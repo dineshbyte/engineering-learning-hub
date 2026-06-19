@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bloom filters — reference cheat sheet</title>
+<script>(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script>function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}</script>
+<link rel="stylesheet" href="../../assets/tokens.css">
+<style>
+  :root{--accent:var(--track-bloom)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.5}
+  .wrap{max-width:46rem;margin:0 auto;padding:2.4rem 1.4rem 4rem}
+  h1{font-size:1.5rem;margin:0 0 .2rem}
+  .kicker{font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  h2{font-size:1rem;margin:1.6rem 0 .4rem;color:var(--accent)}
+  table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:.86rem}
+  th,td{border:1px solid var(--line);padding:.4rem .55rem;text-align:left;vertical-align:top}
+  th{background:var(--chip)}
+  code{background:var(--chip);padding:.05rem .3rem;border-radius:3px;font-size:.9em}
+  .one{background:var(--chip);border-left:3px solid var(--accent);padding:.7rem 1rem;margin:1rem 0;font-size:.95rem}
+  ul{margin:.4rem 0 .4rem 1.1rem;padding:0;font-size:.88rem}
+  footer{margin-top:2rem;font-size:.76rem;color:var(--muted)}
+  a{color:var(--accent)}
+  .themebtn{position:fixed;top:.7rem;right:.7rem;z-index:60;font-family:ui-sans-serif,system-ui,sans-serif;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.15rem .5rem;font-size:1rem;color:var(--ink)}
+  .themebtn:hover{background:var(--chip)}
+  @media print{body{font-size:12px} a{color:var(--ink)} .themebtn{display:none!important} html[data-theme="dark"]{--bg:#fff;--card:#fff;--ink:#111110}}
+</style>
+</head>
+<body>
+<button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light" style="position:fixed;top:.7rem;right:.7rem;z-index:60;background:var(--card)">🌓</button>
+<div class="wrap">
+  <div class="kicker">Bloom filters · quick reference</div>
+  <h1>Bloom filter cheat sheet</h1>
+
+  <div class="one"><strong>Never lies about absence; only exaggerates presence.</strong>
+    "Not present" is certain; "present" is probable. That asymmetry is why it guards expensive lookups.</div>
+
+  <h2>What it is</h2>
+  <ul>
+    <li>An <code>m</code>-bit array + <code>k</code> independent hash functions. Stores no keys.</li>
+    <li><code>add(x)</code>: set the k bits x hashes to. <code>contains(x)</code>: "no" if any bit is 0, else "probably".</li>
+    <li><strong>No delete</strong> in the standard form — bits are shared. Use a counting Bloom filter to delete.</li>
+  </ul>
+
+  <h2>The math</h2>
+  <table>
+    <tr><th>Quantity</th><th>Formula</th></tr>
+    <tr><td>False-positive rate</td><td><code>(1 − e^(−kn/m))^k</code></td></tr>
+    <tr><td>Optimal hash count</td><td><code>k = (m/n)·ln 2</code></td></tr>
+    <tr><td>FP rate at optimal k</td><td><code>(0.5)^k</code></td></tr>
+  </table>
+  <table>
+    <tr><th>Bits/item (m/n)</th><th>Optimal k</th><th>≈ FP rate</th></tr>
+    <tr><td>8</td><td>6</td><td>~2%</td></tr>
+    <tr><td>10</td><td>7</td><td>~1%</td></tr>
+    <tr><td>16</td><td>11</td><td>~0.05%</td></tr>
+  </table>
+
+  <h2>Where it lives / when not to</h2>
+  <ul>
+    <li><strong>Use</strong>: skip disk reads in LSM-tree stores (RocksDB, Cassandra), dedup, cache/CDN admission.</li>
+    <li><strong>Avoid</strong>: when you need deletes, exact answers, or to enumerate the set — it can't do any of those.</li>
+    <li>Watch <strong>saturation</strong>: FP rate climbs as it fills past its design n. Rebuild or partition.</li>
+  </ul>
+
+  <h2>Variants (one line each)</h2>
+  <ul>
+    <li><strong>Counting</strong>: counters not bits → supports delete (more space).</li>
+    <li><strong>Scalable</strong>: chain of filters that grows to hold a target FP rate as n rises.</li>
+    <li><strong>Cuckoo filter</strong>: alternative supporting delete with better locality at low FP rates.</li>
+  </ul>
+
+  <footer>
+    Pairs with Lesson 1 · <a href="../lessons/0001-what-is-a-bloom-filter.html">What a Bloom filter is</a>.
+    Sources: Bloom (1970, CACM); Mitzenmacher &amp; Broder survey; NIST FP-rate analysis; RocksDB wiki.
+  </footer>
+</div>
+</body>
+</html>

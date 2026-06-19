@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transactions &amp; Isolation — visual fundamentals</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/lesson.css">
+<style>:root{--accent:var(--track-transactions)}
+/* ---- slim rules: classes not covered by lesson.css ---- */
+.sans{font-family:ui-sans-serif,system-ui,sans-serif}
+figure{text-align:center}
+figure svg,figure img{max-width:min(100%,34rem); width:auto; height:auto}
+
+/* one-sentence decomposition chips */
+.chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+.chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+.chip b{color:var(--accent)}
+.chip.c2 b,.fact.blue b{color:var(--track-rest)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
+
+/* TOC as a grid */
+.toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
+.toc a{text-decoration:none; padding:.15rem 0}
+
+/* level block */
+.lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
+.lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
+.num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
+.lvltop h2{margin:0}
+.tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
+
+/* fact-card eyebrow + myth grid container (lesson.css styles .myth .m/.t but not the grid) */
+.fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+.myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
+
+/* custom details markers (lesson.css gives the base box) */
+details.mc summary{color:var(--good); list-style:none}
+details.mc summary::before{content:"\25B8 "}
+details.mc[open] summary::before{content:"\25BE "}
+details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
+details.mc .ans{color:var(--muted)}
+details.iq{border-left:3px solid var(--track-rest)}
+details.iq summary{list-style:none; color:var(--ink)}
+details.iq summary::-webkit-details-marker{display:none}
+details.iq[open] summary{color:var(--track-rest)}
+details.iq .a{margin-top:.45rem; font-size:.85rem; line-height:1.45}
+details.iq .a b{color:var(--track-rest)}
+
+/* dark "cheat" panel — recolored with tokens so it reads in both themes */
+.cheat{background:var(--card); border:1px solid var(--line); color:var(--ink); border-radius:10px; padding:1.1rem 1.2rem; margin:1.2rem 0; font-size:.88rem}
+.cheat h3{color:var(--accent); margin:1rem 0 .3rem; font-size:.8rem; letter-spacing:.06em; text-transform:uppercase}
+.cheat a{color:var(--accent)} .cheat th{color:var(--muted)} .cheat code{background:var(--chip); color:var(--ink)}
+
+/* footer prev/next nav */
+.nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
+
+@media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<!-- shared arrowheads -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="mvcc-internals-deep-dive.html" title="MVCC Internals">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><a href="book-2-transactions-isolation-fundamentals.epub">&#8595; EPUB</a><span style="color:var(--muted)">Transactions &amp; Isolation</span></span>
+  </nav>
+  <div class="kicker">Book 2 · The whole stack · visual edition</div>
+  <h1>Transactions &amp; Isolation — fundamentals</h1>
+  <p class="meta">~35 min · 9 levels · real-DB gotchas + interview questions · interactive recall</p>
+
+  <div class="mission">
+    <strong>Your bar:</strong> redraw the isolation × anomaly matrix on a whiteboard from memory, and
+    in a code review name <em>which</em> anomaly a write is exposed to and the exact fix. Every level is built to
+    be <em>seen and redrawn</em>, not read. Grounded in Kleppmann's <em>DDIA</em> ch.7&amp;9<sup><a href="#s1" id="r1">1</a></sup>
+    and Berenson et al. (1995).<sup><a href="#s2" id="r2">2</a></sup>
+  </div>
+
+  <p>One sentence holds the whole book. Each level unpacks one chip of it:</p>
+  <div class="chips">
+    <span class="chip">A transaction is an <b>all-or-nothing unit</b></span>
+    <span class="chip c2">isolation fakes <b>"ran one at a time"</b></span>
+    <span class="chip c3">weak levels leak <b>named anomalies</b></span>
+    <span class="chip c4">you pick the <b>fix per write</b></span>
+  </div>
+
+  <nav class="toc">
+    <a href="#l1">①&nbsp;ACID — the 4 promises</a><a href="#l2">②&nbsp;The anomalies</a>
+    <a href="#l3">③&nbsp;Isolation levels: the menu</a><a href="#l4">④&nbsp;Snapshot &amp; MVCC</a>
+    <a href="#l5">⑤&nbsp;Lost update &amp; write skew</a><a href="#l6">⑥&nbsp;Serializability</a>
+    <a href="#l7">⑦&nbsp;Distributed txns &amp; 2PC</a><a href="#l8">⑧&nbsp;Sagas &amp; outbox</a>
+    <a href="#l9">⑨&nbsp;Choosing in practice</a><a href="#interview">◆&nbsp;Interview Qs</a>
+    <a href="#quiz">★&nbsp;Retrieval quiz</a><a href="#cheat">★&nbsp;Cheat sheet</a>
+  </nav>
+
+  <!-- ============ HERO: the spectrum of safety vs speed ============ -->
+  <figure style="margin-top:1.6rem">
+    <svg viewBox="0 0 640 220" role="img" aria-label="The isolation ladder from Read Uncommitted up to Serializable, trading speed for safety, with the anomalies each step closes">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="24" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THE LADDER — every step up closes an anomaly, every step costs speed</text>
+        <!-- arrow axes -->
+        <line x1="40" y1="190" x2="600" y2="190" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="600" y="206" text-anchor="end" font-size="10" fill="#6b675f">more safety →</text>
+        <line x1="600" y1="172" x2="40" y2="172" stroke="#9a2417" marker-end="url(#arwA)"/>
+        <text x="40" y="166" font-size="10" fill="#9a2417">← more speed / concurrency</text>
+        <!-- rungs -->
+        <g>
+          <rect x="44" y="48" width="120" height="44" rx="9" fill="#fff" stroke="#d8d4c8"/>
+          <text x="104" y="68" text-anchor="middle" font-size="10.5" font-weight="700" fill="#111110">Read Uncommitted</text>
+          <text x="104" y="83" text-anchor="middle" font-size="9" fill="#9a2417">dirty reads OK</text>
+        </g>
+        <g>
+          <rect x="180" y="48" width="120" height="44" rx="9" fill="#fff" stroke="#d8d4c8"/>
+          <text x="240" y="68" text-anchor="middle" font-size="10.5" font-weight="700" fill="#111110">Read Committed</text>
+          <text x="240" y="83" text-anchor="middle" font-size="9" fill="#6b675f">no dirty reads</text>
+        </g>
+        <g>
+          <rect x="316" y="48" width="124" height="44" rx="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <text x="378" y="65" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7a1f12">Snapshot (RR)</text>
+          <text x="378" y="79" text-anchor="middle" font-size="8.5" fill="#6b675f">consistent snapshot</text>
+          <text x="378" y="90" text-anchor="middle" font-size="8.5" fill="#9a2417">write skew leaks</text>
+        </g>
+        <g>
+          <rect x="456" y="48" width="140" height="44" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+          <text x="526" y="68" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">Serializable</text>
+          <text x="526" y="83" text-anchor="middle" font-size="9" fill="#2f5d3a">no anomaly possible ✓</text>
+        </g>
+        <!-- step arrows -->
+        <line x1="164" y1="70" x2="178" y2="70" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="300" y1="70" x2="314" y2="70" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="440" y1="70" x2="454" y2="70" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="320" y="128" text-anchor="middle" font-size="10.5" fill="#1f3a5a">Vendors mislabel the rungs — Postgres "Repeatable Read" <tspan font-weight="700">is</tspan> Snapshot; Oracle "Serializable" <tspan font-weight="700">is</tspan> Snapshot.</text>
+      </g>
+    </svg>
+    <figcaption>Memorise this ladder. Levels 3–6 climb it; Levels 1–2 explain the rungs; Levels 7–9 leave the single node and reach across services.</figcaption>
+  </figure>
+
+  <!-- ================= LEVEL 1 ================= -->
+  <section class="lvl" id="l1">
+    <div class="lvltop"><span class="num">1</span><h2>ACID — the four promises (and what they don't mean)</h2></div>
+    <p class="tagline">A transaction is one all-or-nothing unit. ACID names four guarantees around it — only one is about concurrency.</p>
+    <figure>
+      <svg viewBox="0 0 600 200" role="img" aria-label="The four ACID letters, each labelled with whose job it is: Atomicity and Isolation are the database, Durability is storage, Consistency is the application">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <g>
+            <rect x="14" y="44" width="138" height="96" rx="10" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+            <text x="83" y="68" text-anchor="middle" font-size="15" font-weight="700" fill="#7a1f12">A</text>
+            <text x="83" y="86" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">Atomicity</text>
+            <text x="83" y="103" text-anchor="middle" font-size="8.5" fill="#6b675f">all-or-nothing;</text>
+            <text x="83" y="114" text-anchor="middle" font-size="8.5" fill="#6b675f">can I undo it?</text>
+            <text x="83" y="131" text-anchor="middle" font-size="8" fill="#1f3a5a" font-weight="700">DB · recovery</text>
+          </g>
+          <g>
+            <rect x="160" y="44" width="138" height="96" rx="10" fill="#fff" stroke="#d8d4c8"/>
+            <text x="229" y="68" text-anchor="middle" font-size="15" font-weight="700" fill="#9a2417">C</text>
+            <text x="229" y="86" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">Consistency</text>
+            <text x="229" y="103" text-anchor="middle" font-size="8.5" fill="#6b675f">your invariants</text>
+            <text x="229" y="114" text-anchor="middle" font-size="8.5" fill="#6b675f">hold (if code OK)</text>
+            <text x="229" y="131" text-anchor="middle" font-size="8" fill="#9a2417" font-weight="700">YOUR app, not DB</text>
+          </g>
+          <g>
+            <rect x="306" y="44" width="138" height="96" rx="10" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+            <text x="375" y="68" text-anchor="middle" font-size="15" font-weight="700" fill="#7a1f12">I</text>
+            <text x="375" y="86" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">Isolation</text>
+            <text x="375" y="103" text-anchor="middle" font-size="8.5" fill="#6b675f">concurrent txns</text>
+            <text x="375" y="114" text-anchor="middle" font-size="8.5" fill="#6b675f">don't corrupt</text>
+            <text x="375" y="131" text-anchor="middle" font-size="8" fill="#1f3a5a" font-weight="700">DB · this whole book</text>
+          </g>
+          <g>
+            <rect x="452" y="44" width="134" height="96" rx="10" fill="#fff" stroke="#d8d4c8"/>
+            <text x="519" y="68" text-anchor="middle" font-size="15" font-weight="700" fill="#2f5d3a">D</text>
+            <text x="519" y="86" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">Durability</text>
+            <text x="519" y="103" text-anchor="middle" font-size="8.5" fill="#6b675f">committed data</text>
+            <text x="519" y="114" text-anchor="middle" font-size="8.5" fill="#6b675f">survives a crash</text>
+            <text x="519" y="131" text-anchor="middle" font-size="8" fill="#2f5d3a" font-weight="700">storage · WAL+fsync</text>
+          </g>
+          <text x="300" y="28" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">ACID — Härder &amp; Reuter, 1983</text>
+          <text x="300" y="166" text-anchor="middle" font-size="10.5" fill="#7a1f12">Only <tspan font-weight="700">I</tspan> is about more than one transaction at a time — which is exactly why it's hard.</text>
+          <rect x="120" y="178" width="360" height="18" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+          <text x="300" y="191" text-anchor="middle" font-size="9.5" fill="#2f5d3a">Atomicity + Durability share ONE mechanism: the write-ahead log (redo + undo)</text>
+        </g>
+      </svg>
+      <figcaption>"Atomic" means <em>abortable</em> — nothing to do with concurrency. Consistency is the odd letter out: it's your code's job, the DB only helps.<sup><a href="#s1" id="r1b">1</a></sup></figcaption>
+    </figure>
+    <figure>
+      <img src="diagrams/01-acid-atomicity.png" alt="All-or-nothing: a crash mid-transaction rolls back BOTH writes, money is conserved. The C in ACID is your job, not the database's.">
+      <figcaption>All-or-nothing in transaction-history notation: a crash after the debit but before the credit rolls back <em>both</em> — money is conserved.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Atomicity</b> A partly-done transaction is discarded (rollback / abort). It is about undoability — not "no one sees my intermediate state".</div>
+      <div class="fact"><b>Consistency</b> Your app invariants hold <em>if your code is correct</em>. The DB enforces FKs/uniqueness/CHECK; the <em>meaning</em> lives in your code.</div>
+      <div class="fact blue"><b>Isolation</b> Concurrent transactions behave as <em>some</em> serial order. The default level is almost always weaker than that.</div>
+      <div class="fact blue"><b>Durability</b> Committed data survives the faults you planned for (WAL + fsync, then replication). Never absolute — Jepsen proves it.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "ACID-compliant = safe / serializable"</div><div class="t">✓ ACID is silent on which isolation level you get by default — and it's weaker than serializable</div></div>
+    <div class="rule"><span>🧱 Memory rule:</span> A=abortable · C=your job · I=concurrency (the only multi-txn letter) · D=survives planned faults. WAL gives A and D together.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Which letter is about concurrency? <span class="ans">→ Isolation, and only Isolation</span></li>
+      <li>Whose job is Consistency? <span class="ans">→ the application's; the DB only helps preserve it</span></li>
+      <li>What single mechanism gives both atomicity and durability? <span class="ans">→ the write-ahead log (undo + redo)</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 2 ================= -->
+  <section class="lvl" id="l2">
+    <div class="lvltop"><span class="num">2</span><h2>The anomalies — the catalog of concurrency bugs</h2></div>
+    <p class="tagline">An anomaly = an outcome no serial order could produce. Isolation levels are defined by <em>which</em> ones they forbid.</p>
+    <figure>
+      <svg viewBox="0 0 620 250" role="img" aria-label="Five named anomalies, each a bad interleaving of two transactions over shared data">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <text x="310" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">FIVE WAYS CONCURRENCY CORRUPTS DATA</text>
+          <g>
+            <rect x="12" y="36" width="190" height="58" rx="8" fill="#f7ecea" stroke="#9a2417"/>
+            <text x="22" y="54" font-size="10.5" font-weight="700" fill="#7a2218">Dirty read (P1)</text>
+            <text x="22" y="70" font-size="8.5" fill="#6b675f">read another txn's</text>
+            <text x="22" y="82" font-size="8.5" fill="#6b675f">uncommitted write → it aborts</text>
+          </g>
+          <g>
+            <rect x="214" y="36" width="190" height="58" rx="8" fill="#f7ecea" stroke="#9a2417"/>
+            <text x="224" y="54" font-size="10.5" font-weight="700" fill="#7a2218">Non-repeatable read (P2)</text>
+            <text x="224" y="70" font-size="8.5" fill="#6b675f">same row reads differently</text>
+            <text x="224" y="82" font-size="8.5" fill="#6b675f">twice = read skew</text>
+          </g>
+          <g>
+            <rect x="416" y="36" width="190" height="58" rx="8" fill="#f7ecea" stroke="#9a2417"/>
+            <text x="426" y="54" font-size="10.5" font-weight="700" fill="#7a2218">Phantom (P3)</text>
+            <text x="426" y="70" font-size="8.5" fill="#6b675f">a new row changes the</text>
+            <text x="426" y="82" font-size="8.5" fill="#6b675f">result of a search</text>
+          </g>
+          <g>
+            <rect x="114" y="108" width="190" height="58" rx="8" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+            <text x="124" y="126" font-size="10.5" font-weight="700" fill="#7a1f12">Lost update (P4)</text>
+            <text x="124" y="142" font-size="8.5" fill="#6b675f">two read-modify-writes</text>
+            <text x="124" y="154" font-size="8.5" fill="#6b675f">clobber each other (same row)</text>
+          </g>
+          <g>
+            <rect x="316" y="108" width="190" height="58" rx="8" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+            <text x="326" y="126" font-size="10.5" font-weight="700" fill="#7a1f12">Write skew</text>
+            <text x="326" y="142" font-size="8.5" fill="#6b675f">disjoint writes jointly</text>
+            <text x="326" y="154" font-size="8.5" fill="#6b675f">break an invariant</text>
+          </g>
+          <rect x="60" y="186" width="500" height="48" rx="9" fill="#1c1b18"/>
+          <text x="310" y="206" text-anchor="middle" font-size="10.5" font-weight="700" fill="#f3efe3">Dirty WRITE (P0) is forbidden by EVERY real level —</text>
+          <text x="310" y="223" text-anchor="middle" font-size="9.5" fill="#e8b3a6">allowing it would make atomic rollback impossible.</text>
+        </g>
+      </svg>
+      <figcaption>Berenson et al. (1995) number these P0–P4.<sup><a href="#s2" id="r2b">2</a></sup> Adya (1999) later recast them as forbidden <em>cycles</em> in a transaction dependency graph — the modern lens.</figcaption>
+    </figure>
+    <figure>
+      <img src="diagrams/02-lost-update.png" alt="The canonical lost update. Two transactions both read counter=10, both add 1, both write 11 — the result is 11 instead of 12, and one increment is silently lost.">
+      <figcaption>The canonical lost update: both read 10, both write 11. Result 11, not 12 — one increment vanishes. Look closely; this is the one you'll ship by accident.</figcaption>
+    </figure>
+    <div class="myth"><div class="m">✗ "If two txns write the same table at once, that's an anomaly"</div><div class="t">✓ An anomaly is a result <em>no serial order</em> could have produced — that clause is the entire game</div></div>
+    <div class="rule"><span>🐛 Memory rule:</span> Dirty read = saw uncommitted · Non-repeatable = row changed under me · Phantom = search result changed · Lost update = same-row clobber · Write skew = disjoint writes break one invariant.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What is the one-line definition of an anomaly? <span class="ans">→ a result no serial order could produce</span></li>
+      <li>Which anomaly does <em>every</em> real engine forbid? <span class="ans">→ dirty write (P0)</span></li>
+      <li>Lost update vs write skew? <span class="ans">→ same row clobbered vs disjoint writes break an invariant</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 3 ================= -->
+  <section class="lvl" id="l3">
+    <div class="lvltop"><span class="num">3</span><h2>Isolation levels — the menu, and why the names lie</h2></div>
+    <p class="tagline">A level is a contract: <em>which anomalies will the DB prevent for me?</em> Read the matrix, never the name.</p>
+    <figure>
+      <img src="diagrams/03-isolation-matrix.png" alt="The isolation-level by anomaly matrix. Each cell shows whether a level prevents an anomaly; the names real databases use map onto these rows in surprising ways.">
+      <figcaption>The level × anomaly matrix. Read it bottom-up: every step adds protection. Snapshot Isolation is the awkward guest — blocks phantoms, still leaks write skew, so it sits below true Serializable.</figcaption>
+    </figure>
+    <table>
+      <tr><th>Level</th><th>Dirty read</th><th>Non-repeat.</th><th>Phantom</th><th>Write skew</th></tr>
+      <tr><td>Read Uncommitted</td><td>possible</td><td>possible</td><td>possible</td><td>possible</td></tr>
+      <tr><td>Read Committed</td><td>prevented</td><td>possible</td><td>possible</td><td>possible</td></tr>
+      <tr><td>Snapshot (SI)</td><td>prevented</td><td>prevented</td><td>prevented*</td><td><b>possible</b></td></tr>
+      <tr><td>Serializable</td><td>prevented</td><td>prevented</td><td>prevented</td><td>prevented</td></tr>
+    </table>
+    <p class="tagline">ANSI SQL-92 names only three phenomena (dirty/non-repeatable/phantom). <b>Lost update and write skew aren't in the standard at all</b> — which is why SI doesn't fit any ANSI row cleanly.</p>
+    <div class="facts">
+      <div class="fact blue"><b>Postgres "Repeatable Read"</b> is actually Snapshot Isolation — stronger than ANSI RR (blocks phantoms) but still leaks write skew.</div>
+      <div class="fact blue"><b>Oracle "Serializable"</b> is actually Snapshot Isolation — so it <em>allows write skew</em>. Not serializable in the textbook sense.</div>
+      <div class="fact"><b>MySQL InnoDB "Repeatable Read"</b> is the default; blocks many phantoms via next-key (gap) locks — a different mechanism, different profile.</div>
+      <div class="fact"><b>A level is a ceiling, not a floor</b> Nothing stops an engine preventing <em>more</em> than the level requires. Always check the engine, not the word.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "Two DBs both set to 'Repeatable Read' give the same guarantees"</div><div class="t">✓ Same name, different real guarantees — a bug impossible on one is live on the other</div></div>
+    <div class="rule"><span>📖 Memory rule:</span> The standard defines levels by anomalies prevented; vendors slap those names on whatever their engine does. Reason from the matrix, never the name.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>How does ANSI define a level? <span class="ans">→ by the phenomena it forbids, not the implementation</span></li>
+      <li>What does Postgres "Repeatable Read" really give you? <span class="ans">→ Snapshot Isolation (write skew still possible)</span></li>
+      <li>Why is SI the "awkward guest"? <span class="ans">→ blocks phantoms but leaks write skew, which ANSI can't even express</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 4 ================= -->
+  <section class="lvl" id="l4">
+    <div class="lvltop"><span class="num">4</span><h2>Snapshot Isolation &amp; MVCC — how Read Committed / SI actually work</h2></div>
+    <p class="tagline">Real engines don't lock readers. They keep multiple versions of each row and let every reader see a frozen, consistent past.</p>
+    <figure>
+      <img src="diagrams/04-mvcc-snapshot.png" alt="Two snapshots, one row, no blocking. The version chain for row x and how Ta and Tb each read a different committed version while writers keep appending.">
+      <figcaption>MVCC: every write <em>appends</em> a new version tagged with its txn id; readers walk the chain to the newest version committed before their snapshot. That's why readers never block writers.</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 600 150" role="img" aria-label="Read Committed takes a fresh snapshot per statement; Snapshot Isolation takes one per transaction">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <text x="150" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">READ COMMITTED — snapshot per STATEMENT</text>
+          <line x1="40" y1="40" x2="40" y2="120" stroke="#6b675f"/>
+          <g fill="#fff" stroke="#1f3a5a"><rect x="60" y="40" width="74" height="22" rx="5"/><rect x="60" y="74" width="74" height="22" rx="5"/></g>
+          <text x="97" y="55" text-anchor="middle" font-size="9">SELECT → A</text>
+          <text x="97" y="89" text-anchor="middle" font-size="9">SELECT → B≠A</text>
+          <text x="150" y="116" text-anchor="middle" font-size="9" fill="#9a2417">non-repeatable read leaks</text>
+          <line x1="300" y1="8" x2="300" y2="140" stroke="#d8d4c8" stroke-dasharray="4 4"/>
+          <text x="450" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">SNAPSHOT ISO — snapshot per TRANSACTION</text>
+          <line x1="340" y1="40" x2="340" y2="120" stroke="#6b675f"/>
+          <g fill="#f1eee2" stroke="#7a1f12"><rect x="360" y="40" width="74" height="22" rx="5"/><rect x="360" y="74" width="74" height="22" rx="5"/></g>
+          <text x="397" y="55" text-anchor="middle" font-size="9">SELECT → A</text>
+          <text x="397" y="89" text-anchor="middle" font-size="9">SELECT → A</text>
+          <text x="450" y="116" text-anchor="middle" font-size="9" fill="#2f5d3a">frozen view; reads always agree ✓</text>
+        </g>
+      </svg>
+      <figcaption>The single mechanical difference: snapshot <em>scope</em>. Per-statement (RC) lets the view move under you; per-transaction (SI) freezes it.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Read Committed</b> No dirty reads, no dirty writes; a fresh snapshot per statement; write locks held to commit. The default in Postgres, Oracle, SQL Server.</div>
+      <div class="fact"><b>Snapshot Isolation</b> One snapshot per transaction; reads never block. Write conflicts resolved at commit by <em>first-committer-wins</em>; the loser aborts.</div>
+      <div class="fact blue"><b>MVCC rules</b> Every UPDATE writes a new tuple (Postgres tags <code>xmin</code>/<code>xmax</code>); versions form a chain; visibility = was it committed before my snapshot?</div>
+      <div class="fact blue"><b>The cost is garbage</b> Dead versions must be reclaimed (VACUUM / GC). A long-running txn pins old versions open → table bloat. The #1 MVCC incident.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "A long read-only transaction is harmless"</div><div class="t">✓ Its open snapshot pins old versions, stalls VACUUM, and bloats tables by gigabytes</div></div>
+    <div class="rule"><span>📸 Memory rule:</span> MVCC = append a version per write, read the newest one committed before your snapshot. RC snapshots per statement; SI per transaction; neither blocks reads.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>RC vs SI in one word? <span class="ans">→ snapshot scope: per-statement vs per-transaction</span></li>
+      <li>What does an MVCC UPDATE physically do? <span class="ans">→ writes a new version tagged with the writer's txn id</span></li>
+      <li>Why is a long read txn an operational risk? <span class="ans">→ pins old versions, blocks VACUUM → bloat</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 5 ================= -->
+  <section class="lvl" id="l5">
+    <div class="lvltop"><span class="num">5</span><h2>Lost updates &amp; write skew — the subtle invariant-breakers</h2></div>
+    <p class="tagline">These survive a green test suite and a casual BEGIN/COMMIT, then corrupt prod under load. The fixes are structural, not "be careful".</p>
+    <figure>
+      <img src="diagrams/05-write-skew.png" alt="Write skew breaks an invariant that no single transaction violated. Two doctors, T1 and T2, each read the same on-call count (both see 2), each decide it is safe, each write only their own row to off-call; the combined result is zero doctors on call.">
+      <figcaption>Write skew: two on-call doctors each read "count = 2, safe to leave", each write <em>their own</em> row. No lock conflict — different rows. Final state: zero on call. Each txn alone did nothing wrong.</figcaption>
+    </figure>
+    <h4 class="sans" style="color:#7a1f12">Lost update — three fixes, in this order</h4>
+    <table>
+      <tr><th>Fix</th><th>What it is</th><th>Reach for it when</th></tr>
+      <tr><td>1 · Atomic write</td><td><code>UPDATE c SET n = n + 1</code> — computed in-engine under its own lock</td><td>new value is a pure fn of the old; cheapest &amp; safest</td></tr>
+      <tr><td>2 · Explicit lock</td><td><code>SELECT … FOR UPDATE</code> — pessimistic row lock to commit</td><td>you must read→compute→write in app code</td></tr>
+      <tr><td>3 · Compare-and-set</td><td><code>… WHERE version = :v</code>; retry if 0 rows — optimistic</td><td>scale; no lock across user think-time</td></tr>
+    </table>
+    <div class="facts">
+      <div class="fact"><b>Lost update</b> Two read-modify-writes to the <em>same</em> object; one silently overwrites the other. Counters, balances, JSON merges.</div>
+      <div class="fact"><b>Write skew</b> Two reads of overlapping rows, each passes a check, each writes a <em>different</em> row → joint invariant broken. SI does NOT prevent it.</div>
+      <div class="fact blue"><b>Why SI misses it</b> Both read pre-write snapshots; write sets are disjoint, so first-committer-wins has nothing to conflict on.</div>
+      <div class="fact blue"><b>Materialize the conflict</b> Add a lock row per shift/room/seat; force <code>FOR UPDATE</code> on it so disjoint writers collide. Ugly — use only without SSI.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "Snapshot isolation will protect my on-call invariant"</div><div class="t">✓ Write skew slips through SI; use Serializable (SSI) or a materialized lock row</div></div>
+    <div class="rule"><span>⚖️ Memory rule:</span> Lock the row you can name (atomic write / FOR UPDATE / CAS for lost update); serialize the conflict you can't name (SSI / materialized row for write skew).</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Structural difference, lost update vs write skew? <span class="ans">→ same row clobbered vs disjoint writes break an invariant</span></li>
+      <li>Cheapest counter fix? <span class="ans">→ atomic in-DB <code>SET n = n + 1</code></span></li>
+      <li>Why doesn't SI stop write skew? <span class="ans">→ disjoint writes; nothing to conflict on at commit</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 6 ================= -->
+  <section class="lvl" id="l6">
+    <div class="lvltop"><span class="num">6</span><h2>Serializability — serial · 2PL · SSI</h2></div>
+    <p class="tagline">Instead of plugging anomalies one by one, demand that <em>none</em> can ever happen. Three ways to deliver it, three currencies to pay in.</p>
+    <figure>
+      <img src="diagrams/06-serializability-strategies.png" alt="A 2PL lock count rises in the growing phase and falls in the shrinking phase, forming a triangle. The dashed line marks the moment of first release, after which no new lock may ever be taken.">
+      <figcaption>2PL's lock count rises (growing phase, acquire only) then falls (shrinking phase, release only). The first release ends growth — no new lock after it. That discipline is what produces serializability.</figcaption>
+    </figure>
+    <table>
+      <tr><th>Strategy</th><th>Style</th><th>You pay in</th><th>Wins when</th></tr>
+      <tr><td>Serial execution</td><td>no concurrency (1 thread)</td><td>throughput ceiling</td><td>data fits RAM; txns tiny, single-partition (VoltDB, Redis)</td></tr>
+      <tr><td>2PL</td><td>pessimistic locking</td><td>lock waits, deadlocks, bad tail latency</td><td>contention high &amp; aborts intolerable</td></tr>
+      <tr><td>SSI</td><td>optimistic, abort on conflict</td><td>aborts + retries under contention</td><td>contention low–moderate; reads must not block</td></tr>
+    </table>
+    <div class="facts">
+      <div class="fact"><b>"Serializable" formally</b> The result equals <em>some</em> serial order — not a specific one, not wall-clock order. Constrains the <em>outcome</em>, not the physical execution.</div>
+      <div class="fact"><b>2PL adds predicate locks</b> Row locks can't lock a row that doesn't exist yet — so index-range / predicate locks stop phantom inserts. (Eswaran et al. 1976.)</div>
+      <div class="fact blue"><b>SSI</b> Start from SI (no read locks), track read-write dependencies, abort one txn at commit if a dangerous structure forms. Postgres ships it as SERIALIZABLE. (Cahill et al. 2008.)<sup><a href="#s3" id="r3">3</a></sup></div>
+      <div class="fact blue"><b>2PL ≠ 2PC</b> Two-phase <em>locking</em> = concurrency control on one node. Two-phase <em>commit</em> = atomic commit across nodes (Level 7). Same number, unrelated.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "Serializable means transactions can't overlap in time"</div><div class="t">✓ They still overlap physically — only the <em>result</em> must match some serial order</div></div>
+    <div class="rule"><span>🔒 Memory rule:</span> Serial = forbid concurrency · 2PL = block (pessimistic, deadlocks) · SSI = let it run, abort losers (optimistic, retries). Read your workload to choose.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What does serializable constrain? <span class="ans">→ the result equals <em>some</em> serial order, not execution</span></li>
+      <li>What ends 2PL's growing phase? <span class="ans">→ the first lock release; no new lock after it</span></li>
+      <li>How does SSI differ from 2PL on a conflict? <span class="ans">→ optimistic abort at commit vs pessimistic block</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 7 ================= -->
+  <section class="lvl" id="l7">
+    <div class="lvltop"><span class="num">7</span><h2>Distributed transactions &amp; 2PC — why two-phase commit blocks</h2></div>
+    <p class="tagline">Now the data is on two machines. Atomicity is no longer one log write. You need a tiny consensus protocol — and it inherits consensus's worst property.</p>
+    <figure>
+      <img src="diagrams/07-two-phase-commit.png" alt="2PC commits cleanly when nobody fails, but the coordinator crashing between phases freezes the participants in doubt. Top: prepare/vote then commit succeeds; bottom: the coordinator dies after both participants prepared, leaving them holding locks with no safe move.">
+      <figcaption>2PC: prepare/vote, then commit/abort, driven by a coordinator. The coordinator's COMMIT log write is the single irrevocable moment. If it crashes after participants vote YES, they're stuck in doubt holding locks.</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 560 150" role="img" aria-label="A participant that voted yes and lost its coordinator can neither commit nor abort, so it blocks holding locks">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <text x="280" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9a2417">THE IN-DOUBT TRAP</text>
+          <rect x="200" y="32" width="160" height="34" rx="8" fill="#f1eee2" stroke="#7a1f12"/>
+          <text x="280" y="48" text-anchor="middle" font-size="10" font-weight="700" fill="#7a1f12">participant voted YES</text>
+          <text x="280" y="61" text-anchor="middle" font-size="8.5" fill="#9a2417">coordinator then crashes</text>
+          <rect x="20" y="100" width="160" height="38" rx="8" fill="#fff" stroke="#d8d4c8"/>
+          <text x="100" y="116" text-anchor="middle" font-size="9.5" fill="#111110">can't COMMIT</text>
+          <text x="100" y="129" text-anchor="middle" font-size="8.5" fill="#6b675f">maybe verdict was ABORT</text>
+          <rect x="380" y="100" width="160" height="38" rx="8" fill="#fff" stroke="#d8d4c8"/>
+          <text x="460" y="116" text-anchor="middle" font-size="9.5" fill="#111110">can't ABORT</text>
+          <text x="460" y="129" text-anchor="middle" font-size="8.5" fill="#6b675f">maybe verdict was COMMIT</text>
+          <path d="M 240 66 L 130 98" fill="none" stroke="#9a2417" marker-end="url(#arwA)"/>
+          <path d="M 320 66 L 430 98" fill="none" stroke="#9a2417" marker-end="url(#arwA)"/>
+          <rect x="210" y="100" width="140" height="38" rx="8" fill="#1c1b18"/>
+          <text x="280" y="116" text-anchor="middle" font-size="10" font-weight="700" fill="#f3efe3">BLOCK</text>
+          <text x="280" y="129" text-anchor="middle" font-size="8" fill="#e8b3a6">hold locks, wait for recovery</text>
+        </g>
+      </svg>
+      <figcaption>This is the Two Generals Problem with a tie-breaker: one node decides, the rest obey — but if that node dies mid-decision, the rest freeze.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Phase 1 — prepare/vote</b> Coordinator sends PREPARE; each participant does everything short of commit, writes a <em>prepared</em> record, replies YES → and surrenders its right to abort.</div>
+      <div class="fact"><b>Phase 2 — commit/abort</b> All YES → coordinator writes COMMIT (the point of no return) → tells everyone. Any NO/timeout → ABORT.</div>
+      <div class="fact blue"><b>The fatal flaw: it blocks</b> Coordinator crash after the vote leaves prepared participants in doubt, holding locks, with no safe unilateral move. A single point of failure that freezes data.</div>
+      <div class="fact blue"><b>3PC doesn't save you</b> Non-blocking only under a synchronous network — which doesn't exist. You can't tell a crashed coordinator from a slow one. Essentially never used.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "Add a third phase (3PC) and it's non-blocking and safe"</div><div class="t">✓ 3PC trades blocking for inconsistency under partition — worse on a real async network</div></div>
+    <div class="rule"><span>⛓️ Memory rule:</span> 2PC = vote then act, via a coordinator. The COMMIT log write is the point of no return. Coordinator crash post-vote = in-doubt participants block on their locks.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>When is a 2PC outcome irrevocably fixed? <span class="ans">→ when the coordinator writes its COMMIT record</span></li>
+      <li>A participant voted YES, coordinator dies — what does it do? <span class="ans">→ block, hold locks, wait for recovery</span></li>
+      <li>Why is 3PC not the fix? <span class="ans">→ it needs a synchronous network; real networks are async</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 8 ================= -->
+  <section class="lvl" id="l8">
+    <div class="lvltop"><span class="num">8</span><h2>Sagas, outbox &amp; idempotency — eventual consistency for workflows</h2></div>
+    <p class="tagline">Checkout spans orders, payments, inventory — three DBs, three teams. No single BEGIN/COMMIT wraps them. So you trade isolation for availability.</p>
+    <figure>
+      <img src="diagrams/08-saga-compensation.png" alt="A three-step saga unwinding on failure. The forward path commits each local transaction in order; when inventory fails, the saga runs compensating transactions backward, semantically undoing rather than rolling back.">
+      <figcaption>A saga = local transactions T₁…Tₙ, each with a compensating Cᵢ. Fail at step j → run Cⱼ…C₁ backward. A compensation is <em>not</em> a rollback: T₂ already committed, so you issue a new offsetting transaction (refund, not delete).</figcaption>
+    </figure>
+    <table>
+      <tr><th>Choose 2PC when</th><th>Choose a saga when</th></tr>
+      <tr><td>All participants share an XA stack</td><td>Independent services / vendors</td></tr>
+      <tr><td>Steps are short; locks held briefly</td><td>The operation is long-running</td></tr>
+      <tr><td>You need true isolation between ops</td><td>You can tolerate visible intermediate states</td></tr>
+      <tr><td>Operations have no natural undo</td><td>Each step has a clean semantic undo</td></tr>
+    </table>
+    <div class="facts">
+      <div class="fact"><b>Saga</b> Each Tᵢ is a real short local ACID txn; no locks across steps. Not serializable — others can see a charged-but-unfulfilled order. (Garcia-Molina &amp; Salem 1987.)<sup><a href="#s4" id="r4">4</a></sup></div>
+      <div class="fact"><b>Transactional outbox</b> In the <em>same</em> local txn that updates business tables, INSERT the event into an <code>outbox</code> row. One commit, fully atomic. A relay publishes later.</div>
+      <div class="fact blue"><b>Idempotency key</b> The relay gives at-least-once → duplicates are inevitable. Stamp each step <code>{sagaId}:{step}</code>; dedup on the consumer so retries don't double-charge.</div>
+      <div class="fact blue"><b>The three are a set</b> Outbox (never lost) + idempotency (never double-applied) + compensations (forward or clean unwind). Drop one and you have a correctness hole.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "A compensating transaction is just a delayed rollback"</div><div class="t">✓ The committed row is real; you can't un-send the email — you send an apology (a new offsetting txn)</div></div>
+    <div class="rule"><span>🔄 Memory rule:</span> Sagas swap global locks for eventual consistency: local txn + compensation + outbox (at-least-once) + idempotency key (dedup). Model a PENDING state; tolerate the window.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Compensation vs rollback? <span class="ans">→ offsets a committed change vs erases an uncommitted one</span></li>
+      <li>Why does the outbox exist? <span class="ans">→ commit state change + event atomically in one local txn</span></li>
+      <li>What does at-least-once force every step to have? <span class="ans">→ an idempotency key</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 9 ================= -->
+  <section class="lvl" id="l9">
+    <div class="lvltop"><span class="num">9</span><h2>Choosing isolation in practice — the senior decision tree</h2></div>
+    <p class="tagline">The Monday-morning payoff: isolation is set per transaction, so you choose by the <em>shape of the write</em>, not one global setting.</p>
+    <figure>
+      <img src="diagrams/09-isolation-decision.png" alt="Picking the right concurrency control is a decision tree, not a single global setting. Follow the shape of your write — one row, a cross-row invariant, or a cross-service workflow — to the specific fix, because raising the isolation level only solves one of the three branches.">
+      <figcaption>Picking concurrency control is a decision tree. Follow the <em>shape</em> of your write to the specific fix — raising the isolation level only solves one of the branches.</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 600 210" role="img" aria-label="A decision tree mapping the shape of a write to its fix: single row, cross-row invariant, or cross-service workflow">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <rect x="210" y="10" width="180" height="34" rx="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <text x="300" y="26" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7a1f12">does this read feed a write?</text>
+          <text x="300" y="38" text-anchor="middle" font-size="8.5" fill="#6b675f">what invariant must hold after commit?</text>
+          <!-- three branches -->
+          <line x1="250" y1="44" x2="110" y2="80" stroke="#6b675f" marker-end="url(#arw)"/>
+          <line x1="300" y1="44" x2="300" y2="80" stroke="#6b675f" marker-end="url(#arw)"/>
+          <line x1="350" y1="44" x2="490" y2="80" stroke="#6b675f" marker-end="url(#arw)"/>
+          <g>
+            <rect x="20" y="82" width="170" height="40" rx="8" fill="#fff" stroke="#d8d4c8"/>
+            <text x="105" y="98" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">ONE row</text>
+            <text x="105" y="112" text-anchor="middle" font-size="8.5" fill="#6b675f">counter / balance</text>
+          </g>
+          <g>
+            <rect x="215" y="82" width="170" height="40" rx="8" fill="#fff" stroke="#d8d4c8"/>
+            <text x="300" y="98" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">CROSS-ROW invariant</text>
+            <text x="300" y="112" text-anchor="middle" font-size="8.5" fill="#6b675f">≥1 doctor; no double-book</text>
+          </g>
+          <g>
+            <rect x="410" y="82" width="170" height="40" rx="8" fill="#fff" stroke="#d8d4c8"/>
+            <text x="495" y="98" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">CROSS-SERVICE</text>
+            <text x="495" y="112" text-anchor="middle" font-size="8.5" fill="#6b675f">reserve→charge→ticket</text>
+          </g>
+          <line x1="105" y1="122" x2="105" y2="150" stroke="#6b675f" marker-end="url(#arw)"/>
+          <line x1="300" y1="122" x2="300" y2="150" stroke="#6b675f" marker-end="url(#arw)"/>
+          <line x1="495" y1="122" x2="495" y2="150" stroke="#6b675f" marker-end="url(#arw)"/>
+          <g>
+            <rect x="20" y="152" width="170" height="44" rx="8" fill="#eef5ee" stroke="#2f5d3a"/>
+            <text x="105" y="170" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">atomic write /</text>
+            <text x="105" y="184" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">FOR UPDATE</text>
+          </g>
+          <g>
+            <rect x="215" y="152" width="170" height="44" rx="8" fill="#eef5ee" stroke="#2f5d3a"/>
+            <text x="300" y="170" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">Serializable (SSI) /</text>
+            <text x="300" y="184" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">materialized lock row</text>
+          </g>
+          <g>
+            <rect x="410" y="152" width="170" height="44" rx="8" fill="#eef5ee" stroke="#2f5d3a"/>
+            <text x="495" y="170" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">saga + idempotency</text>
+            <text x="495" y="184" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">(no level reaches here)</text>
+          </g>
+        </g>
+      </svg>
+      <figcaption>Three shapes, three fixes. The senior instinct in one line: lock the row you can name, serialize the conflict you can't, make idempotent everything that crosses a wire.</figcaption>
+    </figure>
+    <table>
+      <tr><th>Engine</th><th>Default</th><th>What you actually get</th></tr>
+      <tr><td>PostgreSQL</td><td>Read Committed</td><td>fresh snapshot/statement; lost update + write skew both possible</td></tr>
+      <tr><td>MySQL (InnoDB)</td><td>Repeatable Read</td><td>snapshot at first read; next-key locks block some phantoms</td></tr>
+      <tr><td>Oracle</td><td>Read Committed</td><td>snapshot/statement; "Serializable" is actually SI</td></tr>
+      <tr><td>SQL Server</td><td>Read Committed</td><td>lock-based; opt-in <code>SNAPSHOT</code> for MVCC</td></tr>
+    </table>
+    <div class="myth"><div class="m">✗ "My database is ACID, so concurrency is handled"</div><div class="t">✓ Every default is weaker than serializable; whatever the level doesn't prevent, <em>you</em> must</div></div>
+    <div class="rule"><span>🧭 Senior checklist:</span> ① name the invariant · ② does the read feed a write? · ③ does it span &gt;1 row? · ④ what's the <em>real</em> default here? · ⑤ if Serializable, is there a retry loop for 40001?</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Read-modify-write in app code — the risk &amp; fix? <span class="ans">→ lost update; atomic UPDATE or FOR UPDATE</span></li>
+      <li>Cross-row invariant — which fix actually works? <span class="ans">→ Serializable or a materialized lock row</span></li>
+      <li>Postgres default, really? <span class="ans">→ Read Committed; write skew + lost update are your job</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= INTERACTIVE RECALL ================= -->
+  <h2 class="sec" id="quiz">Retrieval practice — mix the levels</h2>
+  <p>Reading builds <em>fluency</em> (feels familiar). Recall builds <em>storage</em> (lasts). Answer from memory — instant feedback.</p>
+  <div class="quiz" id="quiz1">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q1.</span> Which ACID property is the only one about more than one transaction at a time?</p>
+      <button class="opt">Atomicity — the all-or-nothing rollback guarantee</button>
+      <button class="opt">Durability — committed data surviving a crash</button>
+      <button class="opt">Isolation — concurrent transactions not corrupting each other</button>
+      <button class="opt">Consistency — the application invariant always holding</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q2.</span> Two clerks both read <code>seats=10</code>, both write <code>9</code>; two seats sold but the count dropped by one. This is…</p>
+      <button class="opt">a dirty read of an uncommitted seat-count value</button>
+      <button class="opt">a lost update from concurrent read-modify-write</button>
+      <button class="opt">a phantom row appearing inside the booking range</button>
+      <button class="opt">a write skew across two disjoint rows</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q3.</span> Postgres "Repeatable Read" actually provides…</p>
+      <button class="opt">true serializability enforced by two-phase locking</button>
+      <button class="opt">the exact ANSI Read Committed guarantee</button>
+      <button class="opt">read uncommitted under a different vendor label</button>
+      <button class="opt">snapshot isolation, which still permits write skew</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q4.</span> Why does snapshot isolation fail to prevent the on-call-doctors anomaly?</p>
+      <button class="opt">conflict detection only fires on writes to the same row; theirs differ</button>
+      <button class="opt">snapshot isolation permits dirty reads of each other's rows</button>
+      <button class="opt">the snapshot is taken at commit time, so both see two doctors</button>
+      <button class="opt">snapshots are stale and return values older than they should</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q5.</span> A 2PC participant voted YES, then the coordinator crashed. It must…</p>
+      <button class="opt">commit immediately — voting yes implies the verdict was commit</button>
+      <button class="opt">abort immediately — no commit message has arrived</button>
+      <button class="opt">block and hold its locks until it learns the coordinator's decision</button>
+      <button class="opt">poll the other participants and copy whatever they chose</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q6.</span> How does a compensating transaction differ from a database rollback?</p>
+      <button class="opt">a rollback is eventual; a compensation applies immediately</button>
+      <button class="opt">a rollback erases an uncommitted change; a compensation offsets a committed one</button>
+      <button class="opt">a rollback needs a coordinator; a compensation runs fully locally</button>
+      <button class="opt">a rollback touches one table; a compensation touches many</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Reconstruct the ladder from a blank page</h3>
+  <p class="rehearse" style="font-size:.9rem">Write the four levels and, for each, the anomalies it still leaks — nothing on screen. Then reveal and compare; gaps are your next drill.</p>
+  <div class="rehearse">
+    <textarea placeholder="Read Uncommitted → leaks …  Read Committed → leaks …  Snapshot → leaks …  Serializable → leaks …"></textarea><br>
+    <button class="btn" onclick="document.getElementById('spine').classList.add('show')">Reveal the spine</button>
+    <div class="model" id="spine">
+      <b>RU</b> dirty read, non-repeatable, phantom, write skew · <b>RC</b> no dirty reads; still non-repeatable + phantom + lost update + write skew ·
+      <b>SI (vendors' "RR")</b> consistent snapshot; blocks dirty/non-repeatable/phantom; <em>still leaks write skew</em> ·
+      <b>Serializable</b> nothing (serial / 2PL / SSI). Fixes: lost update → atomic/FOR UPDATE/CAS · write skew → SSI or materialized row · cross-service → saga + idempotency.
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Say <em>"grill me on isolation"</em> for mixed no-clue questions, or paste a real read-modify-write and I'll name the anomaly and the cheapest fix with you. Want a worked write-skew trace, or the next book on storage engines? Just ask.
+  </div>
+
+  <!-- ================= INTERVIEW QUESTIONS ================= -->
+  <h2 class="sec" id="interview">Interview questions on these concepts</h2>
+  <p>Use each one <strong>twice</strong>: answer it yourself from memory (recall), and ask it of a candidate to test depth. Reveal shows what a strong answer <em>hits</em> — a checklist, not a script.</p>
+
+  <details class="iq"><summary>1 · What does ACID actually promise — and what does "atomic" not mean?</summary>
+    <div class="a"><b>Hits:</b> A = abortable (undo a partial txn), <em>not</em> concurrency. C = your app invariant, mostly your code's job. I = concurrent txns behave as some serial order. D = survives planned faults. Bonus: A and D ride the same WAL; "ACID-compliant" says nothing about the default isolation level.<sup><a href="#s1" id="r1c">1</a></sup></div></details>
+
+  <details class="iq"><summary>2 · Name the anomalies, and which one every real engine forbids.</summary>
+    <div class="a"><b>Hits:</b> dirty read, non-repeatable read (read skew), phantom, lost update, write skew. <em>Dirty write (P0)</em> is forbidden everywhere — allowing it breaks atomic rollback. An anomaly = a result no serial order could produce.<sup><a href="#s2" id="r2c">2</a></sup></div></details>
+
+  <details class="iq"><summary>3 · Two services both set "Repeatable Read." Do they give the same guarantees?</summary>
+    <div class="a"><b>Hits:</b> No. Postgres RR = snapshot isolation (leaks write skew, no gap locks); MySQL InnoDB RR = snapshot-ish with next-key gap locks that block many phantoms. Same name, different real guarantees. Reason from the matrix, never the label. Oracle "Serializable" is even SI.</div></details>
+
+  <details class="iq"><summary>4 · Explain how an MVCC engine serves a consistent read without locking.</summary>
+    <div class="a"><b>Hits:</b> every write appends a new versioned tuple tagged with its txn id; a read walks the version chain and returns the newest version committed before its snapshot. Readers never block writers. Cost: dead versions need VACUUM/GC, and a long-running txn pins them open → bloat.</div></details>
+
+  <details class="iq"><summary>5 · A counter is losing increments under load. Walk me through the diagnosis and fixes.</summary>
+    <div class="a"><b>Hits:</b> classic lost update — read-modify-write in app code, both write a value off a stale read. Fixes in order: atomic <code>SET n = n + 1</code> (cheapest); <code>SELECT … FOR UPDATE</code>; compare-and-set with a version column + retry. Note Postgres SI auto-detects lost updates but MySQL InnoDB RR does not.</div></details>
+
+  <details class="iq"><summary>6 · Why doesn't Snapshot Isolation prevent write skew, and how do you actually fix it?</summary>
+    <div class="a"><b>Hits:</b> both txns read pre-write snapshots and write <em>different</em> rows, so first-committer-wins has nothing to conflict on. Fix: Serializable (Postgres SSI tracks read-write dependencies and aborts a loser at commit — budget for retries / 40001), or materialize the conflict into one lockable row.<sup><a href="#s3" id="r3b">3</a></sup></div></details>
+
+  <details class="iq"><summary>7 · Why is 2PC a blocking protocol, and when would you still use it?</summary>
+    <div class="a"><b>Hits:</b> after a participant votes YES, a coordinator crash leaves it in doubt — can't commit (maybe abort) or abort (maybe commit), so it blocks holding locks. The coordinator is a SPOF that freezes data. 3PC needs a synchronous network, so it's out. Still fine when participants share an XA stack, steps are short, and you need real isolation — or inside one engine (Spanner/Cockroach) where a Raft-replicated coordinator removes the block.</div></details>
+
+  <details class="iq"><summary>8 · Whiteboard: a checkout spanning orders, payments, inventory. Design it safe. (rehearse with me)</summary>
+    <div class="a"><b>Hits:</b> not a distributed txn — a <em>saga</em>. Local txn per service + a compensating txn each (refund ≠ delete); order steps so the irreversible pivot is last; transactional <em>outbox</em> to publish events atomically with the local commit; <em>idempotency keys</em> (<code>{sagaId}:{step}</code>) for at-least-once dedup; a visible <code>PENDING</code> state. The three — outbox, idempotency, compensation — are a set.<sup><a href="#s4" id="r4b">4</a></sup> <em>Want to run this live? Ask me to grade your whiteboard answer.</em></div></details>
+
+  <!-- ================= CHEAT SHEET (compact) ================= -->
+  <h2 class="sec" id="cheat">★ Cheat sheet — symptom → fix</h2>
+  <div class="cheat">
+    <p style="margin-top:0"><strong>Mental models:</strong> ACID = A abortable · C your job · I concurrency · D survives planned faults · Anomaly = no serial order explains it · Level = which anomalies forbidden (read the matrix, not the name) · MVCC = append versions, read your snapshot · SI = consistent snapshot, leaks write skew · SSI = optimistic serializable, retries · 2PC = vote+act, blocks on coordinator crash · Saga = local txns + compensations + outbox + idempotency.</p>
+    <h3>Anomaly → fix table</h3>
+    <table>
+      <tr><th>Symptom in code</th><th>Anomaly</th><th>Fix</th></tr>
+      <tr><td>read value, compute, write back (same row)</td><td>lost update</td><td>atomic <code>SET n=n+1</code> / <code>FOR UPDATE</code> / CAS</td></tr>
+      <tr><td>check a count, then write a different row</td><td>write skew</td><td>Serializable (SSI) / materialized lock row</td></tr>
+      <tr><td>same SELECT, two values in one txn</td><td>non-repeatable read</td><td>Snapshot Isolation (per-txn snapshot)</td></tr>
+      <tr><td>COUNT changes when a row is inserted</td><td>phantom</td><td>predicate / index-range locks · Serializable</td></tr>
+      <tr><td>acted on data that later rolled back</td><td>dirty read</td><td>Read Committed (the floor that matters)</td></tr>
+      <tr><td>state change + event across DB and broker</td><td>(cross-system)</td><td>transactional outbox + idempotency key</td></tr>
+    </table>
+    <h3>Three rules for the review chair</h3>
+    <p style="margin-bottom:0">① Reason from the <strong>anomaly matrix</strong>, never the level's name. ② <strong>Lock the row you can name; serialize the conflict you can't; idempotent everything that crosses a wire.</strong> ③ If you raise to Serializable, ship the <strong>retry loop for 40001</strong> — without it, it's a latent 500.</p>
+  </div>
+
+  <!-- ================= REVIEW GUIDES ================= -->
+  <h2 class="sec" id="review">★ Review guides &amp; what to read next</h2>
+  <div class="facts" style="grid-template-columns:1fr 1fr">
+    <div class="fact"><b>5-min (weekly)</b> Don't re-read — recall. Redraw the ladder + the level×anomaly matrix from memory; recite which anomaly each level still leaks; map three code shapes to their fix blind.</div>
+    <div class="fact"><b>30-min (when stalled)</b> Blank-page the nine levels; trace the on-call-doctors write skew and prove SI lets it through; trace a 2PC coordinator crash; then audit one real transaction in your codebase against the senior checklist.</div>
+  </div>
+  <p style="font-size:.9rem"><strong>Read next, in order:</strong>
+    ① <a href="https://www.oreilly.com/library/view/designing-data-intensive-applications/9781491903063/">DDIA ch.7 &amp; 9 — Kleppmann</a> (the spine) ·
+    ② <a href="https://www.microsoft.com/en-us/research/publication/a-critique-of-ansi-sql-isolation-levels/">"A Critique of ANSI SQL Isolation Levels" — Berenson et al. 1995</a> (why the names lie) ·
+    ③ <a href="https://www.postgresql.org/docs/current/transaction-iso.html">PostgreSQL "Transaction Isolation" docs</a> (what your engine really does) ·
+    ④ <a href="https://jepsen.io">Jepsen</a> (durability/isolation claims, tested).</p>
+
+  <div class="nav">
+    <span>📄 Book 2 · Transactions &amp; Isolation</span>
+    <span><em>Next ▸ Book 3 — Storage Engines &amp; Data Modeling (ask me to build it)</em></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. Martin Kleppmann, <em>Designing Data-Intensive Applications</em>, ch.7 (Transactions) &amp; ch.9 (Distributed Transactions). The primary spine; blunt that ACID is partly a marketing acronym. <a href="#r1">↩</a></span><br>
+    <span id="s2">2. Berenson, Bernstein, Gray, Melton, O'Neil &amp; O'Neil, <em>A Critique of ANSI SQL Isolation Levels</em> (1995). P0–P4 phenomena; why SI is incomparable to ANSI RR and the names mislead. <a href="#r2">↩</a></span><br>
+    <span id="s3">3. Cahill, Röhm &amp; Fekete, <em>Serializable Isolation for Snapshot Databases</em> (2008). The SSI algorithm now shipped as PostgreSQL SERIALIZABLE. Also: Härder &amp; Reuter (1983, coined ACID); Gray &amp; Reuter (1992, WAL/2PL); Eswaran et al. (1976, 2PL); Adya (1999, dependency cycles). <a href="#r3">↩</a></span><br>
+    <span id="s4">4. Garcia-Molina &amp; Salem, <em>Sagas</em>, SIGMOD 1987; Richardson, <em>Microservices Patterns</em> ch.4 (orchestration vs choreography, pivot/retriable steps). Jepsen (jepsen.io) for tested durability/isolation claims. <a href="#r4">↩</a></span>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 2 · Sizing a Bloom filter</title>
+<script>(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script>function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}</script>
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<style>:root{--accent:var(--track-bloom)}</style>
+</head>
+<body>
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="0001-what-is-a-bloom-filter.html" title="What a Bloom filter is">&#8249; Prev</a><a href="0003-failure-modes-and-lsm-reads.html" title="Failure modes &amp; LSM reads">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Bloom Filters &#183; Core</span></span>
+  </nav>
+  <div class="kicker">Lesson 2 · Core</div>
+  <h1>Sizing: pick the error, <em>derive</em> the rest</h1>
+  <p class="meta">~7 min · visual-first · retrieval practice at the end</p>
+
+  <div class="mission">
+    <strong>Why this, first.</strong> The senior move is to start from the false-positive rate you
+    can tolerate and back out the memory — not guess a bit count.
+  </div>
+
+  <figure>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 300" font-family="ui-sans-serif,system-ui,sans-serif">
+      <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#136f63"/></marker></defs>
+      <rect width="680" height="300" fill="#fffff8"/>
+      <text x="340" y="28" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">Two inputs decide everything</text>
+      <rect x="16" y="70" width="150" height="46" rx="8" fill="#e8f1ef" stroke="#136f63"/>
+      <text x="91" y="92" text-anchor="middle" font-size="14" fill="#0f4f47">n = # items</text>
+      <text x="91" y="108" text-anchor="middle" font-size="11" fill="#6b675f">how many you store</text>
+      <rect x="16" y="170" width="150" height="46" rx="8" fill="#e8f1ef" stroke="#136f63"/>
+      <text x="91" y="192" text-anchor="middle" font-size="14" fill="#0f4f47">p = target FP</text>
+      <text x="91" y="208" text-anchor="middle" font-size="11" fill="#6b675f">error you accept</text>
+      <rect x="200" y="60" width="256" height="56" rx="8" fill="#fff" stroke="#9a7a17"/>
+      <text x="328" y="84" text-anchor="middle" font-size="15" fill="#7a5e12">m = &#8722;(n &#183; ln p) / (ln 2)&#178;</text>
+      <text x="328" y="104" text-anchor="middle" font-size="11" fill="#6b675f">bit-array size &#8212; uses n AND p</text>
+      <rect x="200" y="170" width="256" height="56" rx="8" fill="#fff" stroke="#2f5d3a"/>
+      <text x="328" y="194" text-anchor="middle" font-size="15" fill="#2f5d3a">k = log&#8322;(1 / p)</text>
+      <text x="328" y="214" text-anchor="middle" font-size="11" fill="#6b675f">hash count &#8212; uses p ONLY</text>
+      <rect x="496" y="64" width="168" height="48" rx="8" fill="#fbf3e6" stroke="#9a7a17"/>
+      <text x="580" y="84" text-anchor="middle" font-size="13" fill="#7a5e12">bit-array size m</text>
+      <text x="580" y="102" text-anchor="middle" font-size="11" fill="#6b675f">grows with n</text>
+      <rect x="496" y="174" width="168" height="48" rx="8" fill="#eef5ee" stroke="#2f5d3a"/>
+      <text x="580" y="194" text-anchor="middle" font-size="13" fill="#2f5d3a"># hashes k</text>
+      <text x="580" y="212" text-anchor="middle" font-size="11" fill="#6b675f">fixed by p alone</text>
+      <path d="M166 90 L200 86" fill="none" stroke="#136f63" stroke-width="1.5" marker-end="url(#a)"/>
+      <path d="M166 193 L200 198" fill="none" stroke="#136f63" stroke-width="1.5" marker-end="url(#a)"/>
+      <path d="M120 170 C150 150 170 130 200 110" fill="none" stroke="#136f63" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#a)"/>
+      <path d="M456 88 L496 88" fill="none" stroke="#9a7a17" stroke-width="1.5" marker-end="url(#a)"/>
+      <path d="M456 198 L496 198" fill="none" stroke="#2f5d3a" stroke-width="1.5" marker-end="url(#a)"/>
+      <rect x="200" y="252" width="256" height="34" rx="6" fill="#eef5ee" stroke="#2f5d3a"/>
+      <text x="328" y="274" text-anchor="middle" font-size="13" fill="#2f5d3a" font-weight="bold">k ignores n &#8212; double the items, same k</text>
+    </svg>
+    <figcaption>Choose <code>p</code>, count <code>n</code>; the two formulas hand you <code>m</code> and <code>k</code>.</figcaption>
+  </figure>
+
+  <h2>Worked example, in three moves</h2>
+  <div class="steps">
+    <div class="step"><div class="lab">Given</div><div class="big">1,000,000 URLs</div><div class="sub">want p = 1% false positives</div></div>
+    <div class="arrow">&#8594;</div>
+    <div class="step"><div class="lab">Bits</div><div class="big">m &#8776; 9.6 Mbit</div><div class="sub">9.6 bits/item &#215; 1M &#8776; 1.2 MB</div></div>
+    <div class="arrow">&#8594;</div>
+    <div class="step"><div class="lab">Hashes</div><div class="big">k = 7</div><div class="sub">log&#8322;(1/0.01) &#8776; 6.6 &#8594; 7</div></div>
+  </div>
+
+  <h2>The cost ladder</h2>
+  <figure>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 250" font-family="ui-sans-serif,system-ui,sans-serif">
+      <rect width="660" height="250" fill="#fffff8"/>
+      <text x="330" y="26" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">10&#215; fewer false positives &#8594; +4.8 bits/item, +3 hashes</text>
+      <text x="16" y="74" font-size="14" fill="#111110">p = 1%</text>
+      <rect x="96" y="58" width="173" height="26" rx="4" fill="#9fe7da" stroke="#0f4f47"/><text x="104" y="76" font-size="13" fill="#0f4f47">9.6 bits/item</text>
+      <rect x="290" y="58" width="86" height="26" rx="4" fill="#eef5ee" stroke="#2f5d3a"/><text x="333" y="76" text-anchor="middle" font-size="13" fill="#2f5d3a">k = 7</text>
+      <text x="16" y="134" font-size="14" fill="#111110">p = 0.1%</text>
+      <rect x="96" y="118" width="259" height="26" rx="4" fill="#5fb3a6" stroke="#0f4f47"/><text x="104" y="136" font-size="13" fill="#053b34">14.4 bits/item</text>
+      <rect x="376" y="118" width="86" height="26" rx="4" fill="#eef5ee" stroke="#2f5d3a"/><text x="419" y="136" text-anchor="middle" font-size="13" fill="#2f5d3a">k = 10</text>
+      <text x="16" y="194" font-size="14" fill="#111110">p = 0.01%</text>
+      <rect x="96" y="178" width="345" height="26" rx="4" fill="#136f63" stroke="#0f4f47"/><text x="104" y="196" font-size="13" fill="#ffffff">19.2 bits/item</text>
+      <rect x="462" y="178" width="86" height="26" rx="4" fill="#eef5ee" stroke="#2f5d3a"/><text x="505" y="196" text-anchor="middle" font-size="13" fill="#2f5d3a">k = 13</text>
+      <text x="330" y="234" text-anchor="middle" font-size="12" fill="#6b675f">Cost is per item and linear &#8212; accuracy is cheap, but never free.</text>
+    </svg>
+    <figcaption>Each 10&#215; cut in error adds a fixed slice of bits and a few hashes.</figcaption>
+  </figure>
+
+  <div class="cards">
+    <div class="card"><div class="v">~10 bits</div><div class="l">per item &#8776; 1% FP</div></div>
+    <div class="card"><div class="v">k = log&#8322;(1/p)</div><div class="l">hashes, set by p</div></div>
+    <div class="card"><div class="v">+4.8 bits</div><div class="l">per 10&#215; fewer FPs</div></div>
+  </div>
+
+  <table>
+    <tr><th>You want</th><th>Formula</th></tr>
+    <tr><td>Bit-array size m</td><td><code>&#8722;(n &#183; ln p) / (ln 2)&#178;</code></td></tr>
+    <tr><td>Hash count k</td><td><code>log&#8322;(1 / p)</code></td></tr>
+    <tr><td>Bits per item</td><td><code>&#8776; 1.44 &#183; log&#8322;(1 / p)</code></td></tr>
+  </table>
+
+  <p class="rule"><strong>k is set by the error you accept; only m grows with how much you store.</strong></p>
+
+  <hr class="note">
+
+  <h2>Retrieval practice</h2>
+  <p>Answer from memory — feedback is instant.</p>
+
+  <div class="quiz" id="quiz">
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q1.</span> Doubling n, keeping p fixed, changes&#8230;</p>
+      <button class="opt">only m (the bit array), not k</button>
+      <button class="opt">only k (the hash count), not m</button>
+      <button class="opt">both m and k go up together</button>
+      <button class="opt">neither m nor k need to move</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q2.</span> The optimal hash count k depends on&#8230;</p>
+      <button class="opt">the number of items n stored</button>
+      <button class="opt">the bit-array size m chosen</button>
+      <button class="opt">both the item count and rate</button>
+      <button class="opt">the target FP rate you accept</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q3.</span> Cutting the FP rate 10&#215; raises bits/item by&#8230;</p>
+      <button class="opt">around five more bits per item</button>
+      <button class="opt">around fifty more bits per item</button>
+      <button class="opt">around half a bit per item only</button>
+      <button class="opt">almost no extra bits per item</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q4.</span> 1M items at ~1% FP needs roughly&#8230;</p>
+      <button class="opt">about 1.2 kilobytes of memory</button>
+      <button class="opt">about 120 megabytes of memory</button>
+      <button class="opt">about 1.2 megabytes of memory</button>
+      <button class="opt">about 12 gigabytes of memory</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h2>Rehearse out loud</h2>
+  <p class="rehearse">Interviewer: <strong>"Size a Bloom filter to dedupe 50M event IDs at 0.1%
+    false-dupe rate."</strong> ~60 seconds, from memory — then reveal and compare.</p>
+  <div class="rehearse">
+    <textarea placeholder="Your 60-second answer, from memory…"></textarea><br>
+    <button class="btn ghost" onclick="document.getElementById('model').classList.add('show')">Reveal model answer</button>
+    <div class="model" id="model">
+      <p>At p = 0.1%, k = log&#8322;(1000) &#8776; 10 hashes, and bits/item &#8776; 14.4 — note k is fixed by
+        the rate, independent of the 50M. So m &#8776; 14.4 &#215; 50M &#8776; 720 Mbit &#8776; 90 MB. I'd round k to 10,
+        provision ~90–100 MB, and plan to rebuild or shard once the set grows past 50M, because the
+        FP rate climbs as it fills past the size I designed for.</p>
+      <p class="src"><strong>Why this scores:</strong> derives from p first, separates "k from rate"
+        vs "m from volume," lands a concrete number, and flags saturation on growth.</p>
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Want the derivation of why <code>k = log&#8322;(1/p)</code>,
+    a drill on saturation as the filter fills, or the next lesson (Senior: failure modes &amp; the LSM read path)? Say so.
+  </div>
+
+  <h3>Primary source (read this next)</h3>
+  <p>📖 <a href="https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf"><strong>Mitzenmacher &amp; Broder, "Network Applications of Bloom Filters: A Survey"</strong></a><sup><a href="#s1" id="r1">1</a></sup>. The clean derivation of the sizing formulas in one trusted place.</p>
+
+  <div class="next">
+    <span>📄 Keep handy: <a href="../reference/bloom-filters-cheat-sheet.html">Bloom filters reference</a></span>
+    <span><em>Next ▸ <a href="0003-failure-modes-and-lsm-reads.html">Lesson 3: Failure modes &amp; the LSM read path (Senior)</a></em></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. Mitzenmacher &amp; Broder, "Network Applications of Bloom Filters: A Survey", Internet Mathematics 1(4) — <a href="https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf">harvard.edu</a>. <a href="#r1">↩</a></span><br>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){
+          fb.textContent = '✓ Correct.';
+          fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong');
+          fb.textContent = '✗ Not quite — the right answer is highlighted. Re-read it, then say it back out loud.';
+          fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

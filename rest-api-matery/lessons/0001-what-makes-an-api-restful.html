@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 1 · What actually makes an API RESTful? (visual)</title>
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<style>
+  :root{--accent:var(--track-rest)}
+  /* chips — pill row (not in lesson.css) */
+  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+  .chip b{color:var(--accent)}
+  /* REST uses .fact / .step as content blocks with an inline <b> label */
+  .facts{grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr))}
+  .fact b,.step b{display:block; font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+  .fact.blue b{color:var(--accent)}
+  .steps{display:grid; grid-template-columns:1fr 1fr; gap:.5rem}
+  /* myth compare grid — lesson.css styles .m/.t but not the container */
+  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.8rem 0; font-size:.9rem}
+  /* bottom footer nav — lesson.css names this .next */
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.85rem}
+  @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><span style="color:var(--muted);opacity:.55">&#8249; Prev</span><a href="0002-http-methods-and-status-codes.html" title="HTTP methods &amp;amp; status codes (visual)">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">REST API</span></span>
+  </nav>
+  <div class="kicker">Lesson 1 · Foundations · visual edition</div>
+  <h1>What actually makes an API RESTful?</h1>
+  <p class="meta">~7 min · one diagram per idea · retrieval practice at the end</p>
+
+  <div class="mission">
+    <strong>Why this, first.</strong> "Is your API RESTful?" is the most common opener in a senior API interview — and the fastest way to sound mid-level is to answer "it's JSON over HTTP with verbs." REST is an <em>architectural style</em>: a named bundle of constraints defined by Roy Fielding.<sup><a href="#s1" id="r1">1</a></sup> Name the constraints and the rest of the interview answers itself.
+  </div>
+
+  <div class="chips">
+    <span class="chip">REST is a <b>style</b>, not a format</span>
+    <span class="chip">defined by <b>6 constraints</b></span>
+    <span class="chip">measured on a <b>maturity ladder</b></span>
+    <span class="chip">most APIs sit at <b>Level 2</b></span>
+  </div>
+
+  <!-- HERO: the six constraints around a central REST node -->
+  <figure>
+    <svg viewBox="0 0 640 320" role="img" aria-label="The six REST constraints arranged around a central REST node: client-server, stateless, cacheable, uniform interface, layered system, and optional code-on-demand">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">REST = THE STYLE YOU GET BY APPLYING SIX CONSTRAINTS</text>
+        <!-- center node -->
+        <circle cx="320" cy="170" r="46" fill="#f1eee2" stroke="#7a1f12" stroke-width="2"/>
+        <text x="320" y="166" text-anchor="middle" font-size="17" font-weight="700" fill="#7a1f12">REST</text>
+        <text x="320" y="182" text-anchor="middle" font-size="8.5" fill="#6b675f">architectural style</text>
+        <!-- spokes -->
+        <line x1="320" y1="124" x2="320" y2="92" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="282" y1="146" x2="170" y2="92" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="282" y1="194" x2="170" y2="248" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="320" y1="216" x2="320" y2="262" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="358" y1="194" x2="470" y2="248" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="358" y1="146" x2="470" y2="92" stroke="#6b675f" marker-end="url(#arwA)"/>
+        <!-- 1 client-server (top) -->
+        <rect x="246" y="58" width="148" height="36" rx="8" fill="#fff" stroke="#d8d4c8"/>
+        <text x="320" y="74" text-anchor="middle" font-size="10.5" font-weight="700">1 · Client–server</text>
+        <text x="320" y="87" text-anchor="middle" font-size="8" fill="#6b675f">UI and data evolve apart</text>
+        <!-- 2 stateless (top-left) -->
+        <rect x="22" y="58" width="148" height="36" rx="8" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="96" y="74" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">2 · Stateless</text>
+        <text x="96" y="87" text-anchor="middle" font-size="8" fill="#244a2e">no server-side session</text>
+        <!-- 3 cacheable (bottom-left) -->
+        <rect x="22" y="246" width="148" height="36" rx="8" fill="#fff" stroke="#d8d4c8"/>
+        <text x="96" y="262" text-anchor="middle" font-size="10.5" font-weight="700">3 · Cacheable</text>
+        <text x="96" y="275" text-anchor="middle" font-size="8" fill="#6b675f">responses declare freshness</text>
+        <!-- 4 uniform interface (bottom) -->
+        <rect x="246" y="266" width="148" height="38" rx="8" fill="#fff" stroke="#1f3a5a"/>
+        <text x="320" y="282" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1f3a5a">4 · Uniform interface</text>
+        <text x="320" y="295" text-anchor="middle" font-size="8" fill="#1f3a5a">one generic contract</text>
+        <!-- 5 layered system (bottom-right) -->
+        <rect x="470" y="246" width="150" height="36" rx="8" fill="#fff" stroke="#d8d4c8"/>
+        <text x="545" y="262" text-anchor="middle" font-size="10.5" font-weight="700">5 · Layered system</text>
+        <text x="545" y="275" text-anchor="middle" font-size="8" fill="#6b675f">proxies &amp; caches slot in</text>
+        <!-- 6 code-on-demand (top-right) -->
+        <rect x="470" y="58" width="150" height="36" rx="8" fill="#f7ecea" stroke="#9a2417" stroke-dasharray="4 3"/>
+        <text x="545" y="74" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a2417">6 · Code-on-demand</text>
+        <text x="545" y="87" text-anchor="middle" font-size="8" fill="#7a2218">optional · rarely the point</text>
+      </g>
+    </svg>
+    <figcaption>An API is "RESTful" only to the degree it honours these. Each trades some freedom for a system-wide property — the <em>why</em> is what separates recall from understanding.</figcaption>
+  </figure>
+
+  <!-- THE SIX CONSTRAINTS AS FACTS -->
+  <h2 class="sec">The six constraints (and the senior "why")</h2>
+  <p>Don't recite the list — pair each with the property it buys. That trade is the answer interviewers are actually grading.</p>
+  <div class="facts">
+    <div class="fact"><b>1 · Client–server</b> Split UI from data storage so each side evolves independently.</div>
+    <div class="fact blue"><b>2 · Stateless</b> Every request carries all its context; no per-client session is kept. Any node serves any request, so you scale horizontally. <em>Probed hardest.</em></div>
+    <div class="fact"><b>3 · Cacheable</b> Responses declare whether they can be cached — the foundation under ETags and CDNs.</div>
+    <div class="fact blue"><b>4 · Uniform interface</b> One generic contract: identified resources, manipulation via representations, self-descriptive messages, hypermedia. Decouples client from server.</div>
+    <div class="fact"><b>5 · Layered system</b> A client can't tell origin from intermediary, so gateways and proxies slot in invisibly.</div>
+    <div class="fact"><b>6 · Code-on-demand</b> The server may ship runnable code to the client. The only <em>optional</em> constraint.</div>
+  </div>
+  <p class="pull"><strong>Statelessness is the constraint to lead with.</strong> Trace it forward: no server sessions → auth rides a token on every request (Bearer/JWT) → any node serves any request → you scale by adding boxes, not by sticky-routing users. One constraint, a whole architecture.</p>
+
+  <!-- STATELESS DIAGRAM -->
+  <h2 class="sec">What "stateless" buys you</h2>
+  <p>Each request is self-contained — it carries its own auth and context. The server keeps no memory between calls, so the load balancer is free to route the next request anywhere.<sup><a href="#s3" id="r3">3</a></sup></p>
+  <figure>
+    <svg viewBox="0 0 640 200" role="img" aria-label="Two self-contained requests carrying their own tokens are routed by a load balancer to different stateless server nodes; no session is stored">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">EACH REQUEST IS SELF-CONTAINED · NO SERVER SESSION</text>
+        <!-- client -->
+        <rect x="10" y="60" width="120" height="80" rx="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+        <text x="70" y="86" text-anchor="middle" font-size="12" font-weight="700" fill="#7a1f12">Client</text>
+        <text x="70" y="106" text-anchor="middle" font-size="8.5" fill="#6b675f">attaches token</text>
+        <text x="70" y="120" text-anchor="middle" font-size="8.5" fill="#6b675f">+ context to</text>
+        <text x="70" y="134" text-anchor="middle" font-size="8.5" fill="#6b675f">every request</text>
+        <!-- request 1 -->
+        <line x1="130" y1="84" x2="232" y2="84" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="181" y="77" text-anchor="middle" font-size="8" fill="#1f3a5a">GET /me · Bearer …</text>
+        <!-- request 2 -->
+        <line x1="130" y1="120" x2="232" y2="120" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="181" y="135" text-anchor="middle" font-size="8" fill="#1f3a5a">GET /me · Bearer …</text>
+        <!-- load balancer -->
+        <rect x="234" y="68" width="100" height="64" rx="9" fill="#fff" stroke="#1f3a5a"/>
+        <text x="284" y="96" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1f3a5a">Load</text>
+        <text x="284" y="110" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1f3a5a">balancer</text>
+        <!-- to node A -->
+        <line x1="334" y1="86" x2="470" y2="64" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <!-- to node B -->
+        <line x1="334" y1="114" x2="470" y2="146" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <!-- node A -->
+        <rect x="472" y="40" width="158" height="48" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="551" y="60" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">Server node A</text>
+        <text x="551" y="76" text-anchor="middle" font-size="8.5" fill="#244a2e">holds no session ✓</text>
+        <!-- node B -->
+        <rect x="472" y="122" width="158" height="48" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="551" y="142" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">Server node B</text>
+        <text x="551" y="158" text-anchor="middle" font-size="8.5" fill="#244a2e">holds no session ✓</text>
+        <text x="320" y="192" text-anchor="middle" font-size="10" fill="#7a1f12">Because no node "remembers" you, both requests are interchangeable — that is horizontal scale.</text>
+      </g>
+    </svg>
+    <figcaption>Statelessness is what lets the layered system work: any node, any time, any request.</figcaption>
+  </figure>
+  <div class="myth"><div class="m">✗ Myth: "REST means JSON over HTTP with the four CRUD verbs."</div>
+  <div class="t">✓ Truth: REST is a constraint set; JSON + verbs is the surface. Honour the constraints (esp. statelessness + uniform interface) or it isn't REST.</div></div>
+
+  <!-- RICHARDSON MATURITY MODEL LADDER -->
+  <h2 class="sec">The framing device: Richardson Maturity Model</h2>
+  <p>Martin Fowler popularised Leonard Richardson's maturity model<sup><a href="#s2" id="r2">2</a></sup> — a 0-to-3 ladder you can walk an interviewer up in thirty seconds.</p>
+  <figure>
+    <svg viewBox="0 0 640 270" role="img" aria-label="Richardson Maturity Model as a staircase: Level 0 plain old XML, Level 1 resources, Level 2 HTTP verbs, Level 3 hypermedia HATEOAS">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THE MATURITY LADDER · CLIMB IT IN 30 SECONDS</text>
+        <!-- steps -->
+        <rect x="14" y="200" width="150" height="46" rx="8" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="89" y="220" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">L0 · Swamp of POX</text>
+        <text x="89" y="235" text-anchor="middle" font-size="8" fill="#7a2218">one URI, one verb · RPC tunnel</text>
+
+        <rect x="174" y="150" width="150" height="46" rx="8" fill="#fbfaf2" stroke="#d8d4c8"/>
+        <text x="249" y="170" text-anchor="middle" font-size="11" font-weight="700">L1 · Resources</text>
+        <text x="249" y="185" text-anchor="middle" font-size="8" fill="#6b675f">many URIs (/orders/42)</text>
+
+        <rect x="334" y="100" width="150" height="46" rx="8" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.6"/>
+        <text x="409" y="120" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">L2 · HTTP verbs</text>
+        <text x="409" y="135" text-anchor="middle" font-size="8" fill="#244a2e">methods + status carry meaning</text>
+
+        <rect x="478" y="50" width="150" height="46" rx="8" fill="#eef2f5" stroke="#1f3a5a"/>
+        <text x="553" y="70" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">L3 · HATEOAS</text>
+        <text x="553" y="85" text-anchor="middle" font-size="8" fill="#1f3a5a">responses link next actions</text>
+
+        <!-- climbing arrows -->
+        <line x1="164" y1="210" x2="186" y2="184" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="324" y1="160" x2="346" y2="134" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="484" y1="110" x2="506" y2="84" stroke="#6b675f" marker-end="url(#arwA)"/>
+
+        <!-- the pragmatic bar -->
+        <line x1="334" y1="92" x2="334" y2="252" stroke="#2f5d3a" stroke-dasharray="3 3"/>
+        <text x="338" y="262" font-size="8.5" fill="#2f5d3a">← most real APIs deliberately stop here</text>
+      </g>
+    </svg>
+    <figcaption>L0 POX → L1 resources → L2 verbs → L3 hypermedia. The senior move isn't claiming Level 3 — it's knowing <strong>Level 2 is the pragmatic industry bar</strong> and saying why your API sits where it does on purpose.</figcaption>
+  </figure>
+  <p>Fielding himself argues that without hypermedia it isn't really REST.<sup><a href="#s1" id="r1b">1</a></sup> Naming that tension — then defending your pragmatic choice — is exactly the judgment they're testing.</p>
+
+  <div class="rule"><span>🧭 Memory rule:</span> REST = a style of <strong>6 constraints</strong> (client–server, stateless, cacheable, uniform interface, layered, code-on-demand[opt]); maturity is a <strong>0→3 ladder</strong> (POX → resources → verbs → HATEOAS) and you live at L2 on purpose.</div>
+
+  <!-- RETRIEVAL -->
+  <h2 class="sec">Retrieval practice</h2>
+  <p>Close the lesson in your mind first, then answer from memory. Immediate feedback below.</p>
+  <div class="quiz" id="quiz">
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q1.</span> Which best describes what makes an API "RESTful"?</p>
+      <button class="opt">It serves JSON bodies over HTTP using the CRUD verbs</button>
+      <button class="opt">It honours an architectural style of named constraints</button>
+      <button class="opt">It exposes one endpoint that tunnels every operation</button>
+      <button class="opt">It returns the same response body for every client</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q2.</span> REST's <em>statelessness</em> constraint means the server…</p>
+      <button class="opt">must avoid using any persistent database layer at all</button>
+      <button class="opt">returns one identical payload to every connected client</button>
+      <button class="opt">keeps no client session state across separate requests</button>
+      <button class="opt">forbids clients from caching any of its responses</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q3.</span> What lifts an API from Richardson Level 2 to Level 3?</p>
+      <button class="opt">Responses carry hypermedia links driving next actions</button>
+      <button class="opt">Endpoints finally start using the standard HTTP verbs</button>
+      <button class="opt">Each resource at last receives its own dedicated URI</button>
+      <button class="opt">Requests collapse onto one shared catch-all endpoint</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q4.</span> The <em>uniform interface</em> constraint exists mainly to…</p>
+      <button class="opt">make every server response as small as it possibly can be</button>
+      <button class="opt">force all of the resources to share one single schema</button>
+      <button class="opt">guarantee that responses always return inside one second</button>
+      <button class="opt">decouple client and server so each can evolve freely</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h2 class="sec">Rehearse the answer out loud</h2>
+  <p class="rehearse">Interviewer: <strong>"What makes an API RESTful, and what's the difference between REST and 'JSON over HTTP'?"</strong> ~60 seconds, from memory — then reveal and compare.</p>
+  <div class="rehearse">
+    <textarea placeholder="Your 60-second answer, from memory…"></textarea><br>
+    <button class="btn" onclick="document.getElementById('model').classList.add('show')">Reveal model answer</button>
+    <div class="model" id="model">
+      <p>"REST is an <strong>architectural style</strong>, not a wire format. 'JSON over HTTP' is just the surface; an API is RESTful to the degree it honours Fielding's <strong>constraints</strong> — client–server, <strong>stateless</strong>, cacheable, <strong>uniform interface</strong>, layered system, and optional code-on-demand. The one I lead with is statelessness: no server session, so auth rides a token on every request and any node serves any request — that's how we scale horizontally.</p>
+      <p>To place a given API, I use the <strong>Richardson Maturity Model</strong>: L0 is RPC-over-HTTP, L1 adds resource URIs, L2 uses verbs and status codes meaningfully, L3 adds hypermedia (HATEOAS). Ours is a deliberate <strong>Level 2</strong> — true HATEOAS is rare because clients seldom exploit it. If we had many third-party clients we couldn't redeploy, I'd push toward L3 to decouple them from our URL structure. Knowing <em>why</em> we sit at L2 is the point — that's the difference between REST and just JSON over HTTP."</p>
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Want me to trace statelessness into auth and scaling step by step, contrast Level 2 vs true HATEOAS with a concrete payload, or fire harder follow-ups (where the uniform interface costs you efficiency, when code-on-demand actually shows up)? Say the word.
+  </div>
+
+  <div class="nav">
+    <span>📄 Keep handy: <a href="../reference/rest-constraints-and-maturity.html">REST constraints &amp; maturity reference</a></span>
+    <span><a href="../lessons/0002-http-methods-and-status-codes.html"><em>Next ▸ Lesson 2: HTTP methods &amp; status codes</em></a></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. Roy T. Fielding, <em>Architectural Styles and the Design of Network-based Software Architectures</em> (2000) — <a href="https://roy.gbiv.com/pubs/dissertation/rest_arch_style.htm">roy.gbiv.com</a>. <a href="#r1">↩</a></span><br>
+    <span id="s2">2. Martin Fowler, <em>Richardson Maturity Model</em> — <a href="https://martinfowler.com/articles/richardsonMaturityModel.html">martinfowler.com</a>. <a href="#r2">↩</a></span><br>
+    <span id="s3">3. RFC 9110, HTTP Semantics — <a href="https://www.rfc-editor.org/rfc/rfc9110.html">rfc-editor.org</a>; MDN HTTP methods — <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods">developer.mozilla.org</a>. <a href="#r3">↩</a></span>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

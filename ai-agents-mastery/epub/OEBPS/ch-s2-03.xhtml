@@ -1,0 +1,398 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>How Coding Agents Work</title>
+<link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+<!-- shared arrowheads -->
+<svg width="0" height="0" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  
+
+  <div class="kicker">Lesson 3 · Stage 2: Tools in Practice · visual edition</div>
+  <h1>How Coding Agents Work</h1>
+  <p class="meta">~30 min · 3 modules · Claude Code · Cursor · MCP deep dive</p>
+
+  <div class="mission">
+    <strong>Your bar:</strong> explain step-by-step how Claude Code executes a real task, how Cursor retrieves context from a large repo, and how MCP turns any business function into a standardized tool an agent can call.
+  </div>
+
+  
+
+  
+
+  <!-- ============ M4: How Claude Code Actually Works ============ -->
+  <section id="m4">
+    
+      <span class="num">4</span>
+      <h2>How Claude Code Actually Works</h2>
+    
+    <p class="tagline">Claude Code is a runtime that wraps Claude with filesystem, git, terminal, and MCP tools — and nothing more complicated than that.</p>
+
+    <figure>
+      <img src="images/dgm-s2-03-04.png" alt="Claude Code architecture diagram showing User flowing down through Claude Code Runtime to Claude LLM, which fans out to four tool boxes, with a loop-back arrow from Claude LLM to Runtime"/>
+      <figcaption>Claude Code = Claude (the LLM) + a runtime that exposes filesystem, git, terminal, and MCP as tools. The loop runs until Claude returns a final answer.</figcaption>
+    </figure>
+
+    <div class="facts">
+      <div class="fact">
+        <b>Is</b>
+        A CLI agent runtime that wraps the Claude API with a specific toolset: file read/write, Bash execution, git operations, and MCP server connections. Claude chooses which tool to call; the runtime executes it.
+      </div>
+      <div class="fact">
+        <b>Why it exists</b>
+        To let an LLM take real actions in a developer environment — read code, edit files, run tests, commit, and call external services — without the developer writing orchestration code.
+      </div>
+      <div class="fact blue">
+        <b>Like (world)</b>
+        A senior developer with access to the codebase, terminal, and git. You describe the problem; they decide what to read, what to change, and how to verify it. You review the diff.
+      </div>
+      <div class="fact blue">
+        <b>Like (code)</b>
+        A CLI application where the "business logic" is an LLM and the "I/O" is filesystem + Bash. The agent loop is the event loop. Tool results are the I/O callbacks.
+      </div>
+    </div>
+
+    <div class="myth">
+      <div class="m">✗ "Claude Code runs code by generating and evaluating it internally"</div>
+      <div class="t">✓ Claude Code emits a Bash tool call; the runtime executes it in your shell and returns stdout/stderr back to Claude</div>
+    </div>
+
+    <div class="rule">🖥️ Memory rule: <span>Claude Code = Claude + tools.</span> The LLM describes what to do; the runtime does it. You are the approval gate.</div>
+
+    <h3>Walkthrough: "Fix the authentication bug"</h3>
+    <ol>
+      <li><strong>Understand scope</strong> — Claude reads <code>CLAUDE.md</code>, lists directory tree, reads files mentioned in the user message. (Tool: Read, Bash <code>ls</code>)</li>
+      <li><strong>Locate the bug</strong> — Claude reads auth-related files (<code>auth.js</code>, <code>middleware/auth.js</code>). Searches for the suspect pattern via Bash <code>grep</code>. (Tool: Read, Bash)</li>
+      <li><strong>Form a hypothesis</strong> — Claude returns text: "The JWT expiry check uses <code>&lt;</code> instead of <code>&lt;=</code>. Here is my plan." (No tool — pure reasoning output)</li>
+      <li><strong>Edit the file</strong> — Claude calls the Edit tool with the old string and the corrected new string. Runtime patches the file. (Tool: Edit)</li>
+      <li><strong>Run tests</strong> — Claude calls Bash: <code>npm test -- auth</code>. Runtime executes, captures output. (Tool: Bash)</li>
+      <li><strong>Interpret results</strong> — Claude reads test output. If failures remain, it reads the failing test, forms a new hypothesis, loops back to step 4.</li>
+      <li><strong>Verify</strong> — Claude runs <code>git diff</code> to confirm only the intended change was made. (Tool: Bash)</li>
+      <li><strong>Report</strong> — Claude returns the final summary: what the bug was, what was changed, what tests confirm it. Loop ends.</li>
+    </ol>
+
+    <h3>Failure handling: errors are data, not exceptions</h3>
+    <p>The defining property of the loop is that a failure is just another <em>observation</em> fed back to the model — up to limits the <strong>runtime</strong> enforces. The model adapts to errors; it does not decide when to stop.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Failure</th>
+          <th>What the runtime does</th>
+          <th>How recovery happens</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Tool failure (bad path, schema violation)</td>
+          <td>Catches it, returns the error text as the tool result</td>
+          <td>Model sees "file not found", lists the dir, retries with the right path</td>
+        </tr>
+        <tr>
+          <td>Terminal failure (non-zero exit)</td>
+          <td>Captures stderr + exit code, feeds both back</td>
+          <td>Model reads the compiler/test error and edits accordingly</td>
+        </tr>
+        <tr>
+          <td>Test failure</td>
+          <td>Returns the failing output</td>
+          <td>Model edits and re-runs — the core fix-iterate loop</td>
+        </tr>
+        <tr>
+          <td>Infinite loop / thrash</td>
+          <td>Loop cap, no-progress detection, wall-clock timeout, user interrupt</td>
+          <td>Runtime halts and reports — the model can't be trusted to self-terminate</td>
+        </tr>
+        <tr>
+          <td>Bad plan</td>
+          <td>Re-planning on new observations; plan-mode approval gate</td>
+          <td>Human catches it before damage, or new evidence forces a re-plan</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>The crucial design point: the hard stops live in the <strong>runtime</strong>, never in the model. Left alone, the model will retry the same failing command forever or burn the token budget. Bounded retries with backoff, a loop cap, and a cost ceiling are what make the agent safe to run unattended — and for mutating tools (a retried <code>git push</code> or a charge), idempotency is the difference between a retry and an incident.</p>
+
+    <div class="mc"><p class="q">Memory check (answer first, then read):</p><ul>
+        <li>What happens when Claude Code "runs a test"? <span class="answer">→ it calls a Bash tool; the runtime executes the shell command and returns stdout/stderr to Claude</span></li>
+        <li>What is the role of the plan file in Claude Code? <span class="answer">→ it's a structured text artifact Claude writes (and the runtime can read back) to track multi-step intent across the loop</span></li>
+        <li>Why does Claude Code read files explicitly rather than using an embedding index? <span class="answer">→ it uses the agent tool-call loop to read what it judges relevant, giving precise file-level control without requiring an upfront indexing step</span></li>
+      </ul></div>
+
+    <div class="iq"><p class="qs">&#x1F4AC; A user reports Claude Code is reading files that seem irrelevant to the task. What is likely causing this and how would you fix it?</p><p class="ans">Without a good initial prompt + CLAUDE.md scoping, the agent reads broadly to form context. Fix by: <b>providing a tighter task description</b>; using <b>CLAUDE.md to specify project structure</b> so Claude knows where relevant code lives; using <b>/compact</b> to drop old context that is pulling in stale references; and <b>breaking the task into smaller scoped steps</b> so each loop iteration has a clear, bounded goal.</p></div>
+
+    <div class="iq"><p class="qs">&#x1F4AC; How does Claude Code handle a failing test during an iterative fix loop?</p><p class="ans">It reads the test output (stderr/stdout returned by the Bash tool), identifies which assertion failed and why, re-reads the relevant source code if needed, forms a new hypothesis, makes a targeted edit, and re-runs the test — repeating until all tests pass or the max iteration limit is hit. <b>Each iteration adds tool results to the context window</b>, consuming token budget. Long loops on large repos can exhaust context; breaking the task into focused sub-tasks is the mitigation.</p></div>
+  </section>
+
+  <!-- ============ M5: How Cursor Actually Works ============ -->
+  <section id="m5">
+    
+      <span class="num">5</span>
+      <h2>How Cursor Actually Works</h2>
+    
+    <p class="tagline">Cursor front-loads the context problem. It indexes your repo at open time so any query can retrieve relevant code instantly.</p>
+
+    <figure>
+      <img src="images/dgm-s2-03-03.png" alt="Cursor two-phase architecture: left phase shows index time from Repo files through Chunking and Embedding model to Vector index; right phase shows query time from User query through Embed query and Similarity search to Context assembly, then LLM, then Edit generation"/>
+      <figcaption>Cursor pre-computes relevance. When you ask a question, retrieval is a fast vector search — not a file-by-file read.</figcaption>
+    </figure>
+
+    <div class="facts">
+      <div class="fact">
+        <b>Is</b>
+        An IDE with an embedded coding agent that pre-indexes your repo via embeddings, retrieves relevant code snippets by semantic similarity at query time, and passes them as context to the LLM.
+      </div>
+      <div class="fact">
+        <b>Why it exists</b>
+        To solve the context problem at IDE speed — for a 1M-token codebase you can't read file-by-file. A vector index makes "find the most relevant code" a millisecond operation.
+      </div>
+      <div class="fact blue">
+        <b>Like (world)</b>
+        A librarian who has read and catalogued every book. When you ask a question, they don't re-read the library — they retrieve the right pages instantly from their index.
+      </div>
+      <div class="fact blue">
+        <b>Like (code)</b>
+        Elasticsearch for your codebase. Documents are code chunks; queries are developer intent; results are injected into the LLM context window.
+      </div>
+    </div>
+
+    <div class="myth">
+      <div class="m">✗ "Cursor reads the whole codebase on every query, like a human developer would"</div>
+      <div class="t">✓ Cursor reads the codebase once at index time; each query is a fast similarity search against pre-computed embeddings</div>
+    </div>
+
+    <div class="rule">🔍 Memory rule: <span>Cursor = vector search + LLM.</span> Index-time cost is paid once. Query-time cost is a fast lookup. The trade-off is index freshness vs read-on-demand precision.</div>
+
+    <h3>Cursor vs Claude Code</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th>Cursor</th>
+          <th>Claude Code</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Context strategy</td>
+          <td>Index-first: embed repo at open time, retrieve by similarity</td>
+          <td>Tool-first: agent explicitly reads files it judges relevant</td>
+        </tr>
+        <tr>
+          <td>Repo understanding</td>
+          <td>Broad semantic similarity; good at "find files related to X"</td>
+          <td>Deep structural understanding; good at "read this specific file"</td>
+        </tr>
+        <tr>
+          <td>Speed to first result</td>
+          <td>Fast (index lookup ~ms)</td>
+          <td>Slower (each file read is a tool call round-trip)</td>
+        </tr>
+        <tr>
+          <td>Index freshness</td>
+          <td>Must re-index after large changes</td>
+          <td>Always reads current file state</td>
+        </tr>
+        <tr>
+          <td>Multi-file edits</td>
+          <td>Strong (can apply diffs across files in one response)</td>
+          <td>Strong (iterative edits via Edit tool, verified with tests)</td>
+        </tr>
+        <tr>
+          <td>Agent mode</td>
+          <td>Yes — executes multi-step tasks using retrieved context</td>
+          <td>Yes — the primary mode; loop-based with approval gates</td>
+        </tr>
+        <tr>
+          <td>Best fit</td>
+          <td>Large established codebases, exploration and refactor</td>
+          <td>Precise bug fixes, new feature implementation, test-driven work</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Three axes that place any coding tool</h3>
+    <p>Features blur and change monthly; these three architectural axes do not. Any tool sits somewhere on each: <strong>(1)</strong> does an autonomous loop exist (chat vs agent), <strong>(2)</strong> how is context found (you paste it · index-and-retrieve · read-on-demand), and <strong>(3)</strong> how big is the blast radius (hosted sandbox vs your machine).</p>
+    <table>
+      <thead>
+        <tr>
+          <th>System</th>
+          <th>Where it runs</th>
+          <th>How it gets context</th>
+          <th>Loop / agency</th>
+          <th>Blast radius</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>ChatGPT (consumer app)</td>
+          <td>Hosted, sandboxed</td>
+          <td>You paste it; uploads / sandboxed Python only</td>
+          <td>Chat + light tool use; weak autonomous loop</td>
+          <td>Low (sandboxed)</td>
+        </tr>
+        <tr>
+          <td>Claude Code</td>
+          <td>Your machine (CLI)</td>
+          <td>Read-on-demand — agentic, lazy, no index</td>
+          <td>Strong agent loop: plan, multi-tool, iterate</td>
+          <td>High — runs with your permissions</td>
+        </tr>
+        <tr>
+          <td>Cursor</td>
+          <td>Your IDE (VS Code fork)</td>
+          <td>Embedding index + similarity retrieval (eager)</td>
+          <td>Agent mode + inline edits, IDE-integrated</td>
+          <td>High (editor + tools)</td>
+        </tr>
+        <tr>
+          <td>Codex (generic CLI/cloud agent)</td>
+          <td>CLI / cloud runner</td>
+          <td>Tool-based retrieval over a checkout</td>
+          <td>Agent loop over a sandboxed checkout</td>
+          <td>Bounded to its sandbox</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>ChatGPT is "chat with optional tools." Cursor and Claude Code are full agents that differ mainly on <em>retrieval philosophy</em> — index-first vs read-on-demand. Codex sits in the same agent family with a sandboxed-checkout execution model.</p>
+
+    <div class="mc"><p class="q">Memory check (answer first, then read):</p><ul>
+        <li>What does Cursor do at repo-open time that Claude Code does not? <span class="answer">→ embeds and indexes the entire repo into a vector store for fast similarity retrieval</span></li>
+        <li>What is the main trade-off of index-first vs read-on-demand? <span class="answer">→ index-first is faster and scales to large repos but can miss structural/logical relationships; read-on-demand is precise but slower and consumes more context budget per task</span></li>
+        <li>In Cursor's agent mode, what does "context assembly" do? <span class="answer">→ takes the similarity-search results and assembles them into the token budget before calling the LLM, prioritizing highest-similarity chunks</span></li>
+      </ul></div>
+
+    <div class="iq"><p class="qs">&#x1F4AC; When would you use Claude Code instead of Cursor for a coding task?</p><p class="ans">Use <b>Claude Code</b> when you need: precise iterative fixing (run tests, read output, fix, repeat); tasks that require Bash/shell commands or git operations; or when the task is well-scoped and the correct files are already known. Use <b>Cursor</b> when you need: broad codebase exploration; multi-file refactors where you don't know which files are relevant; or IDE-integrated tab completion and inline edits during active development.</p></div>
+
+    <div class="iq"><p class="qs">&#x1F4AC; What is the main weakness of an embedding-based retrieval system for code?</p><p class="ans"><b>Semantic similarity does not equal logical or structural relevance.</b> An embedding search for "authentication" may miss files that implement auth logic but use domain-specific naming conventions. Import graphs and call graphs carry structural relationship information that embeddings do not capture. Cursor partially mitigates this with additional signals (file structure, user-provided @mentions), but it remains a known limitation — especially in large monorepos with non-obvious dependency chains.</p></div>
+  </section>
+
+  <!-- ============ M6: MCP Deep Dive ============ -->
+  <section id="m6">
+    
+      <span class="num">6</span>
+      <h2>MCP — USB-C for tools</h2>
+    
+    <p class="tagline">Before MCP every agent had proprietary tool bindings. MCP makes any tool callable by any agent without custom integration code.</p>
+
+    <figure>
+      <img src="images/dgm-s2-03-02.png" alt="MCP chain diagram showing Business Function flowing down through Tool, Tool Registry, MCP Tool, MCP Server, then bidirectional with MCP Client in Agent runtime, then up to Agent LLM"/>
+      <figcaption>MCP standardizes the tool-agent interface. Write one MCP server; every MCP-compatible agent can use your tools without any additional integration.</figcaption>
+    </figure>
+
+    <div class="facts">
+      <div class="fact">
+        <b>Is</b>
+        A protocol (Model Context Protocol) that standardizes how agents discover and call external tools. An MCP Server exposes tools/resources/prompts; an MCP Client (in the runtime) connects, discovers them, and invokes them on the LLM's behalf.
+      </div>
+      <div class="fact">
+        <b>Why it exists</b>
+        Before MCP, every agent framework had its own tool format — OpenAI function calling, Anthropic tool use, LangChain tools, etc. MCP is the shared interface: write once, run in any compatible agent.
+      </div>
+      <div class="fact blue">
+        <b>Like (world)</b>
+        USB-C. Before it: every device had its own cable. After it: one port, all devices. MCP is USB-C for tool integrations.
+      </div>
+      <div class="fact blue">
+        <b>Like (code)</b>
+        A gRPC/REST service registry combined with a standard API gateway. The MCP server is the service. The MCP client is the API gateway. Tool discovery is service registry lookup. Tool invocation is a standard RPC call.
+      </div>
+    </div>
+
+    <div class="myth">
+      <div class="m">✗ "MCP is an AI feature — it only works with LLMs"</div>
+      <div class="t">✓ MCP is just a protocol over JSON-RPC; the server is ordinary code that doesn't know or care about LLMs — it exposes tools, the client calls them</div>
+    </div>
+
+    <div class="rule">🔌 Memory rule: <span>MCP = standardized tool interface.</span> The server owns the capability; the agent runtime owns the invocation. They are decoupled by the protocol.</div>
+
+    <figure>
+      <img src="images/dgm-s2-03-01.png" alt="Three MCP primitives: Tools, Resources, and Prompts all connecting up to a single MCP Server box"/>
+      <figcaption>An MCP server can expose all three primitives. Most start with Tools only; Resources and Prompts are for richer agent-server integration.</figcaption>
+    </figure>
+
+    <p>The chain from business need to agent tool is: a <strong>Business Function</strong> (check invoice status) → wrapped in a <strong>Tool</strong> (a function with input/output schema) → registered in a <strong>Tool Registry</strong> (the MCP server's tool list) → described as an <strong>MCP Tool</strong> (name, description, JSON schema) → served by an <strong>MCP Server</strong> → discovered by the MCP Client → available to the LLM as a callable tool. The only part that touches agent-specific code is the MCP server declaration. Everything above it is ordinary application logic.</p>
+
+    <div class="mc"><p class="q">Memory check (answer first, then read):</p><ul>
+        <li>What is the MCP client's job in the agent runtime? <span class="answer">→ discover available tools from MCP servers, receive tool-call requests from the LLM, invoke the server, and return results</span></li>
+        <li>Name three transport options for MCP. <span class="answer">→ stdio (local process pipe), SSE (Server-Sent Events over HTTP), WebSocket — the protocol is transport-agnostic</span></li>
+        <li>Why does MCP make tool re-use easier than proprietary tool bindings? <span class="answer">→ any MCP-compatible runtime can consume any MCP server without custom code — write the server once, use it across Claude Code, any Claude-based agent, and any other MCP client</span></li>
+      </ul></div>
+
+    <div class="iq"><p class="qs">&#x1F4AC; Your team is building a billing agent. Walk me through how you'd expose the billing system to the agent using MCP.</p><p class="ans">(1) <b>Identify the business functions</b>: get_invoice, apply_credit, retry_charge, get_customer_balance. (2) <b>Implement each as a function</b> with validated input/output (e.g. TypeScript or Python with schema validation). (3) <b>Create an MCP server</b> using an MCP SDK; declare each function as an MCP Tool with name, description, and JSON schema for args. (4) <b>Configure the agent runtime</b> to connect to the MCP server via stdio or SSE. (5) At runtime, the agent discovers tools via <code>tools/list</code>; the LLM sees them as available capabilities. (6) When the LLM calls <code>get_invoice</code>, the MCP client routes the call to the server, executes the function, and returns the structured result.</p></div>
+
+    <div class="iq"><p class="qs">&#x1F4AC; What is the difference between an MCP Tool, an MCP Resource, and an MCP Prompt?</p><p class="ans"><b>Tool</b> = a function the agent can invoke to take an action or query data (read or write); it has a name, description, and JSON schema, and returns a result. <b>Resource</b> = a URI-addressable data source the agent can read passively — like a file or database row — it is not invoked, just fetched. <b>Prompt</b> = a pre-authored template for a common task the user or agent can invoke to get a structured starting prompt (e.g. "draft a support reply"). Tools are the most commonly used; Resources and Prompts add richness for advanced server-agent integration.</p></div>
+  </section>
+
+  <!-- ============ QUIZ ============ -->
+  <h2 id="quiz">Retrieval practice — Modules 4–6</h2>
+
+  <div class="quiz-static"><p><strong>Quiz answer key</strong></p><ol>
+<li>
+<p class="q"><span class="qn">Q1 —</span> When Claude Code "runs a test", what actually executes it?</p>
+<p>&#x2714; <strong>The runtime calls a Bash tool; the shell executes the command and returns stdout/stderr to the LLM</strong></p>
+</li>
+<li>
+<p class="q"><span class="qn">Q2 —</span> Cursor's primary advantage over a read-on-demand approach is...</p>
+<p>&#x2714; <strong>It pre-computes code relevance via embeddings so retrieval is fast even on very large repos</strong></p>
+</li>
+<li>
+<p class="q"><span class="qn">Q3 —</span> The MCP "Tools" primitive is best described as...</p>
+<p>&#x2714; <strong>Invocable functions the agent calls to take actions or retrieve data, with input/output schema</strong></p>
+</li>
+<li>
+<p class="q"><span class="qn">Q4 —</span> In the "fix authentication bug" walkthrough, step 6 says "if failures remain, loop back to step 4." This is...</p>
+<p>&#x2714; <strong>The agent loop — the runtime re-calls the LLM with the test output, which reasons and edits again</strong></p>
+</li>
+<li>
+<p class="q"><span class="qn">Q5 —</span> What is the main limitation of embedding-based retrieval for code context?</p>
+<p>&#x2714; <strong>Semantic similarity may miss structurally related code that uses different naming or domain terms</strong></p>
+</li>
+</ol></div>
+
+  
+
+  
+
+  
+
+  
+
+  <!-- ============ INTERVIEW QUESTIONS ============ -->
+  <h2 id="interview">Interview questions — Modules 4–6</h2>
+
+  <div class="iq"><p class="qs">&#x1F4AC; A user reports Claude Code is reading files that seem irrelevant to the task. What is likely causing this and how would you fix it?</p><p class="ans">Without a good initial prompt + CLAUDE.md scoping, the agent reads broadly to form context. Fix by: <b>providing a tighter task description</b>; using <b>CLAUDE.md to specify project structure</b> so Claude knows where relevant code lives; using <b>/compact</b> to drop old context that is pulling in stale references; and <b>breaking the task into smaller scoped steps</b> so each loop iteration has a clear, bounded goal.</p></div>
+
+  <div class="iq"><p class="qs">&#x1F4AC; How does Claude Code handle a failing test during an iterative fix loop?</p><p class="ans">It reads the test output (stderr/stdout returned by the Bash tool), identifies which assertion failed and why, re-reads the relevant source code if needed, forms a new hypothesis, makes a targeted edit, and re-runs the test — repeating until all tests pass or the max iteration limit is hit. <b>Each iteration adds tool results to the context window</b>, consuming token budget. Long loops on large repos can exhaust context; breaking the task into focused sub-tasks is the mitigation.</p></div>
+
+  <div class="iq"><p class="qs">&#x1F4AC; When would you use Claude Code instead of Cursor for a coding task?</p><p class="ans">Use <b>Claude Code</b> when you need: precise iterative fixing (run tests, read output, fix, repeat); tasks that require Bash/shell commands or git operations; or when the task is well-scoped and the correct files are already known. Use <b>Cursor</b> when you need: broad codebase exploration; multi-file refactors where you don't know which files are relevant; or IDE-integrated tab completion and inline edits during active development.</p></div>
+
+  <div class="iq"><p class="qs">&#x1F4AC; What is the main weakness of an embedding-based retrieval system for code?</p><p class="ans"><b>Semantic similarity does not equal logical or structural relevance.</b> An embedding search for "authentication" may miss files that implement auth logic but use domain-specific naming conventions. Import graphs and call graphs carry structural relationship information that embeddings do not capture. Cursor partially mitigates this with additional signals (file structure, user-provided @mentions), but it remains a known limitation — especially in large monorepos with non-obvious dependency chains.</p></div>
+
+  <div class="iq"><p class="qs">&#x1F4AC; Your team is building a billing agent. Walk me through how you'd expose the billing system to the agent using MCP.</p><p class="ans">(1) <b>Identify the business functions</b>: get_invoice, apply_credit, retry_charge, get_customer_balance. (2) <b>Implement each as a function</b> with validated input/output (e.g. TypeScript or Python with schema validation). (3) <b>Create an MCP server</b> using an MCP SDK; declare each function as an MCP Tool with name, description, and JSON schema for args. (4) <b>Configure the agent runtime</b> to connect to the MCP server via stdio or SSE. (5) At runtime, the agent discovers tools via <code>tools/list</code>; the LLM sees them as available capabilities. (6) When the LLM calls <code>get_invoice</code>, the MCP client routes the call to the server, executes the function, and returns the structured result.</p></div>
+
+  <div class="iq"><p class="qs">&#x1F4AC; What is the difference between an MCP Tool, an MCP Resource, and an MCP Prompt?</p><p class="ans"><b>Tool</b> = a function the agent can invoke to take an action or query data (read or write); it has a name, description, and JSON schema, and returns a result. <b>Resource</b> = a URI-addressable data source the agent can read passively — like a file or database row — it is not invoked, just fetched. <b>Prompt</b> = a pre-authored template for a common task the user or agent can invoke to get a structured starting prompt (e.g. "draft a support reply"). Tools are the most commonly used; Resources and Prompts add richness for advanced server-agent integration.</p></div>
+
+  <!-- ============ NAV ============ -->
+  
+
+  <footer>
+    <p>Sources</p>
+    <ol>
+      <li id="s1">Anthropic, Claude Code documentation — docs.anthropic.com. Tool use, agent loop, file/bash/git tools.</li>
+      <li id="s2">Cursor, documentation — cursor.com/docs. Codebase indexing, embeddings, agent mode.</li>
+      <li id="s3">Anthropic, MCP specification — modelcontextprotocol.io. Tools, Resources, Prompts, transports.</li>
+      <li id="s4">Anthropic, "Building effective agents" — anthropic.com/engineering. Agent patterns and tool use.</li>
+    </ol>
+  </footer>
+</div>
+</body>
+</html>

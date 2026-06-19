@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 560" font-family="sans-serif">
+  <defs>
+    <marker id="sf1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f7a1f"/></marker>
+    <style>
+      .title{font-size:16px;font-weight:bold;fill:#111}
+      .hd{font-size:12.5px;font-weight:bold;fill:#111}
+      .sub{font-size:10.5px;fill:#555}
+      .col{font-size:12px;font-weight:bold;fill:#111}
+      .cell{font-size:11px;fill:#222}
+      .ok{font-size:11px;font-weight:bold;fill:#1f7a1f}
+      .no{font-size:11px;font-weight:bold;fill:#b00000}
+      .mid{font-size:11px;font-weight:bold;fill:#8a5a00}
+      .arr{stroke:#1f7a1f;stroke-width:1.8;fill:none}
+    </style>
+  </defs>
+  <rect width="1040" height="560" fill="#ffffff"/>
+  <text x="520" y="28" text-anchor="middle" class="title">The trade-off: pessimistic blocking vs optimistic abort — and the read-only fast path</text>
+
+  <!-- comparison table -->
+  <rect x="40" y="56" width="640" height="220" rx="8" fill="#fafbfc" stroke="#dde2e8"/>
+  <!-- header row -->
+  <line x1="220" y1="56" x2="220" y2="276" stroke="#dde2e8"/>
+  <line x1="380" y1="56" x2="380" y2="276" stroke="#dde2e8"/>
+  <line x1="530" y1="56" x2="530" y2="276" stroke="#dde2e8"/>
+  <line x1="40" y1="92" x2="680" y2="92" stroke="#cfd6de"/>
+  <line x1="40" y1="150" x2="680" y2="150" stroke="#eef1f4"/>
+  <line x1="40" y1="208" x2="680" y2="208" stroke="#eef1f4"/>
+  <text x="130" y="80" text-anchor="middle" class="col"> </text>
+  <text x="300" y="80" text-anchor="middle" class="col">Strict 2PL</text>
+  <text x="455" y="80" text-anchor="middle" class="col">Plain SI</text>
+  <text x="605" y="80" text-anchor="middle" class="col">SSI</text>
+
+  <text x="52" y="126" class="hd">reads</text>
+  <text x="300" y="126" text-anchor="middle" class="no">block writers</text>
+  <text x="455" y="126" text-anchor="middle" class="ok">non-blocking</text>
+  <text x="605" y="126" text-anchor="middle" class="ok">non-blocking</text>
+
+  <text x="52" y="184" class="hd">correctness</text>
+  <text x="300" y="184" text-anchor="middle" class="ok">serializable</text>
+  <text x="455" y="184" text-anchor="middle" class="no">write skew!</text>
+  <text x="605" y="184" text-anchor="middle" class="ok">serializable</text>
+
+  <text x="52" y="242" class="hd">pays in</text>
+  <text x="300" y="236" text-anchor="middle" class="mid">latency,</text><text x="300" y="252" text-anchor="middle" class="mid">deadlocks</text>
+  <text x="455" y="242" text-anchor="middle" class="ok">~nothing</text>
+  <text x="605" y="236" text-anchor="middle" class="mid">false-positive</text><text x="605" y="252" text-anchor="middle" class="mid">aborts, pred-locks</text>
+
+  <!-- posture note -->
+  <rect x="700" y="56" width="300" height="220" rx="8" fill="#f3f8f4" stroke="#bcd9c4"/>
+  <text x="850" y="82" text-anchor="middle" class="hd" fill="#1f7a1f">Posture</text>
+  <text x="716" y="110" class="sub">2PL is PESSIMISTIC — block up front</text>
+  <text x="716" y="128" class="sub">to prevent conflicts.</text>
+  <text x="716" y="156" class="sub">SSI is OPTIMISTIC — run on snapshots,</text>
+  <text x="716" y="174" class="sub">abort at the end if a structure formed.</text>
+  <text x="716" y="206" class="sub">Read-mostly, low conflict → optimism wins.</text>
+  <text x="716" y="230" class="sub">Push contention high enough and the</text>
+  <text x="716" y="248" class="sub">abort-and-retry tax exceeds 2PL's</text>
+  <text x="716" y="266" class="sub">blocking tax — measure the crossover.</text>
+
+  <!-- safe snapshot fast path -->
+  <rect x="40" y="300" width="960" height="130" rx="10" fill="#eef5ff" stroke="#2a6099"/>
+  <text x="520" y="326" text-anchor="middle" class="hd" fill="#26577e">The escape hatch: the safe-snapshot read-only optimization</text>
+  <rect x="70" y="342" width="250" height="66" rx="6" fill="#fff" stroke="#2a6099"/>
+  <text x="195" y="366" text-anchor="middle" class="cell">READ ONLY transaction</text>
+  <text x="195" y="386" text-anchor="middle" class="sub">proven to reach a "safe snapshot":</text>
+  <text x="195" y="400" text-anchor="middle" class="sub">can't be in any dangerous structure</text>
+  <line class="arr" x1="324" y1="375" x2="430" y2="375" marker-end="url(#sf1)"/>
+  <text x="377" y="366" text-anchor="middle" class="ok">drops to</text>
+  <rect x="436" y="342" width="270" height="66" rx="6" fill="#fff" stroke="#1f7a1f"/>
+  <text x="571" y="366" text-anchor="middle" class="ok">runs as REPEATABLE READ</text>
+  <text x="571" y="386" text-anchor="middle" class="sub">no SIRead locks · never aborts (40001)</text>
+  <text x="571" y="400" text-anchor="middle" class="sub">never causes anyone else's abort</text>
+  <text x="730" y="368" class="sub">READ ONLY DEFERRABLE</text>
+  <text x="730" y="386" class="sub">waits for a safe snapshot</text>
+  <text x="730" y="404" class="sub">on purpose — for long reports.</text>
+
+  <rect x="120" y="452" width="800" height="86" rx="10" fill="#f6f7f6" stroke="#ddd"/>
+  <text x="520" y="478" text-anchor="middle" class="title" font-size="13">Discipline: always retry on 40001 · keep txns short + reads selective · DEFERRABLE for long reports.</text>
+  <text x="520" y="506" text-anchor="middle" class="no" font-size="12">Scope: SSI is single-node. It does NOT make a sharded / replicated fleet serializable for free.</text>
+  <text x="520" y="528" text-anchor="middle" class="sub">Cahill et al. 2008 · Ports &amp; Grittner, VLDB 2012.</text>
+</svg>

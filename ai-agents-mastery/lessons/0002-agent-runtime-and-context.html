@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 2 · Agent Runtime, Context &amp; Memory</title>
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<style>
+  :root{--accent:var(--track-agents)}
+
+  /* one-sentence decomposition chips */
+  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+  .chip b{color:var(--accent)}
+  .chip.c2 b{color:var(--track-rest)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
+
+  /* TOC as a grid */
+  .toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
+  .toc a{text-decoration:none; padding:.15rem 0}
+
+  /* level block */
+  .lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
+  .lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
+  .num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
+  .lvltop h2{margin:0; font-size:1.24rem; font-weight:700}
+  .tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
+
+  /* fact cards — labelled 2-col variant */
+  .facts{grid-template-columns:1fr 1fr}
+  .fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+  .fact.blue b{color:var(--track-rest)}
+
+  /* myth -> truth (2-col grid) */
+  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
+  .myth div{border-radius:6px; padding:.45rem .6rem}
+  .myth .m{background:color-mix(in srgb,var(--bad) 12%,transparent); border-left:3px solid var(--bad); color:var(--bad)}
+  .myth .t{background:color-mix(in srgb,var(--good) 14%,transparent); border-left:3px solid var(--good); color:var(--good)}
+
+  /* dark "memory rule" band */
+  .rule{font-size:.92rem; font-weight:600; background:var(--ink); color:var(--bg); border-radius:8px; padding:.55rem .85rem; margin:.7rem 0}
+  .rule span{color:var(--accent)}
+
+  /* memory-check disclosure */
+  details.mc{border:0; background:transparent; padding:0; margin:.5rem 0 0; font-size:.84rem}
+  details.mc summary{cursor:pointer; color:var(--good); font-weight:600; list-style:none}
+  details.mc summary::before{content:"\25B8 "}
+  details.mc[open] summary::before{content:"\25BE "}
+  details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
+  details.mc .ans{color:var(--muted)}
+
+  /* interview-question disclosure */
+  details.iq{border-left:3px solid var(--track-rest); font-size:.88rem}
+  details.iq summary{list-style:none}
+  details.iq summary::-webkit-details-marker{display:none}
+  details.iq summary::before{content:"\1F4AC "}
+  details.iq[open] summary{color:var(--track-rest)}
+  details.iq .a{margin-top:.45rem; font-size:.85rem; color:var(--ink); line-height:1.45}
+  details.iq .a b{color:var(--track-rest)}
+
+  /* footer nav row */
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
+
+  @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<!-- shared arrowheads -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="0001-ai-agents-from-first-principles.html" title="AI Agents from first principles">&#8249; Prev</a><a href="0003-how-coding-agents-work.html" title="How Coding Agents Work">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">AI Agents</span></span>
+  </nav>
+
+  <div class="kicker">Lesson 2 · Stage 2: Internals · visual edition</div>
+  <h1>Agent Runtime, Context &amp; Memory</h1>
+  <p class="meta">~30 min · 3 modules · runtime internals + context engineering + memory systems</p>
+
+  <div class="mission">
+    <strong>Your bar:</strong> explain to an interviewer how an agent runtime orchestrates an LLM loop, why context engineering often matters more than model choice, and how the three memory tiers map to production storage systems.<sup><a href="#s1" id="r1">1</a></sup>
+  </div>
+
+  <p>One sentence holds all three modules. Each module unpacks one chip:</p>
+  <div class="chips">
+    <span class="chip">An agent is a stateless LLM <b>run by a runtime</b></span>
+    <span class="chip c2">that manages <b>context carefully</b></span>
+    <span class="chip c3">and stores state in <b>three memory tiers</b></span>
+    <span class="chip c4">because the LLM itself <b>remembers nothing</b></span>
+  </div>
+
+  <nav class="toc">
+    <a href="#m1">① Agent Runtime</a><a href="#m2">② Context Management</a>
+    <a href="#m3">③ Memory</a>
+  </nav>
+
+  <!-- ============ MODULE M1: AGENT RUNTIME ============ -->
+  <section class="lvl" id="m1">
+    <div class="lvltop"><span class="num">1</span><h2>Agent Runtime — the OS around the LLM</h2></div>
+    <p class="tagline">The LLM is stateless. Someone has to run the loop, manage tools, and know when to stop. That's the runtime.</p>
+
+    <figure>
+      <svg viewBox="0 0 580 220" role="img" aria-label="Runtime orchestrates: User to Runtime to LLM, with tools below LLM, a loop-back from LLM to Runtime, and a halt arrow from Runtime to the right">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <!-- User box -->
+          <rect x="10" y="20" width="90" height="44" rx="9" fill="#fff" stroke="#d8d4c8"/>
+          <text x="55" y="40" text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="700" fill="#111110">User</text>
+          <text x="55" y="56" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="#6b675f">request</text>
+
+          <!-- Arrow: User -> Runtime -->
+          <line x1="102" y1="42" x2="148" y2="42" stroke="#6b675f" marker-end="url(#arw)"/>
+
+          <!-- Runtime box (highlighted, dashed border) -->
+          <rect x="150" y="8" width="200" height="68" rx="10" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5" stroke-dasharray="6 3"/>
+          <text x="250" y="30" text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="700" fill="#7a1f12">Runtime</text>
+          <text x="250" y="50" text-anchor="middle" dominant-baseline="middle" font-size="9.5" fill="#6b675f">loop · tools · retry · limits</text>
+          <text x="250" y="66" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#6b675f">cost control · safety</text>
+
+          <!-- Arrow: Runtime -> LLM -->
+          <line x1="250" y1="78" x2="250" y2="114" stroke="#7a1f12" stroke-width="1.2" marker-end="url(#arwA)"/>
+
+          <!-- LLM box -->
+          <rect x="186" y="116" width="128" height="44" rx="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <text x="250" y="136" text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="700" fill="#7a1f12">LLM</text>
+          <text x="250" y="152" text-anchor="middle" dominant-baseline="middle" font-size="9.5" fill="#6b675f">predicts only</text>
+
+          <!-- Loop-back dashed arrow: LLM result -> Runtime -->
+          <path d="M 186 130 C 140 130, 130 90, 150 55" fill="none" stroke="#7a1f12" stroke-dasharray="4 3" marker-end="url(#arwA)"/>
+          <text x="106" y="100" text-anchor="middle" font-size="9" fill="#7a1f12">result</text>
+
+          <!-- Halt arrow: Runtime -> right -->
+          <line x1="352" y1="32" x2="430" y2="32" stroke="#9a2417" stroke-width="1.2" marker-end="url(#arwR)"/>
+          <text x="391" y="24" text-anchor="middle" font-size="9" fill="#9a2417">halt / cost limit</text>
+
+          <!-- Tool boxes below LLM -->
+          <rect x="60" y="178" width="110" height="36" rx="7" fill="#eef5ee" stroke="#2f5d3a"/>
+          <text x="115" y="200" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#2f5d3a">File System</text>
+
+          <rect x="195" y="178" width="110" height="36" rx="7" fill="#eef5ee" stroke="#2f5d3a"/>
+          <text x="250" y="200" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#2f5d3a">External API</text>
+
+          <rect x="330" y="178" width="110" height="36" rx="7" fill="#eef5ee" stroke="#2f5d3a"/>
+          <text x="385" y="200" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#2f5d3a">Database</text>
+
+          <!-- Arrows: LLM -> tools -->
+          <line x1="215" y1="162" x2="155" y2="176" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+          <line x1="250" y1="162" x2="250" y2="176" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+          <line x1="285" y1="162" x2="345" y2="176" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        </g>
+      </svg>
+      <figcaption>The runtime is the application server around the LLM. It runs the loop. The LLM only predicts; everything else — calling tools, retrying, enforcing limits — is the runtime's job.</figcaption>
+    </figure>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> Orchestration code that wraps an LLM in a loop — reads output, executes tools, feeds results back, repeats until done or halted.</div>
+      <div class="fact"><b>Why it exists</b> The LLM is a stateless pure function. It can't call tools, maintain state, retry failures, or stop itself. The runtime supplies all of that.</div>
+      <div class="fact blue"><b>Like (world)</b> The office around a brilliant but absent-minded consultant. The consultant (LLM) only answers questions. The office (runtime) books the meetings, delivers results, tracks budget, and fires the consultant if they go over hours.</div>
+      <div class="fact blue"><b>Like (code)</b> Laravel + php-fpm + Horizon (queue worker) combined. The LLM is one handler function. The runtime is the web server + queue + retry policy + middleware chain around it.<sup><a href="#s1" id="r1b">1</a></sup></div>
+    </div>
+
+    <div class="myth">
+      <div class="m">✗ "The LLM decides when to stop and what tools to call"</div>
+      <div class="t">✓ The LLM <em>requests</em> a tool call as text output; the runtime decides whether to execute it, execute it safely, and when the loop is done</div>
+    </div>
+
+    <div class="rule"><span>🏗️ Memory rule:</span> Runtime = Agent OS. The LLM is a CPU instruction set — powerful but inert. The runtime is the kernel that actually runs the process.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Name four responsibilities the runtime has that the LLM cannot do. <span class="ans">→ loop orchestration, tool execution, retry/backoff, cost/safety limits</span></li>
+      <li>What does the LLM actually emit when it "calls a tool"? <span class="ans">→ structured text (tool name + args); the runtime executes the real call</span></li>
+      <li>Closest SWE analogy for the runtime? <span class="ans">→ web server + queue worker + middleware — not just "a function"</span></li>
+    </ul></details>
+
+    <figure style="margin-top:1.4rem">
+      <svg viewBox="0 0 560 160" role="img" aria-label="Six runtime responsibilities surrounding a central Runtime circle: Loop Orchestration, Tool Execution, State Management, Retry and Backoff, Cost Control, Safety Limits">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <!-- Central circle -->
+          <circle cx="280" cy="80" r="38" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <text x="280" y="77" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="700" fill="#7a1f12">Runtime</text>
+          <text x="280" y="93" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#6b675f">responsibilities</text>
+
+          <!-- Top row boxes -->
+          <rect x="20" y="12" width="130" height="38" rx="7" fill="#fbfaf2" stroke="#d8d4c8"/>
+          <text x="85" y="35" text-anchor="middle" dominant-baseline="middle" font-size="10.5" fill="#111110">Loop Orchestration</text>
+
+          <rect x="215" y="12" width="130" height="38" rx="7" fill="#fbfaf2" stroke="#d8d4c8"/>
+          <text x="280" y="35" text-anchor="middle" dominant-baseline="middle" font-size="10.5" fill="#111110">Tool Execution</text>
+
+          <rect x="410" y="12" width="130" height="38" rx="7" fill="#fbfaf2" stroke="#d8d4c8"/>
+          <text x="475" y="35" text-anchor="middle" dominant-baseline="middle" font-size="10.5" fill="#111110">State Management</text>
+
+          <!-- Bottom row boxes -->
+          <rect x="20" y="110" width="130" height="38" rx="7" fill="#fbfaf2" stroke="#d8d4c8"/>
+          <text x="85" y="133" text-anchor="middle" dominant-baseline="middle" font-size="10.5" fill="#111110">Retry &amp; Backoff</text>
+
+          <rect x="215" y="110" width="130" height="38" rx="7" fill="#fbfaf2" stroke="#d8d4c8"/>
+          <text x="280" y="133" text-anchor="middle" dominant-baseline="middle" font-size="10.5" fill="#111110">Cost Control</text>
+
+          <rect x="410" y="110" width="130" height="38" rx="7" fill="#fbfaf2" stroke="#d8d4c8"/>
+          <text x="475" y="133" text-anchor="middle" dominant-baseline="middle" font-size="10.5" fill="#111110">Safety Limits</text>
+
+          <!-- Lines from center to boxes -->
+          <line x1="245" y1="64" x2="150" y2="50" stroke="#d8d4c8"/>
+          <line x1="280" y1="42" x2="280" y2="50" stroke="#d8d4c8"/>
+          <line x1="315" y1="64" x2="410" y2="50" stroke="#d8d4c8"/>
+          <line x1="245" y1="96" x2="150" y2="110" stroke="#d8d4c8"/>
+          <line x1="280" y1="118" x2="280" y2="110" stroke="#d8d4c8"/>
+          <line x1="315" y1="96" x2="410" y2="110" stroke="#d8d4c8"/>
+        </g>
+      </svg>
+      <figcaption>The six responsibilities the runtime owns. None of these happen inside the LLM — they are all code you write or configure.</figcaption>
+    </figure>
+
+    <details class="iq">
+      <summary>Walk me through the lifecycle of one agent loop iteration from the moment the LLM returns output.</summary>
+      <div class="a">
+        <b>Hit these points:</b> LLM returns text with a tool-call block &rarr; runtime parses the output and extracts tool name + args &rarr; validates tool name against the allowed list and validates arg schema &rarr; executes the real function (file read, API call, DB query) &rarr; captures output or error &rarr; appends a <code>[tool_result]</code> message to the conversation history &rarr; calls LLM again with updated context &rarr; repeat until the LLM returns a final answer (no tool call) or max-steps is exceeded and the runtime halts.
+      </div>
+    </details>
+
+    <details class="iq">
+      <summary>How does a runtime prevent an agent from running forever or spending $500?</summary>
+      <div class="a">
+        <b>Hit these points:</b> loop cap (max iterations per session) &rarr; token budget per turn so no single call exceeds limits &rarr; wall-clock timeout on the entire session &rarr; per-session cost tracking with a hard ceiling &rarr; circuit breakers on tool failures (max retries + exponential backoff before aborting) &rarr; human-in-the-loop interrupt hooks that pause execution and request confirmation before high-risk or high-cost actions.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ MODULE M2: CONTEXT MANAGEMENT ============ -->
+  <section class="lvl" id="m2">
+    <div class="lvltop"><span class="num">2</span><h2>Context Management — the RAM budget</h2></div>
+    <p class="tagline">A 200k-token window sounds huge. A real codebase is millions of tokens. Every coding agent is fighting this constraint every call.</p>
+
+    <figure>
+      <svg viewBox="0 0 600 180" role="img" aria-label="Pipeline: large Codebase box, then Context Selection box with Retrieve, Rank, Assemble, Compress steps, then a filled Context Window bar, then LLM">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <!-- Codebase box -->
+          <rect x="8" y="58" width="108" height="64" rx="9" fill="#fff" stroke="#d8d4c8"/>
+          <text x="62" y="82" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#111110">Codebase</text>
+          <text x="62" y="100" text-anchor="middle" dominant-baseline="middle" font-size="9.5" fill="#6b675f">(GB of text)</text>
+          <text x="62" y="114" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#9a2417">too large to fit</text>
+
+          <!-- Arrow: Codebase -> Context Selection -->
+          <line x1="118" y1="90" x2="154" y2="90" stroke="#6b675f" marker-end="url(#arw)"/>
+
+          <!-- Context Selection box -->
+          <rect x="156" y="22" width="166" height="136" rx="10" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <text x="239" y="42" text-anchor="middle" dominant-baseline="middle" font-size="11.5" font-weight="700" fill="#7a1f12">Context Selection</text>
+          <rect x="170" y="56" width="138" height="22" rx="5" fill="#fff" stroke="#d8d4c8"/>
+          <text x="239" y="67" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="#111110">① Retrieve</text>
+          <rect x="170" y="84" width="138" height="22" rx="5" fill="#fff" stroke="#d8d4c8"/>
+          <text x="239" y="95" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="#111110">② Rank</text>
+          <rect x="170" y="112" width="138" height="22" rx="5" fill="#fff" stroke="#d8d4c8"/>
+          <text x="239" y="123" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="#111110">③ Assemble</text>
+          <rect x="170" y="140" width="138" height="10" rx="4" fill="#fff" stroke="#d8d4c8"/>
+          <text x="239" y="145" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#6b675f">④ Compress (if needed)</text>
+
+          <!-- Arrow: Context Selection -> Context Window -->
+          <line x1="324" y1="90" x2="360" y2="90" stroke="#6b675f" marker-end="url(#arw)"/>
+
+          <!-- Context Window bar -->
+          <rect x="362" y="58" width="96" height="64" rx="9" fill="#fff" stroke="#d8d4c8"/>
+          <text x="410" y="72" text-anchor="middle" dominant-baseline="middle" font-size="9" font-weight="700" fill="#111110">Context Window</text>
+          <rect x="370" y="82" width="80" height="14" rx="3" fill="#e8e4d8" stroke="#d8d4c8"/>
+          <rect x="370" y="82" width="52" height="14" rx="3" fill="#7a1f12"/>
+          <text x="410" y="106" text-anchor="middle" dominant-baseline="middle" font-size="8.5" fill="#6b675f">52k / 80k tokens</text>
+
+          <!-- Arrow: Context Window -> LLM -->
+          <line x1="460" y1="90" x2="496" y2="90" stroke="#6b675f" marker-end="url(#arw)"/>
+
+          <!-- LLM box -->
+          <rect x="498" y="66" width="90" height="48" rx="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <text x="543" y="90" text-anchor="middle" dominant-baseline="middle" font-size="14" font-weight="700" fill="#7a1f12">LLM</text>
+          <text x="543" y="106" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#6b675f">reasons here</text>
+        </g>
+      </svg>
+      <figcaption>Context selection is the biggest lever in any coding agent. The right 8k tokens beat the wrong 200k tokens every time.</figcaption>
+    </figure>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> The process of deciding what text to put in the limited context window before each LLM call — selecting, ranking, and assembling the most relevant content from a larger source.</div>
+      <div class="fact"><b>Why it exists</b> LLMs have a fixed token budget per call. A real codebase, conversation history, docs, and tool outputs together vastly exceed it. Something must choose what fits.</div>
+      <div class="fact blue"><b>Like (world)</b> A consultant's pre-meeting briefing pack. You can't hand them 10,000 pages — someone curates the 20 most relevant pages. Wrong curation = wrong advice.</div>
+      <div class="fact blue"><b>Like (code)</b> Redis working set vs full database. The context window is L1 cache. The codebase is the full DB. Context selection is the query + cache-fill strategy.<sup><a href="#s2" id="r2">2</a></sup></div>
+    </div>
+
+    <div class="myth">
+      <div class="m">✗ "A bigger context window means you don't need context engineering"</div>
+      <div class="t">✓ Bigger windows reduce pressure but don't eliminate it; irrelevant tokens dilute attention and raise cost — curation still wins</div>
+    </div>
+
+    <div class="rule"><span>📐 Memory rule:</span> Context window = RAM. You can't load the whole disk into RAM. Context engineering is the query that decides what loads.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Why can't a coding agent just send the entire repo to the LLM? <span class="ans">→ token limit; and even if it fit, irrelevant tokens dilute attention and multiply cost</span></li>
+      <li>Name three stages in context assembly. <span class="ans">→ retrieve (search), rank (score relevance), assemble (pack into window), compress (summarize if needed)</span></li>
+      <li>Why does context quality often beat model quality? <span class="ans">→ a weaker model with the right context out-performs a stronger model with noise — the model can't reason about what it wasn't given</span></li>
+    </ul></details>
+
+    <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:.9rem;margin:1.2rem 0 .3rem;font-weight:600">How Cursor vs Claude Code handle context limits<sup><a href="#s3" id="r3">3</a></sup><sup><a href="#s2" id="r2b">2</a></sup></h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Approach</th>
+          <th>Cursor</th>
+          <th>Claude Code</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Indexing</td>
+          <td>Embeds entire repo at open time</td>
+          <td>No upfront index — reads on demand</td>
+        </tr>
+        <tr>
+          <td>Retrieval</td>
+          <td>Semantic similarity search on embeddings</td>
+          <td>File read + grep + directory scan via tools</td>
+        </tr>
+        <tr>
+          <td>Context assembly</td>
+          <td>Auto-assembled from index results</td>
+          <td>Agent explicitly reads files it decides are relevant</td>
+        </tr>
+        <tr>
+          <td>Strength</td>
+          <td>Fast on large repos, always fresh relevant snippet</td>
+          <td>Precise — agent reads exactly what matters for the task</td>
+        </tr>
+        <tr>
+          <td>Weakness</td>
+          <td>Embedding quality can miss structural/logical relationships</td>
+          <td>Slower start; reads more tokens to understand project layout</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <details class="iq">
+      <summary>Why is context management often more important than the model itself?</summary>
+      <div class="a">
+        <b>Hit these points:</b> The model can only reason about what it's given — wrong or irrelevant context produces wrong answers regardless of model capability. <b>Right context with a smaller model often beats wrong context with the best model.</b> Budget is also a direct function of tokens sent — context selection is the primary cost lever. Finally, context errors are silent: the model doesn't say "you gave me the wrong files" — it just answers incorrectly based on what it received.
+      </div>
+    </details>
+
+    <details class="iq">
+      <summary>You are building a coding agent. The codebase is 2M tokens but your window is 200k. What is your retrieval strategy?</summary>
+      <div class="a">
+        <b>Hit these points:</b> embed + similarity search for relevant files by function/class/symbol name &rarr; supplement with structural context (file tree, import graph, dependency map) &rarr; prioritize files the user's query mentions by name — exact matches first &rarr; compress large files by showing only function signatures and docstrings, not bodies &rarr; reserve a fixed token budget for tool outputs and conversation history and enforce it &rarr; track what you've loaded to avoid refetching &rarr; instrument retrieval quality so you can measure and improve hit rate over time.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ MODULE M3: MEMORY ============ -->
+  <section class="lvl" id="m3">
+    <div class="lvltop"><span class="num">3</span><h2>Memory — because the LLM forgets everything</h2></div>
+    <p class="tagline">The LLM has no memory. Every durable fact must be stored somewhere else and retrieved deliberately.</p>
+
+    <figure>
+      <svg viewBox="0 0 580 200" role="img" aria-label="Three memory tiers: Short-term conversation history, Working scratchpad, and Long-term knowledge base, all connected to a central Agent circle. Below each tier are human analogies: RAM, Notepad, Company Wiki">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <!-- Short-term tier -->
+          <rect x="10" y="20" width="148" height="90" rx="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <text x="84" y="42" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="700" fill="#7a1f12">Short-term</text>
+          <text x="84" y="62" text-anchor="middle" dominant-baseline="middle" font-size="10.5" fill="#111110">Conversation History</text>
+          <text x="84" y="80" text-anchor="middle" dominant-baseline="middle" font-size="8.5" fill="#6b675f">RAM — lives in context window,</text>
+          <text x="84" y="94" text-anchor="middle" dominant-baseline="middle" font-size="8.5" fill="#6b675f">gone on reset</text>
+
+          <!-- Working tier -->
+          <rect x="216" y="20" width="148" height="90" rx="9" fill="#eef2f5" stroke="#1f3a5a" stroke-width="1.5"/>
+          <text x="290" y="42" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="700" fill="#1f3a5a">Working</text>
+          <text x="290" y="62" text-anchor="middle" dominant-baseline="middle" font-size="10.5" fill="#111110">Scratchpad / Plan</text>
+          <text x="290" y="80" text-anchor="middle" dominant-baseline="middle" font-size="8.5" fill="#6b675f">CPU registers — current task</text>
+          <text x="290" y="94" text-anchor="middle" dominant-baseline="middle" font-size="8.5" fill="#6b675f">notes, tool outputs</text>
+
+          <!-- Long-term tier -->
+          <rect x="422" y="20" width="148" height="90" rx="9" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
+          <text x="496" y="42" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="700" fill="#2f5d3a">Long-term</text>
+          <text x="496" y="62" text-anchor="middle" dominant-baseline="middle" font-size="10.5" fill="#111110">Knowledge Base / Facts</text>
+          <text x="496" y="80" text-anchor="middle" dominant-baseline="middle" font-size="8.5" fill="#6b675f">Disk — survives sessions,</text>
+          <text x="496" y="94" text-anchor="middle" dominant-baseline="middle" font-size="8.5" fill="#6b675f">retrieved on demand</text>
+
+          <!-- Central Agent circle -->
+          <circle cx="290" cy="148" r="28" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <text x="290" y="145" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="700" fill="#7a1f12">Agent</text>
+          <text x="290" y="161" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#6b675f">runtime</text>
+
+          <!-- Bidirectional arrows to Agent -->
+          <line x1="120" y1="112" x2="265" y2="136" stroke="#6b675f" marker-end="url(#arw)"/>
+          <line x1="262" y1="132" x2="116" y2="112" stroke="#6b675f" marker-end="url(#arw)"/>
+
+          <line x1="290" y1="112" x2="290" y2="120" stroke="#6b675f" marker-end="url(#arw)"/>
+          <line x1="290" y1="120" x2="290" y2="112" stroke="#6b675f" marker-end="url(#arw)"/>
+
+          <line x1="460" y1="112" x2="315" y2="136" stroke="#6b675f" marker-end="url(#arw)"/>
+          <line x1="318" y1="132" x2="464" y2="112" stroke="#6b675f" marker-end="url(#arw)"/>
+
+          <!-- Human analogies below -->
+          <text x="84" y="188" text-anchor="middle" dominant-baseline="middle" font-size="9.5" fill="#9a2417">RAM</text>
+          <text x="290" y="188" text-anchor="middle" dominant-baseline="middle" font-size="9.5" fill="#1f3a5a">Notepad</text>
+          <text x="496" y="188" text-anchor="middle" dominant-baseline="middle" font-size="9.5" fill="#2f5d3a">Company Wiki</text>
+        </g>
+      </svg>
+      <figcaption>Three memory tiers — each with a different storage backend, durability, and retrieval cost.<sup><a href="#s4" id="r4">4</a></sup></figcaption>
+    </figure>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> The set of mechanisms an agent uses to store and retrieve information across turns — conversation history (short-term), task scratchpad (working), and a knowledge store (long-term) that persists across sessions.</div>
+      <div class="fact"><b>Why it exists</b> The LLM itself remembers nothing between calls. Every fact the agent needs across more than one turn must be explicitly stored and fed back in.</div>
+      <div class="fact blue"><b>Like (world)</b> Human memory: RAM (what you're thinking right now) + notepad (notes from this meeting) + company wiki (facts that outlive this meeting and are shared).</div>
+      <div class="fact blue"><b>Like (code)</b> In-process variables (short-term) + Redis scratchpad (working) + PostgreSQL / vector store (long-term). Each tier has different latency, durability, and query model.</div>
+    </div>
+
+    <div class="myth">
+      <div class="m">✗ "An agent 'knows' things from past conversations"</div>
+      <div class="t">✓ An agent knows what the runtime injects into the context window. Past facts only appear if explicitly retrieved from long-term storage and included.</div>
+    </div>
+
+    <div class="rule"><span>🗄️ Memory rule:</span> LLM = stateless function. Memory = what the runtime injects. Nothing is remembered unless something stored it and something retrieved it.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What happens to short-term memory when a conversation is reset? <span class="ans">→ it's gone — it only existed in the context window</span></li>
+      <li>Name a production backend for each memory tier. <span class="ans">→ short-term: in-memory message list; working: Redis / in-process state; long-term: vector DB (Pinecone/pgvector), SQL DB, key-value store</span></li>
+      <li>What should NOT be stored in long-term memory? <span class="ans">→ raw conversation transcripts (noisy, expensive to search); redundant/stale facts; PII unless required and compliant</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>Your support agent needs to remember a customer's product preferences across sessions. What memory tier handles this and what's your storage/retrieval design?</summary>
+      <div class="a">
+        <b>Hit these points:</b> long-term memory — persists across sessions by definition &rarr; store as <b>structured facts</b> in a relational DB keyed by <code>customer_id</code> (not raw transcripts) &rarr; retrieve by <code>customer_id</code> lookup at session start and inject into the system prompt as a short, structured block &rarr; update after each interaction where a new preference is expressed — write a derived fact, not the full transcript &rarr; version or timestamp facts so stale data can be pruned &rarr; avoid PII in long-term store unless you have a compliant data-retention policy for it.
+      </div>
+    </details>
+
+    <details class="iq">
+      <summary>What's the difference between working memory and context window?</summary>
+      <div class="a">
+        <b>Hit these points:</b> <b>Context window</b> is the physical token budget passed to the LLM each call — it's a technical constraint of the model API. <b>Working memory</b> is a higher-level concept: the scratchpad state the agent maintains for the current task — plans, intermediate results, tool outputs in progress. Working memory is often what fills the context window for a given turn, but short-term history and long-term retrieved facts also compete for that same budget. The distinction matters: context window is the constraint; working memory is one category of content that consumes it.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ QUIZ ============ -->
+  <h2 class="sec" id="quiz">Retrieval practice — test the three modules</h2>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q1.</span> The runtime's relationship to the LLM is most like…</p>
+      <button class="opt">A database that the LLM queries directly to find answers to questions</button>
+      <button class="opt">A load balancer distributing LLM requests across multiple model replicas</button>
+      <button class="opt">A kernel that orchestrates a CPU — the LLM computes, the runtime runs the process</button>
+      <button class="opt">A caching layer that stores and replays previous LLM responses for reuse</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q2.</span> Context management matters because…</p>
+      <button class="opt">Larger context windows always improve answer quality regardless of content selected</button>
+      <button class="opt">The LLM can only reason about what it receives — wrong content in means wrong answer out</button>
+      <button class="opt">Token limits only matter for cost accounting, not for answer quality or relevance</button>
+      <button class="opt">Retrieval is only needed for very large codebases, not for standard conversational agents</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q3.</span> Short-term memory in an agent system is…</p>
+      <button class="opt">A Redis cache that is shared and persisted across all concurrent agent sessions</button>
+      <button class="opt">The vector store that holds embedded documents for semantic similarity retrieval</button>
+      <button class="opt">The structured database that stores user preferences and facts across many sessions</button>
+      <button class="opt">The conversation history in the current context window — gone when the session resets</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q4.</span> An agent's runtime prevents infinite loops by…</p>
+      <button class="opt">Enforcing a max iteration cap and token budget, halting and returning an error when exceeded</button>
+      <button class="opt">Asking the LLM to self-assess after each turn whether it is stuck in a loop</button>
+      <button class="opt">Caching all LLM responses and detecting identical repeated outputs automatically</button>
+      <button class="opt">Delegating all loop management to the MCP server connection layer and its timeouts</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q5.</span> The main difference between Cursor's and Claude Code's context approach is…</p>
+      <button class="opt">Cursor uses a significantly larger context window than Claude Code for every single request</button>
+      <button class="opt">Claude Code pre-indexes the entire repo at startup; Cursor reads files on demand when asked</button>
+      <button class="opt">Cursor pre-indexes the repo via embeddings; Claude Code reads files on demand via tools</button>
+      <button class="opt">Both use identical retrieval strategies but differ only in their UI and default model selection</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <!-- ============ INTERVIEW QUESTIONS ============ -->
+  <h2 class="sec" id="interview">Interview questions — Modules 1–3</h2>
+
+  <details class="iq">
+    <summary>M1 — Walk me through the lifecycle of one agent loop iteration from the moment the LLM returns output.</summary>
+    <div class="a">
+      <b>Hit these points:</b> LLM returns text with a tool-call block &rarr; runtime parses it and extracts tool name + args &rarr; validates tool name against the allowed list and validates arg schema &rarr; executes the real function (file read, API call, DB query) &rarr; captures output or error &rarr; appends a <code>[tool_result]</code> message to the conversation history &rarr; calls LLM again with updated context &rarr; repeat until the LLM returns a final answer (no tool call) or max-steps is exceeded and the runtime halts.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M1 — How does a runtime prevent an agent from running forever or spending $500?</summary>
+    <div class="a">
+      <b>Hit these points:</b> loop cap (max iterations per session) &rarr; token budget per turn so no single call exceeds limits &rarr; wall-clock timeout on the entire session &rarr; per-session cost tracking with a hard ceiling &rarr; circuit breakers on tool failures (max retries + exponential backoff before aborting) &rarr; human-in-the-loop interrupt hooks that pause execution and request confirmation before high-risk or high-cost actions.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M2 — Why is context management often more important than the model itself?</summary>
+    <div class="a">
+      <b>Hit these points:</b> The model can only reason about what it's given — wrong or irrelevant context produces wrong answers regardless of model capability. <b>Right context with a smaller model often beats wrong context with the best model.</b> Budget is also a direct function of tokens sent — context selection is the primary cost lever. Context errors are silent: the model doesn't say "you gave me the wrong files" — it just answers incorrectly based on what it received.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M2 — You are building a coding agent. The codebase is 2M tokens but your window is 200k. What is your retrieval strategy?</summary>
+    <div class="a">
+      <b>Hit these points:</b> embed + similarity search for relevant files by function/class/symbol name &rarr; supplement with structural context (file tree, import graph, dependency map) &rarr; prioritize files the user's query mentions by name — exact matches first &rarr; compress large files by showing only function signatures and docstrings, not bodies &rarr; reserve a fixed token budget for tool outputs and conversation history and enforce it &rarr; track what you've loaded to avoid refetching &rarr; instrument retrieval quality so you can measure and improve hit rate over time.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M3 — Your support agent needs to remember a customer's product preferences across sessions. What memory tier handles this and what's your storage/retrieval design?</summary>
+    <div class="a">
+      <b>Hit these points:</b> long-term memory — persists across sessions by definition &rarr; store as <b>structured facts</b> in a relational DB keyed by <code>customer_id</code> (not raw transcripts) &rarr; retrieve by <code>customer_id</code> lookup at session start and inject into the system prompt as a short, structured block &rarr; update after each interaction where a new preference is expressed — write a derived fact, not the full transcript &rarr; version or timestamp facts so stale data can be pruned &rarr; avoid PII in long-term store unless you have a compliant data-retention policy for it.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M3 — What's the difference between working memory and context window?</summary>
+    <div class="a">
+      <b>Hit these points:</b> <b>Context window</b> is the physical token budget passed to the LLM each call — it's a technical constraint of the model API. <b>Working memory</b> is a higher-level concept: the scratchpad state the agent maintains for the current task — plans, intermediate results, tool outputs in progress. Working memory is often what fills the context window for a given turn, but short-term history and long-term retrieved facts also compete for that same budget. The distinction matters: context window is the constraint; working memory is one category of content that consumes it.
+    </div>
+  </details>
+
+  <!-- ============ NAV ============ -->
+  <div class="nav">
+    <span style="color:var(--muted)">← Lesson 1: <a href="0001-ai-agents-from-first-principles.html">The whole stack</a></span>
+    <span>Lesson 3: <a href="0003-how-coding-agents-work.html">Coding Agents in Depth →</a></span>
+  </div>
+
+  <!-- ============ SOURCES ============ -->
+  <footer id="sources">
+    <p><strong>Sources</strong></p>
+    <p><span id="s1">1. Anthropic, "Building effective agents" — anthropic.com/engineering. Runtime responsibilities, tool use patterns. <a href="#r1">↩</a></span></p>
+    <p><span id="s2">2. Anthropic, Claude Code documentation — docs.anthropic.com. Read-on-demand context model. <a href="#r2">↩</a></span></p>
+    <p><span id="s3">3. Cursor, documentation — cursor.com/docs. Codebase indexing and retrieval. <a href="#r3">↩</a></span></p>
+    <p><span id="s4">4. Anthropic, "Multi-agent research system" — anthropic.com/engineering. Memory and context patterns in production agents. <a href="#r4">↩</a></span></p>
+  </footer>
+
+</div><!-- /wrap -->
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

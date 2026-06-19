@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 4 · Variants at scale</title>
+<script>(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script>function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}</script>
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<style>:root{--accent:var(--track-bloom)}</style>
+</head>
+<body>
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="0003-failure-modes-and-lsm-reads.html" title="Failure modes &amp; LSM reads">&#8249; Prev</a><span style="color:var(--muted);opacity:.45">Next &#8250;</span></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Bloom Filters &#183; Staff</span></span>
+  </nav>
+  <div class="kicker">Lesson 4 · Staff</div>
+  <h1>Variants at scale: pick the one whose <em>limit</em> bites</h1>
+  <p class="meta">~8 min · visual-first · retrieval practice at the end</p>
+
+  <div class="mission">
+    <strong>The Staff frame.</strong> Standard Bloom is the default. Reach for a variant only when
+    one specific limit — no deletes, unknown <code>n</code>, or speed — actually hurts.
+  </div>
+
+  <h2>The decision matrix</h2>
+  <figure>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 320" font-family="ui-sans-serif,system-ui,sans-serif">
+      <rect width="680" height="320" fill="#fffff8"/>
+      <text x="340" y="26" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">Four filters, four answers to "what limit do I hit?"</text>
+      <!-- column headers -->
+      <rect x="206" y="44" width="112" height="30" rx="5" fill="#e8f1ef" stroke="#136f63"/><text x="262" y="63" text-anchor="middle" font-size="11.5" fill="#0f4f47" font-weight="bold">Delete?</text>
+      <rect x="322" y="44" width="112" height="30" rx="5" fill="#e8f1ef" stroke="#136f63"/><text x="378" y="63" text-anchor="middle" font-size="11.5" fill="#0f4f47" font-weight="bold">Grows w/ n?</text>
+      <rect x="438" y="44" width="112" height="30" rx="5" fill="#e8f1ef" stroke="#136f63"/><text x="494" y="63" text-anchor="middle" font-size="11.5" fill="#0f4f47" font-weight="bold">Space</text>
+      <rect x="554" y="44" width="112" height="30" rx="5" fill="#e8f1ef" stroke="#136f63"/><text x="610" y="63" text-anchor="middle" font-size="11.5" fill="#0f4f47" font-weight="bold">Locality</text>
+      <!-- row: Standard -->
+      <rect x="16" y="80" width="186" height="46" rx="6" fill="#fff" stroke="#136f63"/><text x="26" y="100" font-size="13" fill="#0f4f47" font-weight="bold">Standard Bloom</text><text x="26" y="118" font-size="10.5" fill="#6b675f">the baseline</text>
+      <rect x="206" y="80" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="262" y="108" text-anchor="middle" font-size="12" fill="#9a2417">no</text>
+      <rect x="322" y="80" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="378" y="108" text-anchor="middle" font-size="12" fill="#9a2417">no (fixed m)</text>
+      <rect x="438" y="80" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="494" y="108" text-anchor="middle" font-size="12" fill="#2f5d3a">best (1x)</text>
+      <rect x="554" y="80" width="112" height="46" rx="6" fill="#fbf3e6" stroke="#9a7a17"/><text x="610" y="108" text-anchor="middle" font-size="12" fill="#7a5e12">k probes</text>
+      <!-- row: Counting -->
+      <rect x="16" y="130" width="186" height="46" rx="6" fill="#fff" stroke="#136f63"/><text x="26" y="150" font-size="13" fill="#0f4f47" font-weight="bold">Counting Bloom</text><text x="26" y="168" font-size="10.5" fill="#6b675f">bits &#8594; counters</text>
+      <rect x="206" y="130" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="262" y="158" text-anchor="middle" font-size="12" fill="#2f5d3a">yes</text>
+      <rect x="322" y="130" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="378" y="158" text-anchor="middle" font-size="12" fill="#9a2417">no (fixed m)</text>
+      <rect x="438" y="130" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="494" y="158" text-anchor="middle" font-size="12" fill="#9a2417">~4x bits</text>
+      <rect x="554" y="130" width="112" height="46" rx="6" fill="#fbf3e6" stroke="#9a7a17"/><text x="610" y="158" text-anchor="middle" font-size="12" fill="#7a5e12">k probes</text>
+      <!-- row: Scalable -->
+      <rect x="16" y="180" width="186" height="46" rx="6" fill="#fff" stroke="#136f63"/><text x="26" y="200" font-size="13" fill="#0f4f47" font-weight="bold">Scalable Bloom</text><text x="26" y="218" font-size="10.5" fill="#6b675f">chain of filters</text>
+      <rect x="206" y="180" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="262" y="208" text-anchor="middle" font-size="12" fill="#9a2417">no</text>
+      <rect x="322" y="180" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="378" y="208" text-anchor="middle" font-size="12" fill="#2f5d3a">yes (auto)</text>
+      <rect x="438" y="180" width="112" height="46" rx="6" fill="#fbf3e6" stroke="#9a7a17"/><text x="494" y="208" text-anchor="middle" font-size="12" fill="#7a5e12">grows w/ n</text>
+      <rect x="554" y="180" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="610" y="208" text-anchor="middle" font-size="12" fill="#9a2417">k per layer</text>
+      <!-- row: Cuckoo -->
+      <rect x="16" y="230" width="186" height="46" rx="6" fill="#fff" stroke="#136f63"/><text x="26" y="250" font-size="13" fill="#0f4f47" font-weight="bold">Cuckoo filter</text><text x="26" y="268" font-size="10.5" fill="#6b675f">fingerprint buckets</text>
+      <rect x="206" y="230" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="262" y="258" text-anchor="middle" font-size="12" fill="#2f5d3a">yes</text>
+      <rect x="322" y="230" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="378" y="258" text-anchor="middle" font-size="12" fill="#9a2417">no (fixed)</text>
+      <rect x="438" y="230" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="494" y="258" text-anchor="middle" font-size="12" fill="#2f5d3a">&lt; Bloom if p&#8804;3%</text>
+      <rect x="554" y="230" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="610" y="258" text-anchor="middle" font-size="12" fill="#2f5d3a">2 buckets</text>
+      <text x="340" y="302" text-anchor="middle" font-size="12" fill="#6b675f">Green = the advantage that makes you pick it. Red = the cost you pay for it.</text>
+    </svg>
+    <figcaption>Each variant trades one of standard Bloom's costs for relief on a different axis.<sup><a href="#s1" id="r1">1</a></sup><sup><a href="#s2" id="r2">2</a></sup><sup><a href="#s3" id="r3">3</a></sup></figcaption>
+  </figure>
+
+  <h2>What each one actually changes</h2>
+  <div class="steps">
+    <div class="step"><div class="lab">Counting</div><div class="big">delete</div><div class="sub">bits &#8594; ~4-bit counters; increment on add, decrement on remove &#8212; costs ~4&#215; the bits<sup><a href="#s1" id="r4">1</a></sup></div></div>
+    <div class="step"><div class="lab">Scalable</div><div class="big">unknown n</div><div class="sub">add a new, larger filter when full; geometric error bounds keep total FP capped<sup><a href="#s3" id="r5">3</a></sup></div></div>
+    <div class="step"><div class="lab">Cuckoo</div><div class="big">delete + space</div><div class="sub">stores fingerprints in 2 candidate buckets; smaller than Bloom once p&#8804;3%<sup><a href="#s2" id="r6">2</a></sup></div></div>
+  </div>
+
+  <p>Blocked / register-blocked Bloom packs an item's <code>k</code> bits into one cache line, so a
+  lookup is a single memory access — speed at a tiny FP-rate cost.</p>
+
+  <h2>The Staff use: a cheap negative filter</h2>
+  <figure>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 330" font-family="ui-sans-serif,system-ui,sans-serif">
+      <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#136f63"/></marker>
+      <marker id="r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9a2417"/></marker></defs>
+      <rect width="680" height="330" fill="#fffff8"/>
+      <text x="340" y="26" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">Distributed dedup: Bloom in front of the source of truth</text>
+      <!-- ingest nodes -->
+      <text x="92" y="60" text-anchor="middle" font-size="11" fill="#6b675f">N ingest nodes</text>
+      <rect x="20" y="70" width="144" height="40" rx="6" fill="#fff" stroke="#136f63"/><text x="92" y="88" text-anchor="middle" font-size="12" fill="#0f4f47" font-weight="bold">Node 1 + local Bloom</text><text x="92" y="103" text-anchor="middle" font-size="10" fill="#6b675f">cheap, in-RAM</text>
+      <rect x="20" y="120" width="144" height="40" rx="6" fill="#fff" stroke="#136f63"/><text x="92" y="138" text-anchor="middle" font-size="12" fill="#0f4f47" font-weight="bold">Node 2 + local Bloom</text><text x="92" y="153" text-anchor="middle" font-size="10" fill="#6b675f">cheap, in-RAM</text>
+      <rect x="20" y="170" width="144" height="40" rx="6" fill="#fff" stroke="#136f63"/><text x="92" y="188" text-anchor="middle" font-size="12" fill="#0f4f47" font-weight="bold">Node N + local Bloom</text><text x="92" y="203" text-anchor="middle" font-size="10" fill="#6b675f">cheap, in-RAM</text>
+      <!-- gate -->
+      <rect x="236" y="110" width="150" height="100" rx="8" fill="#e8f1ef" stroke="#136f63" stroke-width="1.5"/>
+      <text x="311" y="138" text-anchor="middle" font-size="13" fill="#0f4f47" font-weight="bold">Bloom says?</text>
+      <text x="311" y="166" text-anchor="middle" font-size="11.5" fill="#9a2417" font-weight="bold">&#8220;no&#8221; &#8594; drop / accept</text>
+      <text x="311" y="184" text-anchor="middle" font-size="10.5" fill="#6b675f">certain &#8212; no lookup needed</text>
+      <text x="311" y="202" text-anchor="middle" font-size="11.5" fill="#2f5d3a" font-weight="bold">&#8220;maybe&#8221; &#8594; verify &#8595;</text>
+      <!-- source of truth -->
+      <rect x="470" y="120" width="190" height="80" rx="8" fill="#fbf3e6" stroke="#9a7a17" stroke-width="1.5"/>
+      <text x="565" y="150" text-anchor="middle" font-size="13" fill="#7a5e12" font-weight="bold">Source of truth</text>
+      <text x="565" y="170" text-anchor="middle" font-size="11" fill="#7a5e12">DB / cross-node lookup</text>
+      <text x="565" y="188" text-anchor="middle" font-size="10.5" fill="#6b675f">expensive &#183; authoritative</text>
+      <!-- arrows nodes -> gate -->
+      <path d="M164 90 C200 100 210 130 236 140" fill="none" stroke="#136f63" stroke-width="1.4" marker-end="url(#a)"/>
+      <path d="M164 140 L236 152" fill="none" stroke="#136f63" stroke-width="1.4" marker-end="url(#a)"/>
+      <path d="M164 190 C200 180 210 170 236 162" fill="none" stroke="#136f63" stroke-width="1.4" marker-end="url(#a)"/>
+      <!-- maybe -> source -->
+      <path d="M386 175 C420 180 440 165 470 160" fill="none" stroke="#2f5d3a" stroke-width="1.6" marker-end="url(#a)"/>
+      <text x="430" y="150" text-anchor="middle" font-size="10" fill="#2f5d3a">few % of traffic</text>
+      <!-- no path dropping -->
+      <path d="M311 210 L311 250" fill="none" stroke="#9a2417" stroke-width="1.6" marker-end="url(#r)"/>
+      <text x="311" y="268" text-anchor="middle" font-size="11" fill="#9a2417" font-weight="bold">most traffic stops here</text>
+      <rect x="120" y="290" width="440" height="30" rx="6" fill="#eef5ee" stroke="#2f5d3a"/>
+      <text x="340" y="310" text-anchor="middle" font-size="12.5" fill="#2f5d3a" font-weight="bold">Bloom turns the expensive lookup from "every event" into "only maybes"</text>
+    </svg>
+    <figcaption>The filter never decides correctness — it just removes the cheap certainties so the
+    authoritative store handles a fraction of the load.</figcaption>
+  </figure>
+
+  <p class="rule"><strong>Reach for a variant only when standard Bloom's specific limit bites:
+  delete &#8594; counting / cuckoo; unknown n &#8594; scalable; speed &#8594; blocked.</strong></p>
+
+  <h2>When NOT to use any of them</h2>
+  <div class="cards">
+    <div class="card"><div class="v">need exact</div><div class="l">false positives unacceptable &#8594; use a real set / index</div></div>
+    <div class="card"><div class="v">enumerate</div><div class="l">must list or return the items &#8594; filters store no keys</div></div>
+    <div class="card"><div class="v">tiny set</div><div class="l">a hash set is smaller and exact &#8594; no win below ~thousands</div></div>
+  </div>
+
+  <hr class="note">
+
+  <h2>Retrieval practice</h2>
+  <p>Answer from memory — feedback is instant.</p>
+
+  <div class="quiz" id="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q1.</span> You need deletes but RAM is very tight. Pick&#8230;</p>
+      <button class="opt">a scalable Bloom, sized for the peak load</button>
+      <button class="opt">a counting Bloom, paying the extra counters</button>
+      <button class="opt">a cuckoo filter, smaller at low error rates</button>
+      <button class="opt">a standard Bloom, rebuilt on each delete</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q2.</span> Item count n is unknown and may grow a lot. Use&#8230;</p>
+      <button class="opt">a cuckoo filter with oversized buckets</button>
+      <button class="opt">a counting Bloom with the widest counter</button>
+      <button class="opt">a blocked Bloom for the cache-line speed</button>
+      <button class="opt">a scalable Bloom that chains new layers</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q3.</span> The Staff framing of Bloom in a pipeline is&#8230;</p>
+      <button class="opt">the authoritative store of membership truth</button>
+      <button class="opt">a cheap negative filter before a costly check</button>
+      <button class="opt">a cache that returns the stored item values</button>
+      <button class="opt">a replacement for the database index layer</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q4.</span> Counting Bloom's cost versus a standard Bloom is&#8230;</p>
+      <button class="opt">about four times the bits for the counters</button>
+      <button class="opt">about half the bits because deletes free up</button>
+      <button class="opt">about equal bits with slower lookups only</button>
+      <button class="opt">about ten times the bits for safe counting</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h2>Rehearse out loud</h2>
+  <p class="rehearse">Interviewer: <strong>"Design dedup for a 100-node, 10B-event/day ingest pipeline
+    with a 0.1% duplicate tolerance — what do you use and why?"</strong> ~60 seconds, from memory —
+    then reveal and compare.</p>
+  <div class="rehearse">
+    <textarea placeholder="Your 60-second answer, from memory…"></textarea><br>
+    <button class="btn ghost" onclick="document.getElementById('model').classList.add('show')">Reveal model answer</button>
+    <div class="model" id="model">
+      <p>Put a per-node Bloom filter in front of an authoritative dedup store (Redis / a sharded
+        KV). The Bloom is a <strong>cheap negative filter</strong>: a "no" is certain, so it drops
+        the bulk of duplicates locally and only "maybe" hits pay the cross-node / store lookup —
+        that's where the cost savings live. Size each filter from the target <code>p</code>
+        (~0.1% &#8594; ~14.4 bits/item); if per-node n is unknown or unbounded, use a
+        <strong>scalable Bloom</strong> so the FP rate stays capped as it grows. Plan to shard the
+        authoritative store by key and rebuild / roll filters on a time window (events expire), so
+        saturation never pushes the FP rate up. Cuckoo or counting only if I actually need deletes.</p>
+      <p class="src"><strong>Why this scores:</strong> leads with the cheap-negative-filter framing,
+        sizes from p, names the authoritative source of truth, picks scalable for unknown n, and has
+        a rebuild / shard plan for saturation — not just "add a Bloom filter."</p>
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Want the cuckoo-filter insertion / kick-out
+    mechanics, the geometric-error-bound math behind scalable Bloom, or a deeper drill on sizing the
+    distributed dedup tier? Say so.
+  </div>
+
+  <h3>Primary sources (read these next)</h3>
+  <p>📖 <a href="https://www.cs.cmu.edu/~dga/papers/cuckoo-conext2014.pdf"><strong>Fan, Andersen, Kaminsky &amp; Mitzenmacher, "Cuckoo Filter: Practically Better Than Bloom" (2014)</strong></a><sup><a href="#s2" id="r7">2</a></sup> — delete support, locality, and the &#8804;3% space crossover.</p>
+
+  <div class="next">
+    <span>📄 End of track — keep handy: <a href="../reference/bloom-filters-cheat-sheet.html">Bloom filters cheat sheet</a></span>
+    <span><em>✓ Final lesson (Staff). You've walked the full ladder.</em></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. Mitzenmacher &amp; Broder, "Network Applications of Bloom Filters: A Survey", Internet Mathematics 1(4) — counting Bloom filters (~4-bit counters) — <a href="https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf">harvard.edu</a>. <a href="#r1">↩</a> <a href="#r4">↩</a></span><br>
+    <span id="s2">2. Fan, Andersen, Kaminsky &amp; Mitzenmacher, "Cuckoo Filter: Practically Better Than Bloom", ACM CoNEXT 2014 — deletes, 2 candidate buckets, &#8804;3% FP space crossover — <a href="https://www.cs.cmu.edu/~dga/papers/cuckoo-conext2014.pdf">cs.cmu.edu</a>. <a href="#r2">↩</a> <a href="#r6">↩</a> <a href="#r7">↩</a></span><br>
+    <span id="s3">3. Almeida, Baquero, Preguiça &amp; Hutchison, "Scalable Bloom Filters", Information Processing Letters 101(6), 2007 — chained filters with geometric error bounds — <a href="https://gsd.di.uminho.pt/members/cbm/ps/dbloom.pdf">gsd.di.uminho.pt</a>. <a href="#r3">↩</a> <a href="#r5">↩</a></span><br>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){
+          fb.textContent = '✓ Correct.';
+          fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong');
+          fb.textContent = '✗ Not quite — the right answer is highlighted. Re-read it, then say it back out loud.';
+          fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

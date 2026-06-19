@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 7 · Caching &amp; conditional requests (visual)</title>
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<style>
+  :root{--accent:var(--track-rest)}
+  /* chips — pill row (not in lesson.css) */
+  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+  .chip b{color:var(--accent)}
+  /* REST uses .fact / .step as content blocks with an inline <b> label */
+  .facts{grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr))}
+  .fact b,.step b{display:block; font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+  .fact.blue b{color:var(--accent)}
+  .steps{display:grid; grid-template-columns:1fr 1fr; gap:.5rem}
+  /* myth compare grid — lesson.css styles .m/.t but not the container */
+  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.8rem 0; font-size:.9rem}
+  /* bottom footer nav — lesson.css names this .next */
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.85rem}
+  @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="0006-pagination-at-scale.html" title="Pagination at scale (visual)">&#8249; Prev</a><a href="0008-authentication-and-authorization.html" title="Authentication &amp;amp; authorization (visual)">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">REST API</span></span>
+  </nav>
+  <div class="kicker">Lesson 7 · Caching · visual edition</div>
+  <h1>Caching &amp; conditional requests</h1>
+  <p class="meta">~7 min · one diagram per idea · retrieval practice at the end</p>
+
+  <div class="mission">
+    <strong>Why this, first.</strong> Caching and ETags are where REST's <em>cacheable</em> constraint stops being theory and starts paying for itself in latency and load. The senior twist: the same ETag that powers a cache validator also powers <strong>conditional writes</strong> (<code>If-Match</code>) — the HTTP-native way to prevent lost updates. It's a favorite interview follow-up, and most candidates know only the caching half. This lesson makes both halves something you can <em>draw</em>.
+  </div>
+
+  <div class="chips">
+    <span class="chip">Fresh? <b>serve it free</b></span>
+    <span class="chip">Stale? <b>revalidate cheap</b></span>
+    <span class="chip">304 <b>no body</b></span>
+    <span class="chip">same ETag <b>locks writes</b></span>
+  </div>
+
+  <!-- HERO: the two halves -->
+  <figure>
+    <svg viewBox="0 0 640 170" role="img" aria-label="HTTP caching has two halves: freshness reuses a stored response with no network call; validation cheaply confirms a stored response with a bodyless round-trip">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">CACHING IS TWO MECHANISMS — DON'T CONFLATE THEM</text>
+        <rect x="14" y="38" width="290" height="96" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="159" y="60" text-anchor="middle" font-size="13" font-weight="700" fill="#2f5d3a">FRESHNESS</text>
+        <text x="159" y="80" text-anchor="middle" font-size="10" fill="#244a2e">Cache-Control: max-age=N</text>
+        <text x="159" y="98" text-anchor="middle" font-size="9.5" fill="#244a2e">reuse stored copy · ZERO network</text>
+        <text x="159" y="116" text-anchor="middle" font-size="9.5" fill="#244a2e">the common-case win</text>
+        <rect x="336" y="38" width="290" height="96" rx="9" fill="#eef2f5" stroke="#1f3a5a"/>
+        <text x="481" y="60" text-anchor="middle" font-size="13" font-weight="700" fill="#1f3a5a">VALIDATION</text>
+        <text x="481" y="80" text-anchor="middle" font-size="10" fill="#1f3a5a">ETag / If-None-Match</text>
+        <text x="481" y="98" text-anchor="middle" font-size="9.5" fill="#1f3a5a">round-trip · NO body → 304</text>
+        <text x="481" y="116" text-anchor="middle" font-size="9.5" fill="#1f3a5a">the cheap fallback</text>
+        <text x="320" y="156" text-anchor="middle" font-size="10.5" fill="#7a1f12">Design with both: aggressive freshness for the common case, validation as the cheap fallback when freshness lapses.</text>
+      </g>
+    </svg>
+    <figcaption><strong>Freshness</strong> reuses a stored response with no call at all; <strong>validation</strong> cheaply confirms one with a bodyless round-trip.<sup><a href="#s1" id="r1">1</a></sup></figcaption>
+  </figure>
+
+  <!-- FRESHNESS: Cache-Control directives map -->
+  <h2 class="sec">Freshness — the <code>Cache-Control</code> directives map</h2>
+  <p>The origin declares a response's lifetime; while it's fresh, caches serve it directly. The directives you must be fluent in:<sup><a href="#s1">1</a></sup></p>
+  <figure>
+    <svg viewBox="0 0 640 250" role="img" aria-label="Cache-Control directives grouped: lifetime (max-age, s-maxage), storage scope (public vs private, no-store), and reuse rules (no-cache, must-revalidate, stale-while-revalidate)">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">CACHE-CONTROL · THREE QUESTIONS IT ANSWERS</text>
+
+        <rect x="10" y="32" width="200" height="206" rx="9" fill="#fbfaf2" stroke="#d8d4c8"/>
+        <text x="110" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">HOW LONG FRESH?</text>
+        <rect x="22" y="64" width="176" height="36" rx="6" fill="#fff" stroke="#d8d4c8"/>
+        <text x="110" y="80" text-anchor="middle" font-size="10" font-weight="700">max-age=N</text>
+        <text x="110" y="93" text-anchor="middle" font-size="8.5" fill="#6b675f">fresh for N seconds</text>
+        <rect x="22" y="106" width="176" height="40" rx="6" fill="#fff" stroke="#d8d4c8"/>
+        <text x="110" y="122" text-anchor="middle" font-size="10" font-weight="700">s-maxage=N</text>
+        <text x="110" y="135" text-anchor="middle" font-size="8.5" fill="#6b675f">shared caches only · wins</text>
+        <text x="110" y="172" text-anchor="middle" font-size="8.5" fill="#9a2417">Expires = legacy absolute</text>
+        <text x="110" y="186" text-anchor="middle" font-size="8.5" fill="#9a2417">timestamp; max-age</text>
+        <text x="110" y="200" text-anchor="middle" font-size="8.5" fill="#9a2417">supersedes it (no skew)</text>
+
+        <rect x="220" y="32" width="200" height="206" rx="9" fill="#fbfaf2" stroke="#d8d4c8"/>
+        <text x="320" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">WHO MAY STORE?</text>
+        <rect x="232" y="64" width="176" height="40" rx="6" fill="#eef2f5" stroke="#1f3a5a"/>
+        <text x="320" y="80" text-anchor="middle" font-size="10" font-weight="700" fill="#1f3a5a">public</text>
+        <text x="320" y="93" text-anchor="middle" font-size="8.5" fill="#1f3a5a">any shared cache may store</text>
+        <rect x="232" y="110" width="176" height="40" rx="6" fill="#eef2f5" stroke="#1f3a5a"/>
+        <text x="320" y="126" text-anchor="middle" font-size="10" font-weight="700" fill="#1f3a5a">private</text>
+        <text x="320" y="139" text-anchor="middle" font-size="8.5" fill="#1f3a5a">browser only · per-user</text>
+        <rect x="232" y="156" width="176" height="40" rx="6" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="320" y="172" text-anchor="middle" font-size="10" font-weight="700" fill="#9a2417">no-store</text>
+        <text x="320" y="185" text-anchor="middle" font-size="8.5" fill="#7a2218">never write to any cache</text>
+
+        <rect x="430" y="32" width="200" height="206" rx="9" fill="#fbfaf2" stroke="#d8d4c8"/>
+        <text x="530" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">REUSE RULES?</text>
+        <rect x="442" y="64" width="176" height="40" rx="6" fill="#fff" stroke="#d8d4c8"/>
+        <text x="530" y="80" text-anchor="middle" font-size="10" font-weight="700">no-cache</text>
+        <text x="530" y="93" text-anchor="middle" font-size="8.5" fill="#6b675f">store, but 304-check first</text>
+        <rect x="442" y="110" width="176" height="40" rx="6" fill="#fff" stroke="#d8d4c8"/>
+        <text x="530" y="126" text-anchor="middle" font-size="10" font-weight="700">must-revalidate</text>
+        <text x="530" y="139" text-anchor="middle" font-size="8.5" fill="#6b675f">once stale, no serving stale</text>
+        <rect x="442" y="156" width="176" height="40" rx="6" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="530" y="172" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">stale-while-revalidate</text>
+        <text x="530" y="185" text-anchor="middle" font-size="8.5" fill="#244a2e">serve stale, refresh in bg</text>
+      </g>
+    </svg>
+    <figcaption>A still-fresh response is reused with zero contact with the origin — that's the whole win. <code>no-cache</code> is the confusingly named one: it <em>does</em> cache; it just won't serve without a 304 check.</figcaption>
+  </figure>
+  <div class="myth"><div class="m">✗ Myth: "<code>no-cache</code> means don't cache it."</div>
+  <div class="t">✓ Truth: <code>no-cache</code> stores it but revalidates before every reuse; <code>no-store</code> is the one that never writes to any cache.</div></div>
+
+  <!-- VALIDATION: the 304 round-trip -->
+  <h2 class="sec">Validation — the <code>If-None-Match</code> → <code>304</code> round-trip</h2>
+  <p>When freshness lapses, a cache <em>validates</em> rather than re-downloads. The client echoes the stored <code>ETag</code> in <code>If-None-Match</code>; if it still matches, the server replies <code>304 Not Modified</code> with no body.<sup><a href="#s2" id="r2">2</a></sup></p>
+  <figure>
+    <svg viewBox="0 0 640 200" role="img" aria-label="Conditional GET: client sends If-None-Match with the stored ETag; if unchanged the server returns 304 with no body and the cache serves the stored copy; if changed it returns 200 with the new body and a new ETag">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THE CONDITIONAL GET — REVALIDATE WITHOUT RE-DOWNLOADING</text>
+        <rect x="14" y="86" width="150" height="58" rx="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+        <text x="89" y="110" text-anchor="middle" font-size="12" font-weight="700" fill="#7a1f12">Cache / client</text>
+        <text x="89" y="127" text-anchor="middle" font-size="9" fill="#6b675f">holds ETag "v7"</text>
+        <line x1="164" y1="106" x2="232" y2="106" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="198" y="98" text-anchor="middle" font-size="8.5" fill="#6b675f">If-None-Match: "v7"</text>
+        <rect x="234" y="86" width="130" height="58" rx="9" fill="#fff" stroke="#d8d4c8"/>
+        <text x="299" y="111" text-anchor="middle" font-size="12" font-weight="700">Origin</text>
+        <text x="299" y="128" text-anchor="middle" font-size="9" fill="#6b675f">compares ETags</text>
+        <rect x="430" y="22" width="200" height="58" rx="9" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
+        <text x="530" y="44" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">MATCH → 304</text>
+        <text x="530" y="60" text-anchor="middle" font-size="9" fill="#244a2e">Not Modified · NO body</text>
+        <text x="530" y="73" text-anchor="middle" font-size="9" fill="#244a2e">serve stored copy → save bandwidth</text>
+        <rect x="430" y="150" width="200" height="58" rx="9" fill="#eef2f5" stroke="#1f3a5a"/>
+        <text x="530" y="172" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">CHANGED → 200</text>
+        <text x="530" y="188" text-anchor="middle" font-size="9" fill="#1f3a5a">full body + new ETag</text>
+        <text x="530" y="201" text-anchor="middle" font-size="9" fill="#1f3a5a">cache refreshes its copy</text>
+        <path d="M 364 96 C 390 70, 405 58, 430 52" fill="none" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <path d="M 364 130 C 390 158, 405 170, 430 178" fill="none" stroke="#1f3a5a" marker-end="url(#arw)"/>
+      </g>
+    </svg>
+    <figcaption>A <code>304</code> revalidates freshness for the price of headers — no entity body crosses the wire. That's the bandwidth saver behind every well-tuned cache.</figcaption>
+  </figure>
+  <div class="facts">
+    <div class="fact"><b>ETag + If-None-Match</b> An opaque version tag for the representation.<sup><a href="#s3" id="r3">3</a></sup> Echoed in <code>If-None-Match</code>; still matching → <code>304</code> with no body.</div>
+    <div class="fact"><b>Last-Modified + If-Modified-Since</b> Timestamp-based, weaker (1-second granularity, clock issues). The fallback when you can't compute an ETag cheaply.</div>
+    <div class="fact blue"><b>Strong validator — "abc"</b> Byte-for-byte identical. Required for <code>Range</code> requests and what you want for concurrency control.</div>
+    <div class="fact blue"><b>Weak validator — W/"abc"</b> Semantically equivalent. Fine for cache revalidation of cosmetically-varying responses.</div>
+  </div>
+
+  <!-- LIFECYCLE: fresh -> stale -> revalidate -->
+  <h2 class="sec">The fresh → stale → revalidate lifecycle</h2>
+  <figure>
+    <svg viewBox="0 0 640 150" role="img" aria-label="A cached response is fresh until max-age elapses, then goes stale; on next use the cache revalidates with a conditional request, getting either 304 to keep it or 200 to replace it">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">A STORED RESPONSE OVER ITS LIFETIME</text>
+        <rect x="10" y="40" width="150" height="56" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="85" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="#2f5d3a">FRESH</text>
+        <text x="85" y="81" text-anchor="middle" font-size="9" fill="#244a2e">within max-age · served free</text>
+        <line x1="160" y1="68" x2="186" y2="68" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="173" y="58" text-anchor="middle" font-size="8" fill="#6b675f">max-age</text>
+        <text x="173" y="100" text-anchor="middle" font-size="8" fill="#6b675f">elapses</text>
+        <rect x="188" y="40" width="150" height="56" rx="9" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="263" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="#9a2417">STALE</text>
+        <text x="263" y="81" text-anchor="middle" font-size="9" fill="#7a2218">expired · must revalidate</text>
+        <line x1="338" y1="68" x2="364" y2="68" stroke="#6b675f" marker-end="url(#arw)"/>
+        <rect x="366" y="40" width="160" height="56" rx="9" fill="#eef2f5" stroke="#1f3a5a"/>
+        <text x="446" y="64" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">REVALIDATE</text>
+        <text x="446" y="81" text-anchor="middle" font-size="9" fill="#1f3a5a">conditional GET (ETag)</text>
+        <rect x="540" y="26" width="92" height="40" rx="8" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="586" y="44" text-anchor="middle" font-size="10" font-weight="700" fill="#2f5d3a">304 → keep</text>
+        <text x="586" y="58" text-anchor="middle" font-size="8" fill="#244a2e">reset freshness</text>
+        <rect x="540" y="72" width="92" height="40" rx="8" fill="#fff" stroke="#1f3a5a"/>
+        <text x="586" y="90" text-anchor="middle" font-size="10" font-weight="700" fill="#1f3a5a">200 → replace</text>
+        <text x="586" y="104" text-anchor="middle" font-size="8" fill="#1f3a5a">new body+ETag</text>
+        <path d="M 526 60 C 532 52, 535 50, 540 48" fill="none" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <path d="M 526 76 C 532 84, 535 88, 540 90" fill="none" stroke="#1f3a5a" marker-end="url(#arw)"/>
+        <text x="320" y="136" text-anchor="middle" font-size="9.5" fill="#2f5d3a"><tspan font-weight="700">stale-while-revalidate</tspan> serves the stale copy instantly and revalidates in the background — hiding the round-trip from the user.</text>
+      </g>
+    </svg>
+    <figcaption>Stale is not dead: a stale entry is revalidated, not re-downloaded. A <code>304</code> resets its freshness window; a <code>200</code> replaces it.</figcaption>
+  </figure>
+
+  <p class="pull"><strong>An ETag is both a cache validator and a concurrency token — same header, two superpowers.</strong> Read it, and you confirm freshness with a <code>304</code>. Send it back on a write, and you enforce optimistic locking. One value, two roles.</p>
+
+  <!-- CONDITIONAL WRITES -->
+  <h2 class="sec">Conditional writes — optimistic concurrency</h2>
+  <p>This is the senior highlight and the part most candidates miss. The <strong>lost-update problem</strong>: two clients <code>GET</code> the same resource, both edit, both <code>PUT</code> — the second silently overwrites the first. The HTTP-native fix is <strong>optimistic concurrency control</strong> using the same ETag.<sup><a href="#s2">2</a></sup></p>
+  <figure>
+    <svg viewBox="0 0 640 190" role="img" aria-label="Optimistic concurrency: client GETs a resource with ETag v7, sends If-Match v7 on PUT; if the resource is still v7 the write succeeds, if it changed to v8 the server returns 412 Precondition Failed">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">IF-MATCH — REJECT THE WRITE THAT WOULD CLOBBER</text>
+        <rect x="14" y="80" width="150" height="56" rx="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+        <text x="89" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#7a1f12">Client</text>
+        <text x="89" y="121" text-anchor="middle" font-size="9" fill="#6b675f">read ETag "v7"</text>
+        <line x1="164" y1="108" x2="232" y2="108" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="198" y="100" text-anchor="middle" font-size="8.5" fill="#6b675f">PUT · If-Match: "v7"</text>
+        <rect x="234" y="80" width="140" height="56" rx="9" fill="#fff" stroke="#d8d4c8"/>
+        <text x="304" y="105" text-anchor="middle" font-size="12" font-weight="700">Server</text>
+        <text x="304" y="122" text-anchor="middle" font-size="9" fill="#6b675f">current ETag = ?</text>
+        <rect x="440" y="20" width="192" height="52" rx="9" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
+        <text x="536" y="40" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">still "v7" → 200 OK</text>
+        <text x="536" y="56" text-anchor="middle" font-size="9" fill="#244a2e">write applied · new ETag "v8"</text>
+        <rect x="440" y="118" width="192" height="58" rx="9" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="536" y="139" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">now "v8" → 412</text>
+        <text x="536" y="155" text-anchor="middle" font-size="9" fill="#7a2218">Precondition Failed · rejected</text>
+        <text x="536" y="168" text-anchor="middle" font-size="9" fill="#7a2218">client must re-fetch &amp; reconcile</text>
+        <path d="M 374 96 C 400 64, 415 54, 440 48" fill="none" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <path d="M 374 120 C 400 138, 415 144, 440 147" fill="none" stroke="#9a2417" marker-end="url(#arwR)"/>
+      </g>
+    </svg>
+    <figcaption>If the resource changed since the client read it, its ETag no longer matches and the server returns <code>412 Precondition Failed</code>. <code>If-None-Match: *</code> does the dual job for creation — fail if it already exists, giving a race-free create-only.</figcaption>
+  </figure>
+  <div class="facts">
+    <div class="fact"><b>The happy path</b> Client sends <code>If-Match: "etag"</code> on <code>PUT</code>/<code>PATCH</code>; resource unchanged → write applies, costs nothing extra.</div>
+    <div class="fact"><b>The conflict</b> Resource changed → <code>412 Precondition Failed</code>. The client re-fetches and reconciles rather than clobbers.</div>
+    <div class="fact blue"><b>Why not pessimistic locking</b> Holding a lock across stateless requests violates statelessness, ties up resources, and breaks when a client vanishes mid-edit.</div>
+    <div class="fact blue"><b>Why optimistic wins</b> Assumes conflicts are rare, detects them at write time, costs nothing on the happy path — a far better fit for HTTP.</div>
+  </div>
+
+  <!-- LAYERS & VARY -->
+  <h2 class="sec">Caching layers &amp; the <code>Vary</code> trap</h2>
+  <p>Caches live in two places, mapping straight onto REST's <em>cacheable</em> and <em>layered system</em> constraints: <strong>private</strong> caches (the user's browser) and <strong>shared</strong> caches (CDN, reverse proxy, API gateway). A shared cache is one node many users hit — which is exactly why the cache <em>key</em> matters.</p>
+  <figure>
+    <svg viewBox="0 0 640 170" role="img" aria-label="Cache key defaults to the URL; the Vary header adds request headers to the key so different representations get separate entries; getting it wrong leaks the wrong user's data from a shared cache">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THE CACHE KEY — AND WHY VARY GUARDS IT</text>
+        <rect x="20" y="34" width="270" height="120" rx="9" fill="#fbfaf2" stroke="#d8d4c8"/>
+        <text x="155" y="54" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">DEFAULT KEY = URL</text>
+        <text x="155" y="74" text-anchor="middle" font-size="9.5" fill="#6b675f">one entry per /resource</text>
+        <text x="155" y="98" text-anchor="middle" font-size="10" font-weight="700">+ Vary: Accept</text>
+        <text x="155" y="112" text-anchor="middle" font-size="8.5" fill="#6b675f">JSON entry ≠ XML entry</text>
+        <text x="155" y="132" text-anchor="middle" font-size="10" font-weight="700">+ Vary: Accept-Encoding</text>
+        <text x="155" y="146" text-anchor="middle" font-size="8.5" fill="#6b675f">gzip entry ≠ brotli entry</text>
+        <rect x="350" y="34" width="270" height="120" rx="9" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="485" y="54" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">THE AUTH PITFALL</text>
+        <text x="485" y="74" text-anchor="middle" font-size="9.5" fill="#7a2218">shared cache + authed response</text>
+        <text x="485" y="90" text-anchor="middle" font-size="9.5" fill="#7a2218">→ user A's data served to user B 💥</text>
+        <text x="485" y="116" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">Fix: private · no-store</text>
+        <text x="485" y="132" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">or Vary: Authorization</text>
+        <text x="485" y="148" text-anchor="middle" font-size="8.5" fill="#7a2218">default authed responses to private,no-store</text>
+      </g>
+    </svg>
+    <figcaption>By default a cache keys on the URL. <code>Vary</code> adds request headers to that key. Get it wrong and the cache serves the wrong representation — or worse, the wrong user's data.</figcaption>
+  </figure>
+
+  <div class="rule"><span>♻️ Memory rule:</span> Freshness serves free, validation revalidates cheap (<code>304</code>, no body); the <em>same ETag</em> that proves freshness also enforces optimistic locking via <code>If-Match</code> → <code>412</code>; on shared caches, mark authed responses <code>private, no-store</code>.</div>
+
+  <!-- RETRIEVAL -->
+  <h2 class="sec">Retrieval practice</h2>
+  <p>Close the lesson in your mind first, then answer from memory. Effortful recall is what converts this from "I read it" to "I own it." Immediate feedback below.</p>
+  <div class="quiz" id="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q1.</span> A still-fresh response under <code>Cache-Control: max-age</code> is…</p>
+      <button class="opt">revalidated with the origin on each separate reuse</button>
+      <button class="opt">discarded whenever a shared proxy cache receives it</button>
+      <button class="opt">served straight from cache with no call to origin</button>
+      <button class="opt">returned only after the client sends If-None-Match</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q2.</span> A valid conditional <code>GET</code> with <code>If-None-Match</code> returns…</p>
+      <button class="opt">a 200 carrying the full refreshed entity body again</button>
+      <button class="opt">a 304 status with no body, confirming it is fresh</button>
+      <button class="opt">a 412 status because the version tag did not match</button>
+      <button class="opt">a 404 status once the cached entry has gone stale</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q3.</span> A <code>PUT</code> with <code>If-Match</code> on a since-changed resource yields…</p>
+      <button class="opt">200 OK, applying the write over the newer revision</button>
+      <button class="opt">304 Not Modified, skipping the write body entirely</button>
+      <button class="opt">409 Conflict, merging both edits into one revision</button>
+      <button class="opt">412 Precondition Failed, rejecting the stale write</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q4.</span> Authenticated responses leak across users when a cache…</p>
+      <button class="opt">is shared yet omits private, no-store, or Vary auth</button>
+      <button class="opt">stores them privately inside each end user browser</button>
+      <button class="opt">marks the stored entries as no-store before reuse</button>
+      <button class="opt">adds Authorization to the Vary header per request</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h2 class="sec">Rehearse the answer out loud</h2>
+  <p class="rehearse">Interviewer: <strong>"Two users open the same document and both hit Save. How does your API stop the second save from silently clobbering the first?"</strong> ~60 seconds, from memory (no scrolling up) — <em>then</em> reveal the model answer and compare.</p>
+  <div class="rehearse">
+    <textarea placeholder="Your 60-second answer, from memory…"></textarea><br>
+    <button class="btn" onclick="document.getElementById('model').classList.add('show')">Reveal model answer</button>
+    <div class="model" id="model">
+      <p>"That's the classic <strong>lost-update problem</strong>, and I solve it with <strong>optimistic concurrency via ETags</strong>. The <code>GET</code> returns the document together with a strong <code>ETag</code> — a version tag for that exact revision. Any update must send it back as <code>If-Match: &lt;etag&gt;</code>. If the document changed since the client read it, the ETag no longer matches and the server returns <code>412 Precondition Failed</code>. So the second save is rejected, and that client is forced to re-fetch and merge rather than blindly overwrite.</p>
+      <p>I'd reach for this over <strong>pessimistic locking</strong>, which is a poor fit for a web API — it would hold a lock across stateless requests and strand resources if a client walks away mid-edit. Optimistic control costs nothing on the happy path and only detects conflicts at write time. And it's the same <code>ETag</code> that drives <code>304</code> conditional GETs for caching — one value, two jobs."</p>
+      <p class="src"><strong>Why this scores:</strong> it names the lost-update problem, solves it with HTTP-native optimistic concurrency, contrasts it against pessimistic locking with a reason, and connects validation back to caching — the senior signal.</p>
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Want to walk through what a 412 round-trip looks like on the wire? Curious how <code>stale-while-revalidate</code> interacts with a CDN? Want me to grade your rehearsal answer, or fire harder follow-ups on weak vs. strong ETags? Just say so in the chat.
+  </div>
+
+  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Primary source (read this next)</h3>
+  <p>📖 <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"><strong>"HTTP caching" — MDN</strong></a>: ~15 min, the clearest high-trust treatment of freshness vs. validation and the <code>Cache-Control</code> directives you just learned. For the normative detail on conditional requests, <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC 9110</a> is the primary source.</p>
+
+  <div class="nav">
+    <span>📄 Keep handy: <a href="../reference/caching-pagination-versioning.html">Caching, pagination &amp; versioning reference</a></span>
+    <span><a href="../lessons/0006-pagination-at-scale.html">◂ Prev</a> · <a href="../lessons/0008-authentication-and-authorization.html"><em>Next ▸ Lesson 8</em></a></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. MDN, <em>HTTP caching</em> — <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching">developer.mozilla.org</a>. <a href="#r1">↩</a></span><br>
+    <span id="s2">2. RFC 9110, <em>HTTP Semantics</em> (conditional requests) — <a href="https://www.rfc-editor.org/rfc/rfc9110.html">rfc-editor.org</a>. <a href="#r2">↩</a></span><br>
+    <span id="s3">3. MDN, <em>ETag</em> — <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag">developer.mozilla.org</a>. <a href="#r3">↩</a></span>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

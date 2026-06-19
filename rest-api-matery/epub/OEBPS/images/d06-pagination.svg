@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 360" role="img">
+  <title>Offset pagination skips and duplicates rows when the data shifts under writes, while cursor pagination anchors on a stable key</title>
+  <defs><marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,3 L0,6 z" fill="#222"/></marker></defs>
+  <style>
+    text{font-family:"Helvetica Neue",Arial,sans-serif;fill:#111}
+    .cell{fill:#fff;stroke:#222;stroke-width:1.2}
+    .fill{fill:#ddd;stroke:#222;stroke-width:1.2}
+    .h{font-size:14px;font-weight:bold} .n{font-size:11px;fill:#555}
+    .cn{font-size:12px;font-family:"Courier New",monospace}
+    .ln{stroke:#222;stroke-width:1.3;fill:none}
+  </style>
+  <text class="h" x="20" y="28">Offset / limit — window shifts under inserts</text>
+  <g>
+    <rect class="fill" x="20"  y="44" width="40" height="34"/><text class="cn" x="40"  y="66" text-anchor="middle">A</text>
+    <rect class="fill" x="62"  y="44" width="40" height="34"/><text class="cn" x="82"  y="66" text-anchor="middle">B</text>
+    <rect class="cell" x="104" y="44" width="40" height="34"/><text class="cn" x="124" y="66" text-anchor="middle">C</text>
+    <rect class="cell" x="146" y="44" width="40" height="34"/><text class="cn" x="166" y="66" text-anchor="middle">D</text>
+    <text class="n" x="200" y="66">page 1 = OFFSET 0 LIMIT 2 → [A, B]</text>
+  </g>
+  <text class="n" x="20" y="104">a new row "X" is inserted at the top before page 2 loads…</text>
+  <g>
+    <rect class="fill" x="20"  y="116" width="40" height="34"/><text class="cn" x="40"  y="138" text-anchor="middle">X</text>
+    <rect class="cell" x="62"  y="116" width="40" height="34"/><text class="cn" x="82"  y="138" text-anchor="middle">A</text>
+    <rect class="fill" x="104" y="116" width="40" height="34"/><text class="cn" x="124" y="138" text-anchor="middle">B</text>
+    <rect class="cell" x="146" y="116" width="40" height="34"/><text class="cn" x="166" y="138" text-anchor="middle">C</text>
+    <text class="n" x="200" y="138">page 2 = OFFSET 2 LIMIT 2 → [B, C]  ✗ B seen twice, X skipped</text>
+  </g>
+  <line x1="0" y1="172" x2="620" y2="172" stroke="#ccc"/>
+  <text class="h" x="20" y="200">Cursor / keyset — anchor on a stable key</text>
+  <g>
+    <rect class="cell" x="20"  y="216" width="40" height="34"/><text class="cn" x="40"  y="238" text-anchor="middle">A</text>
+    <rect class="cell" x="62"  y="216" width="40" height="34"/><text class="cn" x="82"  y="238" text-anchor="middle">B</text>
+    <rect class="cell" x="104" y="216" width="40" height="34"/><text class="cn" x="124" y="238" text-anchor="middle">C</text>
+    <rect class="cell" x="146" y="216" width="40" height="34"/><text class="cn" x="166" y="238" text-anchor="middle">D</text>
+    <path class="ln" d="M82 262 L82 244" marker-end="url(#ar)"/>
+    <text class="n" x="82" y="278" text-anchor="middle">cursor after B</text>
+  </g>
+  <text class="cn" x="220" y="232">next: WHERE (sort_key, id) &gt; last  ORDER BY … LIMIT n</text>
+  <text class="n" x="220" y="252">inserts before the cursor don't matter — no dup, no skip</text>
+  <text class="n" x="220" y="270">cost is flat with depth (index seek), but no jump-to-page</text>
+</svg>

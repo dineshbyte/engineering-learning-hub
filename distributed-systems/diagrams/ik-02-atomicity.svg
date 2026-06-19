@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 560" font-family="sans-serif">
+  <defs>
+    <marker id="aa2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+    <style>
+      .title{font-size:16px;font-weight:bold;fill:#111}
+      .h{font-size:13px;font-weight:bold;fill:#111}
+      .hbad{font-size:13px;font-weight:bold;fill:#b00000}
+      .step{fill:#eef1f4;stroke:#444;stroke-width:1.3}
+      .gone{fill:#f4f4f4;stroke:#bbb;stroke-width:1.2;stroke-dasharray:4 3}
+      .txn{fill:#eefaf0;stroke:#1f7a1f;stroke-width:1.6;stroke-dasharray:6 4}
+      .tbl{fill:#fff;stroke:#1f7a1f;stroke-width:1.2}
+      .ext{fill:#eef5ff;stroke:#2a6099;stroke-width:1.4}
+      .sT{font-size:11px;fill:#111}
+      .sub{font-size:10.5px;fill:#555}
+      .arr{stroke:#444;stroke-width:1.5;fill:none}
+      .crash{stroke:#b00000;stroke-width:2.6;fill:none}
+      .bad{font-size:11px;font-weight:bold;fill:#b00000}
+    </style>
+  </defs>
+  <rect width="1020" height="560" fill="#ffffff"/>
+  <text x="510" y="26" text-anchor="middle" class="title">Recording the result must be atomic with the side effect</text>
+
+  <!-- the gap -->
+  <text x="40" y="62" class="hbad">The gap: do the work, then record — a crash in between re-does the work</text>
+  <rect class="step" x="40" y="76" width="120" height="34" rx="5"/><text x="100" y="97" text-anchor="middle" class="sT">claim key</text>
+  <line class="arr" x1="160" y1="93" x2="194" y2="93" marker-end="url(#aa2)"/>
+  <rect class="step" x="196" y="76" width="160" height="34" rx="5"/><text x="276" y="97" text-anchor="middle" class="sT">DO WORK (charge $10)</text>
+  <polyline class="crash" points="372,82 390,93 376,101 396,111"/><text x="408" y="90" class="bad">CRASH</text>
+  <rect class="gone" x="470" y="76" width="160" height="34" rx="5"/><text x="550" y="97" text-anchor="middle" class="sub">record result — never runs</text>
+  <line class="arr" x1="630" y1="93" x2="690" y2="93" marker-end="url(#aa2)"/>
+  <text x="700" y="90" class="bad">retry → re-does the work</text><text x="700" y="105" class="bad">→ double effect</text>
+
+  <line x1="40" y1="150" x2="980" y2="150" stroke="#e0e0e0"/>
+  <line x1="510" y1="170" x2="510" y2="500" stroke="#dcdcdc"/>
+
+  <!-- Case A -->
+  <text x="250" y="192" text-anchor="middle" class="h">Case A — side effect in YOUR database</text>
+  <rect class="txn" x="60" y="210" width="380" height="120" rx="10"/>
+  <text x="250" y="234" text-anchor="middle" class="h" fill="#1a5a30">ONE database transaction</text>
+  <rect class="tbl" x="90" y="248" width="150" height="56" rx="5"/><text x="165" y="272" text-anchor="middle" class="sT">write order</text><text x="165" y="290" text-anchor="middle" class="sub">(the business effect)</text>
+  <rect class="tbl" x="260" y="248" width="150" height="56" rx="5"/><text x="335" y="272" text-anchor="middle" class="sT">write idempotency</text><text x="335" y="290" text-anchor="middle" class="sub">record (key → result)</text>
+  <text x="250" y="360" text-anchor="middle" class="sub">commit both or neither · a crash leaves it uncommitted →</text>
+  <text x="250" y="378" text-anchor="middle" class="sub" fill="#1f7a1f">the retry re-runs cleanly. No key, no partial change.</text>
+
+  <!-- Case B -->
+  <text x="760" y="192" text-anchor="middle" class="h">Case B — EXTERNAL side effect</text>
+  <rect class="step" x="560" y="220" width="130" height="44" rx="6"/><text x="625" y="242" text-anchor="middle" class="sT">your service</text><text x="625" y="257" text-anchor="middle" class="sub">(your DB)</text>
+  <line class="arr" x1="690" y1="242" x2="780" y2="242" marker-end="url(#aa2)"/>
+  <text x="735" y="234" text-anchor="middle" class="sub">pass your key →</text>
+  <rect class="ext" x="782" y="220" width="180" height="44" rx="6"/><text x="872" y="240" text-anchor="middle" class="sT" fill="#26577e">Stripe · Idempotency-Key</text><text x="872" y="256" text-anchor="middle" class="sub">dedupes the charge</text>
+  <text x="760" y="320" text-anchor="middle" class="sub">you can't wrap an external call in your transaction</text>
+  <text x="760" y="338" text-anchor="middle" class="sub">(the dual-write problem) →</text>
+  <text x="760" y="362" text-anchor="middle" class="sub" fill="#2a6099">delegate idempotency to the downstream API.</text>
+
+  <rect x="160" y="440" width="700" height="40" rx="8" fill="#f6f7f6" stroke="#ddd"/>
+  <text x="510" y="465" text-anchor="middle" class="h">Make the thing at the boundary idempotent — because you cannot put it inside your transaction.</text>
+</svg>

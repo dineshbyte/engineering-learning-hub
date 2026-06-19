@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Reference · REST Constraints, Maturity &amp; Method Semantics</title>
+<link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+<p class="kicker">Reference · REST</p>
+<h1>Constraints, Maturity &amp; Method Semantics</h1>
+<p class="meta">The compressed essence — glance before an interview.</p>
+
+<p>One page to glance at before an interview or a design review. REST is the <em>style</em> you get by applying a small set of constraints to a networked system.</p>
+
+<h2>The six architectural constraints</h2>
+<p>Each trades freedom for a system-wide property. <a href="https://roy.gbiv.com/pubs/dissertation/rest_arch_style.htm">Fielding, Ch. 5</a>.</p>
+<dl>
+<dt>1 · Client–server</dt>
+<dd>Separate UI concerns from data storage. → Each side evolves independently; portability of the UI, scalability of the server.</dd>
+<dt>2 · Stateless</dt>
+<dd>Every request carries all context the server needs; no stored client session between requests. → Any node can serve any request → horizontal scale, visibility, reliability. The most interview-relevant constraint.</dd>
+<dt>3 · Cacheable</dt>
+<dd>Responses must label themselves cacheable or not. → Eliminate round-trips; the basis for ETags, <code>Cache-Control</code>, CDNs.</dd>
+<dt>4 · Uniform interface</dt>
+<dd>One generic contract for all interaction: identified resources, manipulation via representations, self-descriptive messages, HATEOAS. → The central REST distinction; decouples client from server. Costs efficiency (generic &gt; tuned).</dd>
+<dt>5 · Layered system</dt>
+<dd>A client can't tell if it's talking to the origin or an intermediary. → Lets you insert gateways, proxies, load balancers, caches transparently.</dd>
+<dt>6 · Code-on-demand <em>(optional)</em></dt>
+<dd>Server may ship executable code to the client (e.g. JS). → The only optional constraint; rarely cited in API interviews.</dd>
+</dl>
+
+<h2>Richardson Maturity Model</h2>
+<p>How fully an API uses REST's ideas. <a href="https://martinfowler.com/articles/richardsonMaturityModel.html">Fowler</a>. Most "REST" APIs in production sit at <strong>Level 2</strong> — and a senior can defend that as a deliberate trade-off.</p>
+<dl>
+<dt>L0 · The Swamp of POX</dt>
+<dd>One URI, one verb (usually <code>POST</code>); HTTP is a tunnel. Think old-style SOAP/RPC.</dd>
+<dt>L1 · Resources</dt>
+<dd>Many URIs, each a noun (<code>/orders/42</code>) — but still one verb. Divide and conquer.</dd>
+<dt>L2 · HTTP verbs</dt>
+<dd>Methods carry meaning (<code>GET</code>/<code>POST</code>/<code>PUT</code>/<code>DELETE</code>) and status codes signal outcome. <em>The pragmatic industry bar.</em></dd>
+<dt>L3 · Hypermedia (HATEOAS)</dt>
+<dd>Responses carry links advertising valid next actions; clients aren't hard-coded to URIs. The "Glory of REST" — and the rarest in practice.</dd>
+</dl>
+
+<h2>HTTP method semantics</h2>
+<p>Safe = read-only intent. Idempotent = N identical calls ≡ one call's effect on state. <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC 9110</a> · <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods">MDN</a>.</p>
+<table>
+<thead><tr><th>Method</th><th>Safe</th><th>Idempotent</th><th>Cacheable</th><th>Typical use → success code</th></tr></thead>
+<tbody>
+<tr><td><code>GET</code></td><td>✓ yes</td><td>✓ yes</td><td>✓ yes</td><td>Read a resource → <code>200</code></td></tr>
+<tr><td><code>HEAD</code></td><td>✓ yes</td><td>✓ yes</td><td>✓ yes</td><td>Headers only → <code>200</code></td></tr>
+<tr><td><code>OPTIONS</code></td><td>✓ yes</td><td>✓ yes</td><td>✗ no</td><td>Capabilities / CORS → <code>204</code></td></tr>
+<tr><td><code>POST</code></td><td>✗ no</td><td>✗ no</td><td>rarely</td><td>Create / process → <code>201</code> / <code>202</code></td></tr>
+<tr><td><code>PUT</code></td><td>✗ no</td><td>✓ yes</td><td>✗ no</td><td>Replace at known URI → <code>200</code> / <code>204</code></td></tr>
+<tr><td><code>PATCH</code></td><td>✗ no</td><td>not reqd</td><td>✗ no</td><td>Partial update → <code>200</code> / <code>204</code></td></tr>
+<tr><td><code>DELETE</code></td><td>✗ no</td><td>✓ yes</td><td>✗ no</td><td>Remove → <code>204</code> / <code>200</code></td></tr>
+</tbody>
+</table>
+<p class="note"><strong>Senior gotchas:</strong> <code>PATCH</code> is <em>not</em> guaranteed idempotent (depends on the patch document) — make it so when you can. <code>POST</code> isn't idempotent, which is exactly why retries need an <code>Idempotency-Key</code> (Lesson 3). "Safe" means no <em>intended</em> state change — not "secure" and not "free of all side effects" (a GET may still log).</p>
+
+<h2>Status code families</h2>
+<table>
+<thead><tr><th>Range</th><th>Meaning</th><th>Don't confuse</th></tr></thead>
+<tbody>
+<tr><td>2xx</td><td>Success. <code>200</code> ok · <code>201</code> created (+<code>Location</code>) · <code>202</code> accepted (async) · <code>204</code> no body</td><td>Returning <code>200</code> with an error in the body — an anti-pattern.</td></tr>
+<tr><td>3xx</td><td>Redirect / not-modified. <code>301</code>/<code>308</code> moved · <code>304</code> use your cache</td><td><code>304</code> is a feature (conditional GET), not an error.</td></tr>
+<tr><td>4xx</td><td>Client error. <code>400</code> · <code>401</code> unauthn · <code>403</code> unauthz · <code>404</code> · <code>409</code> conflict · <code>422</code> · <code>429</code> rate-limited</td><td><code>401</code> = who are you; <code>403</code> = you can't. Different.</td></tr>
+<tr><td>5xx</td><td>Server error. <code>500</code> · <code>502</code> · <code>503</code> unavailable · <code>504</code> timeout</td><td>Never use 5xx for a client's bad input.</td></tr>
+</tbody>
+</table>
+
+<hr/>
+<p class="src">Reference · sources: Fielding, Fowler, RFC 9110, MDN (links above).</p>
+</body>
+</html>

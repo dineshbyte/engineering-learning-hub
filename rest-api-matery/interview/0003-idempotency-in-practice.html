@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interview Bank · Idempotency &amp; Reliability</title>
+<style>
+  :root{
+    --ink:#111110; --paper:#fffff8; --muted:#6b675f; --rule:#d8d4c8;
+    --accent:#7a1f12; --chip:#f1eee2; --good:#2f5d3a; --staff:#3a4a7a;
+  }
+  *{box-sizing:border-box}
+  html{font-size:18px}
+  body{margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Palatino Linotype",Palatino,"Iowan Old Style",Georgia,serif; line-height:1.5}
+  .wrap{max-width:43rem; margin:0 auto; padding:3rem 1.4rem 6rem}
+  .kicker{font-size:.72rem; letter-spacing:.18em; text-transform:uppercase; color:var(--muted);
+    font-family:ui-sans-serif,system-ui,sans-serif}
+  h1{font-size:2rem; line-height:1.08; margin:.25rem 0 .4rem; font-weight:600; letter-spacing:-.01em}
+  h2{font-size:.82rem; margin:2.4rem 0 .6rem; font-family:ui-sans-serif,system-ui,sans-serif;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+  a{color:var(--accent)}
+  .how{background:var(--chip); border-left:3px solid var(--accent); padding:.7rem 1rem; font-size:.9rem; margin:1.1rem 0 1.4rem}
+  .meta{font-family:ui-sans-serif,system-ui,sans-serif; font-size:.78rem; color:var(--muted)}
+  .controls{position:sticky; top:0; background:var(--paper); padding:.6rem 0; margin-bottom:.4rem;
+    border-bottom:1px solid var(--rule); display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; z-index:5}
+  .chip{font:inherit; font-family:ui-sans-serif,system-ui,sans-serif; font-size:.76rem; cursor:pointer;
+    background:#fff; border:1px solid var(--rule); border-radius:999px; padding:.25rem .7rem; color:var(--muted)}
+  .chip.active{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .controls .sp{flex:1}
+  .lnk{font:inherit; font-family:ui-sans-serif,system-ui,sans-serif; font-size:.76rem; cursor:pointer;
+    background:none; border:0; color:var(--accent); text-decoration:underline; padding:.2rem .3rem}
+  .card{counter-increment:c; border:1px solid var(--rule); border-radius:8px; padding:.85rem 1rem; margin:.6rem 0; background:#fcfbf2}
+  .q{font-weight:600; margin:0; display:flex; gap:.55rem; align-items:baseline}
+  .q::before{content:counter(c,decimal-leading-zero); font-family:ui-sans-serif,system-ui,sans-serif;
+    color:var(--muted); font-weight:700; font-size:.8rem; flex:0 0 1.6rem}
+  .tag{font-family:ui-sans-serif,system-ui,sans-serif; font-size:.62rem; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase; padding:.12rem .4rem; border-radius:4px; white-space:nowrap; align-self:center}
+  .t-core{background:#e7f0e9; color:var(--good)} .t-senior{background:#f6e9e7; color:var(--accent)} .t-staff{background:#e8ebf5; color:var(--staff)}
+  .reveal{font:inherit; font-family:ui-sans-serif,system-ui,sans-serif; font-size:.78rem; cursor:pointer;
+    margin-top:.6rem; background:transparent; color:var(--accent); border:1px solid var(--accent); border-radius:6px; padding:.32rem .8rem}
+  .a{display:none; margin-top:.7rem; padding-top:.7rem; border-top:1px dashed var(--rule); font-size:.94rem}
+  .a.show{display:block}
+  .a p{margin:.4rem 0} .a ul{margin:.4rem 0 .4rem 1.1rem; padding:0} .a li{margin:.2rem 0}
+  .a code{background:var(--chip); padding:.04rem .3rem; border-radius:3px; font-size:.86em}
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2.6rem; padding-top:1rem; border-top:1px solid var(--rule); font-size:.85rem}
+  footer{margin-top:2.4rem; font-size:.78rem; color:var(--muted)}
+  @media print{ .controls{position:static} .a{display:block} .reveal{display:none} a{color:var(--ink)} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">Interview Bank · Lesson 3</div>
+  <h1>Idempotency &amp; reliability — interview questions</h1>
+  <p class="meta">38 questions · Core / Senior / Staff · pairs with <a href="../lessons/0003-idempotency-in-practice.html">Lesson 3</a></p>
+
+  <div class="how">
+    <strong>Use these as active recall, not reading.</strong> Read the question, answer it <em>out loud or in writing from memory first</em>, and only then reveal the model answer to grade yourself. Recognizing an answer ≠ being able to produce it under pressure. Filter by difficulty; reveal-all only for a final review pass.
+  </div>
+
+  <div class="controls">
+    <button class="chip active" data-f="all">All</button>
+    <button class="chip" data-f="core">Core</button>
+    <button class="chip" data-f="senior">Senior</button>
+    <button class="chip" data-f="staff">Staff</button>
+    <span class="sp"></span>
+    <button class="lnk" id="revealAll">Reveal all</button>
+    <button class="lnk" id="collapseAll">Collapse all</button>
+  </div>
+
+  <h2>Concepts</h2>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> What does it mean for an operation to be idempotent?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Making the same request <em>N</em> times has the <strong>same effect on server state</strong> as making it once. The key word is <em>state</em>, not response: it's about what's left behind, not what comes back.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Safe vs idempotent — what's the difference?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>Safe</strong> = read-only <em>intent</em>, no intended state change (<code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>). <strong>Idempotent</strong> = repeating has the same effect as doing it once. Every safe method is idempotent, but not vice-versa: <code>PUT</code> and <code>DELETE</code> change state yet are idempotent.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Which HTTP methods are idempotent?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>, <code>PUT</code>, and <code>DELETE</code>. <code>POST</code> is <strong>not</strong>. <code>PATCH</code> is <strong>not guaranteed</strong> — it depends on the patch document.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Why isn't <code>POST</code> idempotent?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><code>POST</code> <em>creates</em> — each call can mint a new resource or fire a new side effect (a charge, a transfer). Two identical <code>POST /orders</code> calls produce two orders. Contrast <code>PUT /orders/42</code>, which <em>replaces</em> a named resource, so repeats converge on one state.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Why is <code>PATCH</code> "not guaranteed" to be idempotent?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>It depends entirely on the patch document. A <strong>"set field to X"</strong> patch is idempotent — applying it twice lands on the same state. An <strong>"increment by 1"</strong> patch is not — each application changes state further. The spec leaves it to your semantics, so you can't assume retry-safety.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Is "idempotent" the same as "returns the same response"?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>No — a classic trap. Idempotency is about <strong>effect on state</strong>, not the response body or status. A repeated <code>DELETE</code> is idempotent even though the first returns <code>204</code> and the second may return <code>404</code> — the resource is absent either way. Likewise "no side effects" is wrong: a <code>GET</code> may still log or update analytics.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Why does idempotency matter so much in distributed systems?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Because delivery is fundamentally unreliable: a request can succeed while its acknowledgement is lost to a timeout or dropped connection. The client can't tell, so it retries. Idempotency makes that retry <strong>safe</strong> — it lets you embrace at-least-once delivery instead of chasing the impossible (exactly-once delivery). The request most worth retrying is exactly the one most dangerous to repeat naïvely.</p></div>
+  </div>
+
+  <h2>The Idempotency-Key pattern</h2>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> How do you make a non-idempotent <code>POST</code> safe to retry?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Bolt on the <strong>Idempotency-Key pattern</strong>: the client sends a unique key per logical operation in an <code>Idempotency-Key</code> header; the server stores key → outcome on first execution and <em>replays</em> the stored response on any retry carrying the same key. Stripe is the canonical implementation.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Who generates the idempotency key, and why?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>The <strong>client</strong> — typically a <code>UUID v4</code>, one key per <em>logical operation</em>, reused across every retry of that one intent. Only the client knows that "this retry" and "the first attempt" are the same intent; the server can't infer it from two byte-identical requests. Putting key generation on the client is what makes the dedup correct rather than a guess.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Walk through the server-side flow on first request vs retry.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>First (miss):</strong> the server executes the operation inside a transaction that also persists the key plus the resulting status code, response body, and a request fingerprint. <strong>Retry (hit):</strong> it finds the key, skips execution entirely, and returns the stored response. The duplicate is now harmless.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Why store a fingerprint of the request, not just the key?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>So a key can't be smuggled onto a <em>different</em> operation. The server hashes the request parameters and, on a retry, checks the new request matches the stored fingerprint. A reused key with a different body is <strong>rejected</strong>. Without this, a buggy or malicious client could reuse one key to suppress a genuinely new operation.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Why does Stripe keep idempotency keys for ~24h rather than forever?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>The TTL must be <strong>long enough</strong> to cover realistic client retry windows (network outages, queued retries) but <strong>short enough</strong> to bound storage growth. ~24h comfortably covers retry budgets without keeping a key→response row for every operation ever made. Trade-off: too short and a late retry re-executes; too long and you pay storage forever.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> Should the idempotency layer live in the gateway or the service?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>A gateway/middleware layer is clean for caching the stored response and short-circuiting retries cheaply, but it can't atomically fold the key-write into the <em>business</em> transaction. The strongest guarantee comes from writing the key in the <strong>same transaction as the effect</strong>, which forces it into the service/data layer. Common compromise: gateway handles the fast-path replay and concurrency gate, the service owns the transactional write of key+effect. Name the trade-off rather than asserting one is "correct."</p></div>
+  </div>
+
+  <h2>Implementation &amp; concurrency</h2>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Where do you store the key → response mapping?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>A <strong>durable store</strong> — a DB table, or Redis with a TTL. It must <em>outlive a single process</em> and survive a crash mid-request, because the whole point is to handle a retry that arrives after the original attempt's machine is gone.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Two requests arrive concurrently with the same key — what happens?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>They must <strong>not both execute</strong>. Guard the key with a <strong>unique constraint</strong> or a lock: the first wins and writes; the loser either <em>waits</em> for the in-flight result, or gets a <code>409 Conflict</code> ("operation in progress"). This concurrency case — not the header — is where the interview actually lives.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Why fold the key-write into the same transaction as the effect?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>So the effect and the record-of-the-effect commit <strong>atomically</strong>. If they're separate, a crash between "did the work" and "saved the key" leaves you having executed without a record — the next retry re-executes and duplicates. One transaction makes "executed" and "remembered" inseparable.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> How should you scope idempotency keys?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Per <strong>endpoint + per account/tenant</strong>. That stops one tenant's key colliding with another's, and stops a key minted for one operation replaying on a different endpoint. Without scoping you risk cross-tenant leakage and accidental collisions.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Should you apply idempotency keys to every endpoint?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>No — only to <strong>unsafe, non-idempotent</strong> operations: payments, order creation, message sends, transfers. Reads and naturally idempotent writes (<code>GET</code>, <code>PUT</code>, <code>DELETE</code>) don't need the machinery; adding it everywhere is wasted storage and complexity.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> A retry arrives while the original is still running. Wait or <code>409</code>?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Both are defensible. <strong>Wait</strong> for the in-flight result and return it — best client experience, but holds a connection and risks pile-up. <strong>Return <code>409</code></strong> "in progress" — fail-fast and simple, but pushes the retry decision back to the client. Pick based on operation latency and client tolerance; just don't let the second request <em>execute</em>.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> The process crashes after the effect commits but before responding. What does the next retry see?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>If key+effect were written in <strong>one transaction</strong>, the retry hits a stored key and replays the original response — correct. If they were separate and only the effect committed, the retry sees a <em>miss</em> and re-executes — duplicate. This is exactly why atomic key+effect persistence is the load-bearing detail, not an optimization.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> What goes wrong if you cache the response but the original operation actually failed?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>You'd replay a failure forever, or — worse — cache a <code>5xx</code> and turn a transient error into a permanent one. Best practice: only persist the key for <strong>terminal outcomes</strong>; for in-flight or transient failures, leave the key open (or store a "pending" state) so a legitimate retry can complete the operation rather than being told it already failed.</p></div>
+  </div>
+
+  <h2>Delivery semantics</h2>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Does idempotency give you exactly-once delivery?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>No — say this out loud, it's the differentiator. <strong>Exactly-once <em>delivery</em> is impossible</strong> in a distributed system. Idempotency gives you exactly-once <strong>effect</strong>: the network may deliver five times, but the operation takes effect once.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Write the equation for exactly-once effect.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>exactly-once <strong>effect</strong> = at-least-once <strong>delivery</strong> + idempotent <strong>processing</strong> (dedup on the receiver). You keep retrying until acknowledged, and the receiver deduplicates so duplicates are harmless.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> Why is exactly-once delivery actually impossible?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>The sender can never know with certainty whether a lost acknowledgement means "message not delivered" or "delivered, ack lost." To be safe it must retry — which risks a duplicate — or not retry — which risks a loss. You cannot avoid both with an unreliable network and crash-prone nodes (the Two Generals problem). So you stop trying to deliver once and make duplicate delivery <em>harmless</em> instead.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> In a message/event consumer, what do you deduplicate on?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>On a stable <strong>event id or operation id</strong> carried by the message — the broker's idempotency key. The consumer records processed ids (with a TTL) and skips any it has already handled. Same pattern as HTTP idempotency keys, just at the messaging layer.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> Brokers advertise "exactly-once" — is that a contradiction?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>It's exactly-once <strong>processing within a closed system</strong>, achieved by at-least-once delivery plus dedup/transactional offset commits — not magic exactly-once delivery over the wire. The instant an effect crosses to an <em>external</em> system that isn't part of that transaction (a charge, an email), you're back to at-least-once + idempotency. Know where the boundary is.</p></div>
+  </div>
+
+  <h2>Natural idempotency by design</h2>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Why is <code>PUT</code> naturally idempotent?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><code>PUT</code> is a <strong>full replace</strong> of a named resource. Sending the same representation twice converges on the same state — the second call overwrites with identical content. If the client can name the resource (client-chosen ID), prefer <code>PUT</code> and retries are safe for free.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Is <code>DELETE</code> idempotent? What status do you return on a repeat?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Yes — the resource is absent after one or many calls. On a repeat you can return <code>204</code> (treat absence as success) or <code>404</code> (it genuinely isn't there). The effect is idempotent either way; only the <em>response</em> differs.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> <code>204</code> vs <code>404</code> on a repeated <code>DELETE</code> — name the trade-off.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><code>204</code> is <strong>friendlier to retries</strong> — a flaky client that re-sends gets a clean success and doesn't error-handle a phantom failure. <code>404</code> is <strong>more truthful</strong> — it accurately says "nothing here now." Either is fine; what's <em>not</em> fine is the second <code>DELETE</code> erroring as if it were a failed state change.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> How do you design a create to be naturally safe to retry?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Let the <strong>client choose the resource ID</strong> and use <code>PUT /orders/{client-id}</code> instead of <code>POST /orders</code>. The client-named ID acts as a built-in idempotency key: a repeated <code>PUT</code> converges instead of creating a duplicate. When the client genuinely can't name the resource, fall back to the <code>Idempotency-Key</code> pattern.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> "Design for natural idempotency vs bolt on a key" — how do you decide?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Prefer <strong>natural idempotency</strong> when the client can name the resource (use <code>PUT</code>) or the operation is intrinsically convergent — it's simpler, needs no extra store, and can't be misconfigured. Reach for an <strong>Idempotency-Key</strong> when the operation is irreducibly create-or-side-effect (charge, transfer, message send) and the client can't supply a meaningful ID. Design beats machinery; use machinery only where design can't reach.</p></div>
+  </div>
+
+  <h2>Retries</h2>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Which operations are safe to retry blindly?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Only <strong>idempotent</strong> ones — naturally idempotent methods, or non-idempotent operations guarded by an <code>Idempotency-Key</code>. Never blindly retry a bare <code>POST</code>; you risk double charges and duplicate resources.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> What is exponential backoff with jitter, and why both?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Retry after growing intervals (1s, 2s, 4s…) to give a struggling dependency room to recover — that's <strong>exponential backoff</strong>. Add <strong>jitter</strong> (randomized delay) so a fleet of clients doesn't synchronize their retries into a coordinated spike. Backoff alone still lets everyone retry at the same instants.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What is a thundering herd, and how do retries cause it?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>When a dependency hiccups, every client's retry timer can fire <em>together</em>, slamming the recovering service with a synchronized wave that knocks it back down — a self-reinforcing outage. <strong>Jitter</strong> de-synchronizes the herd; <strong>backoff</strong> thins the rate; <strong>circuit breakers</strong> stop the herd forming at all.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What should you do when a response carries <code>Retry-After</code>?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Honor it. On a <code>429</code> or <code>503</code>, <code>Retry-After</code> is the server explicitly telling you when to come back — obeying it beats your own guessed backoff and avoids hammering a service that's asked for room. Treat it as authoritative over your local retry schedule.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What does a circuit breaker add on top of backoff?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Backoff still retries; a <strong>circuit breaker stops retrying entirely</strong> once a downstream is clearly down — it "opens," fails fast, and periodically probes ("half-open") before closing again. It protects both the caller (no wasted latency) and the callee (no retry storm), letting it actually recover.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Why cap the number of retry attempts?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>To <strong>fail fast</strong> rather than hammering a dead dependency forever. Unbounded retries waste resources, blow latency budgets, and amplify outages. Bound total attempts (and overall deadline), then surface the failure.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> Design <code>POST /orders</code> so a flaky client can retry without duplicates.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>The client mints an <code>Idempotency-Key</code> (UUID) per order and sends it on every retry of that order. The server keeps a <strong>durable key→response store</strong> (status + body) with a TTL and a <strong>request fingerprint</strong>. The first request executes <strong>inside a transaction</strong> that also writes the key under a <strong>unique constraint</strong>; a concurrent or retried request with the same key returns the stored response, waits for the in-flight one, or gets a <code>409</code>. Validate the body matches the original so a key can't be reused for a different order. Frame it precisely: this gives exactly-once <strong>effect</strong>, not exactly-once delivery — pair it client-side with backoff + jitter and honor <code>Retry-After</code>.</p></div>
+  </div>
+
+  <div class="nav">
+    <span><a href="0002-http-methods-and-status-codes.html">◂ Prev bank: HTTP methods &amp; status codes</a></span>
+    <span><a href="0004-resource-modeling-and-uri-design.html">Next bank: Resource modeling &amp; URI design ▸</a></span>
+  </div>
+
+  <footer>📄 <a href="../reference/idempotency-and-retries.html">Idempotency &amp; Retries reference</a> · Interview bank · Lesson 3 · answer from memory first, then reveal · <a href="../index.html">all lessons &amp; banks</a></footer>
+</div>
+
+<script>
+  function setFilter(d){
+    document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active', c.dataset.f===d));
+    document.querySelectorAll('.card').forEach(card=>{
+      card.style.display = (d==='all'||card.dataset.diff===d) ? '' : 'none';
+    });
+  }
+  document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.f)));
+  document.querySelectorAll('.reveal').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      var a = btn.nextElementSibling;
+      var shown = a.classList.toggle('show');
+      btn.textContent = shown ? 'Hide answer' : 'Reveal senior answer';
+    });
+  });
+  document.getElementById('revealAll').addEventListener('click',function(){
+    document.querySelectorAll('.a').forEach(a=>a.classList.add('show'));
+    document.querySelectorAll('.reveal').forEach(b=>b.textContent='Hide answer');
+  });
+  document.getElementById('collapseAll').addEventListener('click',function(){
+    document.querySelectorAll('.a').forEach(a=>a.classList.remove('show'));
+    document.querySelectorAll('.reveal').forEach(b=>b.textContent='Reveal senior answer');
+  });
+</script>
+</body>
+</html>

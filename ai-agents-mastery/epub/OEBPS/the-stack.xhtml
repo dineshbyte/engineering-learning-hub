@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>The stack — ten levels</title>
+<link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+<h1>The stack, level by level</h1>
+<p>The request path that every level explains or adds to:</p>
+<figure>
+<img src="images/dgm-00-hero.png" alt="Request path: User to Agent to Tool to Billing service to Database, with the result looping back"/>
+<figcaption>One pass of the agent loop. Memorise this banner; each level adds or explains one box or the loop arrow.</figcaption>
+</figure>
+
+<!-- L1 -->
+<h2 id="l1"><span class="num">1</span>LLM — the brain in a jar</h2>
+<p class="tagline">The only irreducible primitive. Everything else is plumbing around it.</p>
+<figure><img src="images/dgm-01-llm.png" alt="Text in, LLM predicts, text out; no memory, no hands, no state"/>
+<figcaption>f(text) → text. A pure function: no side effects, nothing retained.</figcaption></figure>
+<dl class="facts">
+<dt>Is</dt><dd>A stateless function: text in → predicted text out.</dd>
+<dt>Why it exists</dt><dd>Turn fuzzy natural-language intent into output with no hand-coded rules.</dd>
+<dt>Like (world)</dt><dd>A genius consultant who read the whole internet but has total amnesia — and can only talk.</dd>
+<dt>Like (code)</dt><dd>A pure <code>POST /predict</code> endpoint. A Lambda with no DB. RAM, no disk.</dd>
+</dl>
+<div class="myth"><div class="m">✗ Myth: "it looks things up / it remembers our chat."</div>
+<div class="t">✓ Truth: it predicts tokens; the app re-sends history each call.</div></div>
+<div class="rule"><span class="label">Memory rule</span>An LLM is a stateless text-prediction function — brain in a jar, no memory, no hands.</div>
+<div class="mc">
+<p class="q">Memory check (answer first, then read):</p>
+<ul><li>Three things an LLM can't do alone? <span class="answer">remember · act · retain state between calls.</span></li>
+<li>If it's stateless, how does a chatbot seem to remember? <span class="answer">the app resends the transcript every call.</span></li></ul></div>
+
+<!-- L2 -->
+<h2 id="l2"><span class="num">2</span>Tool &amp; Tool calling — giving the brain hands</h2>
+<p class="tagline">Two ideas, one critical line: the model <em>requests</em>; your code <em>runs</em>.</p>
+<figure><img src="images/dgm-02-tool.png" alt="LLM emits a tool-call request; runtime executes it against a service and feeds the result back"/>
+<figcaption>Tool = a typed function (name + JSON schema). Tool calling = the model emitting the request your runtime fulfils.</figcaption></figure>
+<dl class="facts">
+<dt>Is</dt><dd>A function the model may <em>request</em> (name + param schema); calling = it asks, the runtime executes.</dd>
+<dt>Why it exists</dt><dd>Bridge text-prediction to real side effects — read a DB, hit an API, send mail — while keeping the model sandboxed.</dd>
+<dt>Like (world)</dt><dd>The amnesiac writes a work order; a runner does it and brings back the result.</dd>
+<dt>Like (code)</dt><dd>An API endpoint with an OpenAPI schema; the model emits a typed RPC your dispatcher routes.</dd>
+</dl>
+<div class="myth"><div class="m">✗ Myth: "the LLM ran the SQL / executed the tool."</div>
+<div class="t">✓ Truth: it only emitted a request — the runtime executed it.</div></div>
+<div class="rule"><span class="label">Memory rule</span>A tool is a typed function the model may request but never run; calling is the model asking, your runtime doing.</div>
+<div class="mc">
+<p class="q">Memory check:</p>
+<ul><li>Who executes a tool call? <span class="answer">the runtime, never the model.</span></li>
+<li>What two things define a tool? <span class="answer">a name and a parameter schema.</span></li></ul></div>
+
+<!-- L3 -->
+<h2 id="l3"><span class="num">3</span>Agent — brain + hands + a goal</h2>
+<p class="tagline">What you get when you let the model drive many tool calls toward an objective.</p>
+<figure><img src="images/dgm-03-agent.png" alt="Agent equals LLM plus tools plus loop plus goal, choosing each step toward resolving a dispute"/>
+<figcaption>Same LLM as Level 1 — the intelligence added is structural: a loop, tools, and a goal.</figcaption></figure>
+<dl class="facts">
+<dt>Is</dt><dd>An LLM in a loop with tools + a goal; the model chooses which tools, in what order, until done.</dd>
+<dt>Why it exists</dt><dd>You can't pre-script open-ended work; steps depend on results. The agent decides the path at runtime.</dd>
+<dt>Like (world)</dt><dd>A capable employee handed an objective and systems access — no script.</dd>
+<dt>Like (code)</dt><dd>A long-running worker that orchestrates service calls dynamically, not a fixed cron job.</dd>
+</dl>
+<div class="myth"><div class="m">✗ Myth: "an agent is a smarter / bigger model."</div>
+<div class="t">✓ Truth: same model — a loop + tools + a goal were added.</div></div>
+<div class="rule"><span class="label">Memory rule</span>Agent = LLM + Tools + Loop + Goal — the model picks the path, the loop keeps it moving.</div>
+<div class="mc">
+<p class="q">Memory check:</p>
+<ul><li>Four ingredients of an agent? <span class="answer">LLM, tools, loop, goal.</span></li>
+<li>Is it a better brain than an LLM? <span class="answer">no; structure was added, not IQ.</span></li></ul></div>
+
+<!-- L4 -->
+<h2 id="l4"><span class="num">4</span>Agent loop — Observe → Think → Act → Repeat</h2>
+<p class="tagline">The heartbeat of every agent. You already run this loop in production.</p>
+<figure><img src="images/dgm-04-loop.png" alt="A cycle of Observe, Think, Act repeating until the goal is met, then Done"/>
+<figcaption>≈ a Kubernetes reconciliation loop, but for intent: desired state = the goal.</figcaption></figure>
+<dl class="facts">
+<dt>Is</dt><dd>Observe state → Think (LLM picks next step) → Act (tool) → observe → repeat, until goal or limit.</dd>
+<dt>Why it exists</dt><dd>The next action depends on the last result — you must react, not pre-plan.</dd>
+<dt>Like (world)</dt><dd>Debugging an outage: symptom → hypothesis → try one thing → observe → adjust.</dd>
+<dt>Like (code)</dt><dd>A K8s reconciliation loop / a REPL / an event loop.</dd>
+</dl>
+<div class="myth"><div class="m">✗ Myth: "the loop runs inside the model / it plans all steps first."</div>
+<div class="t">✓ Truth: the loop is code in the runtime; the model is called once per turn.</div></div>
+<div class="rule"><span class="label">Memory rule</span>The agent loop is a reconciliation loop for intent: observe, think, act, repeat until desired state.</div>
+<div class="mc">
+<p class="q">Memory check:</p>
+<ul><li>Four phases in order? <span class="answer">observe, think, act, repeat.</span></li>
+<li>Where does the loop live? <span class="answer">in the runtime code, not the model.</span></li></ul></div>
+
+<!-- L5 -->
+<h2 id="l5"><span class="num">5</span>Agent runtime — the app server around the brain</h2>
+<p class="tagline">Plain code that hosts the loop. The layer leaders skip — and where reliability lives.</p>
+<figure><img src="images/dgm-05-runtime.png" alt="The runtime is a container holding the loop, calling the LLM, dispatching tools, and enforcing limits"/>
+<figcaption>The model is a guest in this house; the house sets the rules.</figcaption></figure>
+<dl class="facts">
+<dt>Is</dt><dd>The program running the loop: holds state, calls the LLM, runs tools, enforces guardrails.</dd>
+<dt>Why it exists</dt><dd>The stateless LLM can't host a loop or stop itself; something must — and it's code you own.</dd>
+<dt>Like (world)</dt><dd>The office around the employee: building, phones, badges, the manager who says "stop".</dd>
+<dt>Like (code)</dt><dd>Laravel + web server + queue worker. Claude Code, Cursor, the Agent SDK are runtimes.</dd>
+</dl>
+<div class="myth"><div class="m">✗ Myth: "the model manages its own memory &amp; limits."</div>
+<div class="t">✓ Truth: the runtime re-sends history and enforces every limit.</div></div>
+<div class="rule"><span class="label">Memory rule</span>The runtime is the app server hosting the loop — it holds state, runs tools, and enforces the guardrails the model can't.</div>
+<div class="mc">
+<p class="q">Memory check:</p>
+<ul><li>Three runtime jobs the LLM can't do? <span class="answer">hold state, run tools, enforce limits.</span></li>
+<li>Agent loops forever — which layer failed? <span class="answer">the runtime (no max-steps).</span></li></ul></div>
+
+<!-- L6 -->
+<h2 id="l6"><span class="num">6</span>Memory — because the brain forgets everything</h2>
+<p class="tagline">Not a model feature — a runtime discipline. It's just what gets re-injected.</p>
+<figure><img src="images/dgm-06-memory.png" alt="The runtime refills the bounded context window each call from short-term history and a long-term store"/>
+<figcaption>You solved this before: stateless HTTP → sessions + a database. RAG = a SELECT pasted into the prompt.</figcaption></figure>
+<dl class="facts">
+<dt>Is</dt><dd>Whatever the runtime puts back into the prompt. Short-term = context window; long-term = external store.</dd>
+<dt>Why it exists</dt><dd>The model forgets between calls and the window is finite; relevant info must be re-injected.</dd>
+<dt>Like (world)</dt><dd>The employee's notebook (today) + the company wiki (looked up on demand).</dd>
+<dt>Like (code)</dt><dd>Stateless HTTP + sessions + DB. Context = RAM payload; store = disk; RAG = a query injecting rows.</dd>
+</dl>
+<div class="myth"><div class="m">✗ Myth: "bigger context window = memory."</div>
+<div class="t">✓ Truth: that's more RAM per call; durable memory is the external store.</div></div>
+<div class="rule"><span class="label">Memory rule</span>The model is stateless; memory is what the runtime reloads into the prompt — context is RAM, the store is disk.</div>
+<div class="mc">
+<p class="q">Memory check:</p>
+<ul><li>Short-term vs long-term? <span class="answer">context window vs database.</span></li>
+<li>RAG in one backend line? <span class="answer">a query that pastes rows into the prompt.</span></li></ul></div>
+
+<!-- L7 -->
+<h2 id="l7"><span class="num">7</span>Workflow vs Agent — who writes the if/else?</h2>
+<p class="tagline">The most important decision in the stack — and the one VPs over-engineer.</p>
+<figure><img src="images/dgm-07-workflow-agent.png" alt="Workflow is a fixed linear chain you write; agent is a model-driven loop"/>
+<figcaption>Workflow = the if/else you wrote · Agent = the if/else the model writes at runtime.</figcaption></figure>
+<table>
+<tr><th>Dimension</th><th>Workflow</th><th>Agent</th></tr>
+<tr><td>Controls flow</td><td>You (developer)</td><td>The model, at runtime</td></tr>
+<tr><td>Predictability</td><td>High</td><td>Lower (path emerges)</td></tr>
+<tr><td>Cost / latency</td><td>Low</td><td>Higher (many LLM calls)</td></tr>
+<tr><td>Debuggability</td><td>Easy (fixed paths)</td><td>Harder (per-run traces)</td></tr>
+<tr><td>Best for</td><td>Known, repeatable tasks</td><td>Open-ended, unpredictable tasks</td></tr>
+</table>
+<p class="tagline"><strong>Agentic workflow</strong> = the middle: a fixed workflow with a few model-decided steps (a runbook with "use your judgment here").</p>
+<div class="myth"><div class="m">✗ Myth: "agents are the advanced / better default."</div>
+<div class="t">✓ Truth: Anthropic's guidance — start simple, use workflows, reach for agents only when flexibility pays.</div></div>
+<div class="rule"><span class="label">Memory rule</span>Workflow = you write the if/else; Agent = the model writes it; choose by how predictable the path is.</div>
+<div class="mc">
+<p class="q">Memory check:</p>
+<ul><li>Who writes the control flow in each? <span class="answer">developer vs model.</span></li>
+<li>Safe default, and why? <span class="answer">workflow; agents add cost + unpredictability.</span></li></ul></div>
+
+<!-- L8 -->
+<h2 id="l8"><span class="num">8</span>MCP — USB-C for tools</h2>
+<p class="tagline">One standard so you don't hand-write glue for every external system.</p>
+<figure><img src="images/dgm-08-mcp.png" alt="Without MCP, N agents times M tools of bespoke glue; with MCP, N plus M via one standard bus"/>
+<figcaption>Client lives in the agent (the port); a server exposes each tool (the device); the registry is the catalog of what's plugged in.</figcaption></figure>
+<dl class="facts">
+<dt>MCP</dt><dd>An open standard to discover &amp; call tools/data from external systems. "USB-C for AI."</dd>
+<dt>Why it exists</dt><dd>Kills the N×M bespoke-glue mess: expose a server once, any MCP agent uses it → N+M.</dd>
+<dt>Server / Client</dt><dd>Server = exposes tools (device). Client = connects from the host app (port).</dd>
+<dt>Tool registry</dt><dd>The catalog advertised to the model = service discovery for tools.</dd>
+</dl>
+<div class="myth"><div class="m">✗ Myth: "MCP is a Claude feature / MCP <em>is</em> the tool."</div>
+<div class="t">✓ Truth: open multi-vendor standard; it's the protocol to reach tools (≈ JDBC).</div></div>
+<div class="rule"><span class="label">Memory rule</span>MCP is USB-C for tools — server = device, client = port, registry = catalog of what's plugged in.</div>
+<div class="mc">
+<p class="q">Memory check:</p>
+<ul><li>MCP turns N×M into ___? <span class="answer">N+M.</span></li>
+<li>Agent vs GitHub integration — which is which? <span class="answer">agent = client, GitHub = server.</span></li></ul></div>
+
+<!-- L9 -->
+<h2 id="l9"><span class="num">9</span>Single vs Multi-agent — monolith vs microservices</h2>
+<p class="tagline">The same architecture call you've made a hundred times for services.</p>
+<figure><img src="images/dgm-09-single-multi.png" alt="Single agent is one box; multi-agent is an orchestrator delegating to parallel subagents that synthesize an answer"/>
+<figcaption>Anthropic's research system: a lead + 3–5 parallel subagents beat single-agent by 90.2% — at ~15× the tokens.</figcaption></figure>
+<dl class="facts">
+<dt>Single</dt><dd>One loop, one context, one tool registry, end to end. The monolith.</dd>
+<dt>Multi</dt><dd>Orchestrator plans &amp; delegates to worker subagents (own context+tools), then synthesizes.</dd>
+<dt>Like (code)</dt><dd>Monolith vs microservices / map-reduce. The orchestrator is the dispatcher.</dd>
+<dt>The cost</dt><dd>Coordination, latency, partial failure, observability — and ~15× tokens.</dd>
+</dl>
+<div class="myth"><div class="m">✗ Myth: "more agents = better."</div>
+<div class="t">✓ Truth: premature-microservices trap; split only when one context/role can't cope.</div></div>
+<div class="rule"><span class="label">Memory rule</span>Single agent is a monolith; multi-agent is microservices — split only when one context/role can't cope.</div>
+<div class="mc">
+<p class="q">Memory check:</p>
+<ul><li>Map both to an architecture you use daily. <span class="answer">monolith vs microservices.</span></li>
+<li>The cost of multi-agent? <span class="answer">coordination + ~15× tokens.</span></li></ul></div>
+
+<!-- L10 -->
+<h2 id="l10"><span class="num">10</span>Archetypes — one engine, many job descriptions</h2>
+<p class="tagline">The payoff: every "AI agent product" is the same engine + a different toolset + a different prompt.</p>
+<figure><img src="images/dgm-10-archetype.png" alt="One engine fans out into five role-specific agents mapped to employees: coding, exec-assistant, support, SRE, billing"/>
+<figcaption>You don't build a new kind of agent — you hire one by choosing its tools and its job description.</figcaption></figure>
+<table>
+<tr><th>Archetype</th><th>= Employee</th><th>Core tools</th></tr>
+<tr><td>Coding agent</td><td>Software Engineer</td><td>files, shell, run tests, git</td></tr>
+<tr><td>Exec-assistant</td><td>Executive Assistant</td><td>email, calendar, browser, contacts</td></tr>
+<tr><td>Support agent</td><td>Customer Support Rep</td><td>knowledge base, tickets, account, refunds</td></tr>
+<tr><td>SRE agent</td><td>SRE Engineer</td><td>metrics/logs, dashboards, deploy/rollback, paging</td></tr>
+<tr><td>Billing agent</td><td>Billing Ops Specialist</td><td>invoices, payment gateway, subscriptions, refunds</td></tr>
+</table>
+<p>The SRE agent's loop is literally Level 4 again: observe alert → diagnose → remediate → verify, repeat.</p>
+<div class="myth"><div class="m">✗ Myth: "each agent type is different technology."</div>
+<div class="t">✓ Truth: identical architecture; only tools + instructions differ.</div></div>
+<div class="rule"><span class="label">Memory rule</span>Every archetype is the same engine + a different tool registry + a different job description.</div>
+<div class="mc">
+<p class="q">Memory check:</p>
+<ul><li>What changes vs stays between a coding and a billing agent? <span class="answer">tools + prompt change; the engine stays.</span></li>
+<li>Three questions that cut through a pitch? <span class="answer">what tools? what loop? what guardrails?</span></li></ul></div>
+</body>
+</html>

@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 5 · Versioning &amp; API evolution (visual)</title>
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<style>
+  :root{--accent:var(--track-rest)}
+  /* chips — pill row (not in lesson.css) */
+  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+  .chip b{color:var(--accent)}
+  /* REST uses .fact / .step as content blocks with an inline <b> label */
+  .facts{grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr))}
+  .fact b,.step b{display:block; font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+  .fact.blue b{color:var(--accent)}
+  .steps{display:grid; grid-template-columns:1fr 1fr; gap:.5rem}
+  /* myth compare grid — lesson.css styles .m/.t but not the container */
+  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.8rem 0; font-size:.9rem}
+  /* bottom footer nav — lesson.css names this .next */
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.85rem}
+  @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="0004-resource-modeling-and-uri-design.html" title="Resource modeling &amp;amp; URI design (visual)">&#8249; Prev</a><a href="0006-pagination-at-scale.html" title="Pagination at scale (visual)">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">REST API</span></span>
+  </nav>
+  <div class="kicker">Lesson 5 · Versioning · visual edition</div>
+  <h1>Versioning &amp; API evolution</h1>
+  <p class="meta">~7 min · one diagram per idea · retrieval practice at the end</p>
+
+  <div class="mission">
+    <strong>Why this, first.</strong> "How do you version a public API?" is a staple senior question — and the mid-level reflex is to launch straight into <code>/v1</code> vs. headers. The senior move is to <em>reframe</em>: it's really "how do I <strong>evolve</strong> the API without breaking the clients I can't redeploy?" You version only when an evolution is genuinely impossible to make compatibly. This lesson makes that frame — and the breaking-vs-non-breaking line, the three placement strategies, and the deprecation lifecycle — something you can <em>draw</em>.
+  </div>
+
+  <div class="chips">
+    <span class="chip">A version is a <b>last resort</b></span>
+    <span class="chip">so evolve <b>compatibly</b> first</span>
+    <span class="chip">only <b>add</b>, never remove</span>
+    <span class="chip">and clients <b>tolerate</b> the rest</span>
+  </div>
+
+  <!-- HERO: the trap -->
+  <figure>
+    <svg viewBox="0 0 640 156" role="img" aria-label="A version is not a packaging choice; its real cost is permanent support burden, forced migrations, and a combinatorial test matrix">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">A VERSION IS NOT A URL — IT'S A FOREVER COST</text>
+        <rect x="8" y="42" width="144" height="56" rx="9" fill="#fff" stroke="#d8d4c8"/>
+        <text x="80" y="66" text-anchor="middle" font-size="11" font-weight="700">① "just pick /v1"</text>
+        <text x="80" y="83" text-anchor="middle" font-size="9" fill="#6b675f">looks like packaging</text>
+        <rect x="168" y="42" width="144" height="56" rx="9" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="240" y="66" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">② bump per change</text>
+        <text x="240" y="83" text-anchor="middle" font-size="9" fill="#6b675f">client base fragments</text>
+        <rect x="328" y="42" width="144" height="56" rx="9" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="400" y="66" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">③ forced migrations</text>
+        <text x="400" y="83" text-anchor="middle" font-size="9" fill="#6b675f">on every integrator</text>
+        <rect x="488" y="42" width="144" height="56" rx="9" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="560" y="66" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">④ N×N test matrix 💥</text>
+        <text x="560" y="83" text-anchor="middle" font-size="9" fill="#6b675f">5 surfaces, forever</text>
+        <line x1="152" y1="70" x2="168" y2="70" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="312" y1="70" x2="328" y2="70" stroke="#9a2417" marker-end="url(#arwR)"/>
+        <line x1="472" y1="70" x2="488" y2="70" stroke="#9a2417" marker-end="url(#arwR)"/>
+        <text x="320" y="128" text-anchor="middle" font-size="11" fill="#7a1f12">The cost of a version isn't the URL — it's the <tspan font-style="italic">permanent</tspan> support burden you just signed up for.</text>
+        <text x="320" y="146" text-anchor="middle" font-size="10.5" fill="#2f5d3a" font-weight="700">The senior reframe: version only when a change is genuinely impossible to make compatibly.</text>
+      </g>
+    </svg>
+    <figcaption>Treat versioning as packaging and you'll mint one per change, fragment clients, and maintain five parallel surfaces forever. <strong>The best version is often no new version.</strong></figcaption>
+  </figure>
+
+  <div class="rule"><span>♻️ Memory rule:</span> Evolve <em>compatibly</em> first — only ADD (new optional fields, new endpoints), never remove, rename, or repurpose; build <em>tolerant readers</em> (Postel's law: ignore unknown fields). Version <em>only</em> when a change is genuinely breaking.</div>
+
+  <!-- THE LINE: breaking vs non-breaking -->
+  <h2 class="sec">The line that decides everything</h2>
+  <p>Every evolution question collapses to one classification: is the change <strong>breaking</strong> or <strong>non-breaking</strong>? Get this line right and the rest is mechanics.</p>
+  <figure>
+    <svg viewBox="0 0 640 232" role="img" aria-label="Non-breaking changes are pure additions shipped in place; breaking changes remove, rename, retype, or tighten and force a new version">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">BREAKING vs NON-BREAKING</text>
+        <!-- safe column -->
+        <rect x="8" y="30" width="300" height="184" rx="10" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
+        <text x="158" y="50" text-anchor="middle" font-size="12" font-weight="700" fill="#2f5d3a">✓ NON-BREAKING · ship in place</text>
+        <text x="158" y="66" text-anchor="middle" font-size="9" fill="#244a2e">pure additions · no version · no migration</text>
+        <rect x="24" y="76" width="268" height="26" rx="6" fill="#fff" stroke="#2f5d3a"/>
+        <text x="34" y="93" font-size="10" fill="#244a2e">+ add an optional request field</text>
+        <rect x="24" y="106" width="268" height="26" rx="6" fill="#fff" stroke="#2f5d3a"/>
+        <text x="34" y="123" font-size="10" fill="#244a2e">+ add a response field</text>
+        <rect x="24" y="136" width="268" height="26" rx="6" fill="#fff" stroke="#2f5d3a"/>
+        <text x="34" y="153" font-size="10" fill="#244a2e">+ add a new endpoint</text>
+        <rect x="24" y="166" width="268" height="36" rx="6" fill="#fff" stroke="#2f5d3a"/>
+        <text x="34" y="182" font-size="10" fill="#244a2e">+ add an optional enum value —</text>
+        <text x="34" y="195" font-size="9" fill="#6b675f"><tspan font-style="italic">only</tspan> if clients tolerate unknowns</text>
+        <!-- breaking column -->
+        <rect x="332" y="30" width="300" height="184" rx="10" fill="#f7ecea" stroke="#9a2417" stroke-width="1.5"/>
+        <text x="482" y="50" text-anchor="middle" font-size="12" font-weight="700" fill="#9a2417">✗ BREAKING · forces a version</text>
+        <text x="482" y="66" text-anchor="middle" font-size="9" fill="#7a2218">can break a deployed client silently</text>
+        <rect x="348" y="76" width="268" height="26" rx="6" fill="#fff" stroke="#9a2417"/>
+        <text x="358" y="93" font-size="10" fill="#7a2218">− remove or rename a field</text>
+        <rect x="348" y="106" width="268" height="26" rx="6" fill="#fff" stroke="#9a2417"/>
+        <text x="358" y="123" font-size="10" fill="#7a2218">↻ change a field's type or meaning</text>
+        <rect x="348" y="136" width="268" height="26" rx="6" fill="#fff" stroke="#9a2417"/>
+        <text x="358" y="153" font-size="10" fill="#7a2218">! make an optional field required</text>
+        <rect x="348" y="166" width="268" height="36" rx="6" fill="#fff" stroke="#9a2417"/>
+        <text x="358" y="182" font-size="10" fill="#7a2218">⊘ tighten validation · change a</text>
+        <text x="358" y="195" font-size="10" fill="#7a2218">&#160;&#160;&#160;default · drop an endpoint/enum</text>
+      </g>
+    </svg>
+    <figcaption>The catch on enum values: adding one is safe <em>only if</em> clients already ignore values they don't recognize. Server only adds; client only tolerates.<sup><a href="#s3" id="r3">3</a></sup></figcaption>
+  </figure>
+  <div class="myth"><div class="m">✗ Myth: "any change to the response shape needs a new version."</div>
+  <div class="t">✓ Truth: pure additions are non-breaking — ship them in place, no version, if your readers are tolerant.</div></div>
+
+  <!-- THREE STRATEGIES -->
+  <h2 class="sec">Where the version lives: three strategies</h2>
+  <p>Once a change is genuinely breaking, you must place the version somewhere. There's no free option — each buys clarity in one dimension and pays for it in another.</p>
+  <figure>
+    <svg viewBox="0 0 640 220" role="img" aria-label="Three placement strategies: URI path, custom header, and media-type negotiation, each with one trade-off">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THREE PLACEMENTS · ONE TRADE-OFF EACH</text>
+        <!-- 1 URI path -->
+        <rect x="8" y="32" width="200" height="172" rx="10" fill="#fbfaf2" stroke="#7a1f12" stroke-width="1.5"/>
+        <text x="108" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">1 · URI PATH</text>
+        <rect x="22" y="62" width="172" height="30" rx="6" fill="#f1eee2" stroke="#7a1f12"/>
+        <text x="108" y="82" text-anchor="middle" font-size="11" font-family="ui-monospace,Menlo,monospace" fill="#111110">GET /v2/users</text>
+        <text x="108" y="112" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">✓ visible · routes &amp;</text>
+        <text x="108" y="125" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">caches by URL · browser-</text>
+        <text x="108" y="138" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">testable · most common</text>
+        <line x1="22" y1="150" x2="194" y2="150" stroke="#d8d4c8"/>
+        <text x="108" y="166" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a2417">✗ trade-off: couples</text>
+        <text x="108" y="179" text-anchor="middle" font-size="9.5" fill="#7a2218">version to identity —</text>
+        <text x="108" y="192" text-anchor="middle" font-size="9.5" fill="#7a2218">"not pure REST"</text>
+        <!-- 2 custom header -->
+        <rect x="220" y="32" width="200" height="172" rx="10" fill="#eef2f5" stroke="#1f3a5a" stroke-width="1.5"/>
+        <text x="320" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">2 · CUSTOM HEADER</text>
+        <rect x="234" y="62" width="172" height="30" rx="6" fill="#fff" stroke="#1f3a5a"/>
+        <text x="320" y="81" text-anchor="middle" font-size="9.5" font-family="ui-monospace,Menlo,monospace" fill="#111110">Accept-Version: 2</text>
+        <text x="320" y="112" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">✓ clean, version-free</text>
+        <text x="320" y="125" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">URLs · resource keeps</text>
+        <text x="320" y="138" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">one identity</text>
+        <line x1="234" y1="150" x2="406" y2="150" stroke="#d8d4c8"/>
+        <text x="320" y="166" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a2417">✗ trade-off: invisible —</text>
+        <text x="320" y="179" text-anchor="middle" font-size="9.5" fill="#7a2218">easy to forget, hard to</text>
+        <text x="320" y="192" text-anchor="middle" font-size="9.5" fill="#7a2218">test &amp; spot in logs</text>
+        <!-- 3 media type -->
+        <rect x="432" y="32" width="200" height="172" rx="10" fill="#f7ecea" stroke="#9a2417" stroke-width="1.5"/>
+        <text x="532" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">3 · MEDIA TYPE</text>
+        <rect x="446" y="60" width="172" height="34" rx="6" fill="#fff" stroke="#9a2417"/>
+        <text x="532" y="76" text-anchor="middle" font-size="8" font-family="ui-monospace,Menlo,monospace" fill="#111110">Accept: application/</text>
+        <text x="532" y="88" text-anchor="middle" font-size="8" font-family="ui-monospace,Menlo,monospace" fill="#111110">vnd.api+json;version=2</text>
+        <text x="532" y="112" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">✓ most "RESTful" ·</text>
+        <text x="532" y="125" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">HATEOAS-friendly ·</text>
+        <text x="532" y="138" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">version per representation</text>
+        <line x1="446" y1="150" x2="618" y2="150" stroke="#d8d4c8"/>
+        <text x="532" y="166" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a2417">✗ trade-off: complex,</text>
+        <text x="532" y="179" text-anchor="middle" font-size="9.5" fill="#7a2218">poor tooling/proxy</text>
+        <text x="532" y="192" text-anchor="middle" font-size="9.5" fill="#7a2218">support — no ergonomics</text>
+      </g>
+    </svg>
+    <figcaption>Azure's guidance frames these the same way: there's no universally right answer — the choice follows your clients and tooling, not dogma. In an interview, state your pick <em>and</em> name its trade-off.<sup><a href="#s3">3</a></sup></figcaption>
+  </figure>
+
+  <!-- HOW EXEMPLARS DO IT -->
+  <h2 class="sec">How the exemplars actually do it</h2>
+  <p>Two reference points worth quoting by name, because they encode the senior instinct — <em>never break a deployed client silently.</em></p>
+  <div class="facts">
+    <div class="fact"><b>Stripe · pin per account</b> Your version is fixed when you first integrate; you upgrade explicitly, and a single request can override with a header. A server-side change never silently reshapes an existing integration.<sup><a href="#s1" id="r1">1</a></sup></div>
+    <div class="fact blue"><b>GitHub · date in a header</b> A date-based version sent in <code>X-GitHub-Api-Version</code> — the header strategy paired with calendar versioning (<code>2024-10-01</code>).<sup><a href="#s2" id="r2">2</a></sup></div>
+    <div class="fact"><b>Date vs semver = labeling</b> <code>2024-10-01</code> vs <code>v2</code> is a labeling choice, not a strategy. Both expose only <strong>major</strong> versions; minors/patches are the compatible changes you ship in place.</div>
+    <div class="fact blue"><b>Pinning is the real move</b> Per-account pinning converts "we changed the API" from a client-breaking event into a client-<em>controlled</em> one. That's the senior signal.</div>
+  </div>
+
+  <!-- DEPRECATION LIFECYCLE -->
+  <h2 class="sec">Deprecation is a lifecycle, not a delete</h2>
+  <p>The version is the easy half. Retiring the old one without burning integrators is where seniority shows.</p>
+  <figure>
+    <svg viewBox="0 0 640 168" role="img" aria-label="Evolution timeline: v1 live, then deprecate with Deprecation and Sunset headers while v2 runs in parallel, then retire after usage drains">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">DEPRECATION TIMELINE · ANNOUNCE → OVERLAP → RETIRE</text>
+        <!-- timeline rail -->
+        <line x1="20" y1="84" x2="620" y2="84" stroke="#d8d4c8" stroke-width="2"/>
+        <!-- v1 live -->
+        <rect x="20" y="60" width="150" height="48" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="95" y="80" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">v1 LIVE</text>
+        <text x="95" y="97" text-anchor="middle" font-size="9" fill="#244a2e">sole surface</text>
+        <line x1="170" y1="84" x2="190" y2="84" stroke="#6b675f" marker-end="url(#arw)"/>
+        <!-- deprecate / overlap -->
+        <rect x="192" y="36" width="226" height="96" rx="9" fill="#fbfaf2" stroke="#7a1f12" stroke-width="1.5"/>
+        <text x="305" y="54" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">DEPRECATE · run in parallel</text>
+        <rect x="204" y="62" width="202" height="22" rx="5" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="305" y="77" text-anchor="middle" font-size="8.5" font-family="ui-monospace,Menlo,monospace" fill="#7a2218">Deprecation: true</text>
+        <rect x="204" y="88" width="202" height="22" rx="5" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="305" y="103" text-anchor="middle" font-size="8.5" font-family="ui-monospace,Menlo,monospace" fill="#7a2218">Sunset: Sat, 01 Nov 2025 …</text>
+        <text x="305" y="124" text-anchor="middle" font-size="8.5" fill="#6b675f">v1 + v2 both serve · months, not days</text>
+        <line x1="418" y1="84" x2="438" y2="84" stroke="#6b675f" marker-end="url(#arw)"/>
+        <!-- retire -->
+        <rect x="440" y="60" width="180" height="48" rx="9" fill="#f1eee2" stroke="#6b675f"/>
+        <text x="530" y="80" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">RETIRE v1</text>
+        <text x="530" y="97" text-anchor="middle" font-size="9" fill="#6b675f">only after usage drains</text>
+        <!-- bottom row of duties -->
+        <text x="320" y="152" text-anchor="middle" font-size="10" fill="#1f3a5a">In-band headers (RFC 8594) + out-of-band changelog/email/docs · <tspan font-weight="700" fill="#7a1f12">monitor real traffic, then remove — not on a calendar guess.</tspan></text>
+      </g>
+    </svg>
+    <figcaption><code>Deprecation</code> + <code>Sunset</code> (RFC 8594) ride in every response so even silent clients carry the warning; you sunset only once real usage on v1 has genuinely drained.<sup><a href="#s4" id="r4">4</a></sup></figcaption>
+  </figure>
+  <div class="steps">
+    <div class="step"><b>1 · Announce &amp; overlap</b> Publish the change, then run old and new <em>in parallel</em> for a long, generous window — months for a public API, not days.</div>
+    <div class="step"><b>2 · Signal in-band</b> Emit <code>Deprecation</code> and <code>Sunset</code> (RFC 8594) with the retirement date, so even silent clients carry the warning.</div>
+    <div class="step"><b>3 · Communicate out-of-band</b> Changelog, email, docs — reach the humans, not just the code.</div>
+    <div class="step"><b>4 · Monitor, then remove</b> Watch real traffic on the old version; sunset only once usage has drained, not on a calendar guess.</div>
+  </div>
+  <p class="pull"><strong>Pinning is the move that scales.</strong> It turns "we changed the API" from a client-breaking event into a client-controlled one — additive-first, then major, parallel, signaled, monitored, retired.</p>
+
+  <!-- RETRIEVAL -->
+  <h2 class="sec">Retrieval practice</h2>
+  <p>Close the lesson in your mind first, then answer from memory. Effortful recall is what converts "I read it" into "I own it." Immediate feedback below.</p>
+  <div class="quiz" id="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q1.</span> Which API change is genuinely <em>breaking</em>?</p>
+      <button class="opt">Adding one brand new optional field onto the request body</button>
+      <button class="opt">Adding one brand new endpoint beside the existing routes</button>
+      <button class="opt">Making one previously optional field required on requests</button>
+      <button class="opt">Adding one brand new field onto the standard response body</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q2.</span> The senior reframe of "how do you version?" is…</p>
+      <button class="opt">always cut a fresh major version per shipped product change</button>
+      <button class="opt">evolve compatibly first and version only on real breakage</button>
+      <button class="opt">favor headers over the path because they read far cleaner</button>
+      <button class="opt">delay any change until the next planned quarterly release</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q3.</span> A "tolerant reader" client is one that…</p>
+      <button class="opt">retries each failed request against the previous version</button>
+      <button class="opt">accepts only the exact response schema it was built on</button>
+      <button class="opt">rejects responses that carry any unexpected extra field</button>
+      <button class="opt">ignores fields it does not recognize instead of failing</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q4.</span> The RFC 8594 <code>Sunset</code> header is used to…</p>
+      <button class="opt">declare the date an endpoint or version will be retired</button>
+      <button class="opt">declare the version pinned to this particular account</button>
+      <button class="opt">declare the cache lifetime allowed for this one payload</button>
+      <button class="opt">declare the media type that this response was encoded in</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h2 class="sec">Rehearse the answer out loud</h2>
+  <p class="rehearse">Interviewer: <strong>"We have a public API with thousands of third-party integrations. We need to change the shape of the user object. How do you version it?"</strong> ~60 seconds, from memory (no scrolling up) — then reveal and compare.</p>
+  <div class="rehearse">
+    <textarea placeholder="Your 60-second answer, from memory…"></textarea><br>
+    <button class="btn" onclick="document.getElementById('model').classList.add('show')">Reveal model answer</button>
+    <div class="model" id="model">
+      <p>"First I'd ask whether the change can be <strong>additive</strong>. If we can add the new field alongside the old, deprecate the old, and rely on <strong>tolerant readers</strong> to ignore what they don't use, we avoid a version bump entirely — the cheapest outcome for thousands of integrators we can't redeploy.</p>
+      <p>If it's genuinely <strong>breaking</strong> — renaming, retyping, or dropping a field clients depend on — then I introduce a new <strong>major</strong> version (date-based like Stripe and GitHub, or <code>/v2</code>). Critically, I <strong>pin existing accounts to their current version</strong> so nothing breaks silently, run both in parallel, and emit <code>Deprecation</code> + <code>Sunset</code> (RFC 8594) headers. Then a migration guide, a generous timeline, and I <strong>monitor real usage</strong> before sunsetting. On placement I'd default to the URI path for visibility and routing — accepting it's 'less pure REST' — or a header for clean URLs at the cost of discoverability."</p>
+      <p class="src"><strong>Why this scores:</strong> it avoids needless versions, prevents silent breakage via per-account pinning, and walks a real deprecation lifecycle — additive-first, then major, parallel, signaled, monitored, retired.</p>
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Want to drill the breaking-vs-non-breaking line on edge cases? Curious how Stripe's per-account pinning is implemented under the hood? Want me to grade your rehearsal answer or fire harder follow-ups about deprecation timelines? Just say so in the chat.
+  </div>
+
+  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Primary source (read this next)</h3>
+  <p>📖 <a href="https://docs.stripe.com/api/versioning"><strong>"API versioning" — Stripe API docs</strong></a>: the clearest production treatment of per-account pinning and explicit upgrades. Pair it with <a href="https://docs.github.com/en/rest/about-the-rest-api/api-versions">GitHub's API versions</a> for the date-based-header approach.</p>
+
+  <div class="nav">
+    <span>📄 Keep handy: <a href="../reference/caching-pagination-versioning.html">Caching, pagination &amp; versioning reference</a></span>
+    <span><a href="../lessons/0004-resource-modeling-and-uri-design.html">◂ Prev</a> · <a href="../lessons/0006-pagination-at-scale.html"><em>Next ▸ Lesson 6</em></a></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. Stripe, <em>API versioning</em> — <a href="https://docs.stripe.com/api/versioning">docs.stripe.com</a>. <a href="#r1">↩</a></span><br>
+    <span id="s2">2. GitHub, <em>API versions</em> — <a href="https://docs.github.com/en/rest/about-the-rest-api/api-versions">docs.github.com</a>. <a href="#r2">↩</a></span><br>
+    <span id="s3">3. Microsoft, <em>API design best practices</em> — <a href="https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design">learn.microsoft.com</a>. <a href="#r3">↩</a></span><br>
+    <span id="s4">4. RFC 8594, <em>The Sunset HTTP Header Field</em> — <a href="https://www.rfc-editor.org/rfc/rfc8594.html">rfc-editor.org</a>. <a href="#r4">↩</a></span>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

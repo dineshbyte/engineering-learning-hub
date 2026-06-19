@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 540" font-family="sans-serif">
+  <defs>
+    <marker id="aq6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+    <marker id="arep" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b00000"/></marker>
+    <style>
+      .title{font-size:16px;font-weight:bold;fill:#111}
+      .col{font-size:12px;font-weight:bold;fill:#666;letter-spacing:1px}
+      .box{fill:#eef1f4;stroke:#444;stroke-width:1.4}
+      .boxT{font-size:11.5px;font-weight:bold;fill:#111}
+      .sub{font-size:9.5px;fill:#555}
+      .cell{fill:#fdf0d6;stroke:#b58a3b;stroke-width:1}
+      .ev{font-size:8.5px;fill:#7a5a10;font-family:monospace}
+      .off{font-size:9px;fill:#999}
+      .cyl{fill:#e9f0f7;stroke:#2a6099;stroke-width:1.4}
+      .arr{stroke:#444;stroke-width:1.6;fill:none}
+      .rep{stroke:#b00000;stroke-width:1.4;fill:none;stroke-dasharray:5 4}
+      .repT{font-size:10px;font-weight:bold;fill:#b00000}
+      .cap{font-size:11px;fill:#555}
+    </style>
+  </defs>
+  <rect width="1020" height="540" fill="#ffffff"/>
+  <text x="510" y="26" text-anchor="middle" class="title">CQRS: one write model produces a log; many read models fan out from it</text>
+
+  <text x="120" y="70" text-anchor="middle" class="col">WRITE SIDE — source of truth</text>
+  <text x="490" y="70" text-anchor="middle" class="col">EVENT LOG</text>
+  <text x="850" y="70" text-anchor="middle" class="col">READ SIDE — derived, disposable</text>
+
+  <!-- write side -->
+  <rect class="box" x="40" y="100" width="170" height="44" rx="6"/><text x="125" y="122" text-anchor="middle" class="boxT">Command</text><text x="125" y="137" text-anchor="middle" class="sub">CapturePayment(orderId=42)</text>
+  <line class="arr" x1="125" y1="144" x2="125" y2="184" marker-end="url(#aq6)"/>
+  <rect class="box" x="40" y="186" width="170" height="46" rx="6"/><text x="125" y="208" text-anchor="middle" class="boxT">Command Handler</text><text x="125" y="223" text-anchor="middle" class="sub">validates invariants, decides truth</text>
+  <line class="arr" x1="210" y1="208" x2="304" y2="200" marker-end="url(#aq6)"/>
+  <text x="250" y="194" class="sub">appends events</text>
+
+  <!-- log -->
+  <g>
+    <rect class="cell" x="310" y="180" width="62" height="44"/><text x="316" y="206" class="ev">OrderPlaced</text><text x="335" y="238" text-anchor="middle" class="off">0</text>
+    <rect class="cell" x="372" y="180" width="62" height="44"/><text x="378" y="206" class="ev">ItemAdded</text><text x="403" y="238" text-anchor="middle" class="off">1</text>
+    <rect class="cell" x="434" y="180" width="62" height="44"/><text x="440" y="206" class="ev">ItemAdded</text><text x="465" y="238" text-anchor="middle" class="off">2</text>
+    <rect class="cell" x="496" y="180" width="62" height="44"/><text x="502" y="206" class="ev">PaymentCap</text><text x="527" y="238" text-anchor="middle" class="off">3</text>
+    <rect class="cell" x="558" y="180" width="62" height="44"/><text x="564" y="206" class="ev">OrderPlaced</text><text x="589" y="238" text-anchor="middle" class="off">4</text>
+    <rect class="cell" x="620" y="180" width="62" height="44"/><text x="626" y="206" class="ev">PaymentCap</text><text x="651" y="238" text-anchor="middle" class="off">5</text>
+  </g>
+  <text x="690" y="206" class="sub">append →</text>
+
+  <!-- read side -->
+  <rect class="cyl" x="760" y="96" width="170" height="56" rx="10"/><text x="845" y="118" text-anchor="middle" class="boxT">SQL Read Model</text><text x="845" y="134" text-anchor="middle" class="sub">order summary (materialized)</text>
+  <rect class="cyl" x="760" y="250" width="170" height="56" rx="10"/><text x="845" y="272" text-anchor="middle" class="boxT">Search Index</text><text x="845" y="288" text-anchor="middle" class="sub">inverted index (materialized)</text>
+  <line class="arr" x1="684" y1="195" x2="756" y2="130" marker-end="url(#aq6)"/><text x="700" y="150" class="sub">Projection A</text>
+  <line class="arr" x1="684" y1="210" x2="756" y2="276" marker-end="url(#aq6)"/><text x="700" y="252" class="sub">Projection B</text>
+  <line class="arr" x1="985" y1="124" x2="934" y2="124" marker-end="url(#aq6)"/>
+  <text x="945" y="112" class="sub">Query →</text>
+  <text x="940" y="160" class="sub">GET /orders?customerId=42</text>
+
+  <!-- annotations -->
+  <text x="720" y="350" text-anchor="middle" class="cap">eventually consistent — the read side lags the log</text>
+  <path class="rep" d="M335,224 C 300,360 700,400 845,310" marker-end="url(#arep)"/>
+  <text x="430" y="392" class="repT">rebuild a read model = replay the log from offset 0</text>
+</svg>

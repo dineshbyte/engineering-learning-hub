@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SSI — Serializable Snapshot Isolation, visual deep dive</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/lesson.css">
+<style>:root{--accent:var(--track-transactions)}
+/* ---- slim rules: classes not covered by lesson.css ---- */
+.sans{font-family:ui-sans-serif,system-ui,sans-serif}
+figure{text-align:center}
+figure svg,figure img{max-width:min(100%,34rem); width:auto; height:auto}
+
+/* one-sentence decomposition chips */
+.chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+.chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+.chip b{color:var(--accent)}
+.chip.c2 b,.fact.blue b{color:var(--track-rest)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
+
+/* TOC as a grid */
+.toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
+.toc a{text-decoration:none; padding:.15rem 0}
+
+/* level block */
+.lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
+.lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
+.num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
+.lvltop h2{margin:0}
+.tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
+
+/* fact-card eyebrow + myth grid container (lesson.css styles .myth .m/.t but not the grid) */
+.fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+.myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
+
+/* custom details markers (lesson.css gives the base box) */
+details.mc summary{color:var(--good); list-style:none}
+details.mc summary::before{content:"\25B8 "}
+details.mc[open] summary::before{content:"\25BE "}
+details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
+details.mc .ans{color:var(--muted)}
+details.iq{border-left:3px solid var(--track-rest)}
+details.iq summary{list-style:none; color:var(--ink)}
+details.iq summary::-webkit-details-marker{display:none}
+details.iq[open] summary{color:var(--track-rest)}
+details.iq .a{margin-top:.45rem; font-size:.85rem; line-height:1.45}
+details.iq .a b{color:var(--track-rest)}
+
+/* dark "cheat" panel — recolored with tokens so it reads in both themes */
+.cheat{background:var(--card); border:1px solid var(--line); color:var(--ink); border-radius:10px; padding:1.1rem 1.2rem; margin:1.2rem 0; font-size:.88rem}
+.cheat h3{color:var(--accent); margin:1rem 0 .3rem; font-size:.8rem; letter-spacing:.06em; text-transform:uppercase}
+.cheat a{color:var(--accent)} .cheat th{color:var(--muted)} .cheat code{background:var(--chip); color:var(--ink)}
+
+/* footer prev/next nav */
+.nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
+
+@media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<!-- shared arrowheads -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="mvcc-internals-deep-dive.html" title="MVCC Internals">&#8249; Prev</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><a href="ssi-deep-dive.epub">&#8595; EPUB</a><span style="color:var(--muted)">Transactions &amp; Isolation</span></span>
+  </nav>
+  <div class="kicker">Transactions &amp; Isolation · Deep dive · visual edition</div>
+  <h1>Serializable Snapshot Isolation</h1>
+  <p class="meta">~25 min · 5 levels · graph theory → runtime detector · interview questions + interactive recall</p>
+
+  <div class="mission">
+    <strong>Your bar:</strong> on a whiteboard, explain how a database can let everyone read a stale, non-blocking
+    snapshot and <em>still</em> guarantee the result is equivalent to running transactions one at a time. The trick is
+    a small piece of graph theory turned into a cheap, deliberately <em>conservative</em> runtime detector. Grounded in
+    Fekete et al. (2005)<sup><a href="#s2" id="r2">2</a></sup>, Cahill et al. (2008)<sup><a href="#s1" id="r1">1</a></sup>,
+    and the PostgreSQL implementation (Ports &amp; Grittner, VLDB 2012)<sup><a href="#s3" id="r3">3</a></sup>.
+  </div>
+
+  <p>One sentence holds the whole lesson. Each level unpacks one chip of it:</p>
+  <div class="chips">
+    <span class="chip">Snapshot isolation's only hole is <b>write skew</b></span>
+    <span class="chip c2">every anomaly is a <b>cycle of rw-edges</b></span>
+    <span class="chip c3">all reduce to one <b>dangerous structure</b></span>
+    <span class="chip c4">detect &amp; <b>abort, conservatively</b></span>
+  </div>
+
+  <nav class="toc">
+    <a href="#l1">①&nbsp;SI's blind spot — write skew</a><a href="#l2">②&nbsp;Serializability is a graph</a>
+    <a href="#l3">③&nbsp;The dangerous structure</a><a href="#l4">④&nbsp;How Postgres catches it</a>
+    <a href="#l5">⑤&nbsp;The price &amp; escape hatch</a><a href="#interview">◆&nbsp;Interview Qs</a>
+    <a href="#quiz">◆&nbsp;Retrieval quiz</a><a href="#cheat">★&nbsp;Cheat sheet</a>
+  </nav>
+
+  <!-- ============ HERO: the SSI pipeline ============ -->
+  <figure style="margin-top:1.6rem">
+    <svg viewBox="0 0 640 200" role="img" aria-label="The SSI argument: snapshot isolation admits write skew; serializability equals an acyclic dependency graph; every anomaly hides a dangerous structure of two rw-edges; detect it and abort conservatively">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THE WHOLE ARGUMENT — four moves</text>
+        <g>
+          <rect x="8" y="58" width="138" height="58" rx="10" fill="#f7ecea" stroke="#9a2417" stroke-width="1.5"/>
+          <text x="77" y="82" text-anchor="middle" font-size="12" font-weight="700" fill="#9a2417">SI is fast,</text>
+          <text x="77" y="98" text-anchor="middle" font-size="12" font-weight="700" fill="#9a2417">not safe</text>
+          <text x="77" y="112" text-anchor="middle" font-size="9" fill="#6b675f">write skew</text>
+        </g>
+        <g>
+          <rect x="172" y="58" width="138" height="58" rx="10" fill="#fff" stroke="#1f3a5a" stroke-width="1.5"/>
+          <text x="241" y="82" text-anchor="middle" font-size="12" font-weight="700" fill="#1f3a5a">anomaly =</text>
+          <text x="241" y="98" text-anchor="middle" font-size="12" font-weight="700" fill="#1f3a5a">graph cycle</text>
+          <text x="241" y="112" text-anchor="middle" font-size="9" fill="#6b675f">rw-edges only</text>
+        </g>
+        <g>
+          <rect x="336" y="58" width="138" height="58" rx="10" fill="#fbfaf2" stroke="#7a1f12" stroke-width="1.5"/>
+          <text x="405" y="82" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7a1f12">one pivot,</text>
+          <text x="405" y="98" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7a1f12">two rw-edges</text>
+          <text x="405" y="112" text-anchor="middle" font-size="9" fill="#6b675f">dangerous structure</text>
+        </g>
+        <g>
+          <rect x="500" y="58" width="132" height="58" rx="10" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
+          <text x="566" y="82" text-anchor="middle" font-size="12" font-weight="700" fill="#2f5d3a">detect →</text>
+          <text x="566" y="98" text-anchor="middle" font-size="12" font-weight="700" fill="#2f5d3a">abort</text>
+          <text x="566" y="112" text-anchor="middle" font-size="9" fill="#6b675f">SQLSTATE 40001</text>
+        </g>
+        <line x1="146" y1="87" x2="170" y2="87" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="310" y1="87" x2="334" y2="87" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="474" y1="87" x2="498" y2="87" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="320" y="160" text-anchor="middle" font-size="11" fill="#7a1f12">cheap because it never builds the full graph — it watches for one local shape</text>
+        <text x="320" y="180" text-anchor="middle" font-size="10.5" fill="#6b675f">conservative: catches every anomaly, plus a few innocent transactions (the price)</text>
+      </g>
+    </svg>
+    <figcaption>Memorise this banner. Levels 1–5 are exactly these four boxes plus the bill at the end.</figcaption>
+  </figure>
+
+  <!-- ================= LEVEL 1 ================= -->
+  <section class="lvl" id="l1">
+    <div class="lvltop"><span class="num">1</span><h2>Snapshot isolation's blind spot — write skew</h2></div>
+    <p class="tagline">SI blocks dirty reads, non-repeatable reads, and lost updates — but not <em>this</em>.</p>
+    <figure>
+      <img src="diagrams/ssi-01-write-skew.png"
+        alt="Write skew breaks an invariant no single transaction violates. Two on-call doctors each read 2 doctors on call — fine, I can go off-call, then each updates their own row. Neither write conflicts with the other (different rows), so SI's first-committer-wins never fires. Both commit; zero doctors are on call." />
+      <figcaption><strong>Write skew breaks an invariant no single transaction violates.</strong> Two on-call doctors each read "2 on call — the other covers it," then each updates <em>their own</em> row. Different rows → no write-write conflict → first-committer-wins never fires. Both commit; <em>zero</em> doctors on call. No serial order produces this.</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 560 200" role="img" aria-label="Timeline of write skew: Alice and Bob both read count equals 2, each sets their own row off-call, both commit, invariant violated">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <text x="120" y="20" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1f3a5a">Tx A (Alice)</text>
+          <text x="440" y="20" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7a1f12">Tx B (Bob)</text>
+          <line x1="120" y1="30" x2="120" y2="178" stroke="#d8d4c8"/>
+          <line x1="440" y1="30" x2="440" y2="178" stroke="#d8d4c8"/>
+          <rect x="34" y="40" width="172" height="26" rx="6" fill="#fff" stroke="#1f3a5a"/><text x="120" y="57" text-anchor="middle" font-size="9.5">SELECT count(*) → 2 ✓</text>
+          <rect x="354" y="70" width="172" height="26" rx="6" fill="#fff" stroke="#7a1f12"/><text x="440" y="87" text-anchor="middle" font-size="9.5">SELECT count(*) → 2 ✓</text>
+          <rect x="34" y="100" width="172" height="26" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="120" y="117" text-anchor="middle" font-size="9.5">UPDATE alice off-call</text>
+          <rect x="354" y="100" width="172" height="26" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="440" y="117" text-anchor="middle" font-size="9.5">UPDATE bob off-call</text>
+          <rect x="34" y="132" width="172" height="22" rx="6" fill="#f1eee2" stroke="#6b675f"/><text x="120" y="147" text-anchor="middle" font-size="9.5">COMMIT ✓</text>
+          <rect x="354" y="132" width="172" height="22" rx="6" fill="#f1eee2" stroke="#6b675f"/><text x="440" y="147" text-anchor="middle" font-size="9.5">COMMIT ✓</text>
+          <text x="280" y="190" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">result: 0 doctors on call — invariant broken</text>
+        </g>
+      </svg>
+      <figcaption>Both read the same condition on overlapping rows, then each writes a <em>different</em> row. SI sees no conflict.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Is</b> Two txns read an overlapping set, each writes a <em>different</em> row whose safety depended on what the other read.</div>
+      <div class="fact"><b>Why SI misses it</b> Different rows → no write-write conflict → first-committer-wins (which only catches same-row clashes) never fires.</div>
+      <div class="fact blue"><b>Pattern</b> Any "check a condition, then act on the assumption it still holds." Last-unit inventory, duplicate username, double-booked room.</div>
+      <div class="fact blue"><b>Citation</b> Berenson/Gray "Critique of ANSI SQL Isolation Levels" (1995); Oracle's <code>SERIALIZABLE</code> is really only SI.<sup><a href="#s5" id="r5">5</a></sup></div>
+    </div>
+    <div class="myth"><div class="m">✗ "Snapshot isolation is serializable"</div><div class="t">✓ SI permits write skew; only SSI / 2PL / serial execution are truly serializable</div></div>
+    <div class="rule"><span>🩺 Memory rule:</span> Write skew = read an overlapping condition, each write a different row — SI's first-committer-wins never sees it.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Why doesn't first-committer-wins catch write skew? <span class="ans">→ the two writes hit different rows</span></li>
+      <li>One real-world instance? <span class="ans">→ both claim the last inventory unit / username</span></li>
+      <li>Does a serial order ever produce zero doctors? <span class="ans">→ no; the 2nd would read count=1 and be refused</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 2 ================= -->
+  <section class="lvl" id="l2">
+    <div class="lvltop"><span class="num">2</span><h2>Serializability is a graph property</h2></div>
+    <p class="tagline">To detect non-serializability you first need to define it — and the definition is graph-shaped.</p>
+    <figure>
+      <img src="diagrams/ssi-02-dependency-graph.png"
+        alt="Three dependency edges and the rule. A wr edge (T1 writes x, T2 reads that version) and a ww edge (T1's version is overwritten by T2) both order T1 before T2. The rw-antidependency is the subtle one: T1 reads the old version and T2 writes a newer one, so T1 must have come first. A history is serializable if and only if this graph is acyclic." />
+      <figcaption><strong>Three dependency edges, and the rule.</strong> <code>wr</code> (write→read) and <code>ww</code> (write→write) order T1→T2 the obvious way. The <code>rw</code>-antidependency is subtle: T1 reads the <em>old</em> version, T2 writes a <em>newer</em> one — T1 didn't see it, so T1 must precede T2. A history is serializable <strong>iff</strong> this graph is acyclic.</figcaption>
+    </figure>
+    <table>
+      <tr><th>Edge</th><th>Meaning</th><th>Orders</th><th>Under SI?</th></tr>
+      <tr><td>wr</td><td>T1 writes x; T2 reads that version</td><td>T1 → T2</td><td>Never crosses concurrent txns — you read only committed snapshot versions</td></tr>
+      <tr><td>ww</td><td>T1 writes x; T2 overwrites it</td><td>T1 → T2</td><td>Blocked — first-committer-wins stops two concurrent writers of x</td></tr>
+      <tr><td>rw</td><td>T1 reads x; T2 writes a <em>later</em> x</td><td>T1 → T2</td><td><strong>The only edge SI can't prevent</strong> — your snapshot is frozen, later writes are invisible yet still order you first</td></tr>
+    </table>
+    <div class="facts">
+      <div class="fact"><b>Master theorem</b> A multiversion history is serializable <em>exactly when</em> its dependency graph has no cycle. (Adya 1999; Bernstein/Hadzilacos/Goodman.)<sup><a href="#s6" id="r6">6</a></sup></div>
+      <div class="fact"><b>Why a cycle is fatal</b> T1→T2→…→T1 asserts each txn is both before and after the others — impossible to lay on a line.</div>
+      <div class="fact blue"><b>The narrowing</b> SI already prevents ww and cross-txn wr cycles, so the <em>only</em> way an SI history breaks is a cycle made of <code>rw</code>-edges.</div>
+      <div class="fact blue"><b>Why it matters</b> The whole job of a serializable engine reduces to one rule: <em>don't let a cycle commit.</em></div>
+    </div>
+    <div class="myth"><div class="m">✗ "You must build and topologically sort the whole graph"</div><div class="t">✓ You only need to prevent <em>rw-cycles</em> — and §3 shrinks even that</div></div>
+    <div class="rule"><span>🔗 Memory rule:</span> Serializable ⟺ acyclic dependency graph; under SI the only cycles left are made of rw-antidependencies.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Serializable iff the graph is…? <span class="ans">→ acyclic</span></li>
+      <li>Which edge can SI not prevent? <span class="ans">→ rw (read→write antidependency)</span></li>
+      <li>Why can't SI produce a cross-txn wr cycle? <span class="ans">→ you only read committed snapshot versions</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 3 ================= -->
+  <section class="lvl" id="l3">
+    <div class="lvltop"><span class="num">3</span><h2>The dangerous structure — two rw-edges and a pivot</h2></div>
+    <p class="tagline">The result SSI is built on, and the reason it can be cheap. Sharper than "watch for cycles."</p>
+    <figure>
+      <img src="diagrams/ssi-03-dangerous-structure.png"
+        alt="Every snapshot-isolation anomaly contains this exact shape. In any non-serializable SI history, some transaction T-pivot has BOTH an incoming rw-edge (T-in to T-pivot) and an outgoing rw-edge (T-pivot to T-out) — two rw-antidependencies in a row, meeting at the pivot. Both conflicting transactions are concurrent with the pivot, and T-out commits first." />
+      <figcaption><strong>Every SI anomaly contains this exact shape.</strong> Some <strong>T-pivot</strong> has BOTH an inbound <code>rw</code>-edge (from T-in) and an outbound one (to T-out) — two rw-antidependencies <em>in a row</em>. Both conflicting txns are concurrent with the pivot; T-out commits first (Fekete's refinement).</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 520 150" role="img" aria-label="T-in points to T-pivot via an rw edge, and T-pivot points to T-out via a second rw edge; the pivot is the meeting point">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <circle cx="70" cy="80" r="40" fill="#fff" stroke="#1f3a5a" stroke-width="1.5"/>
+          <text x="70" y="78" text-anchor="middle" font-size="12" font-weight="700" fill="#1f3a5a">T-in</text>
+          <text x="70" y="93" text-anchor="middle" font-size="8.5" fill="#6b675f">reads x</text>
+          <circle cx="260" cy="80" r="46" fill="#fbfaf2" stroke="#7a1f12" stroke-width="2"/>
+          <text x="260" y="76" text-anchor="middle" font-size="13" font-weight="700" fill="#7a1f12">T-pivot</text>
+          <text x="260" y="92" text-anchor="middle" font-size="8.5" fill="#6b675f">in + out flag</text>
+          <circle cx="450" cy="80" r="40" fill="#fff" stroke="#2f5d3a" stroke-width="1.5"/>
+          <text x="450" y="78" text-anchor="middle" font-size="12" font-weight="700" fill="#2f5d3a">T-out</text>
+          <text x="450" y="93" text-anchor="middle" font-size="8.5" fill="#6b675f">commits first</text>
+          <line x1="112" y1="80" x2="212" y2="80" stroke="#7a1f12" stroke-width="1.5" marker-end="url(#arwA)"/>
+          <text x="162" y="68" text-anchor="middle" font-size="10" fill="#7a1f12" font-weight="700">rw</text>
+          <line x1="308" y1="80" x2="408" y2="80" stroke="#7a1f12" stroke-width="1.5" marker-end="url(#arwA)"/>
+          <text x="358" y="68" text-anchor="middle" font-size="10" fill="#7a1f12" font-weight="700">rw</text>
+          <text x="260" y="140" text-anchor="middle" font-size="10.5" fill="#6b675f">break ANY one of the three → the cycle can never close</text>
+        </g>
+      </svg>
+      <figcaption>You don't materialise the graph or wait for the cycle to close — you spot one node that is the meeting point of two rw-edges.</figcaption>
+    </figure>
+    <blockquote style="margin:1rem 0;padding:.5rem 0 .5rem 1rem;border-left:3px solid var(--rule);font-family:ui-sans-serif,system-ui,sans-serif;font-size:.86rem;color:#3a372f;font-style:italic">
+      <strong>Fekete's theorem (2005):</strong> in any non-serializable SI execution, the cycle contains two <em>consecutive</em> rw-edges — a T-pivot with an inbound rw-edge from a T-in and an outbound rw-edge to a T-out, both concurrent with the pivot.<sup><a href="#s2" id="r2b">2</a></sup>
+    </blockquote>
+    <div class="facts">
+      <div class="fact"><b>Necessary…</b> Every real anomaly contains the dangerous structure. Catch the pattern → catch every write skew.</div>
+      <div class="fact"><b>…not sufficient</b> The pattern also appears in <em>perfectly serializable</em> histories (the cycle never closes, or the third edge runs the other way).</div>
+      <div class="fact blue"><b>So a detector is conservative</b> Aborting on the pattern catches every anomaly <em>and</em> some innocents — by design.</div>
+      <div class="fact blue"><b>The payoff</b> Cheap-and-conservative beats exact-and-expensive: no full graph, no cycle confirmation. That's what makes §4 possible.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "Seeing the dangerous structure means a cycle definitely exists"</div><div class="t">✓ It's necessary, not sufficient — the would-be cycle may never close</div></div>
+    <div class="rule"><span>⚠️ Memory rule:</span> Dangerous structure = one pivot with an inbound AND outbound rw-edge; necessary for every anomaly, sufficient for none.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What two edges meet at the pivot? <span class="ans">→ one inbound rw, one outbound rw</span></li>
+      <li>Necessary or sufficient? <span class="ans">→ necessary for an anomaly, not sufficient</span></li>
+      <li>How many txns must you break to be safe? <span class="ans">→ just one of the three</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 4 ================= -->
+  <section class="lvl" id="l4">
+    <div class="lvltop"><span class="num">4</span><h2>How PostgreSQL catches it — SIReads &amp; a conservative abort</h2></div>
+    <p class="tagline">Detect rw-antidependencies <em>as they form</em>, without ever making a read block.</p>
+    <figure>
+      <img src="diagrams/ssi-04-ssi-detection.png"
+        alt="SSI detection at runtime. Every read under SERIALIZABLE leaves a non-blocking SIRead lock recording what was read, escalating from tuples to pages to relations under pressure. A later write landing on SIRead-locked data flags an rw-conflict and sets an in/out flag. When one transaction has BOTH an inbound and outbound flag — the dangerous structure — the engine aborts a transaction (preferring the pivot) with SQLSTATE 40001. SIRead locks survive the reader's commit." />
+      <figcaption><strong>SSI detection at runtime.</strong> Every read leaves a non-blocking <strong>SIRead "lock"</strong> recording what was touched. A later write landing on SIRead-locked data is a detected rw-conflict and sets an in/out flag. Both flags on one txn → the engine aborts (preferring the pivot) with <strong>SQLSTATE 40001</strong>. SIRead locks survive the reader's commit — a conflicting writer can still arrive.</figcaption>
+    </figure>
+    <table>
+      <tr><th>Piece</th><th>What it does</th></tr>
+      <tr><td>SIRead locks</td><td>Predicate locks taken on what a serializable read touched. They <strong>never block</strong> a writer — they only leave a record "this txn read this." A write later falling on one = a detected rw-edge.</td></tr>
+      <tr><td>Granularity</td><td>Tuple → page → relation as a txn reads more; index-range locks cover <em>predicates</em>, which is how SSI catches phantoms (rows that don't exist yet but would match). Coarser = less memory, more conflicts.</td></tr>
+      <tr><td>Abort rule</td><td>Each txn carries an inbound-conflict flag and an outbound-conflict flag. When <strong>both</strong> set on one txn (the pivot), roll one back — preferring the pivot itself, unless it already committed.</td></tr>
+      <tr><td>Locks outlive reader</td><td>A SIRead lock is retained <em>after</em> the reading txn commits, because a writer creating the dangerous structure can show up later. This is why long, read-heavy txns inflate the footprint.</td></tr>
+    </table>
+    <div class="facts">
+      <div class="fact"><b>The contract</b> On <code>40001</code> (<code>could not serialize access due to read/write dependencies</code>), <strong>retry the transaction.</strong> Non-negotiable.</div>
+      <div class="fact"><b>Why retry is safe</b> Idempotency makes the retry harmless — see the Idempotency Keys deep dive. An app that doesn't retry is broken, not unlucky.</div>
+      <div class="fact blue"><b>Conservative, again</b> Fires on the <em>structure</em>, not a confirmed cycle, so every genuine write skew is caught — plus a few innocents.</div>
+      <div class="fact blue"><b>Citation</b> Cahill et al. (SIGMOD 2008) gave the algorithm; Ports &amp; Grittner (VLDB 2012) shipped it in PostgreSQL.<sup><a href="#s1" id="r1b">1</a></sup><sup><a href="#s3" id="r3b">3</a></sup></div>
+    </div>
+    <div class="myth"><div class="m">✗ "SIRead locks block writers like real locks"</div><div class="t">✓ They never block — they only record reads so a later write reveals an rw-edge</div></div>
+    <div class="rule"><span>🔍 Memory rule:</span> Reads leave non-blocking SIRead marks; a write on a marked datum is an rw-edge; both flags on one txn → abort with 40001 → retry.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Do SIRead locks block writers? <span class="ans">→ no; they only record what was read</span></li>
+      <li>What's the abort SQLSTATE, and the app's duty? <span class="ans">→ 40001; retry the transaction</span></li>
+      <li>Why retain a SIRead lock past commit? <span class="ans">→ a conflicting writer can arrive later</span></li>
+      <li>How does SSI catch phantoms? <span class="ans">→ index-range / predicate locks</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 5 ================= -->
+  <section class="lvl" id="l5">
+    <div class="lvltop"><span class="num">5</span><h2>The price, the tuning, and the escape hatch</h2></div>
+    <p class="tagline">SSI buys serializability at ~SI throughput. "Roughly" and "conservative" each cost something — senior use means knowing the bill.</p>
+    <figure>
+      <img src="diagrams/ssi-05-tradeoff.png"
+        alt="The trade-off and the fast path. Versus strict 2PL (blocks readers, deadlocks) and plain SI (fast but admits write skew), SSI keeps reads non-blocking and stays correct, paying instead in false-positive aborts and predicate-lock memory. The escape hatch: a READ ONLY transaction proven to a safe snapshot can neither suffer nor cause an anomaly, so PostgreSQL runs it as plain REPEATABLE READ with zero SSI overhead." />
+      <figcaption><strong>The trade-off, and the fast path.</strong> Vs strict 2PL (blocks readers, deadlocks) and plain SI (fast, admits write skew), SSI keeps reads non-blocking and stays correct — paying in false-positive aborts and predicate-lock memory. A <code>READ ONLY</code> txn proven to a "safe snapshot" runs as plain REPEATABLE READ, zero SSI overhead.</figcaption>
+    </figure>
+    <table>
+      <tr><th></th><th>Strict 2PL</th><th>Plain SI</th><th>SSI</th></tr>
+      <tr><td>Correct (serializable)</td><td>Yes</td><td>No — write skew</td><td>Yes</td></tr>
+      <tr><td>Reads block writers</td><td>Yes</td><td>No</td><td>No</td></tr>
+      <tr><td>Failure mode</td><td>Deadlocks, latency</td><td>Silent anomalies</td><td>False-positive aborts</td></tr>
+      <tr><td>Stance</td><td>Pessimistic (block up front)</td><td>—</td><td>Optimistic (abort at the end)</td></tr>
+    </table>
+    <div class="facts">
+      <div class="fact"><b>False positives</b> Rise with contention and with <em>coarse</em> predicate locks — as SIReads summarize tuple→page→relation, unrelated rows collide and innocents abort.</div>
+      <div class="fact"><b>Predicate-lock memory</b> Bounded by <code>max_pred_locks_per_transaction</code> × connections. Past it, Postgres <em>summarizes</em> to coarser granularity (more false positives) rather than failing.</div>
+      <div class="fact blue"><b>The oldest txn sets the cost</b> One long serializable txn holds its SIRead locks the whole time — same way a long txn starves VACUUM in MVCC.</div>
+      <div class="fact blue"><b>Safe-snapshot escape hatch</b> A read-only txn that can't be part of any dangerous structure drops to REPEATABLE READ. <code>READ ONLY DEFERRABLE</code> waits for that snapshot on purpose.<sup><a href="#s3" id="r3c">3</a></sup></div>
+    </div>
+    <div class="myth"><div class="m">✗ "Each node serializable ⇒ the sharded fleet is serializable"</div><div class="t">✓ Postgres SSI is <em>single-node</em>; distributed serializability is a harder problem</div></div>
+    <div class="rule"><span>💸 Memory rule:</span> 2PL pays up front in blocking; SSI pays at the end in conservative aborts — for read-mostly, low-conflict OLTP, optimism wins.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Two costs SSI pays? <span class="ans">→ false-positive aborts + predicate-lock memory</span></li>
+      <li>What does <code>READ ONLY DEFERRABLE</code> buy a long report? <span class="ans">→ a free, abort-proof safe snapshot</span></li>
+      <li>Where does optimism lose to 2PL? <span class="ans">→ high contention — measure the crossover</span></li>
+      <li>Scope of the guarantee? <span class="ans">→ single node only</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= INTERVIEW QUESTIONS ================= -->
+  <h2 class="sec" id="interview">Interview questions on SSI</h2>
+  <p>Use each one <strong>twice</strong>: answer it from memory (recall), and ask it of a candidate to test depth. Reveal shows what a strong answer <em>hits</em> — a checklist, not a script.</p>
+
+  <details class="iq"><summary>1 · Snapshot isolation prevents dirty reads and lost updates. So what does it <em>not</em> prevent, and why?</summary>
+    <div class="a"><b>Hits:</b> <em>write skew</em> — two txns read an overlapping condition and each write a <em>different</em> row. SI's first-committer-wins only catches same-row write-write conflicts, so neither write is blocked; both commit and break an invariant no serial order could. Bonus: name a concrete instance (last-unit inventory, double-booked room, on-call doctors).</div></details>
+
+  <details class="iq"><summary>2 · Define serializability precisely enough that you could build a detector from the definition.</summary>
+    <div class="a"><b>Hits:</b> model each committed txn as a node; draw a directed edge whenever one must precede another (wr, ww, rw). A history is serializable <em>iff</em> the dependency graph is acyclic — a cycle means every txn is both before and after the others. The detector's only job: don't let a cycle commit.</div></details>
+
+  <details class="iq"><summary>3 · Why does SSI only have to watch rw-antidependencies, not all three edge types?</summary>
+    <div class="a"><b>Hits:</b> SI already prevents ww (first-committer-wins) and cross-txn wr (you read only committed snapshot versions). The <em>only</em> edge SI can't prevent is rw — your snapshot is frozen, so a write that lands after it is invisible yet still orders you first. Hence the only SI cycles are made of rw-edges.</div></details>
+
+  <details class="iq"><summary>4 · State Fekete's theorem and explain why it makes SSI cheap.</summary>
+    <div class="a"><b>Hits:</b> every non-serializable SI history contains <em>two consecutive rw-edges</em> meeting at a pivot (inbound from T-in, outbound to T-out, both concurrent with the pivot). So you never build the whole graph or confirm a cycle closed — you watch for one local two-edge shape. Break any one of the three and the cycle can't form.</div></details>
+
+  <details class="iq"><summary>5 · Why does SSI abort transactions that were actually serializable — and is that a bug?</summary>
+    <div class="a"><b>Hits:</b> the dangerous structure is <em>necessary</em> for an anomaly but <em>not sufficient</em> — it also appears in serializable histories where the cycle never closes. Aborting on it is deliberately <strong>conservative</strong>: catch every anomaly plus some innocents. Not a bug — the cost of being cheap. False-positive rate climbs with contention and coarse predicate locks.</div></details>
+
+  <details class="iq"><summary>6 · How does PostgreSQL detect an rw-edge at runtime without making reads block, and what must the app do?</summary>
+    <div class="a"><b>Hits:</b> SIRead predicate locks — non-blocking records of what each serializable read touched (tuple→page→relation, index-range for phantoms). A write landing on a SIRead-locked datum is a detected rw-conflict; both an inbound and outbound flag on one txn → abort the pivot with SQLSTATE <code>40001</code>. The app contract: <strong>retry on 40001</strong>, made safe by idempotency. SIRead locks outlive the reader's commit.</div></details>
+
+  <details class="iq"><summary>7 · A serializable workload is aborting too often under load. Walk me through your tuning levers.</summary>
+    <div class="a"><b>Hits:</b> keep txns short and reads selective (cuts both false positives and lock pressure); raise <code>max_pred_locks_per_transaction</code> to delay summarization to coarse granularity; move long reporting reads to <code>READ ONLY DEFERRABLE</code> for a free safe snapshot; watch the oldest open txn (it sets the cost, like VACUUM). If contention is genuinely high, measure the crossover where 2PL's blocking tax beats SSI's abort tax.</div></details>
+
+  <details class="iq"><summary>8 · Your fleet is sharded and each Postgres node runs SERIALIZABLE. Is the system serializable?</summary>
+    <div class="a"><b>Hits:</b> no. PostgreSQL SSI guarantees serializability <em>within one server</em> only; it does not extend across shards or logical-replication boundaries for free. Distributed serializability is a separate, harder problem (consensus / globally-ordered commit). Don't assume a sharded fleet is serializable because each node is.</div></details>
+
+  <!-- ================= INTERACTIVE RECALL ================= -->
+  <h2 class="sec" id="quiz">Retrieval practice — mix the levels</h2>
+  <p>Reading builds <em>fluency</em> (feels familiar). Recall builds <em>storage</em> (lasts). Answer from memory — instant feedback.</p>
+  <div class="quiz" id="quiz1">
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q1.</span> Snapshot isolation permits write skew specifically because…</p>
+      <button class="opt">two transactions write the same row and the later write silently wins</button>
+      <button class="opt">each reads a shared condition then writes a different, non-conflicting row</button>
+      <button class="opt">one transaction reads uncommitted data written by a second transaction</button>
+      <button class="opt">the snapshot is refreshed mid-transaction so reads stop being repeatable</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q2.</span> A multiversion history is serializable exactly when its dependency graph…</p>
+      <button class="opt">contains only read-write antidependency edges and no others</button>
+      <button class="opt">has at least one transaction that reads before any others write</button>
+      <button class="opt">is acyclic — no cycle of "must-come-before" edges exists</button>
+      <button class="opt">forms a single connected component spanning every transaction</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q3.</span> Fekete's theorem says every snapshot-isolation anomaly contains…</p>
+      <button class="opt">two consecutive rw-antidependency edges meeting at a pivot transaction</button>
+      <button class="opt">exactly one write-write conflict between two concurrent transactions</button>
+      <button class="opt">a read-only transaction that observes two different committed snapshots</button>
+      <button class="opt">a long-running transaction that pins the cleanup horizon far back</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q4.</span> SSI may abort a transaction that was <em>actually</em> serializable because…</p>
+      <button class="opt">it materializes the full graph and miscomputes the cycle direction</button>
+      <button class="opt">SIRead locks block writers and force a deadlock-style rollback choice</button>
+      <button class="opt">the dangerous structure is sufficient for a cycle but not necessary</button>
+      <button class="opt">the dangerous structure is necessary for a cycle but not sufficient</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q5.</span> PostgreSQL's <code>READ ONLY DEFERRABLE</code> / safe-snapshot optimization lets…</p>
+      <button class="opt">a read-only transaction run as REPEATABLE READ with no SSI overhead</button>
+      <button class="opt">a write transaction skip first-committer-wins for faster blind updates</button>
+      <button class="opt">the engine widen predicate locks from tuple level up to relation level</button>
+      <button class="opt">two serializable transactions share one snapshot to avoid any conflict</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q6.</span> A SIRead lock differs from an ordinary lock because it…</p>
+      <button class="opt">is taken only on writes, never on reads, to detect overwrites</button>
+      <button class="opt">is released the instant the reading transaction commits</button>
+      <button class="opt">never blocks a writer — it only records that a read happened</button>
+      <button class="opt">guarantees a deadlock-free ordering by escalating to a table lock</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Reconstruct the argument from a blank page</h3>
+  <p class="rehearse" style="font-size:.9rem">Write the five moves in order, one line each, with nothing on screen. Then reveal and compare — gaps are your next drill.</p>
+  <div class="rehearse">
+    <textarea placeholder="1. SI's hole = …  2. serializable = …  3. dangerous structure = …  4. Postgres detects via …  5. the price = …"></textarea><br>
+    <button class="btn" onclick="document.getElementById('spine').classList.add('show')">Reveal the spine</button>
+    <div class="model" id="spine">
+      <b>1</b> SI's only hole is write skew (read condition, write different rows) · <b>2</b> serializable ⟺ acyclic dependency graph; SI's only cycles are rw-edges ·
+      <b>3</b> Fekete: every anomaly has a pivot with an inbound + outbound rw-edge (necessary, not sufficient) ·
+      <b>4</b> Postgres: non-blocking SIRead locks → both flags on a pivot → abort with 40001 → retry ·
+      <b>5</b> price = false-positive aborts + predicate-lock memory; escape = READ ONLY DEFERRABLE; single-node only.
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Say <em>"grill me on SSI"</em> for mixed no-clue questions, or
+    drop a real schema and I'll walk you through where write skew hides in it and whether SERIALIZABLE or an explicit
+    lock is the right fix. Want the next deep dive — MVCC, or distributed serializability? Just ask.
+  </div>
+
+  <!-- ================= CHEAT SHEET (compact) ================= -->
+  <h2 class="sec" id="cheat">★ Cheat sheet — term → engineering</h2>
+  <div class="cheat">
+    <p style="margin-top:0"><strong>Mental models:</strong> Write skew = read a shared condition, write different rows · Serializable = acyclic dependency graph · rw-antidependency = read-then-someone-writes-later, the only edge SI can't stop · Dangerous structure = one pivot, two rw-edges (necessary, not sufficient) · SIRead lock = a non-blocking read receipt · 40001 = retry · Safe snapshot = abort-proof read-only.</p>
+    <h3>Translation table</h3>
+    <table>
+      <tr><th>Term</th><th>What it actually is</th></tr>
+      <tr><td>Snapshot isolation</td><td>Read a frozen consistent snapshot; first-committer-wins on same-row writes — <em>not</em> serializable</td></tr>
+      <tr><td>Write skew</td><td>Read overlapping condition → each writes a different row → both commit → invariant broken</td></tr>
+      <tr><td>Dependency graph</td><td>Nodes = txns, edges = must-precede (wr / ww / rw); serializable ⟺ acyclic</td></tr>
+      <tr><td>rw-antidependency</td><td>T1 reads old x, T2 writes newer x; T1 must come first — SI can't prevent it</td></tr>
+      <tr><td>Dangerous structure</td><td>A pivot with both an inbound and outbound rw-edge; necessary, not sufficient</td></tr>
+      <tr><td>SIRead lock</td><td>Non-blocking predicate lock recording a read; outlives the reader's commit</td></tr>
+      <tr><td>SQLSTATE 40001</td><td>"could not serialize access" → the app must retry the transaction</td></tr>
+      <tr><td>READ ONLY DEFERRABLE</td><td>Wait for a safe snapshot, then run as REPEATABLE READ with zero SSI cost</td></tr>
+    </table>
+    <h3>Three rules for the principal chair</h3>
+    <p style="margin-bottom:0">① SERIALIZABLE is the cheap-and-conservative bet: it <strong>will</strong> abort under contention — so <strong>always retry on 40001</strong>. ② Keep txns <strong>short</strong> and reads <strong>selective</strong> to cut false positives and lock memory; push long reads to <code>READ ONLY DEFERRABLE</code>. ③ The guarantee is <strong>single-node</strong> — don't assume a sharded fleet is serializable because each node is.</p>
+  </div>
+
+  <div class="nav">
+    <span>📄 <a href="../index.html">Learning Hub</a> · prerequisite: the MVCC deep dive</span>
+    <span><em>Next ▸ distributed serializability (ask me to build it)</em></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. Cahill, Röhm &amp; Fekete, <em>Serializable Isolation for Snapshot Databases</em> (SIGMOD 2008; ACM TODS 2009). The original SSI algorithm — track rw-antidependencies, abort on the dangerous structure. <a href="#r1">↩</a></span><br>
+    <span id="s2">2. Fekete, Liarokapis, O'Neil, O'Neil &amp; Shasha, <em>Making Snapshot Isolation Serializable</em> (ACM TODS 2005). The theorem that every SI anomaly has two consecutive rw-edges at a pivot. <a href="#r2">↩</a></span><br>
+    <span id="s3">3. Ports &amp; Grittner, <em>Serializable Snapshot Isolation in PostgreSQL</em> (VLDB 2012) — <a href="https://arxiv.org/pdf/1208.4179">arXiv:1208.4179</a>. SIRead predicate locks, granularity/summarization, crash recovery, 2PC, and the safe-snapshot read-only optimization. <a href="#r3">↩</a></span><br>
+    <span id="s4">4. PostgreSQL docs, <em>Transaction Isolation → Serializable Isolation Level</em>; the <a href="https://wiki.postgresql.org/wiki/Serializable">Serializable wiki page</a>; the in-tree <code>README-SSI</code>.</span><br>
+    <span id="s5">5. Berenson, Bernstein, Gray et al., <em>A Critique of ANSI SQL Isolation Levels</em> (SIGMOD 1995). Why named-SERIALIZABLE-that-is-really-SI (e.g. Oracle) admits write skew. <a href="#r5">↩</a></span><br>
+    <span id="s6">6. Adya, <em>Weak Consistency: A Generalized Theory and Optimistic Implementations</em> (MIT PhD, 1999). The multiversion dependency-graph framework the whole argument rests on. Synthesis in Kleppmann, <em>DDIA</em>, Ch. 7. <a href="#r6">↩</a></span>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

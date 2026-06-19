@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 480" font-family="sans-serif">
+  <defs>
+    <marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#222"/>
+    </marker>
+    <style>
+      .title{font-size:17px;font-weight:bold;fill:#111}
+      .lbl{font-size:12.5px;fill:#222}
+      .cap{font-size:12.5px;fill:#444}
+      .key{font-size:12.5px;font-weight:bold;fill:#b06000}
+      .nodeT{font-size:13px;font-weight:bold;fill:#111}
+      .node{fill:#eee;stroke:#333;stroke-width:1.5}
+      .life{stroke:#9a9a9a;stroke-width:1;stroke-dasharray:3 3}
+      .msg{stroke:#222;stroke-width:1.8;fill:none}
+      .late{stroke:#222;stroke-width:1.6;fill:none;stroke-dasharray:6 4}
+      .busy{fill:#cfcfcf;stroke:#555;stroke-width:1}
+      .tick{stroke:#b00000;stroke-width:2.4}
+      .store{fill:#f6f1e7;stroke:#b06000;stroke-width:1.5}
+      .good{font-size:12.5px;font-weight:bold;fill:#1f7a1f}
+    </style>
+  </defs>
+
+  <rect width="780" height="480" fill="#ffffff"/>
+  <text x="390" y="30" text-anchor="middle" class="title">The idempotency key: a retry that's safe by construction</text>
+
+  <rect class="node" x="118" y="50" width="48" height="26" rx="4"/><text x="142" y="68" text-anchor="middle" class="nodeT">A</text>
+  <rect class="node" x="566" y="50" width="48" height="26" rx="4"/><text x="590" y="68" text-anchor="middle" class="nodeT">B</text>
+  <line class="life" x1="142" y1="76" x2="142" y2="430"/>
+  <line class="life" x1="590" y1="76" x2="590" y2="430"/>
+
+  <!-- first attempt -->
+  <text x="250" y="106" class="lbl">charge( <tspan class="key">key = K7</tspan> )</text>
+  <line class="msg" x1="142" y1="112" x2="586" y2="130" marker-end="url(#a5)"/>
+  <rect class="busy" x="580" y="132" width="18" height="46" rx="3"/>
+  <text x="372" y="156" class="cap">charge runs once · saves K7</text>
+
+  <!-- timeout + retry -->
+  <line class="tick" x1="120" y1="172" x2="164" y2="172"/>
+  <text x="20" y="168" class="cap">timeout — A retries</text>
+  <text x="20" y="186" class="cap">(B was only slow)</text>
+
+  <!-- second attempt, same key -->
+  <text x="250" y="214" class="lbl">charge( <tspan class="key">key = K7</tspan> )</text>
+  <text x="452" y="214" class="key">← same key</text>
+  <line class="msg" x1="142" y1="220" x2="586" y2="238" marker-end="url(#a5)"/>
+  <text x="360" y="262" class="good">K7 already done → skip, return saved result</text>
+
+  <!-- reply -->
+  <text x="250" y="312" class="cap">result (identical to the first)</text>
+  <line class="late" x1="586" y1="318" x2="146" y2="336" marker-end="url(#a5)"/>
+
+  <!-- store -->
+  <rect class="store" x="470" y="362" width="240" height="34" rx="6"/>
+  <text x="590" y="384" text-anchor="middle" class="cap">idempotency store:  { K7 → result }</text>
+
+  <text x="390" y="436" text-anchor="middle" class="cap">Same key on a retry ⇒ no second charge.</text>
+  <text x="390" y="458" text-anchor="middle" class="cap">At-least-once delivery + idempotency = exactly-once <tspan font-weight="bold">effect</tspan>.</text>
+</svg>
