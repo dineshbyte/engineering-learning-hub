@@ -74,7 +74,7 @@ lib/                  # vendored epub.js + jszip (for the reader)
 
 ## 🤝 Contributing
 
-Issues and PRs are welcome — fix a typo, sharpen an explanation, add a diagram, or propose a new track. The default branch is **`develop`**; `main` is the release branch. Keep lessons visual-first and cite high-trust sources.
+Issues and PRs are welcome — fix a typo, sharpen an explanation, add a diagram, or propose a new track. Work happens on **`main`** (single branch); branch off it and open a PR. Keep lessons visual-first and cite high-trust sources.
 
 ## ⭐ Found this useful?
 
