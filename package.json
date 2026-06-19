@@ -14,15 +14,18 @@
     "  npm start              -> serves this folder, then open http://localhost:8000/",
     "  PORT=3000 npm start    -> custom port",
     "",
-    "NO INSTALL NEEDED: server.js uses only Node's built-in modules (zero deps).",
-    "Nothing is downloaded from any registry; `npm install` is optional/no-op.",
-    "Fallbacks below cover machines without Node."
+    "ZERO RUNTIME DEPS: server.js uses only Node built-ins, and the served site loads",
+    "vendored libs from lib/ — so `npm start` and GitHub Pages need no install.",
+    "",
+    "DEV DEPS (epubjs, jszip) exist ONLY to refresh those vendored files. To update them:",
+    "  pnpm install && pnpm run vendor   -> copies dist/ into lib/ (then commit lib/)."
   ],
   "scripts": {
     "start": "node server.js",
     "serve": "node server.js",
     "serve:python": "python3 -m http.server 8000",
-    "serve:npx": "npx --yes serve . -l 8000"
+    "serve:npx": "npx --yes serve . -l 8000",
+    "vendor": "node -e \"const f=require('fs');for(const[s,d]of[['node_modules/jszip/dist/jszip.min.js','lib/jszip.min.js'],['node_modules/epubjs/dist/epub.min.js','lib/epub.min.js']])f.copyFileSync(s,d);console.log('vendored lib/ from node_modules')\""
   },
   "engines": {
     "node": ">=22"
@@ -37,5 +40,9 @@
     "distributed-systems",
     "system-design"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "epubjs": "^0.3.93",
+    "jszip": "3.10.1"
+  }
 }
