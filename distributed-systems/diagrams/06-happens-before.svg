@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 470" font-family="sans-serif">
+  <defs>
+    <marker id="ah6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#222"/>
+    </marker>
+    <style>
+      .title{font-size:16px;font-weight:bold;fill:#111}
+      .nodeT{font-size:13px;font-weight:bold;fill:#111}
+      .node{fill:#eee;stroke:#333;stroke-width:1.5}
+      .life{stroke:#9a9a9a;stroke-width:1;stroke-dasharray:3 3}
+      .msg{stroke:#222;stroke-width:1.8;fill:none}
+      .ev{fill:#222}
+      .lbl{font-size:12px;fill:#222}
+      .mlbl{font-size:12px;fill:#444;font-style:italic}
+      .cap{font-size:12px;fill:#555}
+    </style>
+  </defs>
+  <rect width="860" height="470" fill="#ffffff"/>
+  <text x="430" y="26" text-anchor="middle" class="title">Happens-before vs concurrent</text>
+
+  <!-- causal highlight (behind) -->
+  <polyline points="140,120 430,158 430,210" fill="none" stroke="#2a8a2a" stroke-width="7" opacity="0.22" stroke-linejoin="round"/>
+
+  <!-- nodes -->
+  <rect class="node" x="105" y="36" width="70" height="26" rx="4"/><text x="140" y="54" text-anchor="middle" class="nodeT">Node A</text>
+  <rect class="node" x="395" y="36" width="70" height="26" rx="4"/><text x="430" y="54" text-anchor="middle" class="nodeT">Node B</text>
+  <rect class="node" x="685" y="36" width="70" height="26" rx="4"/><text x="720" y="54" text-anchor="middle" class="nodeT">Node C</text>
+  <line class="life" x1="140" y1="62" x2="140" y2="440"/>
+  <line class="life" x1="430" y1="62" x2="430" y2="440"/>
+  <line class="life" x1="720" y1="62" x2="720" y2="440"/>
+
+  <!-- events + messages -->
+  <circle class="ev" cx="140" cy="120" r="5"/><text x="130" y="116" text-anchor="end" class="lbl">send m1 (L=1)</text>
+  <line class="msg" x1="140" y1="120" x2="426" y2="156" marker-end="url(#ah6)"/><text x="262" y="128" class="mlbl">m1</text>
+  <circle class="ev" cx="430" cy="158" r="5"/><text x="442" y="154" class="lbl">recv m1 (L=2)</text>
+  <circle class="ev" cx="430" cy="210" r="5"/><text x="442" y="206" class="lbl">send m2 (L=3)</text>
+  <line class="msg" x1="430" y1="210" x2="716" y2="246" marker-end="url(#ah6)"/><text x="552" y="218" class="mlbl">m2</text>
+  <circle class="ev" cx="720" cy="248" r="5"/><text x="710" y="244" text-anchor="end" class="lbl">recv m2 (L=4)</text>
+
+  <circle class="ev" cx="720" cy="120" r="5"/><text x="710" y="116" text-anchor="end" class="lbl">local event (L=1)</text>
+  <text x="720" y="138" text-anchor="middle" class="cap">— no arrow in or out —</text>
+
+  <text x="150" y="330" class="cap">Green = a causal chain: A's send happens-before B's send.</text>
+  <text x="150" y="350" class="cap">Node C's local event is concurrent with A's send (a1 ∥ c1) — no chain of arrows links them.</text>
+
+  <text x="430" y="416" text-anchor="middle" class="cap">Lamport guarantees: a → b  ⟹  L(a) &lt; L(b).</text>
+  <text x="430" y="436" text-anchor="middle" class="cap">But L(a1) = L(c1) = 1 while a1 ∥ c1 — equal/ordered counters do NOT prove causal order. (Vector clocks fix this.)</text>
+</svg>

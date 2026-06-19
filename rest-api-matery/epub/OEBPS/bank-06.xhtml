@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Pagination at scale — interview questions</title>
+<link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+<p class="kicker">Interview Bank 6 · Performance &amp; Scale</p>
+<h1>Pagination at scale — interview questions</h1>
+<p class="meta">Core / Senior / Staff · answer from memory first</p>
+
+<div class="box"><span class="label">How to use</span> Answer from memory FIRST, then check below.</div>
+
+<h2>Offset / limit pagination</h2>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">01</span> How does offset/limit pagination work?</p>
+<div class="answer"><p>You translate a page request — <code>?page=3&amp;per_page=50</code> — into <code>LIMIT 50 OFFSET 100</code>. The database orders the rows, skips the first <code>OFFSET</code> of them, and returns the next <code>LIMIT</code>. Trivial to implement, and it pairs naturally with a total count so you can render "Page 3 of 412."</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">02</span> What's the single biggest performance problem with deep offsets?</p>
+<div class="answer"><p>The engine can't seek to row 1,000,000 — it must <strong>scan and discard</strong> every row before the offset. <code>OFFSET 1000000 LIMIT 50</code> reads a million rows to hand you fifty. Cost is <code>O(offset)</code>, so deep pages crawl while page 1 stays fast.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">03</span> Why is offset's slowness so dangerous in practice — why does it slip through?</p>
+<div class="answer"><p>Because it <em>hides in development</em>. You test page 1 and page 2 — both fast. The cost only shows up at depth and at scale, exactly the conditions you don't reproduce locally. It surfaces as a tail-latency cliff under real traffic, often via crawlers or scripts walking to deep pages, long after the design is locked in.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">04</span> Explain the consistency problem with offset pagination under concurrent writes.</p>
+<div class="answer"><p>Offsets are <strong>positional, not anchored to data</strong>. If a row is inserted before your window between two page requests, everything shifts down by one: a row you already saw is pushed into the next page and <strong>duplicated</strong>. If a row is deleted, rows slide up and one gets <strong>skipped</strong> entirely. On a feed being written to constantly, every user hits this.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">05</span> When is offset pagination actually the right choice?</p>
+<div class="answer"><p>Small or mostly-static data behind a <strong>human-driven UI</strong> where jump-to-arbitrary-page and a "Page X of Y" total are genuinely useful — a settings list, an admin table, search results a person scans. Don't over-engineer a cursor where someone is clicking a table of contents.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">06</span> Can you keep offset's jump-to-page UI but fix its deep-scan cost?</p>
+<div class="answer"><p>Partly, with hybrids. You can <strong>cap depth</strong> (most UIs never need page 10,000) and force deep navigation through filters instead. You can use a <strong>deferred join</strong> — page the indexed key column only, then join back for the full rows — to shrink the scanned width. And for "page N" specifically you can sometimes seek by a <em>known boundary value</em> rather than a count. But none of these recover both jump-to-page <em>and</em> flat cost; that's the trade you accept by choosing offset.</p></div>
+</div>
+
+<h2>Cursor / keyset pagination</h2>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">07</span> What is cursor (keyset) pagination, in one sentence?</p>
+<div class="answer"><p>Instead of "skip N rows," you remember <strong>where you stopped</strong> using a stable, unique, ordered key, and the next page is a <em>range scan</em> from that anchor rather than a skip.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">08</span> Write the core keyset query and explain each piece.</p>
+<div class="answer"><p><code>WHERE (created_at, id) &gt; (last_created_at, last_id) ORDER BY created_at, id LIMIT n</code>. The <code>WHERE</code> seeks past the last row you returned; the <strong>composite</strong> <code>(created_at, id)</code> uses a tuple comparison so ties on <code>created_at</code> are broken deterministically by <code>id</code>; <code>ORDER BY</code> must match the index and the cursor's order exactly; <code>LIMIT n</code> bounds the page.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">09</span> Why does cursor pagination's cost stay flat with depth?</p>
+<div class="answer"><p>With an index on the sort key, the engine <strong>seeks straight to your anchor and reads forward</strong> <code>n</code> rows. There's nothing to scan-and-discard, so page 20,000 costs the same as page 1.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">10</span> Why is cursor pagination stable under concurrent writes?</p>
+<div class="answer"><p>You anchor to a <strong>value</strong>, not a position. Inserts and deletes elsewhere in the table can't shift the rows you've already passed — your <code>WHERE</code> still says "give me rows after this key." So across the pages you walk forward, no duplicates and no skips.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">11</span> Why isn't <code>created_at</code> alone enough as a cursor key?</p>
+<div class="answer"><p>Because it isn't unique — many rows can share a timestamp. If you page on <code>created_at</code> alone, rows at a boundary timestamp get split unpredictably across pages and can be skipped or repeated. You need a <strong>total stable order</strong>, so you add a unique tiebreaker (<code>id</code>) and compare the tuple <code>(created_at, id)</code>.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">12</span> What index do you need for keyset pagination to actually be fast?</p>
+<div class="answer"><p>A composite index on the <strong>exact sort tuple in the exact order/direction</strong> — e.g. <code>(created_at, id)</code> (or both <code>DESC</code> for newest-first). Without it the "seek" degrades to a sort or scan and you lose the whole benefit. The index, the <code>ORDER BY</code>, and the cursor key must agree.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">13</span> The tuple comparison <code>(a,b) &gt; (x,y)</code> — does every database optimize it as a single index range seek?</p>
+<div class="answer"><p>No — that's a real portability trap. Postgres treats row-value comparison as a clean range seek on the composite index. MySQL historically optimized the tuple form poorly, so people expand it by hand: <code>WHERE created_at &gt; ? OR (created_at = ? AND id &gt; ?)</code>, which is logically identical but must be written carefully to stay sargable. Always <code>EXPLAIN</code> it on your engine; "it's keyset, so it's fast" is an assumption, not a guarantee.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">14</span> What does cursor pagination cost you compared to offset?</p>
+<div class="answer"><p>Two things you must volunteer: <strong>no jump-to-arbitrary-page</strong> (only next/prev from where you are — there's no "page 7" because there's no positional counting), and it <strong>requires a total, stable sort order</strong> that can't change mid-walk. Exact totals also become expensive. You trade addressability for consistency and flat cost.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">15</span> "Offset vs cursor" — give the one-line rule for picking.</p>
+<div class="answer"><p><strong>Offset is for pages a human clicks; cursors are for data a machine streams.</strong> The shape of the consumer decides the shape of the pagination — offset when someone scans a table of contents, cursor when something drains a firehose.</p></div>
+</div>
+
+<h2>Cursor design</h2>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">16</span> Why hand the client an <em>opaque</em> cursor instead of raw column values?</p>
+<div class="answer"><p>So you can <strong>change the internals without breaking clients</strong>. If a cursor is just <code>?after_id=839</code>, that ID becomes a public contract. Wrap the key in an opaque token (e.g. base64) and you can change the encoding, add a tiebreaker, switch sort keys, or migrate storage later — clients only ever echo the blob back.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">17</span> What actually goes inside the cursor?</p>
+<div class="answer"><p>The values needed to reconstruct the <code>WHERE</code> on the next request: the <strong>sort key plus the unique tiebreaker</strong> of the last row returned — e.g. <code>{created_at, id}</code> — base64-encoded. Many APIs also fold in the <strong>sort and filter</strong> the cursor was minted under (or a hash of them) so a mismatched reuse can be rejected rather than silently returning garbage.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">18</span> Why must sort and filter stay stable for a cursor's whole life?</p>
+<div class="answer"><p>A cursor is only meaningful against the <strong>exact ordering it was minted under</strong> — it says "the row after <em>this position in this sequence</em>." Change the sort or filter mid-walk and that position points at nothing meaningful: you get skips, dups, or nonsense. Treat sort + filter as part of the cursor's contract; if they change, the client must start a fresh page-walk.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">19</span> What are <code>before</code> and <code>after</code> cursors for?</p>
+<div class="answer"><p>They're the two directions of a walk. <code>after</code> fetches the page <em>following</em> a cursor (forward / next); <code>before</code> fetches the page <em>preceding</em> it (backward / prev). Together they give bidirectional paging without offsets — GitHub exposes both, Stripe uses <code>starting_after</code> / <code>ending_before</code>.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">20</span> Should a cursor be signed or encrypted, and should it expire?</p>
+<div class="answer"><p>It depends on threat model. Base64 alone is just obfuscation — a curious client can decode it. <strong>Sign it</strong> (HMAC) if a tampered cursor could leak rows or skip authorization scoping; <strong>encrypt it</strong> if the embedded key itself is sensitive. <strong>Expiry</strong> is reasonable when cursors imply a snapshot you can't hold open forever (you return a clear error so clients restart). The default is opaque + signed; reserve encryption and short TTLs for when the cursor carries real risk.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">21</span> A client sends back a cursor that's now invalid (key migrated, filter changed). What should the API do?</p>
+<div class="answer"><p>Fail <strong>loudly and predictably</strong> — return a <code>400</code> with a clear "cursor invalid, restart pagination" error rather than silently coercing it into a wrong window. Because cursors are opaque, clients are built to handle "start over," so a clean error is far safer than quietly returning duplicates or gaps the client can't detect.</p></div>
+</div>
+
+<h2>Totals &amp; response metadata</h2>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">22</span> Why is an exact total count expensive at scale?</p>
+<div class="answer"><p>There's no shortcut: to count a filtered set the engine must scan (or count an index over) the <strong>whole matching set</strong>, and that cost grows without bound as the table grows. On a billion-row feed, computing "of N total" on every page is often more expensive than the page itself.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">23</span> The product wants a total count on a huge feed. What are your options?</p>
+<div class="answer"><p>Three senior moves: <strong>omit it</strong> (most streaming clients don't need it); return an <strong>approximate</strong> count from table statistics ("~2.4M results"); or compute it <strong>lazily / off the hot path</strong> (cached, async, or a separate endpoint). The mistake is silently promising an exact count and eating an unbounded query on every request.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">24</span> How do you tell the client there's a next page <em>without</em> counting?</p>
+<div class="answer"><p>A <code>has_more</code> boolean. Fetch <strong><code>n+1</code> rows</strong>; if the extra one comes back, there's a next page, so you return <code>n</code> rows and <code>has_more: true</code> (and drop the spare). One cheap extra row replaces a full count.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">25</span> <code>Link</code> header vs envelope — what's the trade-off?</p>
+<div class="answer"><p><strong>Link headers</strong> (GitHub: <code>rel="next"/"prev"/"last"</code>) keep the body pure data and let the client just follow URLs — clean separation, HTTP-native. An <strong>envelope</strong> — <code>{ data: [...], next_cursor, has_more }</code> — puts pagination state in the payload, which clients often find easier to consume and works regardless of header handling. Either is defensible; pick one and be consistent.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">26</span> Contrast how GitHub and Stripe paginate.</p>
+<div class="answer"><p><strong>GitHub</strong> defaults to page numbers and returns a <code>Link</code> header with <code>next/prev/last</code> URLs, and offers <code>before</code>/<code>after</code> <strong>cursors</strong> on newer, high-volume endpoints. <strong>Stripe</strong> is <strong>cursor-only</strong>: <code>starting_after</code> / <code>ending_before</code> take an object ID as the cursor, and you read a <code>has_more</code> flag — no page numbers, no totals.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">27</span> Why does Stripe use an object ID as the cursor rather than an opaque blob — isn't that leaking internals?</p>
+<div class="answer"><p>It's a deliberate trade. The object ID is <em>already</em> public (you're listing those objects), so it leaks nothing new, and it makes cursors human-debuggable and intuitive — "page after this charge." The cost is that the ID's role in ordering becomes part of the contract. It works for Stripe because their objects have a stable creation order keyed by ID; a general API with mutable sort keys is usually better served by a true opaque cursor that can hide a composite key.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">28</span> Where should <code>per_page</code> / limit be bounded, and why?</p>
+<div class="answer"><p>The server must <strong>cap and default it</strong> — e.g. default 50, max 100 — and clamp anything larger rather than honoring <code>per_page=1000000</code>. Page size is a resource-consumption and latency lever a client shouldn't control unbounded; an uncapped limit is a trivial DoS and a memory/serialization blowup.</p></div>
+</div>
+
+<h2>Judgment &amp; design</h2>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">29</span> Design pagination for an activity feed: hundreds of millions of rows, constantly written. Walk me through it.</p>
+<div class="answer"><p>Cursor/keyset on a stable composite key <code>(created_at, id)</code> with a matching index. Each page is a range scan: <code>WHERE (created_at, id) &lt; last ORDER BY created_at DESC, id DESC LIMIT n</code>, returning an <strong>opaque cursor</strong> + <code>has_more</code> (fetch <code>n+1</code>). <strong>Explicitly reject offset</strong>: deep offsets scan-and-discard so cost grows with depth, and the window shifts under constant writes, duplicating or skipping rows. <strong>Omit or approximate the total</strong>. Keep <strong>sort and filter fixed</strong> for the cursor's life, and <strong>don't offer jump-to-page</strong> — next/prev is what a streaming consumer needs.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">30</span> How do filtering and sorting interact with cursor pagination?</p>
+<div class="answer"><p>The cursor is valid <em>only</em> for the filter+sort it was minted under, so each distinct sort order needs its <strong>own composite key and a supporting index</strong> — "sort by price" and "sort by date" are different walks with different cursors. Arbitrary user-chosen sort + filter combinations cause an <strong>index explosion</strong>; you either constrain sortable fields to an indexed allow-list, or accept that rarely-used sorts fall back to slower paths. Filters that narrow the set are fine as long as they stay constant across the walk and the index still supports the leading columns.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">31</span> How do you implement bidirectional (prev as well as next) cursor paging?</p>
+<div class="answer"><p>For "prev," <strong>reverse the comparison and the order</strong>: instead of <code>(k) &lt; last ... ORDER BY DESC</code> you run <code>(k) &gt; first ... ORDER BY ASC LIMIT n</code>, then <strong>reverse the result set</strong> back to display order before returning. You typically emit two cursors per page — one for each edge (GitHub's <code>before</code>/<code>after</code>, Relay's <code>startCursor</code>/<code>endCursor</code>) — so the client can walk either way.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">32</span> A user wants to deep-link / permalink to "page 5" of a cursor-paginated list. How do you handle it?</p>
+<div class="answer"><p>Cursors are inherently <strong>relative, not addressable</strong>, so there's no canonical "page 5." Options: link to a <strong>cursor</strong> instead of a page number (a permalink that means "from this anchor onward" — stable as long as that row exists); or, if the product truly needs human page numbers, link to a <strong>filter that re-anchors</strong> (e.g. "items after this date"). If genuine arbitrary jump-to-page is a hard requirement, that's a signal the access pattern is offset-shaped — and you accept offset's costs for that surface, possibly with a depth cap.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">33</span> A client needs a fully consistent snapshot across a long multi-page export. What do you do?</p>
+<div class="answer"><p>Plain keyset gives "no dups/skips among rows you've passed," but rows can still appear or vanish ahead of your cursor. For a true point-in-time snapshot, options ladder up in cost: page by an <strong>immutable key with an <code>as_of</code> timestamp filter</strong> (<code>WHERE created_at &lt;= snapshot_ts</code>) so later writes are invisible; use a <strong>repeatable-read/snapshot transaction</strong> for short exports (doesn't survive a long client-paced walk); or for very large jobs, do a <strong>bulk export / changefeed</strong> instead of live pagination. Match the mechanism to how long the walk lasts.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">34</span> Default position: a colleague reaches for offset on a new high-volume list endpoint. What do you say?</p>
+<div class="answer"><p>Ask who consumes it. If it's machine traffic or an infinite-scroll feed over large/growing data, push for <strong>cursor</strong> from day one — retrofitting it later is painful once clients depend on page numbers. If it's a small human-scanned table that needs jump-to-page, offset is fine. Decide by access pattern, not habit.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">35</span> You inherit an offset API in production and need to migrate to cursors without breaking clients. How?</p>
+<div class="answer"><p>Run them in parallel: <strong>add</strong> cursor params (and a <code>next_cursor</code> in responses) <em>alongside</em> existing <code>page</code>/<code>per_page</code> — purely additive, no break. Steer new and high-volume clients to cursors, optionally <strong>cap offset depth</strong> to contain the worst queries immediately. Emit <code>Deprecation</code>/<code>Sunset</code> signals on the offset params, watch real usage, and only remove offset once traffic drains — a standard additive-evolution + deprecation lifecycle.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">36</span> Are offset and cursor the only models? Where do time-window and "seek by value" fit?</p>
+<div class="answer"><p>They're the two general-purpose ones, but keyset is really a family. <strong>Time-window</strong> paging (<code>since</code>/<code>until</code> on a timestamp) is keyset specialized to a time axis — great for logs and changefeeds. <strong>Seek-by-value</strong> ("items after id=X") is keyset with the client naming the anchor. The common thread is anchoring to a value in a stable order; "offset vs cursor" is the headline, but the right framing is positional vs value-anchored.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">37</span> Why do interviewers ask "how would you paginate a huge, constantly-changing collection?"</p>
+<div class="answer"><p>Because it cleanly separates engineers who've only used offset pages from those who've <em>felt them break</em> in production. Reaching for cursors and naming exactly why offset fails — <code>O(offset)</code> cost and the shifting-window inconsistency — plus what you give up (jump-to-page, cheap totals), is the senior signal.</p></div>
+</div>
+
+<hr/>
+<p class="src">Interview Bank 6 · pairs with Lesson 6.</p>
+</body>
+</html>

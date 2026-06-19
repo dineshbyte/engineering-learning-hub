@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Resource modeling &amp; URIs — interview questions</title>
+<link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+<p class="kicker">Interview Bank 4 · API Design</p>
+<h1>Resource modeling &amp; URIs — interview questions</h1>
+<p class="meta">Core / Senior / Staff · answer from memory first</p>
+
+<div class="box"><span class="label">How to use</span> Answer from memory FIRST, then check below.</div>
+
+<h2>Nouns not verbs</h2>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">01</span> Why is <code>POST /getOrder</code> an anti-pattern?</p>
+<div class="answer"><p>It encodes the <em>verb in the path</em>, which is RPC wearing a REST costume. In resource-oriented design the URI names a <strong>noun</strong> — the thing — and the HTTP method <em>is</em> the verb. The read should be <code>GET /orders/42</code>: the resource is <code>/orders/42</code>, the action is <code>GET</code>.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">02</span> Should collection names be singular or plural?</p>
+<div class="answer"><p>Plural, consistently: <code>/orders</code>, <code>/customers</code>, <code>/products</code>. A collection holds many items, so the plural reads naturally — <code>/orders</code> is the set, <code>/orders/42</code> is one member of it. Mixing singular and plural across the surface is a consistency smell.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">03</span> What is the difference between a collection URI and an item URI?</p>
+<div class="answer"><p>A <strong>collection URI</strong> (<code>/orders</code>) addresses the set: <code>GET</code> lists it, <code>POST</code> adds to it (server assigns the id). An <strong>item URI</strong> (<code>/orders/42</code>) addresses one member: <code>GET</code> reads it, <code>PUT</code>/<code>PATCH</code> updates it, <code>DELETE</code> removes it. The method's meaning shifts with which level you're at.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">04</span> What's the right way to create a new order?</p>
+<div class="answer"><p><code>POST /orders</code> with the order body. The server assigns the id and returns <code>201 Created</code> with a <code>Location</code> header pointing at <code>/orders/{new-id}</code>. You don't <code>POST /createOrder</code> and you don't let the client pick the id on a collection <code>POST</code>.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">05</span> Why does the noun/verb discipline matter beyond aesthetics?</p>
+<div class="answer"><p>Because it's what keeps the contract <strong>uniform and cacheable</strong>. Once verbs leak into paths, every endpoint becomes a bespoke procedure and the HTTP machinery — caching, idempotency, conditional requests, status semantics — stops applying. <code>GET /orders/42</code> is cacheable and safe by definition; <code>POST /getOrder</code> tells intermediaries nothing. Naming the resource correctly is the load-bearing decision the rest of the design hangs off.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">06</span> A teammate wants <code>GET /searchOrders</code>. What do you propose instead?</p>
+<div class="answer"><p>Search is reading a collection with criteria, so <code>GET /orders?status=open&amp;customer_id=7</code>. The collection is the noun; query params carry the filter. <code>searchOrders</code> reintroduces a verb in the path. The one legitimate exception is a search with a body too large/complex for a query string, where teams use <code>POST /orders/search</code> (or <code>:search</code>) — but acknowledge that's a pragmatic concession that costs you GET cacheability.</p></div>
+</div>
+
+<h2>Modeling non-CRUD actions</h2>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">07</span> Why don't actions like <em>cancel</em> or <em>publish</em> map cleanly to CRUD?</p>
+<div class="answer"><p>Because they're genuine verbs that don't reduce to create/read/update/delete. "Cancel an order" isn't naturally a <code>PUT</code> of a new representation — it's a state transition. CRUD covers the easy 80%; modeling the remaining verbs is where the interview gets interesting.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">08</span> What are the three principled ways to model a non-CRUD action?</p>
+<div class="answer"><ul>
+<li><strong>Sub-resource / state collection:</strong> treat the outcome as a thing — <code>POST /orders/42/cancellations</code>, or a status you read back.</li>
+<li><strong>Custom method (Google AIP):</strong> colon-suffixed verb on the resource — <code>POST /orders/42:cancel</code>.</li>
+<li><strong>Reify the action as its own resource:</strong> promote the verb to a noun — <code>POST /refunds</code> with <code>{order_id}</code>.</li>
+</ul><p>The senior signal is naming the trade-off, not just picking one.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">09</span> When do you reify an action as its own top-level resource?</p>
+<div class="answer"><p>When the action has its <strong>own durable lifecycle, state, and history</strong>. A refund is processed → settled → reversible; it's queried, listed, audited, and reported on independently. That earns it standalone existence as <code>/refunds</code> sitting alongside <code>/payments</code>. Decide by lifecycle, not by grammar.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">10</span> When is a custom method (<code>POST /orders/42:cancel</code>) the right call?</p>
+<div class="answer"><p>When the action is a <strong>momentary transition on an existing resource</strong> that has no life of its own, and inventing a noun ("a cancellation") would create something nobody queries. The custom method is honest that it's a non-CRUD verb, keeps the resource in the path, and is explicitly sanctioned by Google AIP for verbs that don't fit standard methods. It's cleaner than forcing a fake resource.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">11</span> Sub-resource vs custom method for the same action — how do you choose?</p>
+<div class="answer"><p>If you want the action to leave an <strong>auditable, listable record</strong>, model it as a sub-resource/state collection (<code>POST /orders/42/cancellations</code>) — now you can <code>GET</code> the history. If it's a pure transition you'll never enumerate, a custom method (<code>:cancel</code>) is leaner and avoids a collection that only ever holds zero or one rows. Both keep the parent resource in the path; they differ on whether the action deserves to be a queryable record.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">12</span> Articulate the pure-REST vs pragmatist tension on custom methods.</p>
+<div class="answer"><p>Purists argue <em>everything</em> should be a resource: a custom method like <code>:cancel</code> smuggles a verb back into the URI and breaks the uniform interface, so they'd reify state into resources (a cancellation record, a status sub-resource). Pragmatists accept a colon-method for a genuinely non-CRUD verb because inventing nouns nobody queries is its own cost. The staff answer doesn't pick a religion — it picks by lifecycle: durable state and history → reify; momentary transition → sub-resource or custom method. Say the trade-off out loud; that's the signal.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">13</span> What status code does an async action like <code>:cancel</code> return if it can't complete synchronously?</p>
+<div class="answer"><p><code>202 Accepted</code> — the request is acknowledged but processing isn't done. Return a representation (or <code>Location</code>) for a status/operation resource the client can poll (<code>GET /operations/{id}</code> or the order's own status). Returning <code>200</code> immediately would lie about completion.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">14</span> Should a state transition be a <code>PATCH</code> on a status field instead of a custom method?</p>
+<div class="answer"><p>You <em>can</em> model "cancel" as <code>PATCH /orders/42 {"status":"cancelled"}</code>, and it's defensible when the transition is genuinely just a field change. The risks: it hides business rules (cancelling may trigger refunds, restocking, notifications) behind an innocuous field write, lets clients set arbitrary illegal states, and makes authorization/validation per-transition harder. A custom method or sub-resource names the operation explicitly, so you can authorize and validate <em>that transition</em> and run its side effects. Prefer the explicit form when the transition carries behavior, not just data.</p></div>
+</div>
+
+<h2>Nesting &amp; relationships</h2>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">15</span> What does nesting like <code>/customers/1/orders</code> communicate?</p>
+<div class="answer"><p>Containment — "the orders belonging to customer 1." That's a legitimate, readable use of nesting for a real ownership relationship. The mistake isn't nesting one level; it's going deep.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">16</span> Why is deep nesting like <code>/customers/1/orders/42/items/9</code> fragile?</p>
+<div class="answer"><p>It hard-codes the entire hierarchy into the URL. The day a relationship changes — items move under a fulfillment, an order spans customers, you add line-item history — every client URL breaks. Deep paths couple your contract to today's org chart. They also bloat with redundant ids you don't need to locate the leaf.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">17</span> What's the shallow alternative to deep nesting, and what do you keep?</p>
+<div class="answer"><p>Address resources flatly by identity — <code>/orders/42</code>, <code>/items/9</code> — and express relationships with <strong>filtering</strong>: <code>/orders?customer_id=1</code> instead of <code>/customers/1/orders</code>. You get the same query power without coupling the URL to the hierarchy. Keep nesting (≈ one level) only for genuine ownership where the child has no identity of its own.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">18</span> Link, embed, or separate endpoint — what are the three ways to handle related data?</p>
+<div class="answer"><ul>
+<li><strong>Link:</strong> return a reference/URL (hypermedia) the client follows when it wants the related resource.</li>
+<li><strong>Embed/expand:</strong> inline the related data on demand — <code>GET /orders/42?expand=customer</code> or <code>?fields=</code>.</li>
+<li><strong>Separate endpoint:</strong> the client fetches <code>/customers/7</code> itself.</li>
+</ul><p>The choice is a round-trips-vs-payload-size trade-off.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">19</span> Over-embedding vs the N+1 problem — describe the tension.</p>
+<div class="answer"><p>Always embedding everything makes <em>every</em> payload huge — clients download relations they didn't ask for, caching gets coarser, and the response couples to many tables. Never embedding makes clients <strong>chatty</strong>: list 50 orders, then fire 50 follow-up requests for each customer (the N+1 round-trip). The middle path is opt-in expansion (<code>?expand=</code> / field selection) so the client pays only for what it needs.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">20</span> What are the downsides of a flexible <code>?expand=</code> / field-selection mechanism?</p>
+<div class="answer"><p>It pushes you toward GraphQL-shaped problems without GraphQL's tooling: every expansion combination is a distinct query and cache key, so <strong>caching fragments</strong>; arbitrary expansion enables expensive N+1 / fan-out queries you must bound; authorization must be enforced <em>per expanded field</em>, not just on the root; and response shape becomes dynamic, complicating client typing and contract tests. Mitigate with an allowlist of expandable relations, depth/complexity limits, and per-field authz. At some point if clients need fully arbitrary shapes, that's the signal to consider GraphQL.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">21</span> Where should a many-to-many relationship be modeled — under which resource?</p>
+<div class="answer"><p>Neither parent "owns" it, so deep nesting under one side is arbitrary. Either expose the relationship from both sides as filtered sub-collections (<code>/students/1/courses</code> and <code>/courses/9/students</code>) backed by the same join, or — if the link itself carries data (enrollment date, grade) — <strong>reify the join</strong> as its own resource: <code>/enrollments?student_id=1</code>. Reify when the relationship has attributes; otherwise filtered views suffice.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">22</span> A mobile team complains your API is too chatty. How do you respond at the design level?</p>
+<div class="answer"><p>Diagnose first: is it N+1 over a list (add opt-in <code>expand</code> / embedded relations), too many round-trips for one screen (offer a purpose-built composite/aggregate endpoint or a BFF that fans out server-side), or pagination thrash (bigger pages, cursor paging)? Resist the urge to deep-nest everything just to save calls — that re-couples URLs. Options: bounded expansion, a read-optimized aggregate resource, batch endpoints, or a separate BFF layer. Name the caching and coupling cost of each rather than reflexively embedding.</p></div>
+</div>
+
+<h2>Identifiers</h2>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">23</span> Why prefer opaque identifiers over sequential integers in URIs?</p>
+<div class="answer"><p>Sequential ints <strong>leak business volume</strong> (reading order <code>#100002</code> tells an attacker your throughput) and invite <strong>enumeration</strong> — walking <code>/orders/1</code>, <code>/orders/2</code>… UUIDs/ULIDs are opaque and non-guessable, so neither attack works from the id alone.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">24</span> What is a BOLA / IDOR vulnerability and how does id choice relate to it?</p>
+<div class="answer"><p>Broken Object-Level Authorization (a.k.a. IDOR): a user swaps the id in <code>/orders/42</code> for <code>/orders/43</code> and reads someone else's data because the server checks <em>authentication</em> but not <em>ownership</em>. Opaque ids make resources <em>harder to guess</em>, but they are <strong>not the fix</strong> — they're defense in depth. The real fix is an authorization check on every object access ("does this caller own this order?"). Calling opaque ids a substitute for authz is a junior mistake.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">25</span> UUID vs ULID — when does the difference matter?</p>
+<div class="answer"><p>Both are opaque and non-guessable. ULIDs (and UUIDv7) are <strong>time-sortable</strong> — they encode a timestamp prefix, so they're roughly monotonic, which keeps database B-tree index inserts sequential and avoids the write-amplification of random UUIDv4. Pick ULID/UUIDv7 when insert performance and natural ordering matter; classic random UUIDv4 when you specifically want no embedded time signal.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">26</span> What are slugs for, and what should they <em>not</em> be?</p>
+<div class="answer"><p>Slugs (<code>/articles/how-to-design-apis</code>) are for <strong>humans and SEO</strong> — readable, memorable URLs. They should <strong>not</strong> be your stable primary key: titles change, slugs collide, and they're mutable. Use an opaque id as the canonical key and treat the slug as a lookup alias (often redirecting to the id-based canonical URL).</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">27</span> Should the URI expose your internal database primary key?</p>
+<div class="answer"><p>Avoid it. Exposing the raw DB key couples your <em>public contract</em> to a storage detail — you can't reshard, migrate to a different store, or merge tables without breaking URLs, and an auto-increment key leaks volume. Mint a separate external identifier (opaque, stable) that you map to the internal key. The public id is part of your API contract; the internal key isn't.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">28</span> Client-generated vs server-generated ids — what changes in the design?</p>
+<div class="answer"><p>Server-generated: <code>POST /orders</code>, server mints the id, returns <code>201</code> + <code>Location</code>. Simple, but the create isn't naturally idempotent — a retry can double-create, so you bolt on an <code>Idempotency-Key</code>. Client-generated (e.g. client picks a UUID): the create becomes a natural <strong>idempotent upsert</strong> via <code>PUT /orders/{client-uuid}</code> — a retry targets the same URI and is safe by construction, and offline/mobile clients can mint ids without a round-trip. The cost is trusting clients with the id namespace (collision/forgery handling). Choose by whether you need offline id minting and free idempotency.</p></div>
+</div>
+
+<h2>Conventions &amp; consistency</h2>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">29</span> What are the boring-on-purpose URI formatting conventions?</p>
+<div class="answer"><p>Lowercase; hyphen-separated words (<code>/purchase-orders</code>, not <code>/purchaseOrders</code> or <code>/purchase_orders</code>); no trailing slash; no file extensions (<code>.json</code>) — use the <code>Accept</code> header for format. Boring and predictable beats clever.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">30</span> What belongs in query parameters and what doesn't?</p>
+<div class="answer"><p>Query params carry <strong>filtering, sorting, and pagination</strong> — <code>?status=open&amp;sort=-created_at&amp;page=2</code>. They must <strong>not</strong> carry identity: the resource's identifier belongs in the <em>path</em> (<code>/orders/42</code>, not <code>/orders?id=42</code>). Path = which resource; query = how to view the collection.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">31</span> When is a singleton resource the right shape, and how do you spot the mistake?</p>
+<div class="answer"><p>When there's <strong>exactly one</strong> of a thing in a context — <code>/users/me/settings</code>, <code>/account/preferences</code>. A singleton has <em>no id and no plural</em>; you <code>GET</code>/<code>PUT</code>/<code>PATCH</code> it directly. The tell is modeling it as a collection (<code>/users/me/settings/1</code>) — reaching for the plural-collection pattern reflexively instead of fitting it to the domain.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">32</span> What does <code>/users/me</code> express, and why is it useful?</p>
+<div class="answer"><p>It's an <strong>alias for the authenticated principal</strong> — "whoever this token belongs to" — so the client doesn't need to know or send its own id. It avoids leaking other users' ids into client code, sidesteps a class of IDOR mistakes (you can't swap <code>me</code> for someone else), and reads cleanly: <code>/users/me/orders</code>. The server resolves <code>me</code> to the real id from the credentials.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">33</span> Why does consistency across the surface beat a locally clever endpoint?</p>
+<div class="answer"><p>Because clients learn your API by <strong>pattern</strong>: once they know <code>/orders</code>, <code>/orders/42</code>, <code>?status=</code>, they predict the rest. One odd-but-clever endpoint forces every consumer to special-case it, breaks codegen/SDK assumptions, and costs documentation and support forever. The marginal cleverness almost never pays back the cognitive tax. Predictability is a feature.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">34</span> How should the path represent filtering by multiple values or ranges?</p>
+<div class="answer"><p>Keep it in the query string with a consistent grammar: repeated keys or CSV for sets (<code>?status=open&amp;status=pending</code> or <code>?status=open,pending</code>), and explicit suffixes/operators for ranges (<code>?created_after=…&amp;created_before=…</code> or a documented <code>created_at[gte]=</code>). Pick one convention and apply it everywhere. The path still names the collection; all of this is query, never identity.</p></div>
+</div>
+
+<h2>Judgment</h2>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">35</span> Walk through deriving a resource model from a domain — what's your method?</p>
+<div class="answer"><p>(1) List the <strong>nouns</strong> the domain holds (order, cart, customer, payment, refund) — those are candidate resources. (2) Decide which are top-level collections vs owned sub-resources by asking "does this have identity on its own?" (3) Map the verbs to HTTP methods; for non-CRUD verbs, decide sub-resource / custom method / reify by lifecycle. (4) Choose relationships: nest one level for true ownership, filter for the rest. (5) Pick opaque ids and consistent conventions. Narrate the trade-offs as you go — the reasoning is what's scored.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">36</span> Whiteboard prompt: model an e-commerce checkout (browse cart, place order, cancel, refund).</p>
+<div class="answer"><p>Cart is <code>/carts/{id}</code> with line items at <code>/carts/{id}/items/{id}</code> — one level, real containment. Place order: <code>POST /orders</code>, server assigns id, returns <code>201</code> + <code>Location</code>, built from the cart; require an <code>Idempotency-Key</code> so a retry doesn't double-charge. Cancel is a transition on an existing order, so <code>POST /orders/{id}/cancellations</code> or AIP-style <code>POST /orders/{id}:cancel</code> — no top-level noun. Refund has its own lifecycle (processed/settled/reversible) so <strong>reify</strong> it: <code>POST /refunds</code> with <code>{order_id}</code>, beside <code>/payments</code>. Ids opaque (UUID/ULID); list a customer's orders via <code>/orders?customer_id=</code> rather than deep nesting. That hits nouns-not-verbs, principled action modeling with a stated trade-off, shallow nesting + filtering, and security-aware ids.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">37</span> What's your test for "does this action deserve to be its own resource?"</p>
+<div class="answer"><p>Ask: does it have a <strong>lifecycle, state, and history you'd query independently</strong>? If yes — you'd list it, report on it, transition it through states, audit it — reify (a refund, a shipment, a dispute). If it's a one-shot transition with no afterlife you'd ever enumerate, don't invent a noun nobody reads; use a custom method or status sub-resource. The litmus test is "would I ever <code>GET</code> a collection of these?"</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">38</span> How do you handle pluralization edge cases (uncountable nouns, irregulars)?</p>
+<div class="answer"><p>Default to the natural English plural and stay consistent. For uncountable/mass nouns (<code>/audit-info</code>, <code>/news</code>, <code>/weather</code>) pick a form and document it rather than inventing <code>/informations</code>. For irregulars use the correct plural (<code>/people</code>, not <code>/persons</code>, unless your domain says otherwise). The rule that actually matters: be <strong>uniform</strong> — clients should be able to guess the plural from the singular without surprises.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">39</span> How does URI design interact with HTTP caching?</p>
+<div class="answer"><p>The URI <em>is</em> the cache key, so design affects cacheability directly. Stable, canonical, identity-in-path URIs cache cleanly; <code>GET /orders/42</code> is cacheable with ETags. Smuggling verbs into paths or forcing reads through <code>POST</code> kills caching. Query-param explosion fragments the cache (every filter combo is a new key), and dynamic <code>?expand=</code> shapes do too. One canonical URI per resource (avoid duplicate paths for the same thing) keeps caches and conditional requests effective.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">40</span> How does URI shape interact with object-level authorization?</p>
+<div class="answer"><p>Identity-in-path makes the authorization target explicit: every <code>/orders/{id}</code> access needs an ownership check (BOLA defense), and consistent URI structure lets you enforce that with uniform middleware rather than ad-hoc checks. Aliases like <code>/users/me</code> remove a whole class of IDOR by not letting clients name other principals. Nesting can <em>imply</em> scope (<code>/customers/1/orders</code>) but you must still verify the caller may act as customer 1 — the path is a claim, not proof. Flat URIs + per-object authz is usually cleaner than relying on nesting for security.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">41</span> How does resource modeling interact with versioning?</p>
+<div class="answer"><p>Good modeling reduces the need to version: stable nouns, identity-in-path, and opaque ids let you add fields, relations, and optional expansions without breaking clients. Versioning bites when the <em>shape</em> or <em>relationships</em> change — renaming resources, re-homing sub-resources, changing id schemes. Those are exactly the deep-nesting / leaked-internal-id decisions that age badly. So the modeling discipline (shallow nesting, filtering over containment, external ids) is partly a versioning-cost-avoidance strategy. (Versioning mechanics are Lesson 5.)</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">42</span> Interviewer pushes back: "Deep nesting is more RESTful and self-documenting." Your reply?</p>
+<div class="answer"><p>Nesting documents <em>a</em> relationship but hard-codes <em>one</em> hierarchy into the contract. It reads nicely until the relationship changes or the resource participates in several relationships, at which point the URL lies or breaks. REST cares that resources are identified and addressable — a flat <code>/items/9</code> plus <code>?order_id=42</code> is no less RESTful and far more evolvable. I keep one level for true ownership and filter for everything else; self-documentation comes from consistency and hypermedia/links, not from a long path.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">43</span> When would you accept verbs in paths or otherwise break the conventions?</p>
+<div class="answer"><p>Pragmatically: explicitly-sanctioned custom methods (<code>:cancel</code>) for non-CRUD verbs; a <code>POST .../search</code> when query criteria are too large/sensitive for the URL (trading GET cacheability knowingly); RPC-style or gRPC for chatty internal service-to-service traffic where REST's overhead doesn't pay. The staff move is that these are <strong>deliberate, named exceptions with a stated cost</strong>, isolated and consistent, not accidental drift. Purity isn't the goal — defensible, evolvable design is.</p></div>
+</div>
+
+<div class="qa">
+<p class="q"><span class="tag t-core">Core</span> <span class="qnum">44</span> Why is resource modeling usually the first artifact in a design interview?</p>
+<div class="answer"><p>Because everything else hangs off it — status codes, auth, pagination, caching all assume a resource model. Clean nouns and defensible nesting are one of the earliest senior signals an interviewer reads; get the frame right and the rest of the design falls out cleanly. Get it wrong and every downstream answer inherits the mess.</p></div>
+</div>
+
+<hr/>
+<p class="src">Interview Bank 4 · pairs with Lesson 4.</p>
+</body>
+</html>

@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consistent Hashing — Deep Dive · visual edition</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/lesson.css">
+<style>:root{--accent:var(--track-applied)}
+/* slim rules for classes not in lesson.css */
+.sans{font-family:ui-sans-serif,system-ui,sans-serif}
+
+/* decomposition chips */
+.chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+.chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+.chip b{color:var(--accent)}
+.chip.c2 b{color:var(--accent)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
+
+/* TOC grid */
+.toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
+.toc a{text-decoration:none; padding:.15rem 0}
+
+/* level block */
+.lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
+.lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
+.num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
+.lvltop h2{margin:0; font-size:1.24rem; font-weight:700}
+.tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
+
+/* fact-card labels (2-col grid + uppercase b label) */
+.facts{grid-template-columns:1fr 1fr}
+.fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+.fact.blue b{color:var(--accent)}
+
+/* myth grid container (lesson.css styles .m/.t but not the container) */
+.myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
+.myth .m{border-left:3px solid var(--bad)}
+.myth .t{border-left:3px solid var(--good)}
+
+/* rule highlight span */
+.rule span{color:var(--accent)}
+
+/* memory-check details (custom markers) */
+details.mc{font-size:.84rem}
+details.mc summary{cursor:pointer; color:var(--good); font-weight:600; list-style:none}
+details.mc summary::before{content:"\25B8 "}
+details.mc[open] summary::before{content:"\25BE "}
+details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
+details.mc .ans{color:var(--muted)}
+
+/* interview-question details (custom marker + accent left border) */
+details.iq{border-left:3px solid var(--accent); font-size:.88rem}
+details.iq summary{list-style:none}
+details.iq summary::-webkit-details-marker{display:none}
+details.iq summary::before{content:"\1F4AC "}
+details.iq[open] summary{color:var(--accent)}
+details.iq .a{margin-top:.45rem; font-size:.85rem; color:var(--ink); line-height:1.45}
+details.iq .a b{color:var(--accent)}
+
+/* cheat panel — recolored with tokens to stay readable in both themes */
+.cheat{background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:1.1rem 1.2rem; margin:1.2rem 0; font-size:.88rem}
+.cheat h3{color:var(--accent); margin:1rem 0 .3rem; font-size:.8rem; letter-spacing:.06em; text-transform:uppercase}
+.cheat a{color:var(--accent)} .cheat th{color:var(--muted)} .cheat td,.cheat th{border-color:var(--line)} .cheat code{background:var(--chip); color:var(--ink)}
+
+/* bottom nav row */
+.nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
+
+@media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<!-- shared arrowheads -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="applied-systems-design-fundamentals.html" title="Applied Systems Design — Fundamentals">&#8249; Prev</a><span style="color:var(--muted);opacity:.45">Next &#8250;</span></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><a href="consistent-hashing-deep-dive.epub">&#8595; EPUB</a><span style="color:var(--muted)">Applied Systems Design</span></span>
+  </nav>
+  <div class="kicker">Applied Systems Design · deep dive · visual edition</div>
+  <h1>Consistent Hashing</h1>
+  <p class="meta">~25 min · 7 sections · diagrams + interview questions + interactive recall · supplement to Book 5, Lessons 6 &amp; 8</p>
+
+  <div class="mission">
+    <strong>Your bar:</strong> redraw the ring on a whiteboard and explain — from memory — why <code>mod N</code> is catastrophic,
+    why a bare ring is lopsided, how vnodes flatten it, and what to reach for when one key still runs hot.
+    Grounded in Karger et al. (STOC&nbsp;1997)<sup><a href="#s1" id="r1">1</a></sup> and Dynamo.<sup><a href="#s2" id="r2">2</a></sup>
+  </div>
+
+  <p>One sentence holds the whole topic. Each section just unpacks one chip of it:</p>
+  <div class="chips">
+    <span class="chip">Consistent hashing maps <b>keys and nodes to one ring</b></span>
+    <span class="chip c2">so a membership change moves only <b>K/N keys</b></span>
+    <span class="chip c3">uses <b>virtual nodes</b> to keep load even</span>
+    <span class="chip c4">and a <b>bounded-load cap</b> when a key runs hot</span>
+  </div>
+
+  <nav class="toc">
+    <a href="#l1">①&nbsp;mod N is the enemy</a><a href="#l2">②&nbsp;The ring</a>
+    <a href="#l3">③&nbsp;Virtual nodes</a><a href="#l4">④&nbsp;Bounded loads</a>
+    <a href="#l5">⑤&nbsp;You may not need a ring</a><a href="#l6">⑥&nbsp;Replication / preference list</a>
+    <a href="#quiz">◆&nbsp;Self-check quiz</a><a href="#interview">◆&nbsp;Interview Qs</a>
+    <a href="#cheat">★&nbsp;Cheat sheet</a><a href="#sources">★&nbsp;Sources</a>
+  </nav>
+
+  <!-- ============ HERO: the ring ============ -->
+  <figure style="margin-top:1.6rem">
+    <svg viewBox="0 0 640 250" role="img" aria-label="The hash ring: keys and nodes share one 0 to 2^32 circle; each key is owned by the first node clockwise; adding a node steals only one arc">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THE HASH RING — keys &amp; nodes share one circle (0 … 2³²−1)</text>
+        <!-- ring -->
+        <circle cx="320" cy="140" r="86" fill="none" stroke="#6b675f" stroke-width="1.5"/>
+        <text x="320" y="48" text-anchor="middle" font-size="9" fill="#6b675f">0 / 2³²</text>
+        <!-- nodes on ring -->
+        <g>
+          <circle cx="320" cy="54" r="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/><text x="320" y="40" text-anchor="middle" font-size="10" font-weight="700" fill="#7a1f12">N1</text>
+          <circle cx="406" cy="140" r="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/><text x="426" y="144" text-anchor="middle" font-size="10" font-weight="700" fill="#7a1f12">N2</text>
+          <circle cx="320" cy="226" r="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/><text x="320" y="244" text-anchor="middle" font-size="10" font-weight="700" fill="#7a1f12">N3</text>
+          <circle cx="234" cy="140" r="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/><text x="214" y="144" text-anchor="middle" font-size="10" font-weight="700" fill="#7a1f12">N4</text>
+        </g>
+        <!-- a key -->
+        <circle cx="378" cy="78" r="5" fill="#1f3a5a"/><text x="392" y="72" text-anchor="middle" font-size="9" fill="#1f3a5a">key k</text>
+        <!-- clockwise arrow from key to owner N2 -->
+        <path d="M 384 82 A 70 70 0 0 1 401 132" fill="none" stroke="#1f3a5a" stroke-dasharray="3 3" marker-end="url(#arw)"/>
+        <text x="320" y="120" text-anchor="middle" font-size="9.5" fill="#1f3a5a">owned by first</text>
+        <text x="320" y="133" text-anchor="middle" font-size="9.5" fill="#1f3a5a">node clockwise</text>
+        <text x="320" y="148" text-anchor="middle" font-size="9.5" fill="#6b675f">lookup =</text>
+        <text x="320" y="161" text-anchor="middle" font-size="9.5" fill="#6b675f">successor search</text>
+        <!-- callouts -->
+        <g>
+          <rect x="476" y="78" width="156" height="58" rx="8" fill="#eef5ee" stroke="#2f5d3a"/>
+          <text x="554" y="98" text-anchor="middle" font-size="10" font-weight="700" fill="#2f5d3a">Add a node →</text>
+          <text x="554" y="113" text-anchor="middle" font-size="9.5" fill="#244a2e">steals ONE arc from</text>
+          <text x="554" y="126" text-anchor="middle" font-size="9.5" fill="#244a2e">its neighbour (~K/N)</text>
+        </g>
+        <g>
+          <rect x="8" y="78" width="156" height="58" rx="8" fill="#f7ecea" stroke="#9a2417"/>
+          <text x="86" y="98" text-anchor="middle" font-size="10" font-weight="700" fill="#9a2417">mod N would →</text>
+          <text x="86" y="113" text-anchor="middle" font-size="9.5" fill="#7a2218">re-scatter nearly</text>
+          <text x="86" y="126" text-anchor="middle" font-size="9.5" fill="#7a2218">EVERY key</text>
+        </g>
+      </g>
+    </svg>
+    <figcaption>Memorise this banner. Every section adds one detail: the price of the ring (uneven arcs), the fix (vnodes), the cap (bounded loads), and the alternatives.</figcaption>
+  </figure>
+
+  <!-- ================= SECTION 1 ================= -->
+  <section class="lvl" id="l1">
+    <div class="lvltop"><span class="num">1</span><h2><code>mod&nbsp;N</code> is the enemy</h2></div>
+    <p class="tagline">Understand what the ring is escaping before you build it. The obvious scheme collapses on every scaling event.</p>
+    <figure>
+      <svg viewBox="0 0 560 170" role="img" aria-label="hash(key) mod N: balanced and O(1) but adding one node remaps almost every key because mod changes for nearly all">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <text x="280" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#9a2417">hash(key) mod N — perfect until N changes</text>
+          <!-- before: 4 nodes -->
+          <text x="120" y="46" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">N = 4</text>
+          <g font-size="9.5" fill="#111110">
+            <rect x="40" y="56" width="38" height="26" rx="5" fill="#fff" stroke="#d8d4c8"/><text x="59" y="73" text-anchor="middle">0</text>
+            <rect x="86" y="56" width="38" height="26" rx="5" fill="#fff" stroke="#d8d4c8"/><text x="105" y="73" text-anchor="middle">1</text>
+            <rect x="132" y="56" width="38" height="26" rx="5" fill="#fff" stroke="#d8d4c8"/><text x="151" y="73" text-anchor="middle">2</text>
+            <rect x="178" y="56" width="38" height="26" rx="5" fill="#fff" stroke="#d8d4c8"/><text x="197" y="73" text-anchor="middle">3</text>
+          </g>
+          <text x="120" y="104" text-anchor="middle" font-size="9" fill="#6b675f">key 17 → 17 mod 4 = node 1</text>
+          <!-- arrow -->
+          <line x1="232" y1="70" x2="300" y2="70" stroke="#9a2417" marker-end="url(#arwA)"/>
+          <text x="266" y="60" text-anchor="middle" font-size="9" fill="#9a2417">add 1 node</text>
+          <!-- after: 5 nodes -->
+          <text x="430" y="46" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">N = 5</text>
+          <g font-size="9.5" fill="#111110">
+            <rect x="316" y="56" width="36" height="26" rx="5" fill="#f7ecea" stroke="#9a2417"/><text x="334" y="73" text-anchor="middle">0</text>
+            <rect x="358" y="56" width="36" height="26" rx="5" fill="#f7ecea" stroke="#9a2417"/><text x="376" y="73" text-anchor="middle">1</text>
+            <rect x="400" y="56" width="36" height="26" rx="5" fill="#f7ecea" stroke="#9a2417"/><text x="418" y="73" text-anchor="middle">2</text>
+            <rect x="442" y="56" width="36" height="26" rx="5" fill="#f7ecea" stroke="#9a2417"/><text x="460" y="73" text-anchor="middle">3</text>
+            <rect x="484" y="56" width="36" height="26" rx="5" fill="#fff" stroke="#2f5d3a"/><text x="502" y="73" text-anchor="middle">4</text>
+          </g>
+          <text x="430" y="104" text-anchor="middle" font-size="9" fill="#9a2417">key 17 → 17 mod 5 = node 2  (moved!)</text>
+          <text x="280" y="138" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">≈ only 1/(N+1) keys stay — nearly ALL keys move</text>
+          <text x="280" y="156" text-anchor="middle" font-size="9.5" fill="#6b675f">cache: every lookup misses at once → DB stampede · store: re-shuffle the whole dataset</text>
+        </g>
+      </svg>
+      <figcaption>Reused from the source: <code>mod N</code> vs the ring. Below is the same comparison as a single ring picture.</figcaption>
+    </figure>
+    <figure>
+      <img src="diagrams/ch-01-modn-vs-ring.png"
+        alt="Why the ring beats mod N. With hash(key) mod N, adding a node remaps almost every key. With a consistent-hashing ring, adding a node steals keys only from one neighbour — about K/N of them — and every other key stays exactly where it was." />
+      <figcaption><strong>Why the ring beats <code>mod N</code>.</strong> <code>mod N</code> remaps almost every key on a change; the ring steals only one neighbour's arc (~K/N) and leaves every other key exactly where it was.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>mod N — what it is</b> <code>hash(key) mod N</code>: balanced, O(1), trivial. The default everyone reaches for first.</div>
+      <div class="fact"><b>Why it fails</b> Change N and <code>mod (N+1) ≠ mod N</code> for almost every key. Expected fraction staying put ≈ <code>1/(N+1)</code>.</div>
+      <div class="fact blue"><b>Cache blast radius</b> Every key now hashes to the wrong node → every lookup misses → the stampede hits your DB at once.</div>
+      <div class="fact blue"><b>Store blast radius</b> A sharded store re-shuffles nearly the entire dataset across the network on every scaling event.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "mod N is fine; rehashing on scale-up is a one-time blip"</div><div class="t">✓ It re-scatters ~all keys <em>every</em> change — re-shuffle the dataset / stampede the DB</div></div>
+    <div class="rule"><span>🎯 Memory rule:</span> Consistent hashing exists for ONE property — a membership change moves only ~<span>K/N</span> keys (one node's worth), not nearly all of them.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What fraction of keys stay put when N→N+1 under mod N? <span class="ans">→ ~1/(N+1) — almost none</span></li>
+      <li>Why is it worse for a cache than a store? <span class="ans">→ universal miss → DB stampede</span></li>
+      <li>The one property the ring buys? <span class="ans">→ only ~K/N keys move on a change</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= SECTION 2 ================= -->
+  <section class="lvl" id="l2">
+    <div class="lvltop"><span class="num">2</span><h2>The ring — what actually moves</h2></div>
+    <p class="tagline">Map nodes <em>and</em> keys into the same hash space. A key belongs to the first node clockwise. That locality is the whole win.</p>
+    <figure>
+      <svg viewBox="0 0 600 230" role="img" aria-label="Adding node N5 between N1 and N2 claims only the arc behind it — keys move from one neighbour, everything else stays">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <text x="300" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">ADD a node → it steals ONE arc from its predecessor</text>
+          <!-- BEFORE ring -->
+          <text x="150" y="44" text-anchor="middle" font-size="10" font-weight="700" fill="#6b675f">before</text>
+          <circle cx="150" cy="140" r="70" fill="none" stroke="#6b675f" stroke-width="1.5"/>
+          <circle cx="150" cy="70" r="8" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/><text x="150" y="60" text-anchor="middle" font-size="9" font-weight="700" fill="#7a1f12">N1</text>
+          <circle cx="220" cy="140" r="8" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/><text x="236" y="144" text-anchor="middle" font-size="9" font-weight="700" fill="#7a1f12">N2</text>
+          <circle cx="150" cy="210" r="8" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/><text x="150" y="226" text-anchor="middle" font-size="9" font-weight="700" fill="#7a1f12">N3</text>
+          <!-- arc owned by N2 highlighted -->
+          <path d="M 150 70 A 70 70 0 0 1 220 140" fill="none" stroke="#1f3a5a" stroke-width="4" opacity="0.4"/>
+          <text x="150" y="140" text-anchor="middle" font-size="9" fill="#1f3a5a">N2 owns</text>
+          <text x="150" y="152" text-anchor="middle" font-size="9" fill="#1f3a5a">this arc</text>
+          <!-- arrow between -->
+          <line x1="248" y1="140" x2="350" y2="140" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+          <text x="299" y="130" text-anchor="middle" font-size="9.5" fill="#2f5d3a">insert N5</text>
+          <!-- AFTER ring -->
+          <text x="460" y="44" text-anchor="middle" font-size="10" font-weight="700" fill="#6b675f">after</text>
+          <circle cx="460" cy="140" r="70" fill="none" stroke="#6b675f" stroke-width="1.5"/>
+          <circle cx="460" cy="70" r="8" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/><text x="460" y="60" text-anchor="middle" font-size="9" font-weight="700" fill="#7a1f12">N1</text>
+          <circle cx="530" cy="140" r="8" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/><text x="546" y="144" text-anchor="middle" font-size="9" font-weight="700" fill="#7a1f12">N2</text>
+          <circle cx="460" cy="210" r="8" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/><text x="460" y="226" text-anchor="middle" font-size="9" font-weight="700" fill="#7a1f12">N3</text>
+          <circle cx="520" cy="92" r="8" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/><text x="540" y="86" text-anchor="middle" font-size="9" font-weight="700" fill="#2f5d3a">N5</text>
+          <!-- arc stolen by N5 -->
+          <path d="M 520 92 A 70 70 0 0 1 530 140" fill="none" stroke="#2f5d3a" stroke-width="4" opacity="0.55"/>
+          <text x="460" y="140" text-anchor="middle" font-size="9" fill="#2f5d3a">N5 takes only</text>
+          <text x="460" y="152" text-anchor="middle" font-size="9" fill="#2f5d3a">this slice (~K/N)</text>
+        </g>
+      </svg>
+      <figcaption>Lookup = a <em>successor search</em>: binary-search the sorted node positions for the next one clockwise → <code>O(log N)</code>. Remove a node and its arc falls to its clockwise successor — again ~K/N keys, to one node.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Placement</b> A node sits at <code>hash(node_id)</code>; a key is owned by the first node clockwise from <code>hash(key)</code>. Same hash space for both.</div>
+      <div class="fact"><b>Hash space</b> A circle of <code>0 … 2³²−1</code> (Dynamo uses <code>2¹⁶⁰</code>). Wrapping around the top is what makes it a ring.</div>
+      <div class="fact blue"><b>Add</b> Claims only the arc between it and its counter-clockwise neighbour — ~K/N keys from <em>one</em> node. Everyone else stays.</div>
+      <div class="fact blue"><b>Remove</b> Its arc's keys fall to the clockwise successor — again ~K/N keys, to <em>one</em> node.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "Adding a node reshuffles keys across the cluster"</div><div class="t">✓ It touches exactly one neighbour's arc; locality is the entire point</div></div>
+    <div class="rule"><span>🧭 Memory rule:</span> Lookup is a clockwise <span>successor search</span> (O(log N)); a membership change touches exactly <span>one neighbour's arc</span> — but those arcs are not equal.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>How is a key's owner found? <span class="ans">→ first node clockwise — a successor search, O(log N)</span></li>
+      <li>On add, where do the moved keys come from? <span class="ans">→ one node: the new node's predecessor arc</span></li>
+      <li>What price did locality buy us? <span class="ans">→ unequal arcs → load imbalance</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= SECTION 3 ================= -->
+  <section class="lvl" id="l3">
+    <div class="lvltop"><span class="num">3</span><h2>Virtual nodes — fixing the lopsided ring</h2></div>
+    <p class="tagline">Random placement does NOT give equal arcs. The most-loaded node can hold <code>log N</code>× the average. Vnodes are an averaging machine.</p>
+    <figure>
+      <svg viewBox="0 0 600 200" role="img" aria-label="One token per node gives wildly uneven arcs; many vnodes per node sum to an even 1/N load with variance shrinking as 1 over root V">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <!-- left: bare ring uneven -->
+          <text x="150" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">1 token / node → uneven</text>
+          <circle cx="150" cy="110" r="64" fill="none" stroke="#6b675f" stroke-width="1.5"/>
+          <circle cx="150" cy="46" r="7" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <circle cx="205" cy="92" r="7" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <circle cx="190" cy="160" r="7" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <circle cx="92" cy="140" r="7" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <!-- big arc highlight -->
+          <path d="M 92 140 A 64 64 0 0 1 150 46" fill="none" stroke="#9a2417" stroke-width="4" opacity="0.5"/>
+          <text x="150" y="106" text-anchor="middle" font-size="9" fill="#9a2417">one node owns</text>
+          <text x="150" y="118" text-anchor="middle" font-size="9" fill="#9a2417">a huge arc</text>
+          <text x="150" y="192" text-anchor="middle" font-size="9" fill="#6b675f">largest arc ≈ Θ((log N)/N)</text>
+          <!-- right: vnodes even -->
+          <text x="450" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">V≈100–200 vnodes / node → even</text>
+          <circle cx="450" cy="110" r="64" fill="none" stroke="#6b675f" stroke-width="1.5"/>
+          <g stroke="#7a1f12" stroke-width="1.5">
+            <circle cx="450" cy="46" r="4" fill="#f1eee2"/><circle cx="498" cy="62" r="4" fill="#fff"/><circle cx="514" cy="110" r="4" fill="#1f3a5a"/>
+            <circle cx="498" cy="158" r="4" fill="#f1eee2"/><circle cx="450" cy="174" r="4" fill="#fff"/><circle cx="402" cy="158" r="4" fill="#1f3a5a"/>
+            <circle cx="386" cy="110" r="4" fill="#f1eee2"/><circle cx="402" cy="62" r="4" fill="#fff"/>
+            <circle cx="476" cy="50" r="4" fill="#1f3a5a"/><circle cx="510" cy="84" r="4" fill="#f1eee2"/>
+            <circle cx="510" cy="136" r="4" fill="#fff"/><circle cx="476" cy="170" r="4" fill="#1f3a5a"/>
+            <circle cx="424" cy="170" r="4" fill="#f1eee2"/><circle cx="390" cy="136" r="4" fill="#fff"/>
+            <circle cx="390" cy="84" r="4" fill="#1f3a5a"/><circle cx="424" cy="50" r="4" fill="#f1eee2"/>
+          </g>
+          <text x="450" y="106" text-anchor="middle" font-size="9" fill="#2f5d3a">each node = sum of</text>
+          <text x="450" y="118" text-anchor="middle" font-size="9" fill="#2f5d3a">many small arcs</text>
+          <text x="450" y="192" text-anchor="middle" font-size="9" fill="#6b675f">per-node load → 1/N, std dev ~ 1/√V</text>
+        </g>
+      </svg>
+      <figcaption>New SVG: same physical node's vnodes share a colour. Below is the source diagram of the same idea.</figcaption>
+    </figure>
+    <figure>
+      <img src="diagrams/ch-02-vnodes.png"
+        alt="Virtual nodes smooth the load. Left: four physical nodes placed once each carve the ring into wildly uneven arcs — one node is overloaded. Right: each physical node owns many small vnodes scattered around the ring, so every node's total load converges to 1/N." />
+      <figcaption><strong>Virtual nodes smooth the load.</strong> Each physical node owns many small vnodes scattered around the ring, so its total load — the sum of many independent arcs — converges to <code>1/N</code>.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>The problem</b> Random placement → largest arc ≈ <code>Θ((log N)/N)</code>; the hottest node can hold <code>log N</code>× average. With few nodes, one routinely owns 2–3× another.</div>
+      <div class="fact"><b>The fix</b> Hash each <em>physical</em> node to many positions (<code>V ≈ 100–200</code>). N nodes scatter <code>N·V</code> points around the ring.</div>
+      <div class="fact blue"><b>Why it works</b> A node's load = the <em>sum</em> of its V little arcs. Averaging V independent pieces concentrates load at <code>1/N</code> with std dev ~ <code>1/√V</code> — within a few % of uniform.</div>
+      <div class="fact blue"><b>Three dividends</b> ① balance (1/√V) · ② graceful failure (a dead node's vnodes spread to many successors, not one) · ③ heterogeneity (2× capacity = 2× vnodes — weighting for free).</div>
+    </div>
+    <div class="myth"><div class="m">✗ "N random nodes carve N roughly-equal arcs"</div><div class="t">✓ Random placement is lopsided; only vnodes (summing many arcs) flatten it</div></div>
+    <div class="rule"><span>🌀 Memory rule:</span> A bare ring is a hot-spot generator. Vnodes turn each node into a <span>sum of many arcs</span> — variance shrinks like <span>1/√V</span>. Dynamo, Cassandra, Riak all use tokens, never a bare ring.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>How bad is a bare ring? <span class="ans">→ hottest node ≈ log N × average</span></li>
+      <li>Why do vnodes balance? <span class="ans">→ load = sum of V arcs; std dev ~ 1/√V</span></li>
+      <li>Two extra dividends besides balance? <span class="ans">→ graceful failure spread + free weighting</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= SECTION 4 ================= -->
+  <section class="lvl" id="l4">
+    <div class="lvltop"><span class="num">4</span><h2>Bounded loads — when one key still runs hot</h2></div>
+    <p class="tagline">Vnodes balance the <em>keyspace</em>, not <em>popularity</em>. A viral key has exactly one home. Cap every node and overflow clockwise.</p>
+    <figure>
+      <img src="diagrams/ch-03-bounded-loads.png"
+        alt="Consistent hashing with bounded loads. Each node has a capacity cap of (1+ε)× the average. A key whose home node is full overflows clockwise to the next node with spare capacity, so no node can exceed the cap — at the cost of a little extra movement." />
+      <figcaption><strong>Consistent hashing with bounded loads.</strong> Cap each node at <code>(1+ε)×</code> average. A key whose home node is full overflows clockwise to the next node with room — so no node can exceed the cap.</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 560 150" role="img" aria-label="A key lands on a full node and walks clockwise past full nodes until one has spare capacity">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <text x="280" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">CAP = (1+ε) × average — full node → walk clockwise to room</text>
+          <!-- three nodes as capacity bars -->
+          <g>
+            <text x="90" y="48" text-anchor="middle" font-size="10" font-weight="700" fill="#9a2417">N1 (home)</text>
+            <rect x="50" y="56" width="80" height="64" rx="6" fill="#fff" stroke="#9a2417"/>
+            <rect x="50" y="58" width="80" height="60" rx="5" fill="#f7ecea"/>
+            <line x1="50" y1="62" x2="130" y2="62" stroke="#9a2417" stroke-dasharray="3 2"/>
+            <text x="90" y="92" text-anchor="middle" font-size="9" fill="#9a2417">FULL</text>
+          </g>
+          <g>
+            <text x="260" y="48" text-anchor="middle" font-size="10" font-weight="700" fill="#9a2417">N2</text>
+            <rect x="220" y="56" width="80" height="64" rx="6" fill="#fff" stroke="#9a2417"/>
+            <rect x="220" y="60" width="80" height="58" rx="5" fill="#f7ecea"/>
+            <line x1="220" y1="62" x2="300" y2="62" stroke="#9a2417" stroke-dasharray="3 2"/>
+            <text x="260" y="92" text-anchor="middle" font-size="9" fill="#9a2417">FULL</text>
+          </g>
+          <g>
+            <text x="430" y="48" text-anchor="middle" font-size="10" font-weight="700" fill="#2f5d3a">N3</text>
+            <rect x="390" y="56" width="80" height="64" rx="6" fill="#fff" stroke="#2f5d3a"/>
+            <rect x="390" y="92" width="80" height="26" rx="5" fill="#eef5ee"/>
+            <line x1="390" y1="62" x2="470" y2="62" stroke="#2f5d3a" stroke-dasharray="3 2"/>
+            <text x="430" y="108" text-anchor="middle" font-size="9" fill="#2f5d3a">has room ✓</text>
+          </g>
+          <!-- key + walk arrows -->
+          <circle cx="20" cy="88" r="5" fill="#1f3a5a"/><text x="20" y="74" text-anchor="middle" font-size="9" fill="#1f3a5a">key</text>
+          <line x1="26" y1="88" x2="48" y2="88" stroke="#1f3a5a" marker-end="url(#arw)"/>
+          <line x1="132" y1="100" x2="218" y2="100" stroke="#7a1f12" stroke-dasharray="4 3" marker-end="url(#arwA)"/>
+          <line x1="302" y1="100" x2="388" y2="100" stroke="#7a1f12" stroke-dasharray="4 3" marker-end="url(#arwA)"/>
+          <text x="280" y="140" text-anchor="middle" font-size="9.5" fill="#6b675f">small ε = tight balance, more overflow churn · large ε = looser, cheaper</text>
+        </g>
+      </svg>
+      <figcaption>New SVG: the overflow walk. The guarantee — <em>no node ever exceeds <code>(1+ε)×</code> average</em> — holds while a membership change still moves only a bounded fraction of keys.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Why vnodes aren't enough</b> They balance the keyspace but assume keys are equally popular. A viral key (or live connections in a cache / LB) hammers its one home node.</div>
+      <div class="fact"><b>The mechanism</b> Pick slack <code>ε &gt; 0</code>; cap each node at <code>(1+ε)×</code> average. A key whose home is at capacity walks clockwise to the next node with room.</div>
+      <div class="fact blue"><b>The knob ε</b> Small ε → tight balance, more overflow reassignment on change. Large ε → looser cap, cheaper.</div>
+      <div class="fact blue"><b>In the wild</b> Google Cloud load balancing and HAProxy <code>balance</code> modes use exactly this. The answer to "vnodes balanced my keyspace but node 7 is still on fire."</div>
+    </div>
+    <div class="myth"><div class="m">✗ "Vnodes guarantee even load, so no node can overload"</div><div class="t">✓ Vnodes balance keyspace, not popularity; bounded loads cap actual load</div></div>
+    <div class="rule"><span>🔥 Memory rule:</span> Bounded loads (Mirrokni–Thorup–Zadimoghaddam 2016)<sup><a href="#s3" id="r3">3</a></sup> caps each node at <span>(1+ε)× average</span> and overflows clockwise — guaranteeing the cap while keeping movement bounded.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Why don't vnodes solve a viral key? <span class="ans">→ they balance keyspace, not popularity; one key = one home</span></li>
+      <li>What does a full node do with a new key? <span class="ans">→ overflow clockwise to the next node with room</span></li>
+      <li>What does ε trade off? <span class="ans">→ tight balance vs overflow churn on change</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= SECTION 5 ================= -->
+  <section class="lvl" id="l5">
+    <div class="lvltop"><span class="num">5</span><h2>You may not need a ring</h2></div>
+    <p class="tagline">The ring is the famous answer, not the only one — and often not the best one. Two alternatives that drop the ring entirely.</p>
+    <figure>
+      <svg viewBox="0 0 560 180" role="img" aria-label="Rendezvous hashing: for a key compute weight against every node and pick the argmax; jump hash maps a key to a bucket 0 to N-1">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <!-- HRW -->
+          <text x="150" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">RENDEZVOUS (HRW) — pick the argmax</text>
+          <circle cx="150" cy="48" r="9" fill="#1f3a5a"/><text x="150" y="78" text-anchor="middle" font-size="9" fill="#111110">key k</text>
+          <g font-size="9.5" fill="#111110">
+            <rect x="40" y="100" width="64" height="30" rx="6" fill="#fff" stroke="#d8d4c8"/><text x="72" y="119" text-anchor="middle">N1 .31</text>
+            <rect x="118" y="100" width="64" height="30" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="150" y="119" text-anchor="middle" fill="#2f5d3a">N2 .87</text>
+            <rect x="196" y="100" width="64" height="30" rx="6" fill="#fff" stroke="#d8d4c8"/><text x="228" y="119" text-anchor="middle">N3 .52</text>
+          </g>
+          <line x1="120" y1="56" x2="80" y2="98" stroke="#6b675f" marker-end="url(#arw)"/>
+          <line x1="150" y1="58" x2="150" y2="98" stroke="#6b675f" marker-end="url(#arw)"/>
+          <line x1="180" y1="56" x2="220" y2="98" stroke="#6b675f" marker-end="url(#arw)"/>
+          <text x="150" y="152" text-anchor="middle" font-size="9" fill="#2f5d3a">highest weight wins → N2</text>
+          <text x="150" y="168" text-anchor="middle" font-size="9" fill="#6b675f">O(N) lookup · uniform argmax → no vnodes needed</text>
+          <line x1="290" y1="10" x2="290" y2="172" stroke="#d8d4c8" stroke-dasharray="4 4"/>
+          <!-- jump hash -->
+          <text x="430" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">JUMP HASH — key → bucket 0…N−1</text>
+          <g font-size="9.5" fill="#111110">
+            <rect x="320" y="56" width="36" height="30" rx="5" fill="#fff" stroke="#d8d4c8"/><text x="338" y="75" text-anchor="middle">0</text>
+            <rect x="360" y="56" width="36" height="30" rx="5" fill="#fff" stroke="#d8d4c8"/><text x="378" y="75" text-anchor="middle">1</text>
+            <rect x="400" y="56" width="36" height="30" rx="5" fill="#f1eee2" stroke="#7a1f12"/><text x="418" y="75" text-anchor="middle">2</text>
+            <rect x="440" y="56" width="36" height="30" rx="5" fill="#fff" stroke="#d8d4c8"/><text x="458" y="75" text-anchor="middle">3</text>
+            <rect x="480" y="56" width="36" height="30" rx="5" fill="#eef5ee" stroke="#2f5d3a"/><text x="498" y="75" text-anchor="middle">4</text>
+          </g>
+          <text x="430" y="106" text-anchor="middle" font-size="9" fill="#6b675f">5 lines · no memory · perfect balance</text>
+          <text x="430" y="124" text-anchor="middle" font-size="9" fill="#2f5d3a">grow/shrink only at the HIGH end ✓</text>
+          <text x="430" y="142" text-anchor="middle" font-size="9" fill="#9a2417">✗ cannot pull an arbitrary middle bucket</text>
+          <text x="430" y="160" text-anchor="middle" font-size="9" fill="#9a2417">✗ no per-node weights</text>
+        </g>
+      </svg>
+      <figcaption>HRW: <code>argmax over nodes of hash(k, node)</code>. Jump hash: a 5-line function mapping k to a bucket in <code>0…N−1</code>.</figcaption>
+    </figure>
+    <table>
+      <tr><th>Scheme</th><th>Lookup</th><th>Balance</th><th>Arbitrary removal</th><th>Weights</th></tr>
+      <tr><td>Ring + vnodes</td><td>O(log N)</td><td>good (needs vnodes)</td><td>yes</td><td>yes (more vnodes)</td></tr>
+      <tr><td>Rendezvous (HRW)</td><td>O(N)</td><td>excellent</td><td>yes</td><td>yes</td></tr>
+      <tr><td>Jump hash</td><td>O(log N)</td><td>perfect</td><td><strong>no</strong> (high-end only)</td><td><strong>no</strong></td></tr>
+    </table>
+    <div class="facts">
+      <div class="fact blue"><b>Rendezvous (HRW) — for free</b> Removing a node only re-homes keys whose top weight was that node → exactly K/N move. Uniform argmax → no log N imbalance, no vnodes.<sup><a href="#s4" id="r4">4</a></sup></div>
+      <div class="fact blue"><b>HRW — the cost</b> <code>O(N)</code> per lookup. Fine for tens-to-low-hundreds of nodes (the common case); for huge N go back to a ring or hierarchy.</div>
+      <div class="fact"><b>Jump hash — the gift</b> 5 lines, zero memory, very fast, perfect balance, minimal remap. Ideal for resharding a numbered range (8→10 shards).<sup><a href="#s5" id="r5">5</a></sup></div>
+      <div class="fact"><b>Jump hash — the trap</b> Grows/shrinks only at the <em>high end</em> and has no weights. Wrong for arbitrary cluster membership where any node may fail. Gorgeous and narrow.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "Consistent hashing means the ring; reach for it by default"</div><div class="t">✓ For small/medium clusters HRW is often simpler &amp; more balanced; jump hash wins for numbered reshards</div></div>
+    <div class="rule"><span>🧰 Memory rule:</span> Ring+vnodes for arbitrary membership at scale · <span>HRW</span> for simple, well-balanced small clusters · <span>jump hash</span> only for a numbered range that grows at the end.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>HRW's lookup cost and why it's still common? <span class="ans">→ O(N); fine for ≤ low-hundreds of nodes, balanced with no vnodes</span></li>
+      <li>When is jump hash wrong? <span class="ans">→ arbitrary middle-node removal; it grows only at the high end</span></li>
+      <li>Which alternative needs no vnodes for balance? <span class="ans">→ HRW (uniform argmax)</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= SECTION 6 ================= -->
+  <section class="lvl" id="l6">
+    <div class="lvltop"><span class="num">6</span><h2>Replication — the preference list</h2></div>
+    <p class="tagline">A key isn't on one node but N. The replicas are the next N <em>distinct physical</em> nodes clockwise — skip duplicate vnodes, prefer distinct racks.</p>
+    <figure>
+      <svg viewBox="0 0 600 230" role="img" aria-label="Walking clockwise to N distinct physical nodes, skipping extra vnodes of an already-picked machine, ideally across distinct racks">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <text x="300" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">PREFERENCE LIST — walk clockwise to N DISTINCT physical nodes</text>
+          <circle cx="170" cy="130" r="84" fill="none" stroke="#6b675f" stroke-width="1.5"/>
+          <!-- key -->
+          <circle cx="170" cy="46" r="5" fill="#1f3a5a"/><text x="170" y="36" text-anchor="middle" font-size="9" fill="#1f3a5a">key k</text>
+          <!-- vnodes around: label physical machine -->
+          <circle cx="226" cy="74" r="8" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/><text x="248" y="70" font-size="9" fill="#2f5d3a">A (r1) ✓</text>
+          <circle cx="254" cy="130" r="8" fill="#f7ecea" stroke="#9a2417" stroke-width="1.5"/><text x="270" y="134" font-size="9" fill="#9a2417">A again ✗ skip</text>
+          <circle cx="226" cy="186" r="8" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/><text x="248" y="190" font-size="9" fill="#2f5d3a">B (r2) ✓</text>
+          <circle cx="114" cy="186" r="8" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/><text x="60" y="190" font-size="9" fill="#2f5d3a">C (r3) ✓</text>
+          <circle cx="86" cy="130" r="8" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <circle cx="114" cy="74" r="8" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <!-- clockwise walk -->
+          <path d="M 176 50 A 78 78 0 0 1 222 70" fill="none" stroke="#6b675f" stroke-dasharray="3 3" marker-end="url(#arw)"/>
+          <text x="170" y="125" text-anchor="middle" font-size="9" fill="#6b675f">N=3 replicas:</text>
+          <text x="170" y="138" text-anchor="middle" font-size="9" fill="#2f5d3a">A, B, C</text>
+          <text x="170" y="151" text-anchor="middle" font-size="9" fill="#6b675f">distinct racks</text>
+          <!-- right callout -->
+          <g>
+            <rect x="356" y="56" width="236" height="150" rx="9" fill="#fbfaf2" stroke="#7a1f12"/>
+            <text x="372" y="80" font-size="10.5" font-weight="700" fill="#7a1f12">Why "distinct"?</text>
+            <text x="372" y="100" font-size="9.5" fill="#9a2417">✗ skip extra vnodes of A — else all</text>
+            <text x="372" y="113" font-size="9.5" fill="#9a2417">3 "replicas" land on machine A</text>
+            <text x="372" y="129" font-size="9.5" fill="#2f5d3a">✓ distinct physical nodes survive a</text>
+            <text x="372" y="142" font-size="9.5" fill="#2f5d3a">single machine failure</text>
+            <text x="372" y="158" font-size="9.5" fill="#2f5d3a">✓ distinct racks / AZs survive a</text>
+            <text x="372" y="171" font-size="9.5" fill="#2f5d3a">rack power loss</text>
+            <text x="372" y="192" font-size="9.5" fill="#1f3a5a">This list = the set R+W&gt;N runs over</text>
+          </g>
+        </g>
+      </svg>
+      <figcaption>This ordered list of distinct physical targets is Dynamo's <strong>preference list</strong> — exactly the set the <code>R + W &gt; N</code> quorum operates over.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Replicas</b> The next N nodes clockwise — but you must reach N <em>distinct physical</em> nodes, skipping extra vnodes of a machine you already picked.</div>
+      <div class="fact"><b>The vnode trap</b> Naïvely taking the next N vnodes can land all "replicas" on one machine — a single failure then loses the key.</div>
+      <div class="fact blue"><b>Rack / AZ awareness</b> Prefer distinct racks / availability zones so a rack power loss doesn't take all N replicas at once.</div>
+      <div class="fact blue"><b>How it composes</b> Hashing decides <em>which</em> nodes hold a key; the quorum (<code>R + W &gt; N</code>) decides <em>how many must agree</em>. Together: the whole storage layer.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "Replicas = the next N vnodes clockwise"</div><div class="t">✓ The next N DISTINCT physical nodes (ideally distinct racks) — or one failure loses the key</div></div>
+    <div class="rule"><span>🗂️ Memory rule:</span> The <span>preference list</span> = next N distinct physical nodes clockwise (across racks). Hashing picks <em>which</em> nodes; quorum picks <em>how many agree</em>.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Why "distinct physical" and not just "next N"? <span class="ans">→ extra vnodes collapse replicas onto one machine</span></li>
+      <li>Why prefer distinct racks/AZs? <span class="ans">→ survive a rack/zone power loss</span></li>
+      <li>How does hashing relate to quorum? <span class="ans">→ which nodes (hash) vs how many agree (R+W&gt;N)</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= QUIZ ================= -->
+  <h2 class="sec" id="quiz">Retrieval practice — mix the sections</h2>
+  <p>Answer from memory; the highlighted option is correct. Each one targets a different failure mode of the naïve mental model.</p>
+  <div class="quiz" id="quiz1">
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q1.</span> Adding one node under <code>hash(key) mod N</code> is catastrophic because…</p>
+      <button class="opt">nearly every key remaps, since mod (N+1) differs for almost all</button>
+      <button class="opt">the new node is placed at a random position on the hash ring</button>
+      <button class="opt">the hash function must be recomputed for the whole keyspace</button>
+      <button class="opt">keys are moved one extra hop clockwise to the nearest node</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q2.</span> Virtual nodes reduce load imbalance on a hash ring because…</p>
+      <button class="opt">they shrink the hash space so fewer collisions ever happen</button>
+      <button class="opt">a node's load is a sum of many arcs, so variance falls as 1/√V</button>
+      <button class="opt">they let each key be owned by several nodes simultaneously</button>
+      <button class="opt">they remove the need to search clockwise for a key's owner</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q3.</span> Consistent hashing with bounded loads handles a hot node by…</p>
+      <button class="opt">rehashing every key with a brand-new hash function instantly</button>
+      <button class="opt">overflowing keys clockwise once a node hits its capacity cap</button>
+      <button class="opt">deleting the least-recently-used keys from the busy node</button>
+      <button class="opt">splitting the hot key across two adjacent nodes on the ring</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q4.</span> Jump consistent hash is the wrong choice when you need to…</p>
+      <button class="opt">reshard a numbered range of shards from eight up to ten</button>
+      <button class="opt">remove an arbitrary failed node and keep the others fixed</button>
+      <button class="opt">map keys to buckets with zero memory and high speed</button>
+      <button class="opt">keep remapping minimal as the bucket count grows at the end</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q5.</span> A lookup on a vnode ring is implemented as…</p>
+      <button class="opt">a linear scan computing a weight for every node, then argmax</button>
+      <button class="opt">a single modulo of the key hash by the node count</button>
+      <button class="opt">a binary search for the first node position clockwise — O(log N)</button>
+      <button class="opt">a recursive jump that doubles the bucket index each step</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q6.</span> Building a replica preference list on a vnode ring, you must…</p>
+      <button class="opt">take the next N vnodes clockwise, whatever machines they map to</button>
+      <button class="opt">pick the N nodes with the highest random weight for the key</button>
+      <button class="opt">place all N replicas on the single node owning the key's arc</button>
+      <button class="opt">walk to N distinct physical nodes, skipping repeats, prefer racks</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Reconstruct the topic from a blank page</h3>
+  <p class="rehearse" style="font-size:.9rem">Draw the ring, then write the six beats in order, one line each, with nothing on screen. Reveal and compare — gaps are your next drill.</p>
+  <div class="rehearse">
+    <textarea placeholder="1. mod N = …  2. ring = …  3. vnodes = …  (keep going to 6, from memory)"></textarea><br>
+    <button class="btn" onclick="document.getElementById('spine').classList.add('show')">Reveal the spine</button>
+    <div class="model" id="spine">
+      <b>1</b> mod N re-scatters ~all keys on a change · <b>2</b> ring: key → first node clockwise; a change moves ~K/N from one neighbour ·
+      <b>3</b> vnodes: load = sum of V arcs, std dev ~1/√V; balance + graceful failure + free weighting ·
+      <b>4</b> bounded loads: cap (1+ε)× avg, overflow clockwise — for popularity skew ·
+      <b>5</b> alternatives: HRW (argmax, O(N), no vnodes), jump hash (no memory, high-end only) ·
+      <b>6</b> replication: preference list = next N distinct physical nodes / racks; quorum R+W&gt;N runs over it.
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Say <em>"grill me on consistent hashing"</em> for mixed
+    no-clue questions, or hand me a real workload (cache, sharded store, L7 load balancer) and I'll walk you through
+    ring vs HRW vs jump hash, your vnode count, and whether you need bounded loads. Want a spaced, interleaved drill set? Just ask.
+  </div>
+
+  <!-- ================= INTERVIEW QUESTIONS ================= -->
+  <h2 class="sec" id="interview">Interview questions on these concepts</h2>
+  <p>Use each one <strong>twice</strong>: answer it yourself from memory (recall), and ask it of a candidate to test depth. Reveal shows what a strong answer <em>hits</em> — a checklist, not a script.</p>
+
+  <details class="iq"><summary>1 · Why not just use <code>hash(key) mod N</code>? Quantify the cost of adding a node.</summary>
+    <div class="a"><b>Hits:</b> mod N is balanced and O(1) but has no locality — when N→N+1, <code>mod (N+1)</code> differs for almost every key, so only ~<code>1/(N+1)</code> stay put. For a store: re-shuffle nearly the whole dataset over the network. For a cache: universal miss → DB stampede. Consistent hashing exists to move only ~K/N.</div></details>
+
+  <details class="iq"><summary>2 · Walk me through a lookup on the ring, and exactly what moves when a node joins.</summary>
+    <div class="a"><b>Hits:</b> both keys and nodes hash into one space (0…2³², Dynamo 2¹⁶⁰); a key is owned by the first node clockwise; lookup = binary search of sorted node positions → O(log N). A join claims only the arc between it and its counter-clockwise neighbour — ~K/N keys, from <em>one</em> node; everything else is untouched. Removal: the arc falls to the clockwise successor.</div></details>
+
+  <details class="iq"><summary>3 · A plain ring with 5 nodes is hot-spotting. Diagnose and fix it, with the math.</summary>
+    <div class="a"><b>Hits:</b> random placement gives unequal arcs — largest ≈ <code>Θ((log N)/N)</code>, hottest node ≈ log N × average; with few nodes one owns 2–3× another. Fix: virtual nodes (V≈100–200). A node's load = sum of V arcs → concentrates at 1/N with std dev ~<code>1/√V</code>. Bonus: vnodes also spread a dead node's load across many successors and make weighting free.</div></details>
+
+  <details class="iq"><summary>4 · Vnodes balanced my keyspace but node 7 is still on fire. Now what?</summary>
+    <div class="a"><b>Hits:</b> vnodes balance the keyspace, not <em>popularity</em> — a viral key has one home. Use consistent hashing with bounded loads: cap each node at <code>(1+ε)×</code> average and overflow a full node's keys clockwise to the next with room. Guarantees no node exceeds the cap while keeping movement bounded. ε trades tightness vs churn. Used by GCP LB and HAProxy.</div></details>
+
+  <details class="iq"><summary>5 · When would you pick rendezvous (HRW) or jump hash over a vnode ring?</summary>
+    <div class="a"><b>Hits:</b> HRW (argmax of <code>hash(k, node)</code>) gives K/N-minimal moves and uniform balance with no vnodes — simpler &amp; more balanced for tens-to-low-hundreds of nodes, at O(N) lookup. Jump hash is 5 lines, zero memory, perfect balance — but only grows/shrinks at the high end and has no weights, so it fits numbered reshards (8→10) and is wrong for arbitrary node failure.</div></details>
+
+  <details class="iq"><summary>6 · How do you place N replicas on a vnode ring? What's the classic bug?</summary>
+    <div class="a"><b>Hits:</b> walk clockwise to N <em>distinct physical</em> nodes, skipping extra vnodes of a machine already chosen — otherwise all replicas can land on one box and a single failure loses the key. Prefer distinct racks/AZs to survive a rack power loss. That ordered list is Dynamo's preference list — the set the <code>R + W &gt; N</code> quorum operates over.</div></details>
+
+  <details class="iq"><summary>7 · How does consistent hashing compose with quorum replication? Draw the boundary.</summary>
+    <div class="a"><b>Hits:</b> two orthogonal decisions. Consistent hashing answers <em>which</em> nodes hold a key (placement + preference list). The quorum answers <em>how many must agree</em> — <code>R + W &gt; N</code> for read-your-writes overlap. Together they form the storage layer: ring decides routing &amp; rebalancing, quorum decides consistency/availability.</div></details>
+
+  <details class="iq"><summary>8 · Whiteboard: design the sharding layer for a 100-node distributed cache. (rehearse this one with me)</summary>
+    <div class="a"><b>Hits:</b> ring in a 2³²/2¹⁶⁰ space; V≈128–256 vnodes/node for balance and weighting; O(log N) successor-search lookup; bounded loads (small ε) because cache items are hot/popular; rebalancing moves only ~K/N on membership change; rack-aware preference list if replicated; mention HRW as a simpler alternative at this scale and why you'd still likely pick the ring (incremental, weighted). <em>Want to run this live? Ask me to grade your whiteboard answer.</em></div></details>
+
+  <!-- ================= CHEAT SHEET ================= -->
+  <h2 class="sec" id="cheat">★ Cheat sheet — claim → engineering</h2>
+  <div class="cheat">
+    <p style="margin-top:0"><strong>Mental models:</strong> mod N = no locality (re-scatters all) · ring = first node clockwise (~K/N moves) · vnodes = sum of arcs (1/√V) · bounded loads = (1+ε) cap + overflow · HRW = argmax, O(N) · jump hash = 5 lines, high-end only · preference list = next N distinct physical nodes.</p>
+    <h3>Translation table</h3>
+    <table>
+      <tr><th>Term</th><th>What it actually is</th></tr>
+      <tr><td>Consistent hashing</td><td>Same ring for keys + nodes so a change moves ~K/N keys</td></tr>
+      <tr><td>Successor search</td><td>Binary search of sorted node positions, clockwise — O(log N)</td></tr>
+      <tr><td>Virtual node / token</td><td>One of V ring positions per physical node; balances via 1/√V</td></tr>
+      <tr><td>Bounded loads</td><td>Per-node cap (1+ε)× average; full node overflows clockwise</td></tr>
+      <tr><td>Rendezvous / HRW</td><td>Assign key to node with highest hash(k,node); no ring</td></tr>
+      <tr><td>Jump hash</td><td>5-line key→bucket (0…N−1); zero memory; high-end resize only</td></tr>
+      <tr><td>Preference list</td><td>Next N distinct physical nodes/racks; the set R+W&gt;N runs over</td></tr>
+    </table>
+    <h3>Three rules for the design round</h3>
+    <p style="margin-bottom:0">① Never <strong>mod N</strong> for cluster membership — it re-scatters everything. ② A bare ring is a <strong>hot-spot generator</strong>; always use vnodes (or HRW). ③ Match scheme to job: <strong>ring</strong> for arbitrary membership, <strong>HRW</strong> for small balanced clusters, <strong>jump hash</strong> only for numbered reshards.</p>
+  </div>
+
+  <div class="nav">
+    <span>📄 Supplement to Book 5, Lessons 6 &amp; 8 · DDIA Ch. 6 (Partitioning)</span>
+    <span><em>Next ▸ interleaved retrieval drills (ask me to build it)</em></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. Karger, Lehman, Leighton, Panigrahy, Levine &amp; Lewin — <em>Consistent Hashing and Random Trees</em> (STOC 1997). The original. <a href="#r1">↩</a></span><br>
+    <span id="s2">2. DeCandia et al. — <em>Dynamo: Amazon's Highly Available Key-value Store</em> (2007). Virtual nodes / tokens and the preference list in practice. <a href="#r2">↩</a></span><br>
+    <span id="s3">3. Mirrokni, Thorup &amp; Zadimoghaddam — <em>Consistent Hashing with Bounded Loads</em> (Google, 2016/2018). The capacity-cap refinement. <a href="#r3">↩</a></span><br>
+    <span id="s4">4. Thaler &amp; Ravishankar — <em>A Name-Based Mapping Scheme for Rendezvous</em> (HRW, 1998). Rendezvous hashing. <a href="#r4">↩</a></span><br>
+    <span id="s5">5. Lamping &amp; Veach — <em>A Fast, Minimal Memory, Consistent Hash Algorithm</em> (Jump hash, Google, 2014). Also: Kleppmann — <em>DDIA</em>, Ch. 6 (Partitioning). <a href="#r5">↩</a></span>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

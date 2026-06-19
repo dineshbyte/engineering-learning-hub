@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Lesson 1 · What a Bloom filter is</title>
+<link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+<div class="kicker">Lesson 1 · Foundation</div>
+<h1>A Bloom filter trades certainty for space</h1>
+
+<div class="mission">
+<strong>Why this, first.</strong> "A probabilistic set" earns nothing. Lead with the
+<em>asymmetry</em>: "definitely not here" is certain, "probably here" is not.
+</div>
+
+<h2>The picture: k hashes, one bit array</h2>
+<figure>
+<img src="images/hero.png" alt="An element passes through three hash functions, setting three bits in an m-bit array. A query checks those bits: any zero means definitely-not-present; all ones means probably-present."/>
+<figcaption>The filter stores no keys &#8212; just one <code>m</code>-bit array. Insert sets k bits; a
+query checks those k bits, and only one of the two answers is certain.</figcaption>
+</figure>
+
+<table>
+<tr><th>Structure</th><th>add(x)</th><th>query(x)</th></tr>
+<tr><td>1 m-bit array, no stored keys</td><td>k hashes set k bits</td><td>read those k bits</td></tr>
+</table>
+
+<h2>The asymmetry is the whole point</h2>
+<figure>
+<img src="images/s1-asymmetry.png" alt="A query checks k bits and asks: is any checked bit 0? If yes, the item is definitely absent (certain, no false negatives). If no and all bits are 1, the item is probably present (may be a false positive, verify)."/>
+<figcaption>If <em>any</em> of x's k bits is 0, x was never added. All k bits set can coincide from
+<em>other</em> items, so "present" is only a probability.</figcaption>
+</figure>
+
+<table>
+<tr><th>Filter says&#8230;</th><th>What you actually know</th><th>Can it be wrong?</th></tr>
+<tr><td><strong>Not present</strong></td><td>The item was never added</td><td>No &#8212; a negative is certain</td></tr>
+<tr><td><strong>Present</strong></td><td>The item is <em>probably</em> there</td><td>Yes &#8212; a false positive</td></tr>
+</table>
+
+<p class="pull"><strong>A Bloom filter never lies about absence; it only ever exaggerates presence.</strong>
+A "no" lets you skip expensive work safely, every time.</p>
+
+<h2>Three operations &#8212; and the one that's missing</h2>
+<table>
+<tr><th>Operation</th><th>What it does</th><th>Wrong?</th></tr>
+<tr><td><code>add(x)</code></td><td>Set the k bits that x hashes to</td><td>&#8212;</td></tr>
+<tr><td><code>contains(x)</code></td><td>"no" if any bit is 0, else "probably"</td><td>FP only</td></tr>
+<tr><td><code>delete(x)</code></td><td><strong>Not supported</strong> &#8212; bits are shared</td><td>n/a</td></tr>
+</table>
+<p>A <em>counting</em> Bloom filter swaps bits for small counters to allow deletes.</p>
+
+<h2>The one piece of math to carry in</h2>
+<table>
+<tr><th>Quantity</th><th>Formula</th></tr>
+<tr><td>False-positive rate</td><td><code>(1 &#8722; e^(&#8722;kn/m))^k</code></td></tr>
+<tr><td>Optimal hash count k</td><td><code>k = (m/n)&#183;ln 2</code></td></tr>
+<tr><td>FP rate at optimal k</td><td><code>(0.5)^k</code></td></tr>
+</table>
+<table>
+<tr><th>Bits per item (m/n)</th><th>Optimal k</th><th>&#8776; False-positive rate</th></tr>
+<tr><td>8</td><td>6</td><td>~2%</td></tr>
+<tr><td>10</td><td>7</td><td>~1%</td></tr>
+<tr><td>16</td><td>11</td><td>~0.05%</td></tr>
+</table>
+<p>That formula is an excellent approximation, not an exact law &#8212; worth saying out loud. The
+headline: ~10 bits/item buys ~1% FP &#8212; a few bytes to skip a disk read, which is why LSM-tree
+stores like RocksDB and Cassandra use them.</p>
+
+<hr/>
+
+<h2>Retrieval practice</h2>
+<p>Cover the answer key below and answer from memory. Effortful recall is what converts this from
+"I read it" to "I own it."</p>
+
+<p><strong>Q1.</strong> Which kind of error can a standard Bloom filter make?</p>
+<ol class="opts" type="a">
+<li>It may say present when the item is absent</li>
+<li>It may say absent when the item is present</li>
+<li>It may be wrong in both possible directions</li>
+<li>It is always exactly correct on membership</li>
+</ol>
+<p><strong>Q2.</strong> Why can't a standard Bloom filter support delete?</p>
+<ol class="opts" type="a">
+<li>The hash functions cannot be run in reverse</li>
+<li>Deletion is disabled to keep queries faster</li>
+<li>A cleared bit may belong to another element</li>
+<li>The bit array is stored in read-only memory</li>
+</ol>
+<p><strong>Q3.</strong> Optimal hash count for m bits and n items is&#8230;</p>
+<ol class="opts" type="a">
+<li>k = (n / m) &#215; ln 2</li>
+<li>k = m &#215; n &#247; ln 2</li>
+<li>k = (m + n) &#215; ln 2</li>
+<li>k = (m / n) &#215; ln 2</li>
+</ol>
+<p><strong>Q4.</strong> A query returns "not present." What is true?</p>
+<ol class="opts" type="a">
+<li>The item may still be there in the set</li>
+<li>The item is definitely not in the set</li>
+<li>The item is probably in the set right</li>
+<li>The result cannot be trusted at all now</li>
+</ol>
+
+<div class="answerkey">
+<strong>Answer key.</strong>
+Q1 &#8212; (a) false positives only; a negative is always certain.
+Q2 &#8212; (c) bits are shared, so clearing one can erase another item.
+Q3 &#8212; (d) k = (m/n)&#183;ln 2.
+Q4 &#8212; (b) "not present" is the one answer that is certain.
+</div>
+
+<h2>Rehearse the answer out loud</h2>
+<p>An interviewer asks: <strong>"Where would you put a Bloom filter in a read-heavy database, and
+what does it buy you?"</strong> Answer in ~60 seconds from memory, <em>then</em> compare with the
+model answer.</p>
+<div class="model">
+<p>Put a small per-segment Bloom filter in front of the on-disk lookup &#8212; in an LSM-tree store
+like RocksDB or Cassandra, one per SSTable. On a read, check the filter first: a "not present" lets
+you <em>skip that disk/SSD read entirely</em>, and because there are no false negatives you never
+skip a key that's actually there. It buys a large cut in read amplification for absent keys, at the
+cost of a few bits of RAM per key and the occasional wasted lookup on a false positive. I'd size it
+for ~1% FP (about 10 bits/key) and revisit if the filter saturates as segments grow &#8212; at which
+point I'd rebuild or partition rather than let the FP rate climb.</p>
+<p class="src"><strong>Why this scores:</strong> leads with the asymmetry (no false negatives &#8594;
+safe to skip), names a real system, and picks a sizing with a stated trade-off.</p>
+</div>
+
+<h3>Primary source</h3>
+<p>Bloom, B. H. (1970), "Space/Time Trade-offs in Hash Coding with Allowable Errors", CACM 13(7).
+The original four-page paper; it frames the whole idea as trading a small, controllable error for a
+large space saving.</p>
+
+<footer>
+<strong>Sources.</strong>
+1. Bloom, B. H. (1970), CACM 13(7).
+2. Mitzenmacher &amp; Broder, "Network Applications of Bloom Filters: A Survey".
+3. Christensen, Roginsky, Jimeno (NIST), "A New Analysis of the False-Positive Rate of a Bloom Filter".
+4. RocksDB Wiki &#8212; Bloom Filter.
+</footer>
+</body>
+</html>

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 9 · Errors, rate limiting &amp; observability (visual)</title>
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<style>
+  :root{--accent:var(--track-rest)}
+  /* chips — pill row (not in lesson.css) */
+  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+  .chip b{color:var(--accent)}
+  /* REST uses .fact / .step as content blocks with an inline <b> label */
+  .facts{grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr))}
+  .fact b,.step b{display:block; font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+  .fact.blue b{color:var(--accent)}
+  .steps{display:grid; grid-template-columns:1fr 1fr; gap:.5rem}
+  /* myth compare grid — lesson.css styles .m/.t but not the container */
+  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.8rem 0; font-size:.9rem}
+  /* bottom footer nav — lesson.css names this .next */
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.85rem}
+  @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="0008-authentication-and-authorization.html" title="Authentication &amp;amp; authorization (visual)">&#8249; Prev</a><a href="0010-async-and-long-running-operations.html" title="Async &amp;amp; long-running operations (visual)">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">REST API</span></span>
+  </nav>
+  <div class="kicker">Lesson 9 · Errors &amp; limits · visual edition</div>
+  <h1>Errors, rate limiting &amp; observability</h1>
+  <p class="meta">~7 min · one diagram per idea · retrieval practice at the end</p>
+
+  <div class="mission">
+    <strong>Why this, first.</strong> These are the "has this person actually <em>operated</em> an API in production?" topics. Anyone ships a happy path. A consistent error contract, principled abuse protection, and real observability are senior table stakes — they decide whether partners can integrate against you and whether you can see what broke at 3am. Mid-level answers stop at "return 500 and log it." This lesson makes the senior version something you can <em>draw</em>.
+  </div>
+
+  <div class="chips">
+    <span class="chip">Errors must be <b>one contract</b></span>
+    <span class="chip">limits protect <b>availability</b></span>
+    <span class="chip">observability <b>sees the failure</b></span>
+    <span class="chip">idempotency <b>survives the retry</b></span>
+  </div>
+
+  <!-- 1 · ERROR BODY ANATOMY -->
+  <h2 class="sec">Error design: one machine-readable contract</h2>
+  <p>The fastest way to make an API "impossible to integrate against" is inconsistent errors — a bare <code>500</code> here, a <code>200</code> with <code>{"ok":false}</code> there, a different shape per endpoint. The senior move is <strong>one consistent, machine-readable error contract across the entire API</strong>. The standard is <strong>RFC 9457, "Problem Details for HTTP APIs"</strong> — media type <code>application/problem+json</code> — which supersedes RFC 7807.<sup><a href="#s1" id="r1">1</a></sup></p>
+  <figure>
+    <svg viewBox="0 0 620 270" role="img" aria-label="Anatomy of a problem+json error body: the five RFC 9457 fields type, title, status, detail, instance, plus extension members code, message, and field-level errors">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="310" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">ANATOMY OF A <tspan font-family="ui-monospace,monospace">problem+json</tspan> ERROR BODY</text>
+        <text x="310" y="34" text-anchor="middle" font-size="9.5" fill="#6b675f">Content-Type: application/problem+json · RFC 9457 (supersedes 7807)</text>
+        <rect x="14" y="44" width="592" height="214" rx="9" fill="#f7ecea" stroke="#9a2417"/>
+        <!-- RFC 9457 core five -->
+        <rect x="28" y="58" width="290" height="124" rx="7" fill="#fff" stroke="#d8d4c8"/>
+        <text x="40" y="74" font-size="9" font-weight="700" fill="#9a2417">RFC 9457 CORE FIELDS</text>
+        <text x="40" y="94" font-size="10" font-family="ui-monospace,monospace" fill="#1f3a5a">"type"</text>
+        <text x="120" y="94" font-size="9" fill="#6b675f">URI naming the problem class</text>
+        <text x="40" y="112" font-size="10" font-family="ui-monospace,monospace" fill="#1f3a5a">"title"</text>
+        <text x="120" y="112" font-size="9" fill="#6b675f">short human summary</text>
+        <text x="40" y="130" font-size="10" font-family="ui-monospace,monospace" fill="#1f3a5a">"status"</text>
+        <text x="120" y="130" font-size="9" fill="#6b675f">HTTP code, e.g. 422</text>
+        <text x="40" y="148" font-size="10" font-family="ui-monospace,monospace" fill="#1f3a5a">"detail"</text>
+        <text x="120" y="148" font-size="9" fill="#6b675f">this-occurrence explanation</text>
+        <text x="40" y="166" font-size="10" font-family="ui-monospace,monospace" fill="#1f3a5a">"instance"</text>
+        <text x="120" y="166" font-size="9" fill="#6b675f">URI of this specific event</text>
+        <!-- extension members -->
+        <rect x="330" y="58" width="262" height="124" rx="7" fill="#eef2f5" stroke="#1f3a5a"/>
+        <text x="342" y="74" font-size="9" font-weight="700" fill="#1f3a5a">EXTENSION MEMBERS (you add)</text>
+        <text x="342" y="94" font-size="10" font-family="ui-monospace,monospace" fill="#7a1f12">"code"</text>
+        <text x="430" y="94" font-size="9" fill="#244a2e">stable, clients branch on it</text>
+        <text x="342" y="112" font-size="9" fill="#6b675f">e.g. "card_declined" — never the title string</text>
+        <text x="342" y="132" font-size="10" font-family="ui-monospace,monospace" fill="#7a1f12">"message"</text>
+        <text x="430" y="132" font-size="9" fill="#6b675f">human, for logs/devs</text>
+        <text x="342" y="152" font-size="10" font-family="ui-monospace,monospace" fill="#7a1f12">"errors"</text>
+        <text x="430" y="152" font-size="9" fill="#6b675f">field-level validation list</text>
+        <text x="342" y="170" font-size="9" fill="#6b675f">which field failed, and why</text>
+        <!-- never leak banner -->
+        <rect x="28" y="194" width="564" height="50" rx="7" fill="#fff" stroke="#9a2417" stroke-dasharray="4 3"/>
+        <text x="44" y="214" font-size="10" font-weight="700" fill="#9a2417">✗ NEVER LEAK INTERNALS</text>
+        <text x="44" y="232" font-size="9" fill="#7a2218">no stack traces · no SQL fragments · no internal ids · no "which layer failed" — that is reconnaissance for an attacker.</text>
+      </g>
+    </svg>
+    <figcaption>Clients branch on a <strong>stable <code>code</code></strong>, humans read the <code>title</code>/<code>message</code>, and <code>errors[]</code> says <em>which field</em> failed — all under one media type.</figcaption>
+  </figure>
+
+  <!-- 2 · STATUS CODE ROUTING -->
+  <p>Pick the <strong>correct status code</strong> — this ties back to Lesson 2 — and never tunnel errors through <code>200</code>; the status line is part of your contract and breaks every intermediary that reads it.<sup><a href="#s3" id="r3">3</a></sup></p>
+  <figure>
+    <svg viewBox="0 0 600 150" role="img" aria-label="Routing an error to a status code: 400 for malformed syntax, 422 for valid syntax but invalid data, 409 for a state conflict; never 200">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="300" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">ROUTE THE FAILURE TO THE RIGHT CODE</text>
+        <rect x="8" y="34" width="180" height="70" rx="9" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="98" y="58" text-anchor="middle" font-size="16" font-weight="700" fill="#9a2417">400</text>
+        <text x="98" y="76" text-anchor="middle" font-size="9.5" fill="#7a2218">malformed syntax</text>
+        <text x="98" y="91" text-anchor="middle" font-size="9" fill="#6b675f">server can't even parse it</text>
+        <rect x="208" y="34" width="180" height="70" rx="9" fill="#fbfaf2" stroke="#7a1f12"/>
+        <text x="298" y="58" text-anchor="middle" font-size="16" font-weight="700" fill="#7a1f12">422</text>
+        <text x="298" y="76" text-anchor="middle" font-size="9.5" fill="#2c2a26">parsed, but invalid</text>
+        <text x="298" y="91" text-anchor="middle" font-size="9" fill="#6b675f">semantic / validation fail</text>
+        <rect x="408" y="34" width="184" height="70" rx="9" fill="#eef2f5" stroke="#1f3a5a"/>
+        <text x="500" y="58" text-anchor="middle" font-size="16" font-weight="700" fill="#1f3a5a">409</text>
+        <text x="500" y="76" text-anchor="middle" font-size="9.5" fill="#1f3a5a">state conflict</text>
+        <text x="500" y="91" text-anchor="middle" font-size="9" fill="#6b675f">collides with current state</text>
+        <text x="300" y="128" text-anchor="middle" font-size="10.5" fill="#9a2417">✗ Don't tunnel any of these through <tspan font-family="ui-monospace,monospace" font-weight="700">200</tspan> — the status line IS the contract.</text>
+      </g>
+    </svg>
+    <figcaption><code>400</code> malformed · <code>422</code> well-formed-but-invalid · <code>409</code> conflict. Same body shape, honest status line.</figcaption>
+  </figure>
+  <div class="myth"><div class="m">✗ Myth: clients should read the human error message to decide what to do.</div>
+  <div class="t">✓ Truth: clients branch on a stable <code>code</code>; the prose is for humans and can be reworded freely.</div></div>
+  <p class="pull"><strong>Clients branch on your error codes, not your error prose</strong> — so make the codes stable and the prose human. The moment you reword a string and a partner's <code>if</code>-statement breaks, you've taught them to never trust your contract again.</p>
+
+  <!-- 3 · TOKEN BUCKET + 429 -->
+  <h2 class="sec">Rate limiting: protect availability and cost</h2>
+  <p>Without limits, one client — buggy retry loop, scraper, or attacker — can exhaust your capacity or your cloud bill. This is OWASP <strong>API4:2023 Unrestricted Resource Consumption</strong>, a top-ten risk for a reason.<sup><a href="#s2" id="r2">2</a></sup> The contract for a throttled request: <code>429 Too Many Requests</code> with <code>Retry-After</code>, plus <code>RateLimit-*</code> headers on <em>every</em> response so well-behaved clients self-throttle <em>before</em> they hit the wall.</p>
+  <figure>
+    <svg viewBox="0 0 620 250" role="img" aria-label="A token bucket refills at a steady rate; each request spends one token; when the bucket is empty the server returns 429 with Retry-After and RateLimit headers">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="310" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">TOKEN BUCKET → 429 WHEN EMPTY</text>
+        <!-- refill -->
+        <text x="92" y="48" text-anchor="middle" font-size="9.5" fill="#2f5d3a">refill: steady rate</text>
+        <line x1="92" y1="54" x2="92" y2="82" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <!-- bucket -->
+        <rect x="50" y="84" width="84" height="96" rx="6" fill="#fbfaf2" stroke="#6b675f"/>
+        <circle cx="72" cy="120" r="7" fill="#eef5ee" stroke="#2f5d3a"/>
+        <circle cx="96" cy="120" r="7" fill="#eef5ee" stroke="#2f5d3a"/>
+        <circle cx="120" cy="120" r="7" fill="#eef5ee" stroke="#2f5d3a"/>
+        <circle cx="84" cy="142" r="7" fill="#eef5ee" stroke="#2f5d3a"/>
+        <circle cx="108" cy="142" r="7" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="92" y="196" text-anchor="middle" font-size="9" fill="#6b675f">cap = burst size</text>
+        <!-- spend one -->
+        <line x1="134" y1="132" x2="186" y2="132" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="160" y="124" text-anchor="middle" font-size="9" fill="#6b675f">spend 1 / req</text>
+        <!-- decision -->
+        <rect x="190" y="100" width="120" height="64" rx="9" fill="#fff" stroke="#1f3a5a"/>
+        <text x="250" y="128" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">token left?</text>
+        <text x="250" y="146" text-anchor="middle" font-size="9" fill="#6b675f">per principal</text>
+        <!-- yes -->
+        <path d="M 310 116 C 340 100, 360 96, 384 92" fill="none" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <text x="352" y="92" text-anchor="middle" font-size="9" fill="#2f5d3a">yes</text>
+        <rect x="386" y="70" width="220" height="44" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="496" y="90" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">200 · served</text>
+        <text x="496" y="105" text-anchor="middle" font-size="9" fill="#244a2e">RateLimit-Remaining decremented</text>
+        <!-- no -->
+        <path d="M 310 150 C 340 166, 360 172, 384 178" fill="none" stroke="#9a2417" marker-end="url(#arwR)"/>
+        <text x="352" y="178" text-anchor="middle" font-size="9" fill="#9a2417">empty</text>
+        <rect x="386" y="150" width="220" height="76" rx="9" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="496" y="170" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">429 Too Many Requests</text>
+        <text x="496" y="188" text-anchor="middle" font-size="9" font-family="ui-monospace,monospace" fill="#7a2218">Retry-After: 30</text>
+        <text x="496" y="204" text-anchor="middle" font-size="9" font-family="ui-monospace,monospace" fill="#7a2218">RateLimit-Limit / -Remaining / -Reset</text>
+        <text x="496" y="219" text-anchor="middle" font-size="8.5" fill="#6b675f">headers sent on EVERY response</text>
+      </g>
+    </svg>
+    <figcaption>Tokens refill steadily; a burst drains the cap, then it's steady-state. Empty bucket → <code>429</code> + <code>Retry-After</code>, so good clients back off on their own.</figcaption>
+  </figure>
+  <div class="facts">
+    <div class="fact"><b>Fixed window</b> Count per calendar window. Trivial, but allows a <em>boundary burst</em> — up to 2× the limit straddling the window edge.</div>
+    <div class="fact"><b>Sliding window</b> Rolling time window (weighted log/counter). Smooths the boundary burst at modest extra state cost.</div>
+    <div class="fact blue"><b>Token bucket</b> Tokens refill at a steady rate; a request spends one; the cap bounds the burst. The common choice — tolerates spiky-but-bounded traffic.</div>
+    <div class="fact blue"><b>Leaky bucket</b> Requests queue and drain at a fixed rate. Smooths <em>output</em> to a constant rate; protects a downstream that hates spikes.</div>
+  </div>
+  <p>Limit per <strong>principal</strong> — API key, account, or user — so one tenant can't starve the rest; fall back to <strong>per-IP</strong> only for unauthenticated traffic. And separate <strong>burst</strong> from <strong>sustained</strong> quotas (e.g. 100/sec burst, 10k/hour sustained) so a legitimate spike isn't punished like sustained abuse.</p>
+
+  <!-- 4 · OBSERVABILITY TRIAD -->
+  <h2 class="sec">Observability: see what actually broke</h2>
+  <p>The three pillars are <strong>logs</strong> (structured/JSON, not free-text), <strong>metrics</strong>, and <strong>traces</strong>. The connective tissue is a <strong>correlation / request id</strong> — W3C <code>traceparent</code> or <code>X-Request-Id</code> — propagated across every service so one request is traceable end to end. Without it, a distributed bug is a needle in N haystacks.</p>
+  <figure>
+    <svg viewBox="0 0 600 230" role="img" aria-label="The observability triad: logs, metrics, and traces, all stitched together by one correlation or request id flowing through every service">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="300" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THE OBSERVABILITY TRIAD, STITCHED BY ONE ID</text>
+        <!-- central id -->
+        <rect x="210" y="96" width="180" height="44" rx="22" fill="#1c1b18" stroke="#1c1b18"/>
+        <text x="300" y="115" text-anchor="middle" font-size="11" font-weight="700" fill="#f3efe3">correlation / request id</text>
+        <text x="300" y="130" text-anchor="middle" font-size="8.5" font-family="ui-monospace,monospace" fill="#e8b3a6">traceparent · X-Request-Id</text>
+        <!-- logs -->
+        <rect x="20" y="40" width="160" height="58" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="100" y="62" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">LOGS</text>
+        <text x="100" y="79" text-anchor="middle" font-size="9" fill="#244a2e">structured JSON</text>
+        <text x="100" y="91" text-anchor="middle" font-size="8.5" fill="#6b675f">not free-text</text>
+        <!-- metrics -->
+        <rect x="220" y="174" width="160" height="56" rx="9" fill="#eef2f5" stroke="#1f3a5a"/>
+        <text x="300" y="196" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">METRICS · RED</text>
+        <text x="300" y="212" text-anchor="middle" font-size="9" fill="#1f3a5a">Rate · Errors · Duration</text>
+        <text x="300" y="224" text-anchor="middle" font-size="8.5" fill="#6b675f">duration = p50/p95/p99</text>
+        <!-- traces -->
+        <rect x="420" y="40" width="160" height="58" rx="9" fill="#fbfaf2" stroke="#7a1f12"/>
+        <text x="500" y="62" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">TRACES</text>
+        <text x="500" y="79" text-anchor="middle" font-size="9" fill="#2c2a26">OpenTelemetry</text>
+        <text x="500" y="91" text-anchor="middle" font-size="8.5" fill="#6b675f">where time goes</text>
+        <!-- connectors -->
+        <line x1="180" y1="86" x2="214" y2="104" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <line x1="420" y1="86" x2="386" y2="104" stroke="#7a1f12" marker-end="url(#arwA)"/>
+        <line x1="300" y1="140" x2="300" y2="172" stroke="#1f3a5a" marker-end="url(#arw)"/>
+      </g>
+    </svg>
+    <figcaption>One id flows through every service, so logs, RED metrics, and OpenTelemetry traces all point at the <em>same</em> request. Define <strong>SLOs and error budgets</strong> so "page someone?" has a numeric answer, not a vibe.</figcaption>
+  </figure>
+  <p>Track <strong>RED metrics</strong> per endpoint — Rate, Errors, Duration — and measure duration as <strong>latency percentiles</strong> (p50/p95/p99), never averages: an average of 50ms hides the p99 of 4s that's losing you the partner.</p>
+  <div class="rule"><span>🛡️ Memory rule:</span> one <span>problem+json</span> contract (stable code, human prose, no leaks) · throttle per principal with <span>token bucket → 429 + Retry-After</span> · see it via logs + RED metrics + traces stitched by one <span>request id</span> · keep retries safe with idempotency keys.</div>
+
+  <p>Tie it back to retries: rate limits and outages <em>cause</em> client retries, and retries on writes cause duplicates — which is exactly why <strong>idempotency keys</strong> (Lesson 3) are the safety net under all of this. Observability tells you it's falling over; idempotency keeps the recovery from corrupting state.</p>
+
+  <!-- RETRIEVAL -->
+  <h2 class="sec">Retrieval practice</h2>
+  <p>Close the lesson in your mind first, then answer from memory. Effortful recall is what converts this from "I read it" to "I own it." Immediate feedback below.</p>
+  <div class="quiz" id="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q1.</span> The current standard contract for HTTP API errors is…</p>
+      <button class="opt">a bare 200 wrapping a custom failure JSON body</button>
+      <button class="opt">a free-text message string clients parse to branch</button>
+      <button class="opt">RFC 9457 Problem Details, application/problem+json</button>
+      <button class="opt">a per-endpoint shape that varies by the resource hit</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q2.</span> A well-formed request that fails validation should return…</p>
+      <button class="opt">400, because any rejected request body is malformed</button>
+      <button class="opt">422, because the syntax parsed but the data is invalid</button>
+      <button class="opt">200, because the server did reach and read the payload</button>
+      <button class="opt">500, because rejecting the input is a server-side fault</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q3.</span> Token bucket is the common rate-limit choice because it…</p>
+      <button class="opt">blocks every burst and forces one constant output rate</button>
+      <button class="opt">counts per calendar window and is the simplest to build</button>
+      <button class="opt">needs zero stored state shared between server instances</button>
+      <button class="opt">allows bursts up to a cap, then refills at a steady rate</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q4.</span> Endpoint latency should be reported and judged on…</p>
+      <button class="opt">percentiles like p95 and p99, never the mean latency</button>
+      <button class="opt">the mean, since it folds in every request in one number</button>
+      <button class="opt">the single fastest response observed across the window</button>
+      <button class="opt">the total request count, divided over the wall-clock time</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h2 class="sec">Rehearse the answer out loud</h2>
+  <p class="rehearse">Interviewer: <strong>"A partner says our API is impossible to integrate against and keeps falling over under their traffic. Redesign the error responses and protect the service."</strong> ~60 seconds, from memory (no scrolling up) — <em>then</em> reveal the model answer and compare.</p>
+  <div class="rehearse">
+    <textarea placeholder="Your 60-second answer, from memory…"></textarea><br>
+    <button class="btn" onclick="document.getElementById('model').classList.add('show')">Reveal model answer</button>
+    <div class="model" id="model">
+      <p>"Three moves. First, <strong>one consistent error contract</strong>: RFC 9457 <code>problem+json</code> everywhere, with a <strong>stable machine-readable code</strong> clients branch on, a human message, and <strong>field-level validation errors</strong> — correct status codes (400 malformed vs 422 validation) and <strong>zero internal leakage</strong>, no stack traces or SQL. Then I'd publish an <strong>error catalog</strong> so partners code against documented codes.</p>
+      <p>Second, <strong>rate limiting</strong>: token bucket per API key, returning <code>429</code> with <code>Retry-After</code> and <code>RateLimit-*</code> headers so good clients back off on their own. Third, make their retries safe with <strong>idempotency keys</strong> on writes. And to actually <em>see</em> where it falls over, I'd instrument with <strong>correlation ids</strong>, structured logs, and <strong>RED metrics</strong> — p95/p99 latency — plus distributed tracing."</p>
+      <p class="src"><strong>Why this scores:</strong> it fixes the DX complaint with a standard contract, protects availability with principled rate limiting, and proves production observability — three distinct senior signals in one answer.</p>
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Want a worked <code>problem+json</code> payload with field-level errors? Curious how token bucket compares to sliding window under a thundering herd? Want me to grade your rehearsal answer or push harder on SLOs and error budgets? Just say so in the chat.
+  </div>
+
+  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Primary source (read this next)</h3>
+  <p>📖 <a href="https://www.rfc-editor.org/rfc/rfc9457.html"><strong>RFC 9457 — "Problem Details for HTTP APIs"</strong></a>: short and concrete; the contract you'll actually quote in design reviews. Then skim <a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/">OWASP API Security Top 10 (2023)</a> for the abuse-and-leakage risks this lesson hardens against.</p>
+
+  <div class="nav">
+    <span>📄 Keep handy: <a href="../reference/api-security-and-auth.html">Errors, rate limiting &amp; auth reference</a></span>
+    <span><a href="../lessons/0008-authentication-and-authorization.html">◂ Prev</a> · <a href="../lessons/0010-async-and-long-running-operations.html"><em>Next ▸ Lesson 10</em></a></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. RFC 9457, <em>Problem Details for HTTP APIs</em> — <a href="https://www.rfc-editor.org/rfc/rfc9457.html">rfc-editor.org</a>. <a href="#r1">↩</a></span><br>
+    <span id="s2">2. OWASP API Security Top 10 (2023) — <a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/">owasp.org</a>. <a href="#r2">↩</a></span><br>
+    <span id="s3">3. RFC 9110, <em>HTTP Semantics</em> (status codes) — <a href="https://www.rfc-editor.org/rfc/rfc9110.html">rfc-editor.org</a>. <a href="#r3">↩</a></span>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

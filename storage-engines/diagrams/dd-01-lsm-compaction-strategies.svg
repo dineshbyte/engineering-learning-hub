@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 560" font-family="sans-serif">
+  <defs>
+    <marker id="al1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>
+    <style>
+      .title{font-size:16px;font-weight:bold;fill:#111}
+      .h{font-size:13px;font-weight:bold;fill:#111}
+      .sst{fill:#dbe7f3;stroke:#2a6099;stroke-width:1.2}
+      .sstL{fill:#dff0e3;stroke:#1f7a1f;stroke-width:1.2}
+      .sstO{fill:#fde7d6;stroke:#b06000;stroke-width:1.2}
+      .lbl{font-size:10px;fill:#222}
+      .sub{font-size:10px;fill:#555}
+      .arr{stroke:#555;stroke-width:1.5;fill:none}
+      .lev{font-size:11px;font-weight:bold;fill:#444}
+      .rng{font-size:8px;fill:#1a5a30}
+      .good{font-size:10.5px;font-weight:bold;fill:#1f7a1f}
+      .bad{font-size:10.5px;font-weight:bold;fill:#b00000}
+    </style>
+  </defs>
+  <rect width="1020" height="560" fill="#ffffff"/>
+  <text x="510" y="26" text-anchor="middle" class="title">Two compaction strategies, opposite trade-offs</text>
+  <line x1="510" y1="46" x2="510" y2="510" stroke="#dcdcdc"/>
+
+  <!-- STCS -->
+  <text x="250" y="70" text-anchor="middle" class="h">Size-tiered (STCS)</text>
+  <text x="40" y="98" class="lev">tier 1 (small)</text>
+  <rect class="sst" x="40" y="106" width="34" height="22"/><rect class="sst" x="80" y="106" width="34" height="22"/><rect class="sst" x="120" y="106" width="34" height="22"/><rect class="sst" x="160" y="106" width="34" height="22"/>
+  <line class="arr" x1="210" y1="117" x2="250" y2="150" marker-end="url(#al1)"/><text x="210" y="140" class="sub">merge 4 →</text>
+  <text x="280" y="170" class="lev">tier 2 (medium)</text>
+  <rect class="sst" x="280" y="178" width="60" height="30"/><rect class="sst" x="346" y="178" width="60" height="30"/>
+  <line class="arr" x1="360" y1="214" x2="300" y2="250" marker-end="url(#al1)"/><text x="330" y="240" class="sub">merge →</text>
+  <text x="180" y="270" class="lev">tier 3 (large)</text>
+  <rect class="sst" x="180" y="278" width="110" height="44"/>
+  <text x="40" y="360" class="sub">merge ~4 same-size tables into the next size up.</text>
+  <text x="40" y="384" class="good">✓ write amp LOW</text>
+  <text x="40" y="406" class="bad">✗ space amp HIGH — ~2× during a merge; a key can</text>
+  <text x="56" y="422" class="bad">linger in several tiers at once.</text>
+
+  <!-- LCS -->
+  <text x="760" y="70" text-anchor="middle" class="h">Leveled (LCS)</text>
+  <text x="540" y="98" class="lev">L0 — overlapping (memtable flushes)</text>
+  <rect class="sstO" x="540" y="106" width="50" height="20"/><rect class="sstO" x="586" y="106" width="50" height="20"/><rect class="sstO" x="632" y="106" width="50" height="20"/>
+  <line class="arr" x1="610" y1="128" x2="610" y2="150" marker-end="url(#al1)"/>
+  <text x="540" y="166" class="lev">L1 — non-overlapping ranges</text>
+  <rect class="sstL" x="540" y="174" width="84" height="24"/><text x="582" y="190" text-anchor="middle" class="rng">A–F</text>
+  <rect class="sstL" x="628" y="174" width="84" height="24"/><text x="670" y="190" text-anchor="middle" class="rng">G–M</text>
+  <rect class="sstL" x="716" y="174" width="84" height="24"/><text x="758" y="190" text-anchor="middle" class="rng">N–T</text>
+  <rect class="sstL" x="804" y="174" width="84" height="24"/><text x="846" y="190" text-anchor="middle" class="rng">U–Z</text>
+  <text x="540" y="236" class="lev">L2 — ~10× bigger, also non-overlapping</text>
+  <g class="sstL">
+    <rect x="540" y="244" width="42" height="20"/><rect x="584" y="244" width="42" height="20"/><rect x="628" y="244" width="42" height="20"/><rect x="672" y="244" width="42" height="20"/><rect x="716" y="244" width="42" height="20"/><rect x="760" y="244" width="42" height="20"/><rect x="804" y="244" width="42" height="20"/><rect x="848" y="244" width="42" height="20"/>
+  </g>
+  <line class="arr" x1="582" y1="198" x2="610" y2="242" marker-end="url(#al1)"/>
+  <text x="600" y="222" class="sub">pick 1 → merge the few overlapping in L2</text>
+  <text x="540" y="360" class="sub">each level non-overlapping; a key is in ≤ 1 SSTable per level.</text>
+  <text x="540" y="384" class="good">✓ read amp LOW (≈ 1 file / level)   ✓ space amp LOW (~1.1×)</text>
+  <text x="540" y="406" class="bad">✗ write amp HIGH — each key rewritten ~T per level</text>
+  <text x="556" y="422" class="bad">→ often 10–30× total.</text>
+</svg>

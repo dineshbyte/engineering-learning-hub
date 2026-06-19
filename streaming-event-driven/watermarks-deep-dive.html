@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watermarks — deep dive · the completeness clock of streaming</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/lesson.css">
+<style>:root{--accent:var(--track-streaming)}
+/* ---- slim rules for classes not in lesson.css ---- */
+figure{text-align:center}
+figure svg,figure img{max-width:min(100%,34rem)}
+img{max-width:100%; height:auto; background:var(--card); border:1px solid var(--line); border-radius:10px}
+.chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+.chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+.chip b{color:var(--accent)}
+.chip.c2 b,.chip.c3 b,.chip.c4 b{color:var(--accent)}
+.toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
+.toc a{text-decoration:none; padding:.15rem 0}
+.lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
+.lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
+.num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
+.lvltop h2{margin:0; font-size:1.24rem}
+.tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
+.fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+.myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
+.rule span{color:var(--accent)}
+details.mc{margin:.5rem 0 0; font-size:.84rem}
+details.mc summary{cursor:pointer; color:var(--good); font-weight:600; list-style:none}
+details.mc summary::before{content:"\25B8 "}
+details.mc[open] summary::before{content:"\25BE "}
+details.mc ul{margin:.4rem 0 0; padding-left:1.1rem}
+details.mc li{margin:.2rem 0}
+details.mc .ans{color:var(--muted)}
+details.iq summary::-webkit-details-marker{display:none}
+details.iq summary{list-style:none}
+details.iq .a{margin-top:.45rem; font-size:.85rem; color:var(--ink); line-height:1.45}
+details.iq .a b{color:var(--accent)}
+.cheat{background:var(--card); border:1px solid var(--line); color:var(--ink); border-radius:10px; padding:1.1rem 1.2rem; margin:1.2rem 0; font-size:.88rem}
+.cheat h3{color:var(--accent); margin:1rem 0 .3rem; font-size:.8rem; letter-spacing:.06em; text-transform:uppercase}
+.nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
+@media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<!-- shared arrowheads -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="exactly-once-kafka-deep-dive.html" title="Exactly-Once in Kafka — Deep Dive">&#8249; Prev</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><a href="watermarks-deep-dive.epub">&#8595; EPUB</a><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Streaming &amp; Event-Driven</span></span>
+  </nav>
+  <div class="kicker">Deep dive · Book 4 · supplement to Lesson 8 · visual edition</div>
+  <h1>Watermarks — the completeness clock of streaming</h1>
+  <p class="meta">~25 min · 5 levels · 3 reused diagrams + new SVGs · interview Qs · interactive recall</p>
+
+  <div class="mission">
+    <strong>Your bar:</strong> redraw — from memory — why a watermark is a <em>guess</em>, how it advances by
+    a <em>min</em> rule, why one idle input freezes a whole pipeline, and the Dataflow-model insight that
+    <em>when a window fires</em> is <strong>not</strong> the watermark. Grounded in Akidau et&nbsp;al.'s
+    <em>Dataflow Model</em><sup><a href="#s1" id="r1">1</a></sup> and the Flink/Beam docs.<sup><a href="#s3" id="r3">3</a></sup>
+  </div>
+
+  <p>One sentence holds the whole topic. Each level just unpacks one chip of it:</p>
+  <div class="chips">
+    <span class="chip">A watermark is a <b>heuristic completeness claim</b> in event time</span>
+    <span class="chip c2">that advances by the <b>min of its inputs</b></span>
+    <span class="chip c3">trading <b>completeness vs latency vs cost</b></span>
+    <span class="chip c4">and it <b>informs</b>, never <b>decides</b>, when a window fires</span>
+  </div>
+
+  <nav class="toc">
+    <a href="#l1">①&nbsp;What it asserts</a><a href="#l2">②&nbsp;Perfect vs heuristic</a>
+    <a href="#l3">③&nbsp;Min rule &amp; idle stall</a><a href="#l4">④&nbsp;Triggers ≠ watermark</a>
+    <a href="#l5">⑤&nbsp;Allowed lateness</a><a href="#usecases">◆&nbsp;Dial settings</a>
+    <a href="#quiz">◆&nbsp;Retrieval quiz</a><a href="#interview">◆&nbsp;Interview Qs</a>
+    <a href="#cheat">★&nbsp;Cheat sheet</a><a href="#review">★&nbsp;Review guide</a>
+  </nav>
+
+  <!-- ============ HERO: the two clocks & the skew ============ -->
+  <figure style="margin-top:1.6rem">
+    <svg viewBox="0 0 640 250" role="img" aria-label="Event time versus processing time. Events occur in event-time order but arrive out of order and late in processing time; the watermark is a moving lower bound chasing the diagonal of true completeness.">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THE TWO CLOCKS — event time vs processing time</text>
+        <!-- axes -->
+        <line x1="70" y1="200" x2="610" y2="200" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="70" y1="200" x2="70" y2="48" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="610" y="222" text-anchor="end" font-size="10" fill="#6b675f">processing time (when you saw it) →</text>
+        <text x="58" y="58" text-anchor="end" font-size="10" fill="#6b675f">event</text>
+        <text x="58" y="70" text-anchor="end" font-size="10" fill="#6b675f">time ↑</text>
+        <!-- ideal diagonal: perfect completeness -->
+        <line x1="70" y1="200" x2="560" y2="60" stroke="#1f3a5a" stroke-dasharray="5 3"/>
+        <text x="470" y="86" font-size="9.5" fill="#1f3a5a">ideal: event time = processing time</text>
+        <!-- watermark curve, lagging below the diagonal -->
+        <path d="M 70 200 C 230 168, 330 150, 430 120 S 560 92, 580 86" fill="none" stroke="#7a1f12" stroke-width="2"/>
+        <text x="430" y="138" font-size="9.5" fill="#7a1f12" font-weight="700">watermark W (a lagging lower bound)</text>
+        <!-- scattered events: out of order & late -->
+        <g fill="#2f5d3a">
+          <circle cx="150" cy="176" r="4"/><circle cx="200" cy="150" r="4"/><circle cx="240" cy="178" r="4"/>
+          <circle cx="300" cy="138" r="4"/><circle cx="350" cy="164" r="4"/><circle cx="410" cy="118" r="4"/>
+        </g>
+        <!-- a late straggler below the watermark -->
+        <circle cx="470" cy="156" r="5" fill="#9a2417"/>
+        <text x="478" y="160" font-size="9.5" fill="#9a2417">late! (below W → would be dropped)</text>
+        <text x="150" y="166" font-size="9" fill="#2f5d3a">on-time events arrive scattered, out of order</text>
+        <!-- skew bracket -->
+        <line x1="540" y1="74" x2="540" y2="98" stroke="#6b675f"/>
+        <text x="548" y="90" font-size="9" fill="#6b675f">skew = how far W lags reality</text>
+      </g>
+    </svg>
+    <figcaption>Memorise this banner. Events happen in event-time order but <em>arrive</em> out of order; the watermark <code>W</code> is a moving lower bound chasing completeness — and the gap is <strong>skew</strong>.</figcaption>
+  </figure>
+
+  <!-- ================= LEVEL 1 ================= -->
+  <section class="lvl" id="l1">
+    <div class="lvltop"><span class="num">1</span><h2>What a watermark actually asserts</h2></div>
+    <p class="tagline">Strip the metaphor: it is one timestamp carried with the data, making a claim about completeness.</p>
+    <figure>
+      <svg viewBox="0 0 600 150" role="img" aria-label="A watermark W carried in the stream asserts that no future record will have a timestamp at or below W; everything to the left of W is claimed complete.">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <!-- timeline of records + watermark marker -->
+          <line x1="20" y1="78" x2="580" y2="78" stroke="#6b675f" marker-end="url(#arw)"/>
+          <text x="580" y="100" text-anchor="end" font-size="10" fill="#6b675f">event time →</text>
+          <!-- records -->
+          <g fill="#2f5d3a" font-size="9" text-anchor="middle">
+            <circle cx="70" cy="78" r="5"/><text x="70" y="64">e1</text>
+            <circle cx="140" cy="78" r="5"/><text x="140" y="64">e2</text>
+            <circle cx="210" cy="78" r="5"/><text x="210" y="64">e3</text>
+            <circle cx="300" cy="78" r="5"/><text x="300" y="64">e4</text>
+          </g>
+          <!-- the watermark marker flowing in the stream -->
+          <g>
+            <rect x="350" y="58" width="40" height="40" rx="6" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+            <text x="370" y="83" text-anchor="middle" font-size="13" font-weight="700" fill="#7a1f12">W</text>
+            <text x="370" y="46" text-anchor="middle" font-size="9" fill="#7a1f12">marker in the stream</text>
+          </g>
+          <!-- claimed-complete region -->
+          <line x1="370" y1="100" x2="370" y2="130" stroke="#7a1f12" stroke-dasharray="3 2"/>
+          <text x="190" y="124" text-anchor="middle" font-size="10" fill="#2f5d3a">✓ claimed COMPLETE: no future record ≤ W</text>
+          <text x="480" y="124" text-anchor="middle" font-size="10" fill="#6b675f">not yet claimed (&gt; W)</text>
+          <!-- monotonic note -->
+          <text x="300" y="16" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">W is a monotonic, non-decreasing lower bound on all FUTURE timestamps</text>
+        </g>
+      </svg>
+      <figcaption><code>W</code> asserts: "event time has advanced to <code>W</code> — no record with timestamp ≤ <code>W</code> arrives from here on." It turns "have I seen all of 12:00–12:05?" into a concrete signal.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Is</b> A single timestamp carried with the data: a monotonic lower bound on every <em>future</em> record's event time.</div>
+      <div class="fact"><b>Why it exists</b> To convert the open-ended "have I seen all the data for this window yet?" into one concrete completeness signal.</div>
+      <div class="fact blue"><b>Like (world)</b> A "mail through &lt;date&gt; has all been delivered" stamp — letters dated earlier won't show up after it.</div>
+      <div class="fact blue"><b>Like (code)</b> A <em>timeout</em> for failure detection: a heuristic the system commits to because it can't wait forever for certainty.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "A watermark is the current processing-time clock"</div><div class="t">✓ It's an event-time lower bound — a claim about completeness, not wall-clock now</div></div>
+    <div class="rule"><span>💧 Memory rule:</span> A watermark is a timeout for completeness — a monotonic lower bound asserting no future event ≤ W will arrive.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What does <code>W</code> claim, precisely? <span class="ans">→ no future record will have timestamp ≤ W</span></li>
+      <li>Monotonic means? <span class="ans">→ it only ever moves forward, never back</span></li>
+      <li>Closest reliability primitive? <span class="ans">→ a timeout — a committed-to heuristic, not a fact</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 2 ================= -->
+  <section class="lvl" id="l2">
+    <div class="lvltop"><span class="num">2</span><h2>Perfect vs heuristic — the tension that defines streaming</h2></div>
+    <p class="tagline">Perfect is rare and clean; heuristic is what you actually run, and it's wrong in one of two ways.</p>
+    <figure>
+      <img src="diagrams/dd-01-watermark-skew.png"
+        alt="Perfect vs heuristic watermarks. A perfect watermark never passes an unseen event, so nothing is ever late. A heuristic watermark is a guess: set it too fast and real events arrive late and get dropped; too slow and windows fire late while state piles up."/>
+      <figcaption><strong>Perfect vs heuristic watermarks.</strong> Perfect never passes an unseen event, so nothing is ever late. Heuristic is a guess — too fast and stragglers drop; too slow and windows fire late while state piles up.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Perfect</b> Needs perfect knowledge of timestamps (in-order partition, hard max delay). Exact → <em>never any late data</em>. Rare.</div>
+      <div class="fact blue"><b>Heuristic</b> Estimates progress, usually "max timestamp seen − bound <code>B</code>" (bounded-out-of-orderness). Being an estimate, it errs.</div>
+    </div>
+    <table>
+      <tr><th>If the watermark is…</th><th>Then…</th><th>You lose</th></tr>
+      <tr><td>too fast (aggressive)</td><td>passes window-end before stragglers arrive; those events are now "late"</td><td>completeness — late data dropped</td></tr>
+      <tr><td>too slow (conservative)</td><td>lags real progress; windows fire long after their data is in</td><td>latency — results delayed, state held longer</td></tr>
+    </table>
+    <div class="myth"><div class="m">✗ "Just set the watermark correctly"</div><div class="t">✓ It's a <em>policy</em>; there is no setting that wins both — only one matched to how late your data runs</div></div>
+    <div class="rule"><span>⚖️ Memory rule:</span> A watermark trades completeness against latency — advance eagerly and drop stragglers, or conservatively and pay in delay and state.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>When is a perfect watermark possible? <span class="ans">→ in-order source or a known hard max delay</span></li>
+      <li>The common heuristic generator? <span class="ans">→ max-seen timestamp minus a bound B</span></li>
+      <li>Too-fast costs ___, too-slow costs ___? <span class="ans">→ completeness; latency (+ state)</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 3 ================= -->
+  <section class="lvl" id="l3">
+    <div class="lvltop"><span class="num">3</span><h2>The min rule — and the idle-partition stall</h2></div>
+    <p class="tagline">Watermarks flow as markers between operators. One propagation rule causes the most common streaming incident.</p>
+    <figure>
+      <img src="diagrams/dd-02-watermark-min-inputs.png"
+        alt="The min rule and the idle-partition stall. An operator's watermark is the minimum across its inputs. If one partition goes idle, its watermark stops advancing, pins the minimum, and every downstream window freezes even though data is flowing on the other inputs."/>
+      <figcaption><strong>The min rule &amp; the idle-partition stall.</strong> An operator's watermark is the <em>minimum</em> across its inputs. One idle partition pins the min and freezes every downstream window — even while the other inputs flow.</figcaption>
+    </figure>
+    <figure>
+      <svg viewBox="0 0 560 180" role="img" aria-label="Three input watermarks 14:05, 14:07 and a stale 13:40 idle partition feed an operator; the output watermark is pinned to the minimum 13:40 until idleness detection excludes the idle input.">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <text x="280" y="16" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">output W = MIN(inputs) — the slowest input governs</text>
+          <!-- inputs -->
+          <rect x="20" y="34" width="120" height="32" rx="7" fill="#fff" stroke="#2f5d3a"/><text x="80" y="55" text-anchor="middle" font-size="10" fill="#244a2e">in A · W=14:05 ▲</text>
+          <rect x="20" y="74" width="120" height="32" rx="7" fill="#fff" stroke="#2f5d3a"/><text x="80" y="95" text-anchor="middle" font-size="10" fill="#244a2e">in B · W=14:07 ▲</text>
+          <rect x="20" y="114" width="120" height="32" rx="7" fill="#f7ecea" stroke="#9a2417"/><text x="80" y="131" text-anchor="middle" font-size="10" fill="#7a2218">in C · W=13:40 ✗ idle</text>
+          <!-- operator -->
+          <rect x="220" y="64" width="120" height="52" rx="10" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <text x="280" y="86" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">operator</text>
+          <text x="280" y="102" text-anchor="middle" font-size="9" fill="#6b675f">W = min(...)</text>
+          <line x1="140" y1="50" x2="218" y2="78" stroke="#6b675f" marker-end="url(#arw)"/>
+          <line x1="140" y1="90" x2="218" y2="90" stroke="#6b675f" marker-end="url(#arw)"/>
+          <line x1="140" y1="130" x2="218" y2="102" stroke="#9a2417" marker-end="url(#arwA)"/>
+          <!-- output -->
+          <rect x="412" y="40" width="130" height="34" rx="8" fill="#f7ecea" stroke="#9a2417"/><text x="477" y="62" text-anchor="middle" font-size="10" fill="#7a2218">W pinned to 13:40 ✗</text>
+          <text x="477" y="92" text-anchor="middle" font-size="9" fill="#9a2417">downstream windows freeze</text>
+          <line x1="340" y1="80" x2="410" y2="62" stroke="#9a2417" marker-end="url(#arwA)"/>
+          <!-- fix -->
+          <rect x="412" y="112" width="130" height="48" rx="8" fill="#eef5ee" stroke="#2f5d3a"/>
+          <text x="477" y="131" text-anchor="middle" font-size="9.5" font-weight="700" fill="#244a2e">withIdleness ✓</text>
+          <text x="477" y="146" text-anchor="middle" font-size="8.5" fill="#244a2e">exclude C → W = 14:05</text>
+          <line x1="340" y1="100" x2="410" y2="128" stroke="#2f5d3a" stroke-dasharray="4 3" marker-end="url(#arwG)"/>
+        </g>
+      </svg>
+      <figcaption>A quiet input's stale watermark pins the min "forever or until it gets data." The dashboard shows records flowing yet <em>nothing emitted</em> — stalled, no error.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Rule</b> An operator's watermark = <em>minimum</em> of all input watermarks (held back further by buffered state with pending timers).</div>
+      <div class="fact"><b>Why min</b> You can't claim "complete up to W" if even one input might still deliver something older than W.</div>
+      <div class="fact blue"><b>The stall</b> An idle input stops advancing → pins the min → downstream windows never fire. The classic silent streaming incident.</div>
+      <div class="fact blue"><b>The fix</b> Idleness detection: after a quiet period, mark the source idle and <em>exclude it from the min</em>; re-include on first record.<sup><a href="#s3" id="r3b">3</a></sup></div>
+    </div>
+    <div class="myth"><div class="m">✗ "Pipeline emits nothing → it must be crashing or back-pressured"</div><div class="t">✓ Often a watermark held hostage by one silent input; fix is <code>withIdleness</code>, not a restart</div></div>
+    <div class="rule"><span>🧊 Memory rule:</span> An operator's watermark is the min of its inputs — so one idle partition freezes the whole pipeline until idleness detection excludes it.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>How does an operator's watermark advance? <span class="ans">→ as the minimum of all its input watermarks</span></li>
+      <li>Why the min, not the max or average? <span class="ans">→ the slowest input could still deliver old data</span></li>
+      <li>One idle partition's symptom + fix? <span class="ans">→ silent stall; withIdleness to exclude it</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 4 ================= -->
+  <section class="lvl" id="l4">
+    <div class="lvltop"><span class="num">4</span><h2>Triggers — <em>when to fire</em> is not the watermark</h2></div>
+    <p class="tagline">The deepest idea, from the Dataflow Model: three questions everyone conflates are actually independent.</p>
+    <figure>
+      <svg viewBox="0 0 600 150" role="img" aria-label="Three independent questions: where in event time (windowing), when in processing time (triggers), and how successive results relate (accumulation). The watermark only informs the when.">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <rect x="14" y="30" width="178" height="86" rx="10" fill="#fff" stroke="#1f3a5a"/>
+          <text x="103" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#1f3a5a">WHERE</text>
+          <text x="103" y="72" text-anchor="middle" font-size="9.5" fill="#6b675f">in event time?</text>
+          <text x="103" y="96" text-anchor="middle" font-size="10.5" fill="#111110">→ windowing</text>
+          <rect x="211" y="30" width="178" height="86" rx="10" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+          <text x="300" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#7a1f12">WHEN</text>
+          <text x="300" y="72" text-anchor="middle" font-size="9.5" fill="#6b675f">in processing time?</text>
+          <text x="300" y="96" text-anchor="middle" font-size="10.5" fill="#111110">→ triggers</text>
+          <rect x="408" y="30" width="178" height="86" rx="10" fill="#fff" stroke="#2f5d3a"/>
+          <text x="497" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#2f5d3a">HOW</text>
+          <text x="497" y="72" text-anchor="middle" font-size="9.5" fill="#6b675f">do results relate?</text>
+          <text x="497" y="96" text-anchor="middle" font-size="10.5" fill="#111110">→ accumulation</text>
+          <text x="300" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">THREE INDEPENDENT QUESTIONS — the watermark only INFORMS the middle one</text>
+          <text x="300" y="136" text-anchor="middle" font-size="9.5" fill="#9a2417">the watermark does NOT decide when a window fires</text>
+        </g>
+      </svg>
+      <figcaption>Where → windowing · When → triggers · How → accumulation. The watermark <em>informs</em> the on-time firing; it does not answer "when".</figcaption>
+    </figure>
+    <figure>
+      <img src="diagrams/dd-03-triggers.png"
+        alt="Triggers decouple firing from the watermark. A window can fire EARLY (speculative partial results before the watermark), ON-TIME (when the watermark passes window-end), and LATE (again when stragglers arrive within allowed lateness), then its state is dropped and truly-late data is discarded."/>
+      <figcaption><strong>Triggers decouple firing from the watermark.</strong> A window can fire EARLY (speculative), ON-TIME (when W passes window-end), and LATE (again, as stragglers arrive) — so a trigger fires <em>more than once</em>.</figcaption>
+    </figure>
+    <table>
+      <tr><th>Accumulation mode</th><th>Each firing emits</th><th>Downstream must</th></tr>
+      <tr><td>Discarding</td><td>only what's new since the last firing (a delta)</td><td>sum the deltas itself</td></tr>
+      <tr><td>Accumulating</td><td>the full result-so-far (overwrites the previous)</td><td>replace the prior value</td></tr>
+      <tr><td>Accumulating + retracting</td><td>a retraction of the old value plus the new one</td><td>apply both for exactness</td></tr>
+    </table>
+    <div class="myth"><div class="m">✗ "The watermark fires the window, exactly once"</div><div class="t">✓ The <em>trigger</em> fires — early, on-time, and late; the watermark only informs the on-time firing</div></div>
+    <div class="rule"><span>🎯 Memory rule:</span> Windowing = where, triggers = when, accumulation = how — so late data isn't a guillotine; the window re-fires and corrects.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>The three independent questions? <span class="ans">→ where (windowing), when (triggers), how (accumulation)</span></li>
+      <li>How many times can a trigger fire? <span class="ans">→ many: early, on-time, late</span></li>
+      <li>Why isn't late data a problem here? <span class="ans">→ late firing + accumulating mode corrects the result</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 5 ================= -->
+  <section class="lvl" id="l5">
+    <div class="lvltop"><span class="num">5</span><h2>Allowed lateness — and the three-way trade-off</h2></div>
+    <p class="tagline">Late firings can't run forever. Allowed lateness is the horizon, and the third dial.</p>
+    <figure>
+      <svg viewBox="0 0 600 200" role="img" aria-label="A timeline showing window-end, then the allowed-lateness horizon during which late firings update the result, then state garbage-collection after which truly-late events go to a side output. Plus a triangle of the three-way trade-off between completeness, latency and cost.">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <!-- lifecycle timeline -->
+          <line x1="20" y1="56" x2="380" y2="56" stroke="#6b675f" marker-end="url(#arw)"/>
+          <text x="200" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">A WINDOW'S LIFETIME</text>
+          <line x1="120" y1="44" x2="120" y2="68" stroke="#7a1f12"/><text x="120" y="38" text-anchor="middle" font-size="9" fill="#7a1f12">W passes end</text>
+          <line x1="280" y1="44" x2="280" y2="68" stroke="#9a2417"/><text x="280" y="38" text-anchor="middle" font-size="9" fill="#9a2417">state GC'd</text>
+          <rect x="120" y="60" width="160" height="20" rx="4" fill="#eef5ee" stroke="#2f5d3a"/>
+          <text x="200" y="74" text-anchor="middle" font-size="9" fill="#244a2e">allowedLateness → late firings update result</text>
+          <text x="60" y="74" text-anchor="middle" font-size="9" fill="#6b675f">on-time</text>
+          <text x="200" y="98" text-anchor="middle" font-size="9" fill="#9a2417">after GC → truly late → side output / dead-letter (never silently)</text>
+          <line x1="280" y1="84" x2="330" y2="96" stroke="#9a2417" stroke-dasharray="3 2" marker-end="url(#arwA)"/>
+          <rect x="332" y="88" width="58" height="22" rx="5" fill="#f7ecea" stroke="#9a2417"/><text x="361" y="103" text-anchor="middle" font-size="8.5" fill="#7a2218">side out</text>
+          <!-- trade-off triangle -->
+          <text x="500" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">THREE DIALS</text>
+          <polygon points="500,40 430,150 570,150" fill="#fbfaf2" stroke="#7a1f12" stroke-width="1.5"/>
+          <text x="500" y="34" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">completeness</text>
+          <text x="424" y="164" text-anchor="middle" font-size="9.5" font-weight="700" fill="#1f3a5a">latency</text>
+          <text x="576" y="164" text-anchor="middle" font-size="9.5" font-weight="700" fill="#8a5a00">cost</text>
+          <text x="500" y="118" text-anchor="middle" font-size="8.5" fill="#6b675f">pick two,</text>
+          <text x="500" y="130" text-anchor="middle" font-size="8.5" fill="#6b675f">pay the third</text>
+        </g>
+      </svg>
+      <figcaption>After <code>W</code> passes window-end, state is kept for <code>allowedLateness</code>; late events re-fire within it. Past the horizon, state is GC'd and truly-late events route to a side output.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Allowed lateness</b> The extra duration a window keeps its state after <code>W</code> passes its end; late events within it re-fire.</div>
+      <div class="fact"><b>After the horizon</b> State is garbage-collected; later events are <em>truly</em> late → drop or route to a side output / dead-letter.</div>
+      <div class="fact blue"><b>Fire early</b> Lower latency, less complete. <b>Wait for W</b> → more complete, higher latency. <b>Hold state longer</b> → tolerate lateness, at memory cost.</div>
+      <div class="fact blue"><b>Dials</b> Watermark, triggers, allowed-lateness set completeness vs latency vs cost. You can't max all three.</div>
+    </div>
+    <div class="myth"><div class="m">✗ "Late data is just dropped and lost"</div><div class="t">✓ Within allowed lateness it re-fires; past it, route to a side output — never silently, if you value your data</div></div>
+    <div class="rule"><span>🎚️ Memory rule:</span> Completeness vs latency vs cost — the three dials are watermark, triggers, and allowed lateness; pick the two your use case needs.</div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What is allowed lateness? <span class="ans">→ how long state is kept past window-end for late firings</span></li>
+      <li>What happens to truly-late events? <span class="ans">→ drop or route to a side output / dead-letter</span></li>
+      <li>The three dials of the trade-off? <span class="ans">→ watermark, triggers, allowed lateness</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= DIAL SETTINGS BY WORKLOAD ================= -->
+  <h2 class="sec" id="usecases">Same primitives, opposite dials — by workload</h2>
+  <p>Grounding: the same windowing primitives, set to opposite ends, for different jobs. This per-workload judgement is the whole point.</p>
+  <table>
+    <tr><th>Workload</th><th>Wants</th><th>Dial settings</th></tr>
+    <tr><td>Fraud check</td><td>Low latency; tolerates re-firing &amp; correction</td><td>aggressive watermark · early + late firings · short state</td></tr>
+    <tr><td>Billing rollup</td><td>Completeness; accepts delay</td><td>conservative watermark · on-time firing · long allowed lateness</td></tr>
+    <tr><td>Live dashboard</td><td>Fast, improving estimate</td><td>frequent early firings · accumulating mode · modest lateness</td></tr>
+    <tr><td>Exact financial sum</td><td>Correctness across late updates</td><td>accumulating + retracting · long allowed lateness · side output for the rest</td></tr>
+    <tr><td>Multi-source join</td><td>Not freezing on a quiet input</td><td><code>withIdleness</code> on every source · watch the min</td></tr>
+  </table>
+  <p class="tagline">Pattern to notice: the dials don't change the <em>engine</em> — they change which of completeness, latency, and cost you pay for. Naming that trade-off out loud is the senior move.<sup><a href="#s2" id="r2">2</a></sup></p>
+
+  <!-- ================= INTERACTIVE RECALL ================= -->
+  <h2 class="sec" id="quiz">Retrieval practice — mix the levels</h2>
+  <p>Reading builds <em>fluency</em> (feels familiar). Recall builds <em>storage</em> (lasts). Answer from memory — instant feedback.</p>
+  <div class="quiz" id="quiz1">
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q1.</span> A watermark <code>W</code> flowing through a pipeline asserts that…</p>
+      <button class="opt">no event with a timestamp at or below W will still arrive from here on</button>
+      <button class="opt">every event seen so far had a timestamp strictly above W</button>
+      <button class="opt">the processing-time clock has now advanced to exactly W</button>
+      <button class="opt">all windows ending before W have already emitted their output</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q2.</span> A heuristic watermark set too <em>fast</em> (too aggressive) costs you…</p>
+      <button class="opt">latency, because windows fire well after their data lands</button>
+      <button class="opt">ordering, because events get reshuffled across the windows</button>
+      <button class="opt">completeness, because real stragglers count as late and drop</button>
+      <button class="opt">memory, because window state is held far longer than needed</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q3.</span> A pipeline emits nothing despite healthy input because one partition went idle. The cause is…</p>
+      <button class="opt">the idle partition is replaying its log from the very first offset</button>
+      <button class="opt">the operator watermark is the minimum across all of its inputs</button>
+      <button class="opt">a Bloom filter on that partition rejected every new record</button>
+      <button class="opt">back-pressure from a downstream sink paused all the sources</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q4.</span> In the Dataflow model, what decides <em>when</em> a window emits a result is the…</p>
+      <button class="opt">watermark, which fires the window exactly once when it passes</button>
+      <button class="opt">window size, which sets a fixed processing-time emit interval</button>
+      <button class="opt">accumulation mode, which controls how late events are merged</button>
+      <button class="opt">trigger, which may fire early, on-time, and late — more than once</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q5.</span> Allowed lateness primarily controls…</p>
+      <button class="opt">how aggressively the watermark advances past unseen events</button>
+      <button class="opt">how long a window keeps state for late firings before GC</button>
+      <button class="opt">the maximum number of partitions an operator may read from</button>
+      <button class="opt">whether the watermark is computed as a min or a max of inputs</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q6.</span> "Accumulating + retracting" mode is needed when downstream…</p>
+      <button class="opt">cannot tolerate any late events arriving after window-end</button>
+      <button class="opt">only ever sees a single on-time firing per window</button>
+      <button class="opt">must stay exact as a window re-fires and corrects its result</button>
+      <button class="opt">runs a perfect watermark and therefore never has late data</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Reconstruct the topic from a blank page</h3>
+  <p class="rehearse" style="font-size:.9rem">Write the five levels in order, one line each, with nothing on screen. Then reveal and compare — gaps are your next drill.</p>
+  <div class="rehearse">
+    <textarea placeholder="1. Watermark asserts = …  2. Perfect vs heuristic = …  3. Min rule = …  (keep going to 5, from memory)"></textarea><br>
+    <button class="btn" onclick="document.getElementById('spine').classList.add('show')">Reveal the spine</button>
+    <div class="model" id="spine">
+      <b>1</b> Watermark = monotonic lower bound; no future event ≤ W (a timeout for completeness) ·
+      <b>2</b> Perfect (rare, no late data) vs heuristic (a guess; too fast drops, too slow lags) — completeness vs latency ·
+      <b>3</b> Operator W = min(inputs); one idle input stalls everything → <code>withIdleness</code> ·
+      <b>4</b> Where=windowing, When=triggers (early/on-time/late, many times), How=accumulation; watermark only informs ·
+      <b>5</b> Allowed lateness keeps state for late firings, then GC + side output; dials = completeness/latency/cost.
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Say <em>"grill me on watermarks"</em> for mixed
+    no-clue questions, or drop a real pipeline and I'll set its watermark / trigger / allowed-lateness dials
+    with you on the completeness↔latency↔cost triangle. Want a spaced, interleaved drill set? Just ask.
+  </div>
+
+  <!-- ================= INTERVIEW QUESTIONS ================= -->
+  <h2 class="sec" id="interview">Interview questions on these concepts</h2>
+  <p>Use each one <strong>twice</strong>: answer it yourself from memory (recall), and ask it of a candidate to test depth. Reveal shows what a strong answer <em>hits</em> — a checklist, not a script.</p>
+
+  <details class="iq"><summary>1 · Define a watermark precisely, and say why it's like a timeout.</summary>
+    <div class="a"><b>Hits:</b> a single, monotonic, non-decreasing timestamp carried with the data; asserts <em>no future record will have event time ≤ W</em>. It's a heuristic the system commits to because it can't wait forever for certainty — exactly like a timeout for failure detection. Red flag: confusing it with the processing-time clock.</div></details>
+
+  <details class="iq"><summary>2 · Perfect vs heuristic watermark — when can you have a perfect one, and what does it buy?</summary>
+    <div class="a"><b>Hits:</b> perfect requires perfect knowledge of timestamps — an in-order single partition or a hard, known max delay; then there is <em>never any late data</em>. Heuristic estimates (max-seen − bound B) and is wrong in one of two directions. Bonus: most real sources are heuristic, so design for late data.</div></details>
+
+  <details class="iq"><summary>3 · Your pipeline is processing records but emitting nothing, with no error. Diagnose.</summary>
+    <div class="a"><b>Hits:</b> an operator's watermark is the <em>min</em> of its inputs; a silent/idle partition's stale watermark pins the min and freezes every downstream window. Fix: idleness detection (<code>withIdleness</code> / idle-source handling) to exclude the idle input, re-include on first record. Not a crash, not back-pressure.</div></details>
+
+  <details class="iq"><summary>4 · Why is the propagation rule a MIN and not a max or average?</summary>
+    <div class="a"><b>Hits:</b> the watermark is a <em>completeness</em> claim; you cannot assert "complete up to W" on the output if even one input might still deliver something older than W. The slowest input governs. Bonus: buffered state with pending event-time timers can hold it back further.</div></details>
+
+  <details class="iq"><summary>5 · Separate windowing, triggers, and accumulation. Where does the watermark fit?</summary>
+    <div class="a"><b>Hits:</b> windowing = <em>where</em> in event time data is grouped; triggers = <em>when</em> output is emitted (early/on-time/late, possibly many times); accumulation = <em>how</em> successive results relate (discarding / accumulating / +retracting). The watermark only <em>informs</em> the on-time firing — it does not decide when the window fires. This is the Dataflow Model's core insight.</div></details>
+
+  <details class="iq"><summary>6 · "But what about late data?" — answer it without dropping anything.</summary>
+    <div class="a"><b>Hits:</b> with late-firing triggers + an accumulating (or +retracting) mode, a straggler arriving after W re-fires the window and <em>corrects</em> the result. Allowed lateness bounds how long state is kept; past it, route truly-late events to a side output / dead-letter — never silently. The watermark stops being a guillotine and becomes a completeness estimate.</div></details>
+
+  <details class="iq"><summary>7 · Set the dials for (a) fraud detection vs (b) a monthly billing rollup. (rehearse this one with me)</summary>
+    <div class="a"><b>Hits:</b> name the three-way trade-off — completeness vs latency vs cost — then map. Fraud: aggressive watermark, early + late firings, short state → low latency, tolerate correction. Billing: conservative watermark, on-time firing, long allowed lateness → completeness over speed, accept delay and memory. Same primitives, opposite dials. <em>Want to run this live? Ask me to grade your answer.</em></div></details>
+
+  <!-- ================= CHEAT SHEET (compact) ================= -->
+  <h2 class="sec" id="cheat">★ Cheat sheet — term → what it actually is</h2>
+  <div class="cheat">
+    <p style="margin-top:0"><strong>Mental models:</strong> Watermark = a timeout for completeness · Perfect = never late, rare · Heuristic = a guess, too-fast drops / too-slow lags · Min rule = slowest input governs · Idle stall = silent freeze, fix with idleness detection · Triggers = when (many times) · Accumulation = how firings relate · Allowed lateness = how long state lives.</p>
+    <h3>Translation table</h3>
+    <table>
+      <tr><th>Term</th><th>What it actually is</th></tr>
+      <tr><td>Watermark W</td><td>Monotonic lower bound: no future event ≤ W</td></tr>
+      <tr><td>Skew</td><td>How far W lags true event-time progress</td></tr>
+      <tr><td>Perfect vs heuristic</td><td>Exact (no late data) vs estimated (late data happens)</td></tr>
+      <tr><td>Min rule</td><td>Operator W = min(input watermarks); slowest governs</td></tr>
+      <tr><td>Idle-partition stall</td><td>Silent input pins the min → downstream freezes</td></tr>
+      <tr><td>Trigger</td><td>Decides <em>when</em> to emit: early / on-time / late</td></tr>
+      <tr><td>Accumulation mode</td><td>Discarding / accumulating / +retracting</td></tr>
+      <tr><td>Allowed lateness</td><td>How long window state survives for late firings</td></tr>
+      <tr><td>Side output</td><td>Where truly-late events go (a dead-letter)</td></tr>
+    </table>
+    <h3>Three rules for the on-call chair</h3>
+    <p style="margin-bottom:0">① A watermark is a <strong>guess</strong>, not a fact — a timeout for completeness. ② An operator's watermark is the <strong>min of its inputs</strong>; one idle input freezes everything — reach for <strong>idleness detection</strong>. ③ <em>When</em> a window fires is the <strong>trigger</strong>, not the watermark — so late data corrects, it doesn't have to drop.</p>
+  </div>
+
+  <!-- ================= REVIEW GUIDES ================= -->
+  <h2 class="sec" id="review">★ Review guide &amp; what to read next</h2>
+  <div class="facts" style="grid-template-columns:1fr 1fr">
+    <div class="fact"><b>5-min (weekly)</b> Don't re-read — recall. Say the one sentence; redraw the two clocks + the min rule from memory; recite the five rules; name the three dials blind.</div>
+    <div class="fact"><b>30-min (when stalled)</b> Blank-page reconstruct all five levels; re-derive why min is forced and why triggers must decouple from the watermark; then set the dials for one real pipeline of your own.</div>
+  </div>
+  <p style="font-size:.9rem"><strong>Read next, in order:</strong>
+    ① <a href="https://research.google/pubs/pub43864/">The Dataflow Model — Akidau et al., VLDB 2015</a> (Level 4, read first) ·
+    ② <a href="https://www.oreilly.com/radar/the-world-beyond-batch-streaming-101/">Streaming 101 / 102 — Akidau</a> (the watermark intuition) ·
+    ③ <a href="https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/event-time/generating_watermarks/">Flink — Generating Watermarks &amp; idleness</a> (Level 3) ·
+    ④ <a href="https://beam.apache.org/documentation/programming-guide/#triggers">Beam — triggers &amp; accumulation</a> (Level 4–5).</p>
+
+  <p style="font-size:.9rem">📖 <strong>Primary source:</strong> <em>Streaming Systems</em> (Akidau, Chernyak &amp; Lax, O'Reilly 2018) — the definitive treatment of watermarks and triggers.</p>
+
+  <div class="nav">
+    <span>📄 Supplement to <a href="../index.html">Book 4 · Lesson 8</a></span>
+    <span><em>Next ▸ interleaved retrieval drills (ask me to build it)</em></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. Akidau, Bradshaw, Chambers, Chernyak, Fernández-Moctezuma, Lax, McVeety, Mills, Perry, Schmidt &amp; Whittle, <em>The Dataflow Model</em> (VLDB 2015) — separated windowing, triggering, and accumulation. <a href="#r1">↩</a></span><br>
+    <span id="s2">2. Akidau, Chernyak &amp; Lax, <em>Streaming Systems</em> (O'Reilly, 2018), and "Streaming 101/102" — the definitive treatment of watermarks &amp; triggers. <a href="#r2">↩</a></span><br>
+    <span id="s3">3. <em>Apache Flink documentation</em> — Generating Watermarks, <code>WatermarkStrategy.withIdleness</code>, allowed lateness, side outputs; and <em>Apache Beam</em> — windowing, triggers, accumulation modes, late data. <a href="#r3">↩</a></span><br>
+    <span id="s4">4. Kleppmann, <em>Designing Data-Intensive Applications</em>, Ch. 11 — event time vs processing time; "when is a window complete?"</span>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

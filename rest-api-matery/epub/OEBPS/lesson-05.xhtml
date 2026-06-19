@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Versioning &amp; API evolution</title>
+<link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+<div class="kicker">Lesson 5 · Versioning</div>
+  <h1>Versioning &amp; API evolution</h1>
+  <p class="meta">~7 min · one diagram per idea · retrieval practice at the end</p>
+
+  <div class="mission">
+    <strong>Why this, first.</strong> "How do you version a public API?" is a staple senior question — and the mid-level reflex is to launch straight into <code>/v1</code> vs. headers. The senior move is to <em>reframe</em>: it's really "how do I <strong>evolve</strong> the API without breaking the clients I can't redeploy?" You version only when an evolution is genuinely impossible to make compatibly. This lesson makes that frame — and the breaking-vs-non-breaking line, the three placement strategies, and the deprecation lifecycle — something you can <em>draw</em>.
+  </div>
+
+  <div class="chips">
+    <span class="chip">A version is a <b>last resort</b></span>
+    <span class="chip">so evolve <b>compatibly</b> first</span>
+    <span class="chip">only <b>add</b>, never remove</span>
+    <span class="chip">and clients <b>tolerate</b> the rest</span>
+  </div>
+
+  <!-- HERO: the trap -->
+  <figure>
+    <img src="images/l05-d1.png" alt="A version is not a packaging choice; its real cost is permanent support burden, forced migrations, and a combinatorial test matrix"/>
+    <figcaption>Treat versioning as packaging and you'll mint one per change, fragment clients, and maintain five parallel surfaces forever. <strong>The best version is often no new version.</strong></figcaption>
+  </figure>
+
+  <div class="rule"><span>♻️ Memory rule:</span> Evolve <em>compatibly</em> first — only ADD (new optional fields, new endpoints), never remove, rename, or repurpose; build <em>tolerant readers</em> (Postel's law: ignore unknown fields). Version <em>only</em> when a change is genuinely breaking.</div>
+
+  <!-- THE LINE: breaking vs non-breaking -->
+  <h2 class="sec">The line that decides everything</h2>
+  <p>Every evolution question collapses to one classification: is the change <strong>breaking</strong> or <strong>non-breaking</strong>? Get this line right and the rest is mechanics.</p>
+  <figure>
+    <img src="images/l05-d2.png" alt="Non-breaking changes are pure additions shipped in place; breaking changes remove, rename, retype, or tighten and force a new version"/>
+    <figcaption>The catch on enum values: adding one is safe <em>only if</em> clients already ignore values they don't recognize. Server only adds; client only tolerates.<sup><a href="#s3" id="r3">3</a></sup></figcaption>
+  </figure>
+  <div class="myth"><div class="m">✗ Myth: "any change to the response shape needs a new version."</div>
+  <div class="t">✓ Truth: pure additions are non-breaking — ship them in place, no version, if your readers are tolerant.</div></div>
+
+  <!-- THREE STRATEGIES -->
+  <h2 class="sec">Where the version lives: three strategies</h2>
+  <p>Once a change is genuinely breaking, you must place the version somewhere. There's no free option — each buys clarity in one dimension and pays for it in another.</p>
+  <figure>
+    <img src="images/l05-d3.png" alt="Three placement strategies: URI path, custom header, and media-type negotiation, each with one trade-off"/>
+    <figcaption>Azure's guidance frames these the same way: there's no universally right answer — the choice follows your clients and tooling, not dogma. In an interview, state your pick <em>and</em> name its trade-off.<sup><a href="#s3">3</a></sup></figcaption>
+  </figure>
+
+  <!-- HOW EXEMPLARS DO IT -->
+  <h2 class="sec">How the exemplars actually do it</h2>
+  <p>Two reference points worth quoting by name, because they encode the senior instinct — <em>never break a deployed client silently.</em></p>
+  <div class="facts">
+    <div class="fact"><b>Stripe · pin per account</b> Your version is fixed when you first integrate; you upgrade explicitly, and a single request can override with a header. A server-side change never silently reshapes an existing integration.<sup><a href="#s1" id="r1">1</a></sup></div>
+    <div class="fact blue"><b>GitHub · date in a header</b> A date-based version sent in <code>X-GitHub-Api-Version</code> — the header strategy paired with calendar versioning (<code>2024-10-01</code>).<sup><a href="#s2" id="r2">2</a></sup></div>
+    <div class="fact"><b>Date vs semver = labeling</b> <code>2024-10-01</code> vs <code>v2</code> is a labeling choice, not a strategy. Both expose only <strong>major</strong> versions; minors/patches are the compatible changes you ship in place.</div>
+    <div class="fact blue"><b>Pinning is the real move</b> Per-account pinning converts "we changed the API" from a client-breaking event into a client-<em>controlled</em> one. That's the senior signal.</div>
+  </div>
+
+  <!-- DEPRECATION LIFECYCLE -->
+  <h2 class="sec">Deprecation is a lifecycle, not a delete</h2>
+  <p>The version is the easy half. Retiring the old one without burning integrators is where seniority shows.</p>
+  <figure>
+    <img src="images/l05-d4.png" alt="Evolution timeline: v1 live, then deprecate with Deprecation and Sunset headers while v2 runs in parallel, then retire after usage drains"/>
+    <figcaption><code>Deprecation</code> + <code>Sunset</code> (RFC 8594) ride in every response so even silent clients carry the warning; you sunset only once real usage on v1 has genuinely drained.<sup><a href="#s4" id="r4">4</a></sup></figcaption>
+  </figure>
+  <div class="steps">
+    <div class="step"><b>1 · Announce &amp; overlap</b> Publish the change, then run old and new <em>in parallel</em> for a long, generous window — months for a public API, not days.</div>
+    <div class="step"><b>2 · Signal in-band</b> Emit <code>Deprecation</code> and <code>Sunset</code> (RFC 8594) with the retirement date, so even silent clients carry the warning.</div>
+    <div class="step"><b>3 · Communicate out-of-band</b> Changelog, email, docs — reach the humans, not just the code.</div>
+    <div class="step"><b>4 · Monitor, then remove</b> Watch real traffic on the old version; sunset only once usage has drained, not on a calendar guess.</div>
+  </div>
+  <p class="pull"><strong>Pinning is the move that scales.</strong> It turns "we changed the API" from a client-breaking event into a client-controlled one — additive-first, then major, parallel, signaled, monitored, retired.</p>
+
+  <!-- RETRIEVAL -->
+  <h2 class="sec">Retrieval practice</h2>
+  <p>Close the lesson in your mind first, then answer from memory. Effortful recall is what converts "I read it" into "I own it." Immediate feedback below.</p>
+  <div class="quiz" id="quiz">
+    <div class="qa"><p class="q"><span class="qn">Q1.</span> Which API change is genuinely <em>breaking</em>?</p>
+<p class="opt">Adding one brand new optional field onto the request body</p>
+<p class="opt">Adding one brand new endpoint beside the existing routes</p>
+<p class="opt correct">Making one previously optional field required on requests</p>
+<p class="opt">Adding one brand new field onto the standard response body</p>
+</div>
+    <div class="qa"><p class="q"><span class="qn">Q2.</span> The senior reframe of "how do you version?" is…</p>
+<p class="opt">always cut a fresh major version per shipped product change</p>
+<p class="opt correct">evolve compatibly first and version only on real breakage</p>
+<p class="opt">favor headers over the path because they read far cleaner</p>
+<p class="opt">delay any change until the next planned quarterly release</p>
+</div>
+    <div class="qa"><p class="q"><span class="qn">Q3.</span> A "tolerant reader" client is one that…</p>
+<p class="opt">retries each failed request against the previous version</p>
+<p class="opt">accepts only the exact response schema it was built on</p>
+<p class="opt">rejects responses that carry any unexpected extra field</p>
+<p class="opt correct">ignores fields it does not recognize instead of failing</p>
+</div>
+    <div class="qa"><p class="q"><span class="qn">Q4.</span> The RFC 8594 <code>Sunset</code> header is used to…</p>
+<p class="opt correct">declare the date an endpoint or version will be retired</p>
+<p class="opt">declare the version pinned to this particular account</p>
+<p class="opt">declare the cache lifetime allowed for this one payload</p>
+<p class="opt">declare the media type that this response was encoded in</p>
+</div>
+  </div>
+
+  <h2 class="sec">Rehearse the answer out loud</h2>
+  <p class="rehearse">Interviewer: <strong>"We have a public API with thousands of third-party integrations. We need to change the shape of the user object. How do you version it?"</strong> ~60 seconds, from memory (no scrolling up) — then reveal and compare.</p>
+  <div class="rehearse">
+    <br/>
+    
+    <div class="answer" id="model">
+      <p>"First I'd ask whether the change can be <strong>additive</strong>. If we can add the new field alongside the old, deprecate the old, and rely on <strong>tolerant readers</strong> to ignore what they don't use, we avoid a version bump entirely — the cheapest outcome for thousands of integrators we can't redeploy.</p>
+      <p>If it's genuinely <strong>breaking</strong> — renaming, retyping, or dropping a field clients depend on — then I introduce a new <strong>major</strong> version (date-based like Stripe and GitHub, or <code>/v2</code>). Critically, I <strong>pin existing accounts to their current version</strong> so nothing breaks silently, run both in parallel, and emit <code>Deprecation</code> + <code>Sunset</code> (RFC 8594) headers. Then a migration guide, a generous timeline, and I <strong>monitor real usage</strong> before sunsetting. On placement I'd default to the URI path for visibility and routing — accepting it's 'less pure REST' — or a header for clean URLs at the cost of discoverability."</p>
+      <p class="src"><strong>Why this scores:</strong> it avoids needless versions, prevents silent breakage via per-account pinning, and walks a real deprecation lifecycle — additive-first, then major, parallel, signaled, monitored, retired.</p>
+    </div>
+  </div>
+
+  
+
+  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Primary source (read this next)</h3>
+  <p>📖 <a href="https://docs.stripe.com/api/versioning"><strong>"API versioning" — Stripe API docs</strong></a>: the clearest production treatment of per-account pinning and explicit upgrades. Pair it with <a href="https://docs.github.com/en/rest/about-the-rest-api/api-versions">GitHub's API versions</a> for the date-based-header approach.</p>
+
+  
+
+  <footer id="sources">
+    <strong>Sources</strong><br/>
+    <span id="s1">1. Stripe, <em>API versioning</em> — <a href="https://docs.stripe.com/api/versioning">docs.stripe.com</a>. <a href="#r1">↩</a></span><br/>
+    <span id="s2">2. GitHub, <em>API versions</em> — <a href="https://docs.github.com/en/rest/about-the-rest-api/api-versions">docs.github.com</a>. <a href="#r2">↩</a></span><br/>
+    <span id="s3">3. Microsoft, <em>API design best practices</em> — <a href="https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design">learn.microsoft.com</a>. <a href="#r3">↩</a></span><br/>
+    <span id="s4">4. RFC 8594, <em>The Sunset HTTP Header Field</em> — <a href="https://www.rfc-editor.org/rfc/rfc8594.html">rfc-editor.org</a>. <a href="#r4">↩</a></span>
+  </footer>
+</body>
+</html>

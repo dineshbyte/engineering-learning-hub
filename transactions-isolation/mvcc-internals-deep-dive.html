@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MVCC Internals · version chains, visibility &amp; the bloat trap</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/lesson.css">
+<style>:root{--accent:var(--track-transactions)}
+/* ---- slim rules: classes not covered by lesson.css ---- */
+.sans{font-family:ui-sans-serif,system-ui,sans-serif}
+figure{text-align:center}
+figure svg,figure img{max-width:min(100%,34rem); width:auto; height:auto}
+
+/* one-sentence decomposition chips */
+.chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+.chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+.chip b{color:var(--accent)}
+.chip.c2 b,.fact.blue b{color:var(--track-rest)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
+
+/* TOC as a grid */
+.toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
+.toc a{text-decoration:none; padding:.15rem 0}
+
+/* level block */
+.lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
+.lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
+.num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
+.lvltop h2{margin:0}
+.tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
+
+/* fact-card eyebrow + myth grid container (lesson.css styles .myth .m/.t but not the grid) */
+.fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+.myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
+
+/* custom details markers (lesson.css gives the base box) */
+details.mc summary{color:var(--good); list-style:none}
+details.mc summary::before{content:"\25B8 "}
+details.mc[open] summary::before{content:"\25BE "}
+details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
+details.mc .ans{color:var(--muted)}
+details.iq{border-left:3px solid var(--track-rest)}
+details.iq summary{list-style:none; color:var(--ink)}
+details.iq summary::-webkit-details-marker{display:none}
+details.iq[open] summary{color:var(--track-rest)}
+details.iq .a{margin-top:.45rem; font-size:.85rem; line-height:1.45}
+details.iq .a b{color:var(--track-rest)}
+
+/* dark "cheat" panel — recolored with tokens so it reads in both themes */
+.cheat{background:var(--card); border:1px solid var(--line); color:var(--ink); border-radius:10px; padding:1.1rem 1.2rem; margin:1.2rem 0; font-size:.88rem}
+.cheat h3{color:var(--accent); margin:1rem 0 .3rem; font-size:.8rem; letter-spacing:.06em; text-transform:uppercase}
+.cheat a{color:var(--accent)} .cheat th{color:var(--muted)} .cheat code{background:var(--chip); color:var(--ink)}
+
+/* footer prev/next nav */
+.nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
+
+@media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<!-- shared arrowheads -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="transactions-isolation-fundamentals.html" title="Transactions &amp;amp; Isolation — visual fundamentals">&#8249; Prev</a><a href="ssi-deep-dive.html" title="SSI — Serializable Snapshot Isolation, visual deep dive">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><a href="mvcc-internals-deep-dive.epub">&#8595; EPUB</a><span style="color:var(--muted)">Transactions &amp; Isolation</span></span>
+  </nav>
+  <div class="kicker">Deep dive · supplement to Book 2, Lesson 4 · visual edition</div>
+  <h1>MVCC internals — version chains, visibility &amp; the bloat trap</h1>
+  <p class="meta">~25 min · 5 levels · Postgres vs InnoDB · interview questions · interactive recall</p>
+
+  <div class="mission">
+    <strong>Your bar:</strong> on a whiteboard, draw how a row version is stored, how a snapshot decides which version it sees, and why one forgotten transaction bloats a whole database — then name the 3 a.m. page each engine gives you. Grounded in <em>DDIA</em> Ch. 7, the PostgreSQL "Concurrency Control" &amp; "Routine Vacuuming" docs, and InnoDB "Multi-Versioning".<sup><a href="#s1" id="r1">1</a></sup>
+  </div>
+
+  <p>Lesson 4 told you the <em>behaviour</em>; this unpacks the <em>physics</em>. One sentence holds it:</p>
+  <div class="chips">
+    <span class="chip">A write makes a <b>new version, not an overwrite</b></span>
+    <span class="chip c2">Postgres keeps it <b>in the heap</b>, InnoDB <b>in undo</b></span>
+    <span class="chip c3">a snapshot reads via <b>xmin / xmax</b></span>
+    <span class="chip c4">dead versions need <b>cleanup — or bloat &amp; wraparound</b></span>
+  </div>
+
+  <nav class="toc">
+    <a href="#l1">①&nbsp;Two ways to store versions</a><a href="#l2">②&nbsp;Visibility rules</a>
+    <a href="#l3">③&nbsp;VACUUM &amp; the bloat trap</a><a href="#l4">④&nbsp;XID wraparound</a>
+    <a href="#l5">⑤&nbsp;Loose ends</a><a href="#usecases">◆&nbsp;Where it bites</a>
+    <a href="#quiz">★&nbsp;Quiz</a><a href="#interview">◆&nbsp;Interview Qs</a>
+    <a href="#cheat">★&nbsp;Cheat sheet</a><a href="#sources">★&nbsp;Sources</a>
+  </nav>
+
+  <!-- ============ HERO: the version chain ============ -->
+  <figure style="margin-top:1.6rem">
+    <svg viewBox="0 0 640 230" role="img" aria-label="One logical row is a chain of physical versions; an UPDATE stamps the old version's xmax and inserts a new tuple with a fresh xmin; a snapshot picks the version it is allowed to see">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="24" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">ONE LOGICAL ROW = A CHAIN OF PHYSICAL VERSIONS</text>
+        <!-- v1 -->
+        <rect x="24" y="52" width="160" height="64" rx="9" fill="#f7ecea" stroke="#9a2417" stroke-width="1.5"/>
+        <text x="104" y="72" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9a2417">v1  balance=100</text>
+        <text x="104" y="90" text-anchor="middle" font-size="10" fill="#6b675f">xmin=10  (created)</text>
+        <text x="104" y="105" text-anchor="middle" font-size="10" fill="#9a2417">xmax=20  → DEAD</text>
+        <!-- v2 -->
+        <rect x="240" y="52" width="160" height="64" rx="9" fill="#fff" stroke="#1f3a5a" stroke-width="1.5"/>
+        <text x="320" y="72" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1f3a5a">v2  balance=90</text>
+        <text x="320" y="90" text-anchor="middle" font-size="10" fill="#6b675f">xmin=20  (created)</text>
+        <text x="320" y="105" text-anchor="middle" font-size="10" fill="#6b675f">xmax=30  → superseded</text>
+        <!-- v3 -->
+        <rect x="456" y="52" width="160" height="64" rx="9" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
+        <text x="536" y="72" text-anchor="middle" font-size="11.5" font-weight="700" fill="#2f5d3a">v3  balance=70</text>
+        <text x="536" y="90" text-anchor="middle" font-size="10" fill="#6b675f">xmin=30  (created)</text>
+        <text x="536" y="105" text-anchor="middle" font-size="10" fill="#2f5d3a">xmax=0  → LIVE</text>
+        <!-- chain arrows -->
+        <line x1="184" y1="84" x2="238" y2="84" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="400" y1="84" x2="454" y2="84" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="211" y="76" text-anchor="middle" font-size="9" fill="#6b675f">UPDATE</text>
+        <text x="427" y="76" text-anchor="middle" font-size="9" fill="#6b675f">UPDATE</text>
+        <!-- snapshot pointers -->
+        <rect x="40" y="170" width="220" height="40" rx="8" fill="#fbfaf2" stroke="#7a1f12"/>
+        <text x="150" y="186" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7a1f12">Txn started @ xid 25</text>
+        <text x="150" y="200" text-anchor="middle" font-size="9.5" fill="#6b675f">sees v2 (20 done, 30 not yet)</text>
+        <path d="M 150 168 C 200 145, 300 130, 320 118" fill="none" stroke="#7a1f12" stroke-dasharray="4 3" marker-end="url(#arwA)"/>
+        <rect x="380" y="170" width="220" height="40" rx="8" fill="#fbfaf2" stroke="#2f5d3a"/>
+        <text x="490" y="186" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">Txn started @ xid 35</text>
+        <text x="490" y="200" text-anchor="middle" font-size="9.5" fill="#6b675f">sees v3 (30 done)</text>
+        <path d="M 490 168 C 520 145, 540 130, 536 118" fill="none" stroke="#2f5d3a" stroke-dasharray="4 3" marker-end="url(#arwG)"/>
+      </g>
+    </svg>
+    <figcaption>Memorise this banner. Two readers, same row, <em>different versions</em> — the whole of snapshot isolation is just <code>xmin</code>/<code>xmax</code> + "did that xid commit before me?"</figcaption>
+  </figure>
+
+  <!-- ================= LEVEL 1 ================= -->
+  <section class="lvl" id="l1">
+    <div class="lvltop"><span class="num">1</span><h2>Two ways to store versions — heap vs undo</h2></div>
+    <p class="tagline">Same isolation guarantee, opposite on-disk layout. Everything below follows from this fork.</p>
+    <figure>
+      <img src="diagrams/dd-01-mvcc-storage.png"
+        alt="Two MVCC storage models. PostgreSQL keeps every row version in the heap (old versions stay until VACUUM removes them). InnoDB updates the row in place and keeps the old version in an undo log, reconstructing past versions on demand.">
+      <figcaption><strong>Two MVCC storage models.</strong> PostgreSQL keeps every row version in the heap (old versions stay until VACUUM removes them). InnoDB updates the row in place and keeps the old version in an undo log, reconstructing past versions on demand.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Postgres — append to heap</b> An <code>UPDATE</code> does <em>not</em> overwrite: it inserts a brand-new tuple (<code>xmin</code>=current xid) and stamps the old tuple's <code>xmax</code>. Both versions sit in the heap. <code>DELETE</code> just sets <code>xmax</code>.</div>
+      <div class="fact blue"><b>InnoDB — update in place + undo</b> The clustered row is modified in place; the prior version is written as an <em>undo record</em> reached via <code>DB_ROLL_PTR</code>. The table stays the latest; history lives in the undo log.</div>
+      <div class="fact"><b>Postgres tuple header</b> <code>xmin</code> = xid that created it; <code>xmax</code> = xid that deleted/superseded it (0 = live). That's it — two ids per version.</div>
+      <div class="fact blue"><b>InnoDB hidden fields</b> <code>DB_TRX_ID</code> = last txn to touch the row; <code>DB_ROLL_PTR</code> = pointer into the undo log. Old reads walk the undo chain backward.</div>
+    </div>
+    <div class="rule"><span>🗄️ Memory rule:</span> Postgres keeps history <span>in the table</span> (fast latest-row reads, but it bloats and needs VACUUM); InnoDB keeps history <span>in undo</span> (compact table, but old reads pay to walk undo and long readers grow the log).</div>
+    <div class="myth"><div class="m">✗ "An UPDATE overwrites the row in place"</div><div class="t">✓ Postgres inserts a new tuple; InnoDB writes undo first — the old version survives either way</div></div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Where do old versions live in each engine? <span class="ans">→ Postgres heap · InnoDB undo log</span></li>
+      <li>What two ids are in a Postgres tuple header? <span class="ans">→ xmin, xmax</span></li>
+      <li>Which engine's table grows on every write? <span class="ans">→ Postgres (append); InnoDB stays compact</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 2 ================= -->
+  <section class="lvl" id="l2">
+    <div class="lvltop"><span class="num">2</span><h2>Visibility rules — how a snapshot decides</h2></div>
+    <p class="tagline">A snapshot isn't a copy of data — it's a tiny descriptor that judges each version it meets.</p>
+    <figure>
+      <img src="diagrams/dd-02-visibility.png"
+        alt="The visibility test. A version is visible to a snapshot only if its creator (xmin) committed before the snapshot, and its remover (xmax) did not. Two transactions with different snapshots see different versions of the same row.">
+      <figcaption><strong>The visibility test.</strong> A version is visible only if its creator (<code>xmin</code>) committed before the snapshot, and its remover (<code>xmax</code>) did not. Two snapshots see different versions of the same row.</figcaption>
+    </figure>
+    <p class="tagline">A Postgres snapshot is three things captured at snapshot time, checked against the commit log (<code>pg_xact</code>/CLOG):</p>
+    <figure>
+      <svg viewBox="0 0 600 180" role="img" aria-label="A snapshot is xmin oldest running, xmax first unassigned, and xip the in-progress list; visibility needs xmin past-and-committed and xmax not-past">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <rect x="14" y="14" width="178" height="56" rx="9" fill="#fff" stroke="#1f3a5a"/>
+          <text x="103" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">snapshot.xmin</text>
+          <text x="103" y="52" text-anchor="middle" font-size="9.5" fill="#6b675f">oldest xid still running</text>
+          <rect x="211" y="14" width="178" height="56" rx="9" fill="#fff" stroke="#1f3a5a"/>
+          <text x="300" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">snapshot.xmax</text>
+          <text x="300" y="52" text-anchor="middle" font-size="9.5" fill="#6b675f">first id not yet assigned</text>
+          <rect x="408" y="14" width="178" height="56" rx="9" fill="#fff" stroke="#1f3a5a"/>
+          <text x="497" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">xip[ ]</text>
+          <text x="497" y="52" text-anchor="middle" font-size="9.5" fill="#6b675f">ids in progress right now</text>
+          <!-- two gates -->
+          <rect x="40" y="100" width="250" height="64" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+          <text x="165" y="122" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">GATE 1 — xmin is past</text>
+          <text x="165" y="139" text-anchor="middle" font-size="9.5" fill="#244a2e">xmin committed, &lt; snapshot.xmax,</text>
+          <text x="165" y="153" text-anchor="middle" font-size="9.5" fill="#244a2e">not in xip[ ]  (creator visible)</text>
+          <rect x="310" y="100" width="250" height="64" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+          <text x="435" y="122" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">GATE 2 — xmax is NOT past</text>
+          <text x="435" y="139" text-anchor="middle" font-size="9.5" fill="#244a2e">xmax=0/aborted, ≥ snapshot.xmax,</text>
+          <text x="435" y="153" text-anchor="middle" font-size="9.5" fill="#244a2e">or in xip[ ]  (deleter not done)</text>
+          <text x="300" y="92" text-anchor="middle" font-size="10" font-weight="700" fill="#7a1f12">VISIBLE ⇔ both gates pass</text>
+        </g>
+      </svg>
+      <figcaption>Plain English: <strong>you see a version created by a txn that committed before your snapshot, and not yet deleted by a txn that committed before your snapshot.</strong> That is the whole of snapshot isolation.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Read Committed</b> A <em>fresh</em> snapshot per statement → can see others' commits between statements.</div>
+      <div class="fact blue"><b>Repeatable Read / SI</b> One snapshot taken at first read, reused all txn → one consistent view.</div>
+      <div class="fact"><b>InnoDB read view</b> Same logic: low-water id, high-water id, active set — applied <em>while walking undo</em> until <code>DB_TRX_ID</code> is visible.</div>
+      <div class="fact blue"><b>Cost of the check</b> Per tuple, a commit-log (CLOG) lookup to learn "did that xid commit or abort?"</div>
+    </div>
+    <div class="rule"><span>👁️ Memory rule:</span> Visible ⇔ <span>xmin committed in the past</span> AND <span>xmax not committed in the past</span> — two header fields plus one commit-log lookup.</div>
+    <div class="myth"><div class="m">✗ "A snapshot copies the rows it will read"</div><div class="t">✓ It stores xmin/xmax/xip[ ] and judges each version on the fly</div></div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Two conditions for a tuple to be visible? <span class="ans">→ xmin past+committed; xmax not past</span></li>
+      <li>Why does Read Committed see new commits mid-txn? <span class="ans">→ fresh snapshot per statement</span></li>
+      <li>What does the engine consult to test commit/abort? <span class="ans">→ the commit log (CLOG / pg_xact)</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 3 ================= -->
+  <section class="lvl" id="l3">
+    <div class="lvltop"><span class="num">3</span><h2>VACUUM, purge &amp; the long-transaction bloat trap</h2></div>
+    <p class="tagline">Dead versions don't vanish on their own. One forgotten transaction can bloat a whole database — silently.</p>
+    <figure>
+      <img src="diagrams/dd-03-vacuum-bloat.png"
+        alt="The long-transaction bloat trap. VACUUM can only remove versions older than the oldest running transaction's snapshot (the xmin horizon). One long-running or idle-in-transaction connection pins that horizon, so dead tuples pile up and the table bloats — unbounded, with no error.">
+      <figcaption><strong>The long-transaction bloat trap.</strong> VACUUM can only remove versions older than the oldest running transaction's snapshot — the <code>xmin</code> horizon. One idle-in-transaction connection pins that horizon, so dead tuples pile up unbounded, with no error.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>When is a version removable?</b> Once invisible to <em>every</em> snapshot that could ever run again — its <code>xmax</code> committed before the oldest still-running txn.</div>
+      <div class="fact blue"><b>The xmin horizon</b> The <code>xmin</code> of the oldest live txn. VACUUM cannot touch anything that died <em>after</em> it — across the whole DB.</div>
+      <div class="fact"><b>VACUUM vs VACUUM FULL</b> Plain VACUUM (usually autovacuum) frees space <em>for reuse in the table</em>; the file doesn't shrink. Only <code>VACUUM FULL</code> rewrites &amp; shrinks, under an exclusive lock.</div>
+      <div class="fact blue"><b>InnoDB equivalent</b> The <strong>purge</strong> thread reclaims undo + delete-marked rows; a long read view shows up as a growing <strong>history list length</strong>.</div>
+    </div>
+    <div class="rule"><span>🧹 Memory rule:</span> Your cleanup is only ever as current as your <span>oldest open transaction</span> — one <code>idle in transaction</code> connection bloats the entire database, with no error.</div>
+    <div class="myth"><div class="m">✗ "Plain VACUUM returns disk to the OS"</div><div class="t">✓ It marks space reusable inside the table; only VACUUM FULL shrinks the file</div></div>
+    <p class="tagline"><b>Defenses (operational, not magical):</b> cap age with <code>idle_in_transaction_session_timeout</code>; watch <code>pg_stat_activity</code> for ancient <code>xact_start</code> / <code>backend_xmin</code>; alert on <code>n_dead_tup</code>. InnoDB: alert on history list length.</p>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What pins the xmin horizon? <span class="ans">→ the oldest still-running transaction</span></li>
+      <li>Does plain VACUUM shrink the file? <span class="ans">→ no; only VACUUM FULL does</span></li>
+      <li>InnoDB symptom of the same bug? <span class="ans">→ growing history list length</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 4 ================= -->
+  <section class="lvl" id="l4">
+    <div class="lvltop"><span class="num">4</span><h2>The transaction-ID wraparound time bomb</h2></div>
+    <p class="tagline">PostgreSQL-specific, famous, and has taken down real companies. The fix is freezing.</p>
+    <figure>
+      <svg viewBox="0 0 600 220" role="img" aria-label="32-bit xids live on a circle; roughly 2 billion are past and 2 billion future; as the system burns through 2 billion newer xids an old tuple's xmin starts to look in the future and the row vanishes; freezing marks it visible to all">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <text x="300" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">XIDS ARE 32-BIT, COMPARED ON A CIRCLE</text>
+          <circle cx="160" cy="120" r="74" fill="none" stroke="#6b675f" stroke-width="1.5"/>
+          <!-- half labels -->
+          <path d="M 160 46 A 74 74 0 0 1 160 194" fill="#eef5ee" opacity="0.5"/>
+          <path d="M 160 46 A 74 74 0 0 0 160 194" fill="#f7ecea" opacity="0.5"/>
+          <text x="120" y="118" text-anchor="middle" font-size="9.5" fill="#9a2417">~2B "future"</text>
+          <text x="120" y="132" text-anchor="middle" font-size="9.5" fill="#9a2417">invisible</text>
+          <text x="202" y="118" text-anchor="middle" font-size="9.5" fill="#2f5d3a">~2B "past"</text>
+          <text x="202" y="132" text-anchor="middle" font-size="9.5" fill="#2f5d3a">visible</text>
+          <circle cx="160" cy="46" r="4" fill="#7a1f12"/><text x="160" y="40" text-anchor="middle" font-size="9" fill="#7a1f12">now</text>
+          <!-- the danger arrow -->
+          <line x1="248" y1="120" x2="296" y2="120" stroke="#9a2417" stroke-width="1.5" marker-end="url(#arwA)"/>
+          <text x="272" y="112" text-anchor="middle" font-size="8.5" fill="#9a2417">+2B xids</text>
+          <!-- danger box -->
+          <rect x="300" y="48" width="288" height="64" rx="9" fill="#f7ecea" stroke="#9a2417" stroke-width="1.5"/>
+          <text x="444" y="68" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">WITHOUT freezing</text>
+          <text x="444" y="85" text-anchor="middle" font-size="9.5" fill="#7a2218">old xmin=100 flips to "in the future"</text>
+          <text x="444" y="100" text-anchor="middle" font-size="9.5" fill="#7a2218">→ tuple vanishes · silent data loss</text>
+          <!-- fix box -->
+          <rect x="300" y="128" width="288" height="74" rx="9" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
+          <text x="444" y="148" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">FREEZING — the defense</text>
+          <text x="444" y="165" text-anchor="middle" font-size="9.5" fill="#244a2e">VACUUM flags old tuples "committed &amp;</text>
+          <text x="444" y="179" text-anchor="middle" font-size="9.5" fill="#244a2e">visible to all; ignore xmin" → wrap-immune</text>
+          <text x="444" y="195" text-anchor="middle" font-size="9" fill="#6b675f">anti-wraparound autovacuum @ default 200M age</text>
+        </g>
+      </svg>
+      <figcaption>Circular comparison is what lets visibility work without an ever-growing counter — and it's the landmine. Freezing defuses it.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>The bomb</b> 32-bit xids (~4.2B), compared circularly. After ~2B newer xids, an old <code>xmin</code> looks future → the row vanishes. Silent, catastrophic data loss.</div>
+      <div class="fact blue"><b>The defense</b> <strong>Freezing</strong>: VACUUM marks old tuples "committed &amp; visible to everyone — ignore <code>xmin</code>." A frozen tuple is wrap-immune.</div>
+      <div class="fact"><b>Escalation</b> As the oldest unfrozen xid ages (<code>autovacuum_freeze_max_age</code>, default 200M), Postgres runs aggressive anti-wraparound autovacuums.</div>
+      <div class="fact blue"><b>The hard stop</b> If freezing falls too far behind, Postgres <strong>refuses new xids and goes read-only</strong> rather than risk corruption — "DB stopped accepting writes."</div>
+    </div>
+    <div class="rule"><span>⏰ Memory rule:</span> Wraparound is prevented by <span>freezing</span> — marking old tuples visible-to-all so their soon-to-wrap xmin is ignored. Fall behind and the database goes read-only.</div>
+    <div class="myth"><div class="m">✗ "Wraparound is fixed by resetting the counter to zero"</div><div class="t">✓ It's prevented by freezing old tuples; nothing resets the global xid counter</div></div>
+    <p class="tagline">The same long transaction that bloats (§3) <em>also</em> holds back freezing — nudging you toward wraparound. The postmortems (Sentry, Mailchimp, others) all read the same: <em>autovacuum couldn't keep up.</em><sup><a href="#s5" id="r5">5</a></sup></p>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>How wide are xids, and how compared? <span class="ans">→ 32-bit, circularly (~2B past / 2B future)</span></li>
+      <li>What does freezing do? <span class="ans">→ marks tuples visible-to-all; ignore xmin</span></li>
+      <li>What happens if freezing falls too far behind? <span class="ans">→ Postgres goes read-only</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= LEVEL 5 ================= -->
+  <section class="lvl" id="l5">
+    <div class="lvltop"><span class="num">5</span><h2>Loose ends — indexes, SSI &amp; which model wins</h2></div>
+    <p class="tagline">Three things to know before you close the book.</p>
+    <figure>
+      <svg viewBox="0 0 600 170" role="img" aria-label="Secondary indexes carry no version info; SSI is built on top of MVCC snapshots; neither storage model wins, they trade">
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+          <rect x="14" y="20" width="180" height="130" rx="9" fill="#fff" stroke="#d8d4c8"/>
+          <text x="104" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">INDEXES</text>
+          <text x="104" y="64" text-anchor="middle" font-size="9" fill="#6b675f">no version info inside</text>
+          <text x="104" y="84" text-anchor="middle" font-size="9" fill="#6b675f">PG: visibility map</text>
+          <text x="104" y="100" text-anchor="middle" font-size="9" fill="#6b675f">for index-only scans</text>
+          <text x="104" y="120" text-anchor="middle" font-size="9" fill="#6b675f">InnoDB: drop to</text>
+          <text x="104" y="135" text-anchor="middle" font-size="9" fill="#6b675f">clustered + undo</text>
+          <rect x="210" y="20" width="180" height="130" rx="9" fill="#fff" stroke="#1f3a5a"/>
+          <text x="300" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">SSI ⊃ MVCC</text>
+          <text x="300" y="66" text-anchor="middle" font-size="9" fill="#6b675f">Serializable runs on</text>
+          <text x="300" y="81" text-anchor="middle" font-size="9" fill="#6b675f">ordinary MVCC snapshots</text>
+          <text x="300" y="101" text-anchor="middle" font-size="9" fill="#6b675f">+ tracks read/write deps</text>
+          <text x="300" y="121" text-anchor="middle" font-size="9" fill="#6b675f">aborts on the dangerous</text>
+          <text x="300" y="136" text-anchor="middle" font-size="9" fill="#6b675f">structure (write skew)</text>
+          <rect x="406" y="20" width="180" height="130" rx="9" fill="#fbfaf2" stroke="#2f5d3a"/>
+          <text x="496" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">WHICH WINS?</text>
+          <text x="496" y="64" text-anchor="middle" font-size="9" fill="#6b675f">neither — they trade</text>
+          <text x="496" y="84" text-anchor="middle" font-size="9" fill="#6b675f">PG: cheap latest reads,</text>
+          <text x="496" y="99" text-anchor="middle" font-size="9" fill="#6b675f">pay VACUUM + bloat</text>
+          <text x="496" y="119" text-anchor="middle" font-size="9" fill="#6b675f">InnoDB: compact table,</text>
+          <text x="496" y="134" text-anchor="middle" font-size="9" fill="#6b675f">pay undo walk + purge</text>
+        </g>
+      </svg>
+      <figcaption>The bug is always the same shape — <strong>a long transaction starves cleanup</strong> — but it wears a different costume in each engine.</figcaption>
+    </figure>
+    <div class="facts">
+      <div class="fact"><b>Indexes carry no version</b> A PG index points at a heap tuple; visibility lives in the heap, so index-only scans consult the <strong>visibility map</strong>. InnoDB secondary entries are delete-marked on update and often force a drop to the clustered index + undo.</div>
+      <div class="fact blue"><b>Indexed-column updates are pricey</b> Under MVCC, updating an indexed column writes new index entries in both engines — extra cost, extra bloat.</div>
+      <div class="fact"><b>SSI is built on MVCC</b> PostgreSQL <code>SERIALIZABLE</code> (SSI) runs on ordinary snapshots and <em>additionally</em> tracks read/write dependencies, aborting one txn on the dangerous-structure pattern that causes write skew.<sup><a href="#s4" id="r4">4</a></sup></div>
+      <div class="fact blue"><b>Pick your discipline</b> Knowing your engine tells you what you owe it: VACUUM/freeze monitoring for Postgres, undo/history-list + purge monitoring for InnoDB.</div>
+    </div>
+    <div class="rule"><span>🧩 Memory rule:</span> MVCC is the substrate; <span>SSI is the safety layer over it</span>. Neither storage model wins — they trade, and a long transaction starves cleanup in both.</div>
+    <div class="myth"><div class="m">✗ "Serializable replaces MVCC with locks"</div><div class="t">✓ Postgres SSI runs on MVCC snapshots + dependency tracking — same substrate, extra checks</div></div>
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Why is an index-only scan not enough alone? <span class="ans">→ indexes carry no visibility; consult the visibility map</span></li>
+      <li>What does SSI add on top of MVCC? <span class="ans">→ read/write dependency tracking + aborts</span></li>
+      <li>Which storage model is "best"? <span class="ans">→ neither; they trade failure modes</span></li>
+    </ul></details>
+  </section>
+
+  <!-- ================= WHERE IT BITES ================= -->
+  <h2 class="sec" id="usecases">Where each piece bites — production map</h2>
+  <p>The concept, the symptom you actually see, and the lever you pull. This is the difference between reading MVCC and operating it.</p>
+  <table>
+    <tr><th>Internal</th><th>Production symptom</th><th>Lever</th></tr>
+    <tr><td>Heap append (PG)</td><td>Table + index files grow on every UPDATE</td><td>autovacuum tuning; HOT updates</td></tr>
+    <tr><td>Undo log (InnoDB)</td><td>Old-version reads slow; undo tablespace grows</td><td>shorten long readers; watch purge lag</td></tr>
+    <tr><td>Visibility / snapshot</td><td>RR txn doesn't see a concurrent commit</td><td>choose RC vs RR per workload</td></tr>
+    <tr><td>xmin horizon</td><td>"DB got slow and big" — bloat, slow seq scans</td><td><code>idle_in_transaction_session_timeout</code>, alert <code>n_dead_tup</code></td></tr>
+    <tr><td>History list length</td><td>InnoDB reads degrade, purge can't advance</td><td>kill long-open read views</td></tr>
+    <tr><td>Wraparound / freeze</td><td>Warnings → <em>database read-only</em></td><td>anti-wraparound autovacuum; never disable it</td></tr>
+    <tr><td>Indexed-column UPDATE</td><td>Write amplification + index bloat</td><td>avoid updating indexed cols hot-path</td></tr>
+  </table>
+  <p class="tagline">Pattern to notice: nearly every MVCC incident is <strong>one long / idle-in-transaction connection</strong> starving cleanup. Find it in <code>pg_stat_activity</code> first.</p>
+
+  <!-- ================= QUIZ ================= -->
+  <h2 class="sec" id="quiz">Retrieval practice — answer from memory</h2>
+  <p>Reading builds fluency (feels familiar). Recall builds storage (lasts). Pick before you peek — instant feedback.</p>
+  <div class="quiz" id="quiz1">
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q1.</span> On an <code>UPDATE</code>, PostgreSQL and InnoDB differ in that…</p>
+      <button class="opt">Postgres appends a new heap tuple; InnoDB updates in place + undo</button>
+      <button class="opt">Postgres rewrites the page in place; InnoDB appends a new row</button>
+      <button class="opt">Postgres locks the whole table; InnoDB locks only the one row</button>
+      <button class="opt">Postgres skips the index; InnoDB always reindexes the new row</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q2.</span> A PostgreSQL tuple is visible to your snapshot only when its…</p>
+      <button class="opt">xmin aborted and its xmax committed before the snapshot began</button>
+      <button class="opt">xmin committed before the snapshot and xmax has not (or is unset)</button>
+      <button class="opt">xmin and xmax are both larger than the snapshot's xmax value</button>
+      <button class="opt">xmin is in the in-progress list and xmax is zero or invalid</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q3.</span> A table bloats badly while one connection sits idle-in-transaction because…</p>
+      <button class="opt">the idle connection keeps rewriting the same rows over and over</button>
+      <button class="opt">autovacuum is disabled automatically while any transaction is open</button>
+      <button class="opt">VACUUM cannot remove tuples that died after the oldest snapshot's xmin</button>
+      <button class="opt">the idle transaction holds an exclusive lock on the whole table</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q4.</span> Transaction-ID wraparound is prevented by VACUUM…</p>
+      <button class="opt">resetting the global transaction counter back to zero periodically</button>
+      <button class="opt">widening transaction ids from 32 bits to 64 bits on the fly</button>
+      <button class="opt">deleting every tuple whose xmin is older than two billion ago</button>
+      <button class="opt">freezing old tuples so their xmin is ignored for visibility</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q5.</span> The one-line trade-off between the two storage models is…</p>
+      <button class="opt">Postgres is faster at everything; InnoDB is only better at writes</button>
+      <button class="opt">Postgres keeps history in the table (bloat/VACUUM); InnoDB in undo (undo-walk/purge)</button>
+      <button class="opt">InnoDB needs VACUUM while Postgres needs a purge thread</button>
+      <button class="opt">Postgres can't do snapshot isolation without an undo log</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q6.</span> PostgreSQL <code>SERIALIZABLE</code> (SSI) relates to MVCC how?</p>
+      <button class="opt">It runs on ordinary MVCC snapshots and adds read/write dependency tracking</button>
+      <button class="opt">It replaces MVCC entirely with two-phase locking on every row</button>
+      <button class="opt">It is a separate storage engine with no version chains at all</button>
+      <button class="opt">It disables snapshots so every read sees the latest committed row</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Reconstruct the deep dive from a blank page</h3>
+  <p class="rehearse" style="font-size:.9rem">Write the five levels in order, one line each, with nothing on screen. Then reveal and compare — gaps are your next drill.</p>
+  <div class="rehearse">
+    <textarea placeholder="1. Storage = …  2. Visibility = …  3. VACUUM/bloat = …  4. Wraparound = …  5. Loose ends = …"></textarea><br>
+    <button class="btn" onclick="document.getElementById('spine').classList.add('show')">Reveal the spine</button>
+    <div class="model" id="spine">
+      <b>1</b> Storage: PG appends to heap (xmin/xmax), InnoDB updates in place + undo (DB_TRX_ID/DB_ROLL_PTR) ·
+      <b>2</b> Visibility: visible ⇔ xmin past+committed AND xmax not-past; RC = fresh snapshot/stmt, RR = one snapshot ·
+      <b>3</b> Cleanup: VACUUM/purge can't pass the xmin horizon = oldest open txn → one idle txn bloats the whole DB ·
+      <b>4</b> Wraparound: 32-bit circular xids; freezing marks tuples visible-to-all or DB goes read-only ·
+      <b>5</b> Loose ends: indexes carry no visibility; SSI sits on MVCC; neither model wins — they trade.
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Say <em>"grill me on MVCC internals"</em> for mixed no-clue questions, or hand me a real incident ("the DB went read-only", "a table is 4× its row count") and I'll walk you from symptom to root cause to the lever you pull. Want the next deep dive — SSI &amp; write skew? Just ask.
+  </div>
+
+  <!-- ================= INTERVIEW QUESTIONS ================= -->
+  <h2 class="sec" id="interview">Interview questions on these internals</h2>
+  <p>Use each one <strong>twice</strong>: answer from memory (recall), and ask a candidate to test depth. Reveal shows what a strong answer <em>hits</em> — a checklist, not a script.</p>
+
+  <details class="iq"><summary>1 · Walk me through exactly what happens on disk when you <code>UPDATE</code> one row in Postgres vs InnoDB.</summary>
+    <div class="a"><b>Hits:</b> Postgres inserts a <em>new</em> tuple (<code>xmin</code>=current xid), stamps the old tuple's <code>xmax</code>, writes new index entries; the old version stays for VACUUM. InnoDB modifies the clustered row <em>in place</em>, first writing an undo record reached via <code>DB_ROLL_PTR</code>; old readers walk undo backward. Bonus: "no overwrite happens" in either — both keep the prior version.</div></details>
+
+  <details class="iq"><summary>2 · Two transactions read the same row and get different values. Explain the mechanism, precisely.</summary>
+    <div class="a"><b>Hits:</b> each holds a snapshot (xmin/xmax/xip[]); for each version it checks <code>xmin</code> committed-and-past and <code>xmax</code> not-past, using the commit log. Different snapshots → different visible versions of the same logical row. Bonus: RC takes a fresh snapshot per statement; RR/SI takes one at first read.</div></details>
+
+  <details class="iq"><summary>3 · A table is 5× the size of its live row count and seq scans are slow. Diagnose it.</summary>
+    <div class="a"><b>Hits:</b> bloat from dead tuples VACUUM can't reclaim. Find the cause: an old / <code>idle in transaction</code> connection (or a 40-min analytics query) pinning the <code>xmin</code> horizon, so nothing that died after it can be removed — DB-wide. Check <code>pg_stat_activity</code> (<code>xact_start</code>, <code>backend_xmin</code>) and <code>n_dead_tup</code>. Fix the txn, not just run VACUUM. Note plain VACUUM won't shrink the file — only <code>VACUUM FULL</code>.</div></details>
+
+  <details class="iq"><summary>4 · "The database suddenly stopped accepting writes." What's your first hypothesis and why?</summary>
+    <div class="a"><b>Hits:</b> transaction-ID <em>wraparound</em>. Freezing fell behind (autovacuum disabled/starved or blocked by a long txn); the oldest unfrozen xid aged past the threshold, so Postgres went read-only to avoid silent data loss. Recovery: let anti-wraparound autovacuum run (or VACUUM in single-user mode), then kill the long txn and fix monitoring. Cite Sentry/Mailchimp postmortems.</div></details>
+
+  <details class="iq"><summary>5 · Why is updating an <em>indexed</em> column more expensive under MVCC — in both engines?</summary>
+    <div class="a"><b>Hits:</b> a new version means new/changed index entries. Postgres writes new index tuples (unless HOT applies) → index bloat; visibility still lives in the heap, so index-only scans need the visibility map. InnoDB delete-marks the old secondary entry and inserts a new one, and reads via secondary index often drop to clustered + undo. Net: write amplification + extra read cost.</div></details>
+
+  <details class="iq"><summary>6 · A long-running analytics query and bloat — connect the two, and give the operational fix.</summary>
+    <div class="a"><b>Hits:</b> the query's snapshot pins the <code>xmin</code> horizon; VACUUM can't reclaim anything that died after it, so bloat grows for as long as the query runs — and it <em>also</em> holds back freezing. Levers: <code>idle_in_transaction_session_timeout</code>, statement timeouts, route heavy analytics to a replica, alert on ancient <code>xact_start</code> and history list length (InnoDB).</div></details>
+
+  <details class="iq"><summary>7 · How is PostgreSQL <code>SERIALIZABLE</code> built on top of MVCC, and what does it add?</summary>
+    <div class="a"><b>Hits:</b> SSI runs transactions on ordinary MVCC snapshots (no extra locks on reads) and <em>additionally</em> tracks read/write dependencies; when it detects the dangerous-structure pattern (rw-antidependencies forming a cycle) that causes write skew, it aborts one transaction. MVCC is the substrate; SSI is the optimistic safety layer over it.<sup><a href="#s4" id="r4b">4</a></sup></div></details>
+
+  <details class="iq"><summary>8 · Same isolation, opposite failure modes — how do you decide which to operate and what to monitor? (rehearse with me)</summary>
+    <div class="a"><b>Hits:</b> you rarely "choose" the engine for MVCC alone, but you owe each a different discipline. Postgres: monitor <code>n_dead_tup</code>, bloat, autovacuum lag, <code>backend_xmin</code>, freeze age — tune autovacuum, never disable it. InnoDB: monitor history list length and purge lag, keep undo bounded, shorten long read views. The shared root cause is always a long transaction starving cleanup. <em>Want to run this live? Ask me to grade your whiteboard answer.</em></div></details>
+
+  <!-- ================= CHEAT SHEET ================= -->
+  <h2 class="sec" id="cheat">★ Cheat sheet — internal → what it means</h2>
+  <div class="cheat">
+    <p style="margin-top:0"><strong>Mental models:</strong> Row = chain of versions · UPDATE = new version, never overwrite · Postgres = history in the heap · InnoDB = history in undo · Snapshot = xmin/xmax/xip[] judging each version · Visible = xmin past+committed AND xmax not-past · xmin horizon = oldest open txn = cleanup limit · VACUUM/purge = the janitor · Freezing = wraparound vaccine · SSI = safety layer over MVCC.</p>
+    <h3>Translation table</h3>
+    <table>
+      <tr><th>Term</th><th>What it actually is</th></tr>
+      <tr><td><code>xmin</code> / <code>xmax</code></td><td>Postgres tuple header: creator xid / deleter xid (0 = live)</td></tr>
+      <tr><td><code>DB_TRX_ID</code> / <code>DB_ROLL_PTR</code></td><td>InnoDB hidden fields: last writer / pointer into undo</td></tr>
+      <tr><td>Snapshot</td><td>xmin (oldest running), xmax (next unassigned), xip[] (in progress)</td></tr>
+      <tr><td>xmin horizon</td><td>xmin of the oldest live txn — VACUUM's cleanup ceiling</td></tr>
+      <tr><td>Bloat</td><td>Dead tuples a pinned horizon won't let VACUUM reclaim</td></tr>
+      <tr><td>Freezing</td><td>Flag "visible to all; ignore xmin" → immune to wraparound</td></tr>
+      <tr><td>History list length</td><td>InnoDB's bloat signal: undo a long read view can't release</td></tr>
+      <tr><td>Purge thread</td><td>InnoDB's VACUUM: reclaims undo + delete-marked rows</td></tr>
+      <tr><td>SSI</td><td>Serializable on MVCC + read/write dependency tracking</td></tr>
+    </table>
+    <h3>Three rules for the on-call chair</h3>
+    <p style="margin-bottom:0">① Cleanup is only as current as your <strong>oldest open transaction</strong> — hunt it in <code>pg_stat_activity</code> first. ② Plain VACUUM frees-for-reuse; <strong>only <code>VACUUM FULL</code> shrinks</strong> the file (exclusive lock). ③ Never disable autovacuum — <strong>"DB went read-only" is wraparound</strong>, and it's always "autovacuum couldn't keep up."</p>
+  </div>
+
+  <!-- ================= REVIEW GUIDES ================= -->
+  <h2 class="sec" id="review">★ Review guide &amp; what to read next</h2>
+  <div class="facts" style="grid-template-columns:1fr 1fr">
+    <div class="fact"><b>5-min (weekly)</b> Don't re-read — recall. Redraw the version chain with xmin/xmax; state the two visibility gates; say why one idle txn bloats the whole DB; name the wraparound read-only stop.</div>
+    <div class="fact"><b>30-min (when stalled)</b> Blank-page reconstruct all five levels; re-derive how heap-vs-undo forces VACUUM-vs-purge; then trace one real incident from symptom → xmin horizon → lever.</div>
+  </div>
+  <p style="font-size:.9rem"><strong>Read next, in order:</strong>
+    ① <a href="https://www.postgresql.org/docs/current/mvcc.html">PostgreSQL — Concurrency Control</a> (xmin/xmax, snapshots) ·
+    ② <a href="https://www.postgresql.org/docs/current/routine-vacuuming.html">PostgreSQL — Routine Vacuuming &amp; Preventing Wraparound</a> ·
+    ③ <a href="https://dev.mysql.com/doc/refman/8.0/en/innodb-multi-versioning.html">MySQL — InnoDB Multi-Versioning</a> ·
+    ④ <a href="ssi-deep-dive.html">SSI deep dive</a> (the safety layer over MVCC).</p>
+
+  <div class="nav">
+    <span>📄 <a href="ssi-deep-dive.html">SSI deep dive</a> · <a href="transactions-isolation-fundamentals.html">Book 2 fundamentals</a></span>
+    <span><em>Next ▸ Serializable Snapshot Isolation &amp; write skew</em></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. Kleppmann, <em>Designing Data-Intensive Applications</em>, Ch. 7 ("Transactions") — snapshot isolation, MVCC, visibility. <a href="#r1">↩</a></span><br>
+    <span id="s2">2. PostgreSQL documentation — "Concurrency Control" (tuple <code>xmin</code>/<code>xmax</code>, snapshots, visibility). <a href="#r1">↩</a></span><br>
+    <span id="s3">3. MySQL InnoDB documentation — "InnoDB Multi-Versioning" (hidden columns, undo logs, purge) and "InnoDB Locking and Transaction Model" (read views). <a href="#r1">↩</a></span><br>
+    <span id="s4">4. Berenson, Bernstein, Gray et al., "A Critique of ANSI SQL Isolation Levels" (1995); Cahill, Röhm &amp; Fekete, "Serializable Isolation for Snapshot Databases" (2008) — the SSI layer. <a href="#r4">↩</a></span><br>
+    <span id="s5">5. PostgreSQL docs, "Routine Vacuuming → Preventing Transaction ID Wraparound Failures"; Postgres wraparound postmortems (Sentry, Mailchimp) — "autovacuum couldn't keep up." <a href="#r5">↩</a></span>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

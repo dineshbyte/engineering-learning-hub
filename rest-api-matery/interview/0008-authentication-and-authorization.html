@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interview Bank · Authentication &amp; Authorization</title>
+<style>
+  :root{
+    --ink:#111110; --paper:#fffff8; --muted:#6b675f; --rule:#d8d4c8;
+    --accent:#7a1f12; --chip:#f1eee2; --good:#2f5d3a; --staff:#3a4a7a;
+  }
+  *{box-sizing:border-box}
+  html{font-size:18px}
+  body{margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Palatino Linotype",Palatino,"Iowan Old Style",Georgia,serif; line-height:1.5}
+  .wrap{max-width:43rem; margin:0 auto; padding:3rem 1.4rem 6rem}
+  .kicker{font-size:.72rem; letter-spacing:.18em; text-transform:uppercase; color:var(--muted);
+    font-family:ui-sans-serif,system-ui,sans-serif}
+  h1{font-size:2rem; line-height:1.08; margin:.25rem 0 .4rem; font-weight:600; letter-spacing:-.01em}
+  h2{font-size:.82rem; margin:2.4rem 0 .6rem; font-family:ui-sans-serif,system-ui,sans-serif;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+  a{color:var(--accent)}
+  .how{background:var(--chip); border-left:3px solid var(--accent); padding:.7rem 1rem; font-size:.9rem; margin:1.1rem 0 1.4rem}
+  .meta{font-family:ui-sans-serif,system-ui,sans-serif; font-size:.78rem; color:var(--muted)}
+  .controls{position:sticky; top:0; background:var(--paper); padding:.6rem 0; margin-bottom:.4rem;
+    border-bottom:1px solid var(--rule); display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; z-index:5}
+  .chip{font:inherit; font-family:ui-sans-serif,system-ui,sans-serif; font-size:.76rem; cursor:pointer;
+    background:#fff; border:1px solid var(--rule); border-radius:999px; padding:.25rem .7rem; color:var(--muted)}
+  .chip.active{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .controls .sp{flex:1}
+  .lnk{font:inherit; font-family:ui-sans-serif,system-ui,sans-serif; font-size:.76rem; cursor:pointer;
+    background:none; border:0; color:var(--accent); text-decoration:underline; padding:.2rem .3rem}
+  .card{counter-increment:c; border:1px solid var(--rule); border-radius:8px; padding:.85rem 1rem; margin:.6rem 0; background:#fcfbf2}
+  .q{font-weight:600; margin:0; display:flex; gap:.55rem; align-items:baseline}
+  .q::before{content:counter(c,decimal-leading-zero); font-family:ui-sans-serif,system-ui,sans-serif;
+    color:var(--muted); font-weight:700; font-size:.8rem; flex:0 0 1.6rem}
+  .tag{font-family:ui-sans-serif,system-ui,sans-serif; font-size:.62rem; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase; padding:.12rem .4rem; border-radius:4px; white-space:nowrap; align-self:center}
+  .t-core{background:#e7f0e9; color:var(--good)} .t-senior{background:#f6e9e7; color:var(--accent)} .t-staff{background:#e8ebf5; color:var(--staff)}
+  .reveal{font:inherit; font-family:ui-sans-serif,system-ui,sans-serif; font-size:.78rem; cursor:pointer;
+    margin-top:.6rem; background:transparent; color:var(--accent); border:1px solid var(--accent); border-radius:6px; padding:.32rem .8rem}
+  .a{display:none; margin-top:.7rem; padding-top:.7rem; border-top:1px dashed var(--rule); font-size:.94rem}
+  .a.show{display:block}
+  .a p{margin:.4rem 0} .a ul{margin:.4rem 0 .4rem 1.1rem; padding:0} .a li{margin:.2rem 0}
+  .a code{background:var(--chip); padding:.04rem .3rem; border-radius:3px; font-size:.86em}
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2.6rem; padding-top:1rem; border-top:1px solid var(--rule); font-size:.85rem}
+  footer{margin-top:2.4rem; font-size:.78rem; color:var(--muted)}
+  @media print{ .controls{position:static} .a{display:block} .reveal{display:none} a{color:var(--ink)} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">Interview Bank · Lesson 8</div>
+  <h1>Authentication &amp; authorization — interview questions</h1>
+  <p class="meta">49 questions · Core / Senior / Staff · pairs with <a href="../lessons/0008-authentication-and-authorization.html">Lesson 8</a></p>
+
+  <div class="how">
+    <strong>Use these as active recall, not reading.</strong> Read the question, answer it <em>out loud or in writing from memory first</em>, and only then reveal the model answer to grade yourself. Recognizing an answer ≠ being able to produce it under pressure. Filter by difficulty; reveal-all only for a final review pass.
+  </div>
+
+  <div class="controls">
+    <button class="chip active" data-f="all">All</button>
+    <button class="chip" data-f="core">Core</button>
+    <button class="chip" data-f="senior">Senior</button>
+    <button class="chip" data-f="staff">Staff</button>
+    <span class="sp"></span>
+    <button class="lnk" id="revealAll">Reveal all</button>
+    <button class="lnk" id="collapseAll">Collapse all</button>
+  </div>
+
+  <h2>AuthN vs AuthZ</h2>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Define authentication vs authorization.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>Authentication (AuthN)</strong> answers <em>"who are you?"</em> — proving identity from a credential. <strong>Authorization (AuthZ)</strong> answers <em>"what may you do?"</em> — deciding whether a <em>known</em> principal may perform <em>this</em> action on <em>this</em> resource. AuthN happens first; AuthZ runs on every protected operation after.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Which status code maps to a missing/invalid credential vs an authenticated-but-not-permitted request?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Missing or invalid credential → <code>401 Unauthorized</code> (a historical misnomer; it really means <em>unauthenticated</em>). Known principal who isn't permitted → <code>403 Forbidden</code>.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Give the one-line senior framing of <code>401</code> vs <code>403</code>.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>401 = come back with valid identity; 403 = your identity is fine, the answer is still no.</strong> A single request can pass AuthN and fail AuthZ on the very next line — and the most expensive bugs live in that gap.</p></div>
+  </div>
+
+  <h2>Credential schemes</h2>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> What is an API key and where is it appropriate?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>A shared secret sent in a header (e.g. <code>X-API-Key</code> or <code>Authorization</code>). Fine for simple <em>server-to-server</em> identification of a calling app, and for low-stakes public read APIs with quotas. It identifies the <em>app</em>, not an end user.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What are the weaknesses of API keys?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>They're <strong>coarse</strong> (hard to scope to one action), <strong>hard to rotate</strong> (often hardcoded by integrators), <strong>long-lived</strong>, and <strong>easy to leak</strong>. They prove possession, not identity-with-permissions. Mitigations: scope keys, support multiple active keys to enable rotation, set quotas, and treat them as secrets.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What is a bearer token, its core risk, and how do you contain it?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>"Whoever <em>bears</em> it is granted access," sent as <code>Authorization: Bearer &lt;token&gt;</code> (header, never a query string). Core risk: it's <strong>not bound to the sender</strong> — anyone who steals one can replay it. Containment: <strong>TLS everywhere</strong>, <strong>short expiry</strong>, keep it out of logs/URLs, and for high security use <strong>sender-constrained tokens</strong> (DPoP or mTLS-bound) so a stolen token can't be replayed from another client.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Is OAuth2 an authentication protocol?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>No. OAuth 2.0 is a <strong>delegated authorization</strong> framework: it lets a user grant an app scoped access to their resources without sharing a password. Treating an OAuth access token as proof of <em>identity</em> is a classic gotcha — the access token is for the resource server, not for identifying the user to the app.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What does OIDC add on top of OAuth2?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>An <strong>identity layer</strong>. OIDC standardizes an <code>id_token</code> (a JWT <em>about the user</em> with claims like <code>sub</code>, <code>email</code>) plus a <code>/userinfo</code> endpoint, so you can actually <em>authenticate</em>. Rule of thumb: <strong>OAuth2 = authorization; OIDC = authentication.</strong> "Sign in with Google" is OIDC.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What is mTLS and when do you reach for it?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Mutual TLS: <em>both</em> ends present X.509 certificates, so each authenticates the other at the transport layer. Reach for it in <strong>service-to-service</strong> traffic (internal mesh, partner backends) where you want strong, replay-resistant identity without bearer secrets. Cost: certificate lifecycle/rotation and PKI overhead; rarely used for public browser clients.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> mTLS vs signed JWTs for service-to-service auth — how do you choose?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>mTLS</strong> authenticates the <em>connection</em> at the transport layer — strong, sender-bound, great inside a service mesh, but it tells you <em>which service</em> connected, not <em>on whose behalf</em>. <strong>Signed JWTs</strong> carry application-level claims (caller, scopes, end-user context, audience) and survive proxy hops, but are bearer by default (replayable if leaked). Mature systems combine them: <strong>mTLS for channel identity + a JWT for fine-grained, propagated authZ context</strong>.</p></div>
+  </div>
+
+  <h2>OAuth2 grants</h2>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Which grant for a user signing in via web/mobile/SPA?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>Authorization Code + PKCE</strong>. The user authenticates at the authorization server, the app receives a short-lived <em>code</em>, then exchanges it for tokens. PKCE is now recommended for <em>all</em> Authorization Code clients, public and confidential.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What problem does PKCE solve, and how?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>It protects <strong>public clients</strong> (SPAs, mobile apps that can't keep a secret) against <strong>authorization-code interception</strong>. The client generates a random <code>code_verifier</code>, sends its hash (<code>code_challenge</code>) on the auth request, and must present the original verifier at token exchange. An intercepted code is useless without the verifier, binding the code to the requester.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Which grant for machine-to-machine with no user?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>Client Credentials</strong>. The service authenticates as <em>itself</em> with its own client id/secret (or a client cert) to get an access token. The right grant for partner backends, cron jobs, and internal services — there is no resource owner to delegate from.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Why are the Implicit and Password grants deprecated — what replaces them?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>Implicit</strong> returned the token in the redirect URL fragment (no code exchange, no refresh, exposed to history/scripts). <strong>Resource-Owner Password</strong> makes the app handle the user's actual password — defeating delegation, blocking MFA/SSO. Both are superseded by <strong>Authorization Code + PKCE</strong>, even for SPAs. Naming either as a default is a red flag.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> What are scopes?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Coarse, named permissions attached to a token (e.g. <code>orders:read</code>, <code>orders:write</code>) describing <em>what the token is allowed to do</em>. They implement least privilege: an app only requests the scopes it needs, and the resource server enforces them.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What is the <code>aud</code> (audience) claim and why must a resource server check it?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><code>aud</code> names the <strong>intended recipient(s)</strong> of the token. A resource server must verify the token was issued <em>for it</em> — otherwise a token minted for service A could be <strong>replayed against service B</strong> (the "confused deputy"). Audience-checking is what stops one service's token from being a skeleton key for another.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Access token vs refresh token — what's the difference?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>The <strong>access token</strong> is short-lived and sent on every API call to prove authorization. The <strong>refresh token</strong> is long-lived, kept private, and used <em>only</em> against the auth server to mint new access tokens without re-prompting the user. Splitting them limits the blast radius of a leaked access token.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What is refresh-token rotation and what does it detect?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Each time a refresh token is used, the auth server <strong>issues a new one and invalidates the old</strong>. If an <em>already-used</em> refresh token is presented again, that signals theft (two parties hold the same token) — the server <strong>revokes the whole token family</strong> and forces re-auth. Rotation turns a stolen refresh token into a detectable, single-use event.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> Where should a SPA store tokens, and why is that contentious?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><code>localStorage</code> is XSS-exploitable; in-memory loses tokens on refresh. The modern recommendation is the <strong>Backend-For-Frontend (BFF)</strong> pattern: tokens live server-side, the browser holds only a <code>HttpOnly</code>+<code>Secure</code>+<code>SameSite</code> session cookie, and the BFF attaches the access token to upstream calls. This keeps tokens out of JS entirely, trading a little architecture for a much smaller XSS blast radius.</p></div>
+  </div>
+
+  <h2>JWT vs sessions</h2>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> What are the three parts of a JWT?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><code>header.payload.signature</code> — three base64url segments joined by dots. The <em>header</em> names the algorithm, the <em>payload</em> carries claims (<code>sub</code>, <code>iss</code>, <code>aud</code>, <code>exp</code>…), and the <em>signature</em> lets any holder of the key verify integrity and authenticity.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Is a JWT payload encrypted?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>No. A standard (JWS) JWT payload is <strong>base64url-encoded, not encrypted</strong> — anyone can decode and read it. The signature guarantees it wasn't <em>tampered with</em>, not that it's <em>secret</em>. So <strong>never put secrets or PII you don't want exposed in a JWT</strong>. (JWE exists for encryption but is rarely used for API tokens.)</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Why do stateless JWTs fit REST so naturally?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Because the constraint of <strong>statelessness</strong> says each request carries everything the server needs. A signed JWT is self-contained: <em>any</em> node verifies it locally with the public key — no session lookup, no shared store on the hot path. That's exactly the horizontal-scaling story REST wants.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What is the chief weakness of a JWT versus a server-side session?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>Revocation.</strong> A self-contained token is valid until <code>exp</code>, no matter what — there's no row to delete. A server-side session is the opposite: trivial to revoke (delete it), but <strong>stateful</strong> (needs a shared store or sticky sessions). The design tension is <em>pure statelessness vs instant logout</em>.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> How do you handle JWT revocation honestly?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Combine: <strong>short-lived access tokens</strong> (minutes) to shrink the blast radius, <strong>rotating refresh tokens</strong> for continuity, and a <strong>denylist or token introspection</strong> for emergency "log this device out now." Short expiry handles the common case cheaply; the denylist handles the urgent case at the cost of reintroducing a little state.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> List the checks of a proper JWT validation.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>(1)</strong> Verify the <strong>signature</strong> with the correct key. <strong>(2)</strong> <strong>Pin the algorithm</strong> — reject <code>alg: none</code> and algorithm-confusion. <strong>(3)</strong> Check <code>iss</code> (issuer), <code>aud</code> (audience is you), and <code>exp</code>/<code>nbf</code> (time window). Optionally check <code>sub</code>, scopes, and a denylist. A JWT you don't fully validate is just an attacker-supplied JSON blob.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> Explain the <code>alg: none</code> and algorithm-confusion attacks.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong><code>alg: none</code>:</strong> attacker sets the header algorithm to <code>none</code> and strips the signature; a naive verifier that trusts the header accepts an unsigned token. <strong>Algorithm confusion (RS256→HS256):</strong> the server expects an RSA-signed token (verify with the <em>public</em> key) but the attacker sends an <code>HS256</code> token signed with that <em>public key as the HMAC secret</em>; a library that picks the algorithm from the header validates it. Defense: <strong>pin the expected algorithm(s) server-side</strong> and never let the token's header choose how it's verified.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> Symmetric (HS256) vs asymmetric (RS256/ES256) signing — when each?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>HS256</strong> uses one shared secret to sign and verify — simple and fast, but <em>everyone who can verify can also forge</em>, so it only suits a single trust domain. <strong>RS256/ES256</strong> sign with a private key and verify with a public key (published via JWKS), so many resource servers can validate without holding signing power. For multi-service / third-party validation, use asymmetric and rotate keys via the JWKS <code>kid</code>.</p></div>
+  </div>
+
+  <h2>Authorization models</h2>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> RBAC vs ABAC — what's the difference?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>RBAC</strong> assigns permissions by <em>role</em> (admin, editor) — simple, coarse: "editors can publish." <strong>ABAC</strong> decides from <em>attributes</em> of subject/resource/environment (department, region, time, owner) — fine-grained and dynamic: "the owner can edit during business hours." RBAC is easier to reason about; ABAC scales to nuanced policy at the cost of complexity.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What is object-level authorization and why is it the one that bites?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>It verifies the authenticated principal may act on <strong>this specific object</strong>, not merely that they're authenticated or role-permitted. It bites because RBAC/ABAC answer "can this <em>kind</em> of user do this <em>kind</em> of thing" but not "does <em>this</em> user own <em>this</em> record." Skipping it is OWASP API #1 — <strong>BOLA</strong> — the most common API breach.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What is function-level authorization (and BFLA)?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Function-level authZ checks whether a principal may invoke a <em>particular operation/endpoint</em> at all (e.g. an admin-only <code>DELETE</code>). <strong>BFLA — Broken Function Level Authorization</strong> (OWASP API5) is when a regular user reaches admin or privileged functions just by guessing the route or swapping the HTTP method, because the check is missing. Defense: deny by default and enforce role/permission per function, including non-GET methods.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> How do you keep authorization consistent across dozens of microservices?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Externalize policy: a <strong>centralized decision model</strong> (e.g. a policy engine / OPA-style PDP, or a relationship-based system à la Google Zanzibar for object-level checks) with services as enforcement points. Propagate identity and scopes via signed tokens, version policies, and test them. The anti-pattern is ad-hoc <code>if</code> checks copy-pasted per service — they drift, and one missed check is a BOLA.</p></div>
+  </div>
+
+  <h2>OWASP API Top 10 (2023)</h2>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> What is the #1 risk on the OWASP API Top 10 (2023)?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>API1: BOLA — Broken Object Level Authorization.</strong> The endpoint confirms you're authenticated (and maybe role-permitted) but never checks you own the <em>specific</em> object, so changing an id returns someone else's data. It's #1 because it's pervasive and high-impact.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Walk through a BOLA on <code>GET /accounts/{id}</code> and the fix.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Attacker is authenticated as user A, calls <code>GET /accounts/123</code> (their own), then changes it to <code>GET /accounts/124</code> and reads user B's account — because the handler only checked <em>authentication</em>. <strong>Fix:</strong> on every object access, verify the authenticated principal is authorized for <em>that exact object</em> (tenant/owner check), enforced at the data layer. <strong>Unguessable ids are not authorization</strong> — that's obscurity.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What is BOPLA (API3) and a concrete example?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>Broken Object Property Level Authorization</strong> — the caller may access the object but not <em>all its properties</em>. Two faces: <strong>excessive data exposure</strong> (returning fields like <code>passwordHash</code> or another user's PII) and <strong>mass assignment</strong> (letting a client set fields they shouldn't, e.g. <code>"isAdmin": true</code> via the update body). Fix: explicit allow-lists for readable and writable fields; never bind request bodies straight onto your model.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> What is Broken Authentication (API2)?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Weaknesses in the auth mechanism itself: weak/missing token validation, accepting <code>alg: none</code>, no rate limit on login (credential stuffing/brute force), tokens that don't expire, weak password reset, or secrets in code. Defenses: strong token validation, login rate limiting + lockout/MFA, short token lifetimes, and standard, well-tested auth libraries.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What is Unrestricted Resource Consumption (API4) and how do you defend it?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>No limits on the resources a request can consume → DoS or runaway cost (huge page sizes, expensive queries, unbounded uploads, fan-out). Defenses: <strong>rate limiting</strong> (<code>429</code> + <code>Retry-After</code>), pagination caps, payload-size and timeout limits, query-complexity limits, and quotas per principal. It also covers <em>financial</em> DoS in pay-per-use backends.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> What is SSRF (API7) in an API context?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>Server-Side Request Forgery:</strong> the API fetches a user-supplied URL (webhook, image-from-URL, importer) and the attacker points it at <em>internal</em> targets — cloud metadata (<code>169.254.169.254</code>), internal services, <code>localhost</code>. Defenses: allow-list destinations, block private/link-local ranges, resolve-then-validate to defeat DNS rebinding, disable redirects to internal hosts, and isolate the egress.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> Why did the 2023 OWASP API list elevate authorization risks to the top?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Because real-world API breaches are dominated by <strong>authorization flaws, not injection</strong>. APIs expose object identifiers directly and are hit programmatically, so missing per-object/per-property/per-function checks (BOLA, BOPLA, BFLA) leak data at scale. The list reflects that authZ — especially object-level — is where APIs actually fail, which is why interviewers hammer it.</p></div>
+  </div>
+
+  <h2>Transport &amp; hygiene</h2>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> Why is TLS non-negotiable for token-based auth?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>A bearer token over plaintext can be sniffed and replayed — game over. TLS encrypts the channel so credentials and tokens can't be read in transit. No exceptions, <strong>including internal hops</strong> (assume the network is hostile / zero-trust).</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> What do the <code>HttpOnly</code>, <code>Secure</code>, and <code>SameSite</code> cookie flags do?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><code>HttpOnly</code>: JavaScript can't read it (mitigates token theft via XSS). <code>Secure</code>: sent only over HTTPS. <code>SameSite</code> (<code>Lax</code>/<code>Strict</code>): restricts sending on cross-site requests (mitigates CSRF). Together they keep a session cookie out of scripts and off cross-site requests.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> XSS vs CSRF — which cookie flag addresses which, and what's the residual risk?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p><strong>XSS</strong> (malicious script reads the token) → <code>HttpOnly</code> stops JS access. <strong>CSRF</strong> (browser auto-sends the cookie on a forged cross-site request) → <code>SameSite</code> (plus CSRF tokens / origin checks). Residual: <code>SameSite=Lax</code> still allows top-level GET navigations, and a successful XSS can act <em>as</em> the user even with <code>HttpOnly</code> — so you still need to prevent XSS, not just contain it.</p></div>
+  </div>
+
+  <div class="card" data-diff="core">
+    <p class="q"><span class="tag t-core">Core</span> What does least-privilege scoping look like in practice?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Grant each credential only the scopes/permissions it actually needs — a read-only integration gets <code>orders:read</code>, not <code>orders:write</code>. It shrinks what a leaked token can do. The default request should be the <em>narrowest</em> set, widened only on demonstrated need.</p></div>
+  </div>
+
+  <h2>Judgment</h2>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> Design auth for a multi-tenant SaaS used by end users <em>and</em> partner backends.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Standardize on <strong>OAuth2</strong>. End users (web/mobile/SPA): <strong>Authorization Code + PKCE</strong> with <strong>OIDC</strong> for identity. Partner backends: <strong>Client Credentials</strong> (or mTLS), no user in the loop. Issue <strong>short-lived signed JWT access tokens + rotating refresh tokens</strong>. Validate signature/alg/<code>iss</code>/<code>aud</code>/<code>exp</code> on every node (stateless, scales out). <strong>Scopes</strong> give coarse authZ; the critical part is <strong>object-level tenant checks</strong> to shut down BOLA. Revocation via short expiry + denylist/introspection. Hygiene: TLS everywhere, tokens only in the Authorization header, secrets rotated, mTLS between services.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Concretely, how do you prevent BOLA on <code>/accounts/{id}</code> in a multi-tenant app?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Derive the tenant/owner from the <em>authenticated token</em>, never from the request, and scope the query: <code>WHERE id = :id AND tenant_id = :tokenTenant</code> — so a foreign id simply returns nothing. Enforce it in a <strong>shared data-access layer</strong> so no endpoint can forget. Add tests that try cross-tenant access. Random ids are a speed bump, not the control.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> A token has leaked. Walk through your response.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Immediate: <strong>revoke it</strong> — add to the denylist / kill the session, and if it's a refresh token, <strong>revoke the whole token family</strong> (rotation makes prior tokens invalid). If a <em>signing key</em> leaked, rotate the key (JWKS <code>kid</code>) so all tokens signed by it stop verifying. Then: force re-auth for affected principals, rotate any related secrets, audit logs for the token's use, and tighten the leak source (logs/URLs/storage). Short expiry is why this is survivable.</p></div>
+  </div>
+
+  <div class="card" data-diff="senior">
+    <p class="q"><span class="tag t-senior">Senior</span> Public API: API keys or OAuth2?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Depends on stakes. <strong>API keys</strong> for simple, read-mostly public data with quotas — low friction for developers. <strong>OAuth2</strong> once you have user data, write actions, or per-user delegation: you need scopes, short-lived tokens, and revocation. A common path is keys for app identification <em>plus</em> OAuth for user-scoped actions. The senior move is naming the trade-off (developer friction vs granularity/revocability), not picking dogmatically.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> Design single sign-on (SSO) across several of your own apps.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Central <strong>identity provider</strong> speaking <strong>OIDC</strong> (or SAML for enterprise). Each app is an OIDC <em>relying party</em> using <strong>Authorization Code + PKCE</strong>; the IdP holds the session and issues per-app tokens with the right <code>aud</code> and scopes. Benefits: one login, central MFA/policy, central revocation. Watch-outs: single sign-out is genuinely hard, the IdP is now a critical dependency (HA + careful key rotation), and don't share one access token across apps — mint per-audience tokens.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> An interviewer says "we'll just use unguessable UUIDs instead of authorization checks." Respond.</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Push back: that's <strong>security through obscurity</strong>, not authorization. IDs leak — in logs, <code>Referer</code> headers, shared links, error messages, prior responses, and the wire. A UUID raises the guessing cost but does nothing once an id is known, and gives <em>zero</em> protection against an authenticated insider. UUIDs are fine for non-enumerability, but you <em>still</em> do the per-object owner/tenant check on every access.</p></div>
+  </div>
+
+  <div class="card" data-diff="staff">
+    <p class="q"><span class="tag t-staff">Staff</span> How do you propagate end-user identity through a chain of microservices safely?</p>
+    <button class="reveal">Reveal senior answer</button>
+    <div class="a"><p>Don't let downstream services blindly trust a header. Options: forward the original <strong>signed access token</strong> (each hop re-validates signature + <code>aud</code>), or use <strong>token exchange</strong> (RFC 8693) to mint a downstream-audience token, all over <strong>mTLS</strong> so the channel identity is also proven. Each service enforces its <em>own</em> authZ — never assume the caller already checked. The anti-pattern is a plaintext <code>X-User-Id</code> header any internal caller can forge.</p></div>
+  </div>
+
+  <div class="nav">
+    <span>📄 <a href="../reference/api-security-and-auth.html">API Security &amp; Auth reference</a></span>
+    <span><a href="0009-error-design-rate-limiting-observability.html">Next bank: Error design, rate limiting &amp; observability ▸</a></span>
+  </div>
+
+  <footer>Interview bank · Lesson 8 · answer from memory first, then reveal · <a href="0007-caching-and-conditional-requests.html">◂ Prev: Caching</a> · <a href="../index.html">all lessons &amp; banks</a></footer>
+</div>
+
+<script>
+  function setFilter(d){
+    document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active', c.dataset.f===d));
+    document.querySelectorAll('.card').forEach(card=>{
+      card.style.display = (d==='all'||card.dataset.diff===d) ? '' : 'none';
+    });
+  }
+  document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.f)));
+  document.querySelectorAll('.reveal').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      var a = btn.nextElementSibling;
+      var shown = a.classList.toggle('show');
+      btn.textContent = shown ? 'Hide answer' : 'Reveal senior answer';
+    });
+  });
+  document.getElementById('revealAll').addEventListener('click',function(){
+    document.querySelectorAll('.a').forEach(a=>a.classList.add('show'));
+    document.querySelectorAll('.reveal').forEach(b=>b.textContent='Hide answer');
+  });
+  document.getElementById('collapseAll').addEventListener('click',function(){
+    document.querySelectorAll('.a').forEach(a=>a.classList.remove('show'));
+    document.querySelectorAll('.reveal').forEach(b=>b.textContent='Reveal senior answer');
+  });
+</script>
+</body>
+</html>

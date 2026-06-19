@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 8 · Authentication &amp; authorization (visual)</title>
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<style>
+  :root{--accent:var(--track-rest)}
+  /* chips — pill row (not in lesson.css) */
+  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+  .chip b{color:var(--accent)}
+  /* REST uses .fact / .step as content blocks with an inline <b> label */
+  .facts{grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr))}
+  .fact b,.step b{display:block; font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+  .fact.blue b{color:var(--accent)}
+  .steps{display:grid; grid-template-columns:1fr 1fr; gap:.5rem}
+  /* myth compare grid — lesson.css styles .m/.t but not the container */
+  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.8rem 0; font-size:.9rem}
+  /* bottom footer nav — lesson.css names this .next */
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.85rem}
+  @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="0007-caching-and-conditional-requests.html" title="Caching &amp;amp; conditional requests (visual)">&#8249; Prev</a><a href="0009-error-design-rate-limiting-observability.html" title="Errors, rate limiting &amp;amp; observability (visual)">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">REST API</span></span>
+  </nav>
+  <div class="kicker">Lesson 8 · Auth · visual edition</div>
+  <h1>Authentication &amp; authorization</h1>
+  <p class="meta">~7 min · one diagram per idea · retrieval practice at the end</p>
+
+  <div class="mission">
+    <strong>Why this, first.</strong> Security is non-negotiable at the senior bar — a fuzzy answer here ends interviews. Interviewers probe three things hard: <strong>AuthN-vs-AuthZ precision</strong>, the <strong>OAuth2/JWT trade-offs</strong> you'd actually deploy, and <strong>object-level authorization (BOLA)</strong> — the #1 API vulnerability on the OWASP list.<sup><a href="#s1" id="r1">1</a></sup> Get these crisp and you sound like someone who has shipped and been breached. Stay vague and you sound like someone who has only read about it.
+  </div>
+
+  <div class="chips">
+    <span class="chip">First prove <b>who you are</b></span>
+    <span class="chip">then what you <b>may do</b></span>
+    <span class="chip">on <b>this exact object</b></span>
+    <span class="chip">over <b>TLS, every node</b></span>
+  </div>
+
+  <!-- HERO: AuthN vs AuthZ -->
+  <h2 class="sec">The distinction everything hangs on</h2>
+  <p>The fastest way to lose the room is to slur the two together. They are different questions, fail at different layers, and map to different status codes:</p>
+  <figure>
+    <svg viewBox="0 0 640 188" role="img" aria-label="Authentication asks who are you and fails with 401; authorization asks what may you do and fails with 403">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">TWO GATES, IN ORDER · DIFFERENT FAILURES</text>
+        <rect x="14" y="34" width="290" height="120" rx="10" fill="#eef2f5" stroke="#1f3a5a" stroke-width="1.5"/>
+        <text x="159" y="56" text-anchor="middle" font-size="13" font-weight="700" fill="#1f3a5a">① AUTHENTICATION</text>
+        <text x="159" y="76" text-anchor="middle" font-size="12" font-style="italic" fill="#1f3a5a">who are you?</text>
+        <text x="159" y="98" text-anchor="middle" font-size="9.5" fill="#6b675f">prove identity from a credential</text>
+        <rect x="46" y="112" width="226" height="30" rx="7" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="159" y="131" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a2417">missing / invalid → 401 Unauthorized</text>
+        <line x1="304" y1="94" x2="336" y2="94" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="320" y="86" text-anchor="middle" font-size="8" fill="#6b675f">pass</text>
+        <rect x="336" y="34" width="290" height="120" rx="10" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
+        <text x="481" y="56" text-anchor="middle" font-size="13" font-weight="700" fill="#2f5d3a">② AUTHORIZATION</text>
+        <text x="481" y="76" text-anchor="middle" font-size="12" font-style="italic" fill="#2f5d3a">what may you do?</text>
+        <text x="481" y="98" text-anchor="middle" font-size="9.5" fill="#6b675f">may this principal do this, here?</text>
+        <rect x="368" y="112" width="226" height="30" rx="7" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="481" y="131" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a2417">known but not allowed → 403 Forbidden</text>
+        <text x="320" y="178" text-anchor="middle" font-size="10.5" fill="#7a1f12">A request can pass gate ① and fail gate ② on the very next line — the priciest bugs live in that gap.</text>
+      </g>
+    </svg>
+    <figcaption><strong>401</strong> = come back with valid identity; <strong>403</strong> = your identity is fine, the answer is still no. (401 is a misnomer; it means <em>unauthenticated</em>.)</figcaption>
+  </figure>
+
+  <!-- CREDENTIAL SCHEMES -->
+  <h2 class="sec">Credential schemes and where each fits</h2>
+  <figure>
+    <svg viewBox="0 0 640 196" role="img" aria-label="API keys, bearer tokens, OAuth2 delegated authorization, and OIDC identity layer compared">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">FROM SHARED SECRET TO DELEGATED IDENTITY</text>
+        <rect x="10" y="28" width="150" height="150" rx="9" fill="#fff" stroke="#d8d4c8"/>
+        <text x="85" y="48" text-anchor="middle" font-size="11.5" font-weight="700">API key</text>
+        <text x="85" y="66" text-anchor="middle" font-size="9" fill="#6b675f">shared secret in</text>
+        <text x="85" y="78" text-anchor="middle" font-size="9" fill="#6b675f">a header</text>
+        <text x="85" y="100" text-anchor="middle" font-size="9" fill="#2f5d3a">✓ simple svc-to-svc</text>
+        <text x="85" y="116" text-anchor="middle" font-size="9" fill="#9a2417">✗ coarse, hard to rotate</text>
+        <text x="85" y="132" text-anchor="middle" font-size="9" fill="#9a2417">✗ leaks easily</text>
+        <text x="85" y="160" text-anchor="middle" font-size="8.5" fill="#7a1f12">never in browser / URL</text>
+        <rect x="166" y="28" width="150" height="150" rx="9" fill="#fbfaf2" stroke="#6b675f"/>
+        <text x="241" y="48" text-anchor="middle" font-size="11.5" font-weight="700">Bearer token</text>
+        <text x="241" y="66" text-anchor="middle" font-size="8.5" fill="#6b675f">Authorization:</text>
+        <text x="241" y="78" text-anchor="middle" font-size="8.5" fill="#6b675f">Bearer &lt;token&gt;</text>
+        <text x="241" y="100" text-anchor="middle" font-size="9" fill="#244a2e">"bearer is granted"</text>
+        <text x="241" y="120" text-anchor="middle" font-size="9" fill="#6b675f">the token IS the</text>
+        <text x="241" y="132" text-anchor="middle" font-size="9" fill="#6b675f">credential →</text>
+        <text x="241" y="160" text-anchor="middle" font-size="8.5" fill="#7a1f12">TLS + short life = all</text>
+        <rect x="322" y="28" width="150" height="150" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="397" y="48" text-anchor="middle" font-size="11.5" font-weight="700" fill="#2f5d3a">OAuth 2.0</text>
+        <text x="397" y="66" text-anchor="middle" font-size="9" fill="#244a2e">delegated AUTHZ</text>
+        <text x="397" y="86" text-anchor="middle" font-size="9" fill="#6b675f">user grants an app</text>
+        <text x="397" y="98" text-anchor="middle" font-size="9" fill="#6b675f">scoped access — no</text>
+        <text x="397" y="110" text-anchor="middle" font-size="9" fill="#6b675f">password shared</text>
+        <text x="397" y="138" text-anchor="middle" font-size="8.5" fill="#9a2417">NOT authentication</text>
+        <text x="397" y="160" text-anchor="middle" font-size="8.5" fill="#9a2417">on its own</text>
+        <rect x="478" y="28" width="152" height="150" rx="9" fill="#eef2f5" stroke="#1f3a5a"/>
+        <text x="554" y="48" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1f3a5a">OIDC</text>
+        <text x="554" y="66" text-anchor="middle" font-size="9" fill="#1f3a5a">identity layer ON</text>
+        <text x="554" y="78" text-anchor="middle" font-size="9" fill="#1f3a5a">TOP of OAuth2</text>
+        <text x="554" y="100" text-anchor="middle" font-size="9" fill="#6b675f">adds id_token</text>
+        <text x="554" y="112" text-anchor="middle" font-size="9" fill="#6b675f">(a JWT about you)</text>
+        <text x="554" y="138" text-anchor="middle" font-size="8.5" fill="#2f5d3a">→ real AUTHENTICATION</text>
+        <line x1="160" y1="103" x2="166" y2="103" stroke="#6b675f"/>
+        <line x1="316" y1="103" x2="322" y2="103" stroke="#6b675f"/>
+        <line x1="472" y1="103" x2="478" y2="103" stroke="#1f3a5a"/>
+      </g>
+    </svg>
+    <figcaption>Rule of thumb: <strong>OAuth2 = authorization; OIDC = authentication.</strong> Treating an OAuth access token as proof of identity is a classic senior gotcha.<sup><a href="#s2" id="r2">2</a></sup><sup><a href="#s3" id="r3">3</a></sup></figcaption>
+  </figure>
+  <div class="myth"><div class="m">✗ Myth: "OAuth2 logs the user in, so the access token proves who they are."</div>
+  <div class="t">✓ Truth: OAuth2 delegates authorization; you need OIDC's <code>id_token</code> to authenticate.</div></div>
+
+  <!-- OAUTH2 AUTHORIZATION-CODE + PKCE FLOW -->
+  <h2 class="sec">The OAuth2 authorization-code flow (+ PKCE)</h2>
+  <p>Name the right grant for the client and you've signalled real-world use, not a tutorial. For <em>users</em> via web, mobile, or SPA, it's Authorization Code + PKCE:</p>
+  <figure>
+    <svg viewBox="0 0 640 250" role="img" aria-label="User authorizes at the authorization server, the client receives a code, exchanges it with a PKCE verifier for an access token, then calls the resource server which validates the token">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">AUTHORIZATION CODE + PKCE</text>
+        <rect x="12" y="34" width="120" height="46" rx="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
+        <text x="72" y="55" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">User</text>
+        <text x="72" y="70" text-anchor="middle" font-size="8.5" fill="#6b675f">resource owner</text>
+        <rect x="12" y="150" width="120" height="46" rx="9" fill="#fff" stroke="#d8d4c8"/>
+        <text x="72" y="171" text-anchor="middle" font-size="11" font-weight="700">Client</text>
+        <text x="72" y="186" text-anchor="middle" font-size="8.5" fill="#6b675f">SPA / mobile app</text>
+        <rect x="360" y="34" width="160" height="46" rx="9" fill="#eef2f5" stroke="#1f3a5a" stroke-width="1.5"/>
+        <text x="440" y="55" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">Authorization Server</text>
+        <text x="440" y="70" text-anchor="middle" font-size="8.5" fill="#6b675f">login + consent · mints tokens</text>
+        <rect x="360" y="150" width="160" height="46" rx="9" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
+        <text x="440" y="171" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">Resource Server</text>
+        <text x="440" y="186" text-anchor="middle" font-size="8.5" fill="#6b675f">the API · validates token</text>
+        <!-- 1 user -> AS : authorize w/ code_challenge -->
+        <path d="M132 50 C 240 40, 300 42, 358 50" fill="none" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="245" y="33" text-anchor="middle" font-size="8.5" fill="#6b675f">① authorize · sends code_challenge (PKCE)</text>
+        <!-- 2 AS -> client : code -->
+        <path d="M400 80 C 360 110, 180 120, 132 158" fill="none" stroke="#1f3a5a" marker-end="url(#arw)"/>
+        <text x="248" y="116" text-anchor="middle" font-size="8.5" fill="#1f3a5a">② redirect back with auth code</text>
+        <!-- 3 client -> AS : code + verifier -->
+        <path d="M132 178 C 230 200, 320 130, 372 84" fill="none" stroke="#7a1f12" marker-end="url(#arwA)"/>
+        <text x="270" y="205" text-anchor="middle" font-size="8.5" fill="#7a1f12">③ exchange code + code_verifier →</text>
+        <!-- 4 AS -> client : access token -->
+        <path d="M372 72 C 320 100, 230 160, 134 172" fill="none" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <text x="300" y="150" text-anchor="middle" font-size="8.5" fill="#2f5d3a">④ access token (+ refresh)</text>
+        <!-- 5 client -> RS : Bearer -->
+        <line x1="132" y1="186" x2="358" y2="178" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="245" y="232" text-anchor="middle" font-size="8.5" fill="#6b675f">⑤ call API · Authorization: Bearer &lt;token&gt;</text>
+      </g>
+    </svg>
+    <figcaption>PKCE binds the auth code to the requester, so an intercepted code is useless — it protects <em>public</em> clients that can't keep a secret. Authorization Code + PKCE supersedes the deprecated Implicit grant even for SPAs.</figcaption>
+  </figure>
+  <div class="facts">
+    <div class="fact"><b>Auth Code + PKCE</b> For users via web / mobile / SPA. PKCE protects public clients by binding the code to whoever requested it.</div>
+    <div class="fact"><b>Client Credentials</b> Machine-to-machine, <em>no user</em>. The service authenticates as itself — partner backends, internal services.</div>
+    <div class="fact blue"><b>Scopes &amp; audience</b> Tokens carry <code>scopes</code> (e.g. <code>orders:read</code>) and an <code>aud</code>. The resource server must check the token was issued <em>for it</em>.</div>
+    <div class="fact blue"><b>Legacy — avoid</b> Implicit and Resource-Owner-Password grants are deprecated; naming them as your default is a red flag.</div>
+  </div>
+
+  <!-- JWT STRUCTURE -->
+  <h2 class="sec">JWT structure — and the trade-off vs. sessions</h2>
+  <p>A JWT is three base64url parts joined by dots, signed so any node can verify it <em>statelessly</em> — which fits REST perfectly:</p>
+  <figure>
+    <svg viewBox="0 0 640 226" role="img" aria-label="A JWT is header dot payload dot signature; the server recomputes the signature over header and payload with its key to verify">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">header . payload . signature</text>
+        <rect x="10" y="30" width="190" height="86" rx="9" fill="#eef2f5" stroke="#1f3a5a"/>
+        <text x="105" y="49" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">HEADER</text>
+        <text x="105" y="68" text-anchor="middle" font-size="9" fill="#6b675f">alg (e.g. RS256)</text>
+        <text x="105" y="83" text-anchor="middle" font-size="9" fill="#6b675f">typ: JWT</text>
+        <text x="105" y="104" text-anchor="middle" font-size="8" fill="#9a2417">pin alg · reject alg:none</text>
+        <text x="206" y="78" text-anchor="middle" font-size="16" font-weight="700" fill="#7a1f12">.</text>
+        <rect x="218" y="30" width="200" height="86" rx="9" fill="#fbfaf2" stroke="#6b675f"/>
+        <text x="318" y="49" text-anchor="middle" font-size="11" font-weight="700">PAYLOAD (claims)</text>
+        <text x="318" y="68" text-anchor="middle" font-size="9" fill="#6b675f">sub · iss · aud · exp</text>
+        <text x="318" y="83" text-anchor="middle" font-size="9" fill="#6b675f">scopes / roles</text>
+        <text x="318" y="104" text-anchor="middle" font-size="8" fill="#9a2417">base64, NOT encrypted — no secrets</text>
+        <text x="424" y="78" text-anchor="middle" font-size="16" font-weight="700" fill="#7a1f12">.</text>
+        <rect x="436" y="30" width="194" height="86" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="533" y="49" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">SIGNATURE</text>
+        <text x="533" y="68" text-anchor="middle" font-size="8.5" fill="#6b675f">sign(header.payload,</text>
+        <text x="533" y="81" text-anchor="middle" font-size="8.5" fill="#6b675f">key) → integrity</text>
+        <text x="533" y="104" text-anchor="middle" font-size="8" fill="#244a2e">proves it wasn't forged</text>
+        <!-- verify row -->
+        <rect x="120" y="142" width="400" height="40" rx="9" fill="#fff" stroke="#7a1f12" stroke-width="1.5"/>
+        <text x="320" y="160" text-anchor="middle" font-size="10" font-weight="700" fill="#7a1f12">VERIFY: recompute sig over header+payload with the key —</text>
+        <text x="320" y="174" text-anchor="middle" font-size="9.5" fill="#6b675f">match? then check iss, aud, exp. No match → reject.</text>
+        <line x1="105" y1="116" x2="240" y2="142" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <line x1="318" y1="116" x2="318" y2="142" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <line x1="533" y1="116" x2="400" y2="142" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <text x="320" y="208" text-anchor="middle" font-size="10.5" fill="#9a2417">Catch: hard to revoke before exp — a JWT you don't fully validate is just attacker-supplied JSON.</text>
+      </g>
+    </svg>
+    <figcaption><code>header.payload.signature</code>, signed and verified statelessly by any node. The payload is base64, not encrypted, so never put secrets in it; and it is hard to revoke before <code>exp</code>.</figcaption>
+  </figure>
+  <div class="facts">
+    <div class="fact"><b>JWT — self-contained</b> Verified statelessly on any node, fits REST. Catch: payload is readable, and revocation before <code>exp</code> is hard.</div>
+    <div class="fact"><b>Server-side session</b> Opaque id pointing at server state. Trivial to revoke (delete the row), but stateful — every node needs a shared store.</div>
+    <div class="fact blue"><b>The revocation answer that scores</b> Short-lived access tokens + refresh tokens with rotation, backed by a denylist / introspection for emergency revoke.</div>
+    <div class="fact blue"><b>Validate everything</b> Check signature; pin alg, reject <code>alg:none</code> and alg-confusion; verify <code>iss</code>, <code>aud</code>, <code>exp</code> — on every node.</div>
+  </div>
+  <p class="pull"><strong>Validate every token, every request, on every node.</strong> Short expiry shrinks the blast radius; the denylist handles the "log this device out now" case. A JWT you don't fully validate is just an attacker-supplied JSON blob.</p>
+
+  <!-- BOLA -->
+  <h2 class="sec">The model that actually gets you breached</h2>
+  <p><strong>RBAC</strong> grants by <em>role</em>; <strong>ABAC</strong> decides from <em>attributes</em> (department, region, resource tags) for finer policy. Both answer "can this <em>kind</em> of principal do this <em>kind</em> of thing" — neither, alone, checks you own <em>this</em> object:</p>
+  <figure>
+    <svg viewBox="0 0 640 178" role="img" aria-label="BOLA: an authenticated, role-permitted user changes the id in the path and the API returns another tenant's object because it skipped the ownership check">
+      <g font-family="ui-sans-serif,system-ui,sans-serif">
+        <text x="320" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">OWASP API #1 · BROKEN OBJECT LEVEL AUTHORIZATION</text>
+        <rect x="10" y="30" width="150" height="58" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
+        <text x="85" y="51" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">✓ authenticated</text>
+        <text x="85" y="68" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">✓ role-permitted</text>
+        <text x="85" y="82" text-anchor="middle" font-size="8.5" fill="#6b675f">RBAC/ABAC passed</text>
+        <line x1="160" y1="59" x2="196" y2="59" stroke="#6b675f" marker-end="url(#arw)"/>
+        <rect x="198" y="30" width="200" height="58" rx="9" fill="#f7ecea" stroke="#9a2417" stroke-width="1.5"/>
+        <text x="298" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">GET /accounts/{id}</text>
+        <text x="298" y="70" text-anchor="middle" font-size="9" fill="#7a2218">attacker swaps id → 1042 → 1043</text>
+        <text x="298" y="83" text-anchor="middle" font-size="8.5" fill="#6b675f">no ownership check</text>
+        <line x1="398" y1="59" x2="434" y2="59" stroke="#9a2417" marker-end="url(#arwR)"/>
+        <rect x="436" y="30" width="194" height="58" rx="9" fill="#f7ecea" stroke="#9a2417"/>
+        <text x="533" y="55" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">someone else's data 💥</text>
+        <text x="533" y="72" text-anchor="middle" font-size="8.5" fill="#7a2218">cross-tenant leak</text>
+        <rect x="120" y="108" width="400" height="34" rx="9" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
+        <text x="320" y="123" text-anchor="middle" font-size="10" font-weight="700" fill="#2f5d3a">FIX: on every object access, verify the principal owns THAT exact object</text>
+        <text x="320" y="136" text-anchor="middle" font-size="9" fill="#244a2e">(tenant / owner check) — non-optional</text>
+        <text x="320" y="166" text-anchor="middle" font-size="10.5" fill="#7a1f12">Unguessable ids are not authorization — they're obscurity.</text>
+      </g>
+    </svg>
+    <figcaption>Two siblings round out the top: <strong>#2 Broken Authentication</strong> (weak validation, credential stuffing, no login rate-limit) and <strong>#3 BOPLA</strong> (reading/writing fields the caller shouldn't, e.g. mass-assigning <code>isAdmin</code>).<sup><a href="#s1">1</a></sup></figcaption>
+  </figure>
+  <div class="rule"><span>🔐 Memory rule:</span> AuthN (who? → 401) before AuthZ (may you? → 403). OAuth2 = authorization, OIDC = authentication. Validate the JWT fully on every node; check object ownership on every access — that's what stops BOLA.</div>
+
+  <!-- TRANSPORT HYGIENE -->
+  <h2 class="sec">Transport &amp; hygiene (forgotten under pressure)</h2>
+  <div class="facts">
+    <div class="fact"><b>TLS always</b> Bearer tokens over plaintext is game over — no exceptions, including internal hops.</div>
+    <div class="fact"><b>Tokens never in URLs</b> They leak into access logs, history, and <code>Referer</code>. Authorization header only.</div>
+    <div class="fact"><b>Cookies hardened</b> <code>HttpOnly</code> + <code>Secure</code> + <code>SameSite</code> keep tokens out of JS (XSS) and off cross-site requests (CSRF).</div>
+    <div class="fact"><b>mTLS + rotate</b> Mutual TLS authenticates both ends; rotation limits damage when a key inevitably leaks.</div>
+  </div>
+
+  <!-- RETRIEVAL -->
+  <h2 class="sec">Retrieval practice</h2>
+  <p>Close the lesson in your mind first, then answer from memory. Immediate feedback below.</p>
+  <div class="quiz" id="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q1.</span> An authenticated user requests another tenant's record and is refused. Correct status?</p>
+      <button class="opt">401 Unauthorized, since their token has now expired</button>
+      <button class="opt">429 Too Many, since the request rate was exceeded</button>
+      <button class="opt">403 Forbidden, since identity is known but not allowed</button>
+      <button class="opt">404 Not Found, since the record id was invalid here</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q2.</span> Which statement about OAuth 2.0 and OIDC is correct?</p>
+      <button class="opt">OAuth2 alone authenticates a user from its access token</button>
+      <button class="opt">OIDC adds an identity layer over OAuth2's delegated authz</button>
+      <button class="opt">OIDC replaces OAuth2 entirely for machine-to-machine flows</button>
+      <button class="opt">OAuth2 encrypts the token payload so secrets ride inside</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q3.</span> A JWT's chief weakness versus a server-side session is that it…</p>
+      <button class="opt">cannot ever be validated without a shared central store</button>
+      <button class="opt">leaks its full payload because each claim is encrypted</button>
+      <button class="opt">forces sticky routing of a user onto one single node</button>
+      <button class="opt">is hard to revoke before its own expiry time arrives</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q4.</span> The right defense against BOLA on <code>GET /accounts/{id}</code> is to…</p>
+      <button class="opt">verify the caller's tenant actually owns that exact object</button>
+      <button class="opt">swap the integer id for a long unguessable random value</button>
+      <button class="opt">require a fresh login on each separate account lookup hit</button>
+      <button class="opt">cache the account record so repeated reads stay much faster</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h2 class="sec">Rehearse the answer out loud</h2>
+  <p class="rehearse">Interviewer: <strong>"Design authentication and authorization for a multi-tenant SaaS API used by both end users and partner backend services."</strong> ~60 seconds, from memory (no scrolling up) — then reveal and compare.</p>
+  <div class="rehearse">
+    <textarea placeholder="Your 60-second answer, from memory…"></textarea><br>
+    <button class="btn" onclick="document.getElementById('model').classList.add('show')">Reveal model answer</button>
+    <div class="model" id="model">
+      <p>"I'd standardize on <strong>OAuth2</strong>. For <strong>end users</strong> — web, mobile, SPA — <strong>Authorization Code + PKCE</strong>, with <strong>OIDC</strong> on top for their identity. For <strong>partner backends</strong>, <strong>Client Credentials</strong>, no user in the loop. The authorization server issues <strong>short-lived signed JWT access tokens</strong> plus <strong>rotating refresh tokens</strong>.</p>
+      <p>Every request, on any node, I <strong>validate the signature, algorithm, <code>iss</code>, <code>aud</code>, and <code>exp</code></strong> — fully stateless, so it scales horizontally. <strong>Scopes</strong> give coarse authZ, but the critical part is <strong>object-level checks</strong>: the principal's tenant must own the requested object, which is how I shut down <strong>BOLA</strong>. For revocation I rely on <strong>short expiry plus a denylist / introspection</strong>. And the hygiene: <strong>TLS everywhere, tokens only in the Authorization header, secrets rotated</strong>, mTLS between services."</p>
+      <p class="src"><strong>Why this scores:</strong> it cleanly separates authN from authZ, picks the <em>correct grant per client</em>, handles JWT revocation <em>honestly</em> instead of pretending it's free, and explicitly defends against <em>BOLA</em> — the one failure that actually breaches multi-tenant APIs.</p>
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Want to walk through a PKCE exchange step by step? Curious how refresh-token rotation detects replay? Want me to grade your rehearsal answer, or fire harder follow-ups — token introspection vs. denylist, mTLS vs. signed JWTs between services? Just say so in the chat.
+  </div>
+
+  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Primary source</h3>
+  <p>📖 <a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/"><strong>OWASP API Security Top 10 (2023)</strong></a>: the high-trust catalog of how real APIs get broken — start with API1:2023 (BOLA), API2 (Broken Authentication), and API3 (BOPLA). For the protocol details, <a href="https://www.rfc-editor.org/rfc/rfc6749">OAuth 2.0 (RFC 6749)</a> and the <a href="https://openid.net/developers/how-connect-works/">OIDC overview</a>.</p>
+
+  <div class="nav">
+    <span>📄 Keep handy: <a href="../reference/api-security-and-auth.html">API security &amp; auth reference</a></span>
+    <span><a href="../lessons/0007-caching-and-conditional-requests.html">◂ Prev</a> · <a href="../lessons/0009-error-design-rate-limiting-observability.html"><em>Next ▸ Lesson 9</em></a></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. OWASP API Security Top 10 (2023) — <a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/">owasp.org</a>. <a href="#r1">↩</a></span><br>
+    <span id="s2">2. OAuth 2.0 Authorization Framework, RFC 6749 — <a href="https://www.rfc-editor.org/rfc/rfc6749">rfc-editor.org</a>. <a href="#r2">↩</a></span><br>
+    <span id="s3">3. OpenID Connect — <em>How Connect Works</em> — <a href="https://openid.net/developers/how-connect-works/">openid.net</a>. <a href="#r3">↩</a></span>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

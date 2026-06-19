@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 520" font-family="sans-serif">
+  <defs>
+    <marker id="al3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+    <marker id="alg3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f7a1f"/></marker>
+    <marker id="alb3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b00000"/></marker>
+    <style>
+      .title{font-size:16px;font-weight:bold;fill:#111}
+      .box{fill:#eef1f4;stroke:#444;stroke-width:1.4}
+      .client{fill:#eef5ff;stroke:#2a6099;stroke-width:1.4}
+      .store{fill:#fff3d6;stroke:#b58a3b;stroke-width:1.4}
+      .good{fill:#dff0e3;stroke:#1f7a1f;stroke-width:1.4}
+      .bad{fill:#fbeaea;stroke:#b00000;stroke-width:1.4}
+      .boxT{font-size:11.5px;font-weight:bold;fill:#111}
+      .sub{font-size:9.5px;fill:#555}
+      .arr{stroke:#444;stroke-width:1.5;fill:none}
+      .gT{font-size:11px;font-weight:bold;fill:#1f7a1f}
+      .bT{font-size:11px;font-weight:bold;fill:#b00000}
+      .lbl{font-size:10px;fill:#444}
+    </style>
+  </defs>
+  <rect width="1100" height="520" fill="#ffffff"/>
+  <text x="550" y="26" text-anchor="middle" class="title">The idempotency-key lifecycle — and where it goes wrong</text>
+
+  <!-- main path -->
+  <rect class="client" x="40" y="70" width="170" height="56" rx="6"/><text x="125" y="92" text-anchor="middle" class="boxT">Client</text><text x="125" y="108" text-anchor="middle" class="sub">generate ONE key (UUID)</text><text x="125" y="120" text-anchor="middle" class="sub">per operation · reuse on retry</text>
+  <line class="arr" x1="210" y1="98" x2="250" y2="98" marker-end="url(#al3)"/>
+  <rect class="box" x="252" y="70" width="150" height="56" rx="6"/><text x="327" y="94" text-anchor="middle" class="boxT">Claim</text><text x="327" y="110" text-anchor="middle" class="sub">INSERT in_progress (atomic)</text>
+  <line class="arr" x1="402" y1="98" x2="442" y2="98" marker-end="url(#al3)"/>
+  <rect class="box" x="444" y="70" width="130" height="56" rx="6"/><text x="509" y="94" text-anchor="middle" class="boxT">Execute</text><text x="509" y="110" text-anchor="middle" class="sub">do the work</text>
+  <line class="arr" x1="574" y1="98" x2="614" y2="98" marker-end="url(#al3)"/>
+  <rect class="store" x="616" y="70" width="180" height="56" rx="6"/><text x="706" y="94" text-anchor="middle" class="boxT">Store result (completed)</text><text x="706" y="110" text-anchor="middle" class="sub">kept for TTL (~24 h)</text>
+
+  <!-- repeat node -->
+  <rect class="box" x="430" y="190" width="240" height="40" rx="6"/><text x="550" y="215" text-anchor="middle" class="boxT">a repeat request arrives with the same key…</text>
+  <line class="arr" x1="706" y1="126" x2="600" y2="188" marker-end="url(#al3)"/>
+
+  <!-- branch 1: same fp, within TTL -> saved -->
+  <line x1="430" y1="210" x2="250" y2="280" stroke="#1f7a1f" stroke-width="1.6" marker-end="url(#alg3)"/>
+  <text x="300" y="250" class="lbl">same params, within TTL</text>
+  <rect class="good" x="80" y="284" width="280" height="50" rx="6"/><text x="220" y="305" text-anchor="middle" class="gT">return the SAVED result</text><text x="220" y="322" text-anchor="middle" class="sub">(or 409 if still in_progress)</text>
+
+  <!-- branch 2: different params -> reject -->
+  <line x1="550" y1="230" x2="550" y2="280" stroke="#b00000" stroke-width="1.6" marker-end="url(#alb3)"/>
+  <text x="558" y="262" class="lbl">different params</text>
+  <rect class="bad" x="420" y="284" width="260" height="50" rx="6"/><text x="550" y="305" text-anchor="middle" class="bT">REJECT — 400/422</text><text x="550" y="322" text-anchor="middle" class="sub">fingerprint mismatch (wrong key reuse)</text>
+
+  <!-- branch 3: after TTL -> hazard -->
+  <line x1="670" y1="210" x2="850" y2="280" stroke="#b00000" stroke-width="1.6" marker-end="url(#alb3)"/>
+  <text x="730" y="250" class="lbl">arrives AFTER TTL expiry</text>
+  <rect class="bad" x="740" y="284" width="300" height="50" rx="6"/><text x="890" y="305" text-anchor="middle" class="bT">key gone → treated as NEW → re-executes</text><text x="890" y="322" text-anchor="middle" class="sub">HAZARD: a late redelivery double-charges</text>
+
+  <rect x="160" y="400" width="780" height="76" rx="10" fill="#f6f7f6" stroke="#ddd"/>
+  <text x="550" y="426" text-anchor="middle" class="title" font-size="13">Two rules that prevent the two classic failures</text>
+  <text x="180" y="450" class="sub">• Generate ONE key per operation and reuse it across retries (a fresh key per attempt defeats dedup; one key for many ops collides).</text>
+  <text x="180" y="468" class="sub">• Set the retention TTL longer than your worst-case retry horizon (queue redelivery, backoff cap, DLQ replay) — or late retries resurrect the effect.</text>
+</svg>

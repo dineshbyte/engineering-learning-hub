@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 520" font-family="sans-serif">
+  <defs>
+    <style>
+      .title{font-size:16px;font-weight:bold;fill:#111}
+      .h{font-size:14px;font-weight:bold;fill:#111}
+      .lat{font-size:12px;fill:#222}
+      .time{font-size:12px;font-weight:bold;fill:#26356b;font-family:monospace}
+      .bar{fill:#5b7bbf}
+      .cap{font-size:11px;fill:#555}
+      .calc{font-size:13px;fill:#222;font-family:monospace}
+      .res{font-size:13px;font-weight:bold;fill:#26356b;font-family:monospace}
+      .hl{fill:#eef1f7;stroke:#5566aa;stroke-width:1.4}
+    </style>
+  </defs>
+  <rect width="1000" height="520" fill="#ffffff"/>
+  <text x="500" y="28" text-anchor="middle" class="title">Back-of-the-envelope: the latency ladder and a worked estimate</text>
+  <line x1="500" y1="48" x2="500" y2="480" stroke="#dcdcdc"/>
+
+  <!-- latency ladder -->
+  <text x="40" y="74" class="h">Latency numbers</text>
+  <text x="20" y="100" class="cap">fastest ↑</text>
+  <g>
+    <text x="40" y="120" class="lat">L1 cache reference</text><text x="220" y="120" class="time">1 ns</text><rect class="bar" x="290" y="110" width="14" height="13"/>
+    <text x="40" y="160" class="lat">Main memory (RAM)</text><text x="220" y="160" class="time">100 ns</text><rect class="bar" x="290" y="150" width="40" height="13"/>
+    <text x="40" y="200" class="lat">SSD random read</text><text x="220" y="200" class="time">100 µs</text><rect class="bar" x="290" y="190" width="95" height="13"/>
+    <text x="40" y="240" class="lat">Datacenter round-trip</text><text x="220" y="240" class="time">0.5 ms</text><rect class="bar" x="290" y="230" width="135" height="13"/>
+    <text x="40" y="280" class="lat">Disk seek</text><text x="220" y="280" class="time">10 ms</text><rect class="bar" x="290" y="270" width="170" height="13"/>
+    <text x="40" y="320" class="lat">Cross-region round-trip</text><text x="220" y="320" class="time">100 ms</text><rect class="bar" x="290" y="310" width="195" height="13"/>
+  </g>
+  <text x="20" y="340" class="cap">slowest ↓</text>
+  <text x="40" y="372" class="cap">each rung ≈ 100× the one above — about 8 orders of magnitude end to end.</text>
+
+  <!-- worked estimate -->
+  <text x="540" y="74" class="h">A worked estimate</text>
+  <text x="540" y="120" class="calc">100M daily users × 10 reads</text><text x="960" y="120" text-anchor="end" class="res">= 1B reads/day</text>
+  <text x="540" y="156" class="calc">1B reads / 86,400 s</text><text x="960" y="156" text-anchor="end" class="res">≈ 12K QPS (avg)</text>
+  <rect class="hl" x="700" y="178" width="262" height="30" rx="5"/>
+  <text x="540" y="198" class="calc">× 3 for peak</text><text x="950" y="198" text-anchor="end" class="res">≈ 35K QPS (peak)</text>
+  <line x1="540" y1="226" x2="960" y2="226" stroke="#ccc"/>
+  <rect class="hl" x="700" y="244" width="262" height="30" rx="5"/>
+  <text x="540" y="264" class="calc">1B records × 1 KB</text><text x="950" y="264" text-anchor="end" class="res">= 1 TB/day</text>
+  <text x="540" y="320" class="cap">Two minutes of arithmetic decides the design:</text>
+  <text x="540" y="340" class="cap">35K QPS → you need a cache + load balancer.</text>
+  <text x="540" y="360" class="cap">1 TB/day → one node won't hold it; you shard.</text>
+</svg>

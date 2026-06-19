@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 520" font-family="sans-serif">
+  <defs>
+    <marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+    <style>
+      .title{font-size:16px;font-weight:bold;fill:#111}
+      .hbad{font-size:13px;font-weight:bold;fill:#b00000}
+      .hgood{font-size:13px;font-weight:bold;fill:#1f7a1f}
+      .step{fill:#eef1f4;stroke:#444;stroke-width:1.3}
+      .ok{fill:#dff0e3;stroke:#1f7a1f;stroke-width:1.3}
+      .err{fill:#fde7d6;stroke:#b06000;stroke-width:1.3}
+      .sT{font-size:11px;fill:#111}
+      .lane{font-size:12px;font-weight:bold;fill:#111}
+      .arr{stroke:#444;stroke-width:1.5;fill:none}
+      .sub{font-size:10.5px;fill:#555}
+      .boxBad{fill:#fbeaea;stroke:#b00000;stroke-width:1.5}
+      .boxGood{fill:#e9f6ec;stroke:#1f7a1f;stroke-width:1.5}
+      .resB{font-size:13px;font-weight:bold;fill:#b00000}
+      .resG{font-size:13px;font-weight:bold;fill:#1f7a1f}
+    </style>
+  </defs>
+  <rect width="1020" height="520" fill="#ffffff"/>
+  <text x="510" y="26" text-anchor="middle" class="title">Two retries, one key: the race that defeats a naive idempotency check</text>
+  <line x1="510" y1="46" x2="510" y2="470" stroke="#dcdcdc"/>
+
+  <!-- UNSAFE -->
+  <text x="40" y="74" class="hbad">Check-then-act — UNSAFE</text>
+  <text x="40" y="104" class="lane">Request 1</text>
+  <rect class="step" x="40" y="112" width="160" height="34" rx="5"/><text x="120" y="133" text-anchor="middle" class="sT">read key → NOT SEEN</text>
+  <line class="arr" x1="200" y1="129" x2="240" y2="129" marker-end="url(#ar1)"/>
+  <rect class="err" x="242" y="112" width="120" height="34" rx="5"/><text x="302" y="133" text-anchor="middle" class="sT">charge $10</text>
+  <text x="40" y="178" class="lane">Request 2</text>
+  <rect class="step" x="40" y="186" width="160" height="34" rx="5"/><text x="120" y="207" text-anchor="middle" class="sT">read key → NOT SEEN</text>
+  <line class="arr" x1="200" y1="203" x2="240" y2="203" marker-end="url(#ar1)"/>
+  <rect class="err" x="242" y="186" width="120" height="34" rx="5"/><text x="302" y="207" text-anchor="middle" class="sT">charge $10</text>
+  <text x="40" y="250" class="sub">both read BEFORE either wrote → neither sees the other.</text>
+  <rect class="boxBad" x="40" y="272" width="430" height="44" rx="6"/>
+  <text x="255" y="299" text-anchor="middle" class="resB">DOUBLE CHARGE — the key bought nothing</text>
+
+  <!-- SAFE -->
+  <text x="540" y="74" class="hgood">Atomic claim — SAFE</text>
+  <text x="540" y="104" class="lane">Request 1 (wins the insert)</text>
+  <rect class="ok" x="540" y="112" width="150" height="34" rx="5"/><text x="615" y="133" text-anchor="middle" class="sT">INSERT key (in_progress) ✓</text>
+  <line class="arr" x1="690" y1="129" x2="724" y2="129" marker-end="url(#ar1)"/>
+  <rect class="step" x="726" y="112" width="100" height="34" rx="5"/><text x="776" y="133" text-anchor="middle" class="sT">charge $10</text>
+  <line class="arr" x1="826" y1="129" x2="850" y2="129" marker-end="url(#ar1)"/>
+  <rect class="ok" x="852" y="112" width="130" height="34" rx="5"/><text x="917" y="129" text-anchor="middle" class="sT">UPDATE completed</text><text x="917" y="142" text-anchor="middle" class="sub">+ save result</text>
+  <text x="540" y="178" class="lane">Request 2 (loses the insert)</text>
+  <rect class="err" x="540" y="186" width="150" height="34" rx="5"/><text x="615" y="207" text-anchor="middle" class="sT">INSERT key ✗ duplicate</text>
+  <line class="arr" x1="690" y1="203" x2="724" y2="203" marker-end="url(#ar1)"/>
+  <rect class="step" x="726" y="186" width="130" height="34" rx="5"/><text x="791" y="203" text-anchor="middle" class="sT">read row: in_progress</text>
+  <line class="arr" x1="856" y1="203" x2="880" y2="203" marker-end="url(#ar1)"/>
+  <rect class="step" x="882" y="186" width="100" height="34" rx="5"/><text x="932" y="207" text-anchor="middle" class="sT">409 retry</text>
+  <text x="540" y="250" class="sub">the UNIQUE constraint lets exactly one request claim the key.</text>
+  <rect class="boxGood" x="540" y="272" width="442" height="44" rx="6"/>
+  <text x="761" y="299" text-anchor="middle" class="resG">charged ONCE — second request gets 409 (or the saved result)</text>
+
+  <rect x="160" y="400" width="700" height="44" rx="8" fill="#f6f7f6" stroke="#ddd"/>
+  <text x="510" y="422" text-anchor="middle" class="title" font-size="13">Claim the key with an atomic INSERT — never "check, then act".</text>
+  <text x="510" y="439" text-anchor="middle" class="sub">(Stale in_progress needs a lease/timeout so a crashed request doesn't block all retries forever.)</text>
+</svg>

@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 540" font-family="sans-serif">
+  <defs>
+    <marker id="ap9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+    <marker id="adlq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b00000"/></marker>
+    <marker id="arp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a6601a"/></marker>
+    <style>
+      .title{font-size:16px;font-weight:bold;fill:#111}
+      .box{fill:#eef1f4;stroke:#444;stroke-width:1.4}
+      .txn{fill:#eefaf0;stroke:#1f7a1f;stroke-width:1.5;stroke-dasharray:6 4}
+      .tbl{fill:#fff;stroke:#888;stroke-width:1}
+      .cell{fill:#fdf0d6;stroke:#b58a3b;stroke-width:1}
+      .cyl{fill:#e9f0f7;stroke:#2a6099;stroke-width:1.4}
+      .dlq{fill:#fbeaea;stroke:#b00000;stroke-width:1.3}
+      .boxT{font-size:11.5px;font-weight:bold;fill:#111}
+      .sub{font-size:9.5px;fill:#555}
+      .arr{stroke:#444;stroke-width:1.6;fill:none}
+      .off{font-size:8px;fill:#999}
+      .tagG{font-size:10px;font-weight:bold;fill:#1f7a1f}
+      .tagB{font-size:10px;font-weight:bold;fill:#2a6099}
+      .tagR{font-size:10px;font-weight:bold;fill:#b00000}
+      .tagA{font-size:10px;font-weight:bold;fill:#a6601a}
+      .cap{font-size:10.5px;fill:#555}
+    </style>
+  </defs>
+  <rect width="1120" height="540" fill="#ffffff"/>
+  <text x="560" y="26" text-anchor="middle" class="title">Making at-least-once safe: outbox · dedupe · DLQ · replay</text>
+
+  <!-- STAGE 1: Service + outbox -->
+  <rect class="box" x="30" y="90" width="120" height="34" rx="5"/><text x="90" y="112" text-anchor="middle" class="boxT">Service</text>
+  <rect class="txn" x="24" y="134" width="170" height="92" rx="8"/><text x="109" y="152" text-anchor="middle" class="tagG">ONE DB TRANSACTION</text>
+  <rect class="tbl" x="40" y="160" width="64" height="54" rx="4"/><text x="72" y="182" text-anchor="middle" class="sub">orders</text><text x="72" y="198" text-anchor="middle" class="sub">(business)</text>
+  <rect class="tbl" x="116" y="160" width="64" height="54" rx="4"/><text x="148" y="182" text-anchor="middle" class="sub">outbox</text><text x="148" y="198" text-anchor="middle" class="sub">(event)</text>
+  <text x="109" y="244" text-anchor="middle" class="tagG">OUTBOX — both commit or neither</text>
+
+  <!-- relay arrow -->
+  <line class="arr" x1="194" y1="180" x2="300" y2="180" marker-end="url(#ap9)"/>
+  <rect class="box" x="218" y="150" width="60" height="26" rx="4"/><text x="248" y="167" text-anchor="middle" class="sub">Relay</text>
+  <text x="240" y="200" text-anchor="middle" class="cap">CDC / poller</text>
+  <text x="240" y="214" text-anchor="middle" class="cap">at-least-once</text>
+
+  <!-- STAGE 2: Kafka topic -->
+  <text x="430" y="118" text-anchor="middle" class="boxT">Kafka topic: orders (durable)</text>
+  <g>
+    <rect class="cell" x="306" y="128" width="40" height="34"/><text x="326" y="176" text-anchor="middle" class="off">0</text>
+    <rect class="cell" x="346" y="128" width="40" height="34"/><text x="366" y="176" text-anchor="middle" class="off">1</text>
+    <rect class="cell" x="386" y="128" width="40" height="34"/><text x="406" y="176" text-anchor="middle" class="off">2</text>
+    <rect class="cell" x="426" y="128" width="74" height="34"/><text x="463" y="148" text-anchor="middle" class="sub">eventId=e-9f3</text><text x="463" y="176" text-anchor="middle" class="off">3</text>
+    <rect class="cell" x="500" y="128" width="40" height="34"/><text x="520" y="176" text-anchor="middle" class="off">4</text>
+  </g>
+  <path d="M540,150 C 580,210 320,210 326,166" stroke="#a6601a" stroke-width="1.4" fill="none" stroke-dasharray="5 4" marker-end="url(#arp)"/>
+  <text x="430" y="228" text-anchor="middle" class="tagA">REPLAY = reset offset to 0 (rebuild read model)</text>
+
+  <!-- consume arrow -->
+  <line class="arr" x1="540" y1="145" x2="640" y2="145" marker-end="url(#ap9)"/>
+  <text x="590" y="136" text-anchor="middle" class="cap">consume</text>
+
+  <!-- STAGE 3: idempotent consumer -->
+  <rect class="box" x="644" y="110" width="180" height="80" rx="6"/><text x="734" y="134" text-anchor="middle" class="boxT">Idempotent Consumer</text>
+  <rect class="tbl" x="660" y="144" width="148" height="34" rx="4"/><text x="734" y="160" text-anchor="middle" class="sub">processed_events(eventId)</text><text x="734" y="173" text-anchor="middle" class="sub">seen? skip : apply</text>
+  <text x="734" y="206" text-anchor="middle" class="tagB">DEDUPE BY EVENT ID</text>
+
+  <!-- apply once -->
+  <line class="arr" x1="824" y1="150" x2="924" y2="150" marker-end="url(#ap9)"/>
+  <text x="874" y="141" text-anchor="middle" class="cap">apply once</text>
+  <rect class="cyl" x="928" y="120" width="160" height="56" rx="10"/><text x="1008" y="146" text-anchor="middle" class="boxT">Read model</text><text x="1008" y="164" text-anchor="middle" class="sub">order_summary</text>
+
+  <!-- DLQ branch -->
+  <line x1="734" y1="190" x2="734" y2="300" stroke="#b00000" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#adlq)"/>
+  <text x="744" y="250" class="tagR">fails N times (poison)</text>
+  <rect class="dlq" x="640" y="304" width="190" height="40" rx="5"/><text x="735" y="322" text-anchor="middle" class="tagR">Dead-Letter Queue: orders.DLQ</text><text x="735" y="337" text-anchor="middle" class="cap">quarantine + alert; partition keeps flowing</text>
+
+  <!-- legend -->
+  <rect x="60" y="400" width="1000" height="64" rx="10" fill="#f7f7f5" stroke="#ddd"/>
+  <text x="80" y="426" class="tagG">[✓] OUTBOX</text><text x="80" y="444" class="cap">atomic publish</text>
+  <text x="340" y="426" class="tagB">[✓] DEDUPE</text><text x="340" y="444" class="cap">idempotent effect</text>
+  <text x="600" y="426" class="tagR">[✓] DLQ</text><text x="600" y="444" class="cap">poison messages</text>
+  <text x="840" y="426" class="tagA">[✓] REPLAY</text><text x="840" y="444" class="cap">rebuild from the log</text>
+</svg>

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Interview Bank 1 · REST Foundations</title>
+<link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+<p class="kicker">Interview Bank 1 · REST Foundations</p>
+<h1>REST foundations — interview questions</h1>
+<p class="meta">Core / Senior / Staff · answer from memory first</p>
+
+<div class="box"><span class="label">How to use</span> Read each question and answer it from memory FIRST — out loud or in writing — then read the answer below to check. Recognising an answer is not the same as recalling it under pressure.</div>
+
+<h2>What REST actually is</h2>
+
+<div class="qa"><p class="q"><span class="tag t-core">Core</span> <span class="qnum">01</span> What is REST, precisely?</p><div class="answer"><p>An <strong>architectural style</strong> defined by a set of constraints, coined by Roy Fielding — <em>not</em> a protocol, data format, or "JSON over HTTP." An API is "RESTful" only to the degree it honors the constraints. Naming it as a style (not a spec) is the senior tell.</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-core">Core</span> <span class="qnum">02</span> Name the six architectural constraints.</p><div class="answer"><p>Client–server, stateless, cacheable, uniform interface, layered system, and code-on-demand (the only optional one).</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">03</span> Is REST the same thing as HTTP?</p><div class="answer"><p>No. REST is a <em>style</em>; HTTP is a <em>protocol</em> that happens to fit it very well. You can apply REST principles over other protocols, and you can absolutely use HTTP <em>un</em>-RESTfully — e.g. tunnelling everything through one <code>POST</code> endpoint (Richardson Level 0).</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">04</span> Resource vs representation — what's the difference?</p><div class="answer"><p>A <strong>resource</strong> is the abstract thing identified by a URI (a user, an order). A <strong>representation</strong> is a snapshot of that resource's state in some format (JSON, XML) transferred over the wire. Clients manipulate representations, never the resource directly — and a resource can have several representations.</p></div></div>
+
+<h2>Statelessness</h2>
+
+<div class="qa"><p class="q"><span class="tag t-core">Core</span> <span class="qnum">05</span> What does the statelessness constraint actually require?</p><div class="answer"><p>Each request must carry everything the server needs to process it; the server keeps <strong>no per-client session state between requests</strong>. State lives on the client (or in a shared datastore the request points at), not in server memory tied to a connection.</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">06</span> Why does statelessness help you scale?</p><div class="answer"><p>Because <em>any</em> node can serve <em>any</em> request — no sticky sessions, no session affinity. You scale horizontally by adding boxes behind a load balancer, and a node dying doesn't lose a user's session. It also improves visibility (each request is self-contained, so caches/proxies/monitoring can reason about it alone).</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">07</span> "Stateless" means no database and no cookies, right?</p><div class="answer"><p>No — a common misconception. It means no <em>server-side session</em> state between requests. Application/resource state in a database is completely fine. Auth state moves into a token sent on every request (e.g. a Bearer/JWT) instead of a server-held session.</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">08</span> What are the costs of statelessness, and how do you mitigate them?</p><div class="answer"><p>Every request must re-send context (auth, etc.), so requests are larger and you can't lean on cheap in-memory session affinity. You also can't trivially do server-push of session changes. Mitigations: compact signed tokens, caching/CDNs, idempotency keys to make retries safe, and a shared cache/store (Redis) when you genuinely need cross-request state — accepting it's then explicit, not hidden in a node's memory.</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">09</span> How does statelessness shape your authentication design?</p><div class="answer"><p>It pushes you toward token-based auth: a signed token (JWT) on every request that any node can validate independently, rather than a server-side session looked up from memory. That's why stateless REST and JWT pair so naturally — and why "where does the session live?" is the wrong question for a pure REST API.</p></div></div>
+
+<h2>Uniform interface &amp; HATEOAS</h2>
+
+<div class="qa"><p class="q"><span class="tag t-core">Core</span> <span class="qnum">10</span> What are the four sub-constraints of the uniform interface?</p><div class="answer"><p>(1) Identification of resources (URIs); (2) manipulation of resources through representations; (3) self-descriptive messages (each message carries enough to be understood — method, media type, status); (4) hypermedia as the engine of application state (HATEOAS).</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-core">Core</span> <span class="qnum">11</span> What is HATEOAS?</p><div class="answer"><p>Hypermedia As The Engine Of Application State: responses include <strong>links advertising the valid next actions</strong>, so the client discovers what it can do rather than hard-coding URIs and workflow. The server can then change its URL structure without breaking clients.</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">12</span> If HATEOAS is part of REST, why is it so rare in real APIs?</p><div class="answer"><p>Because the payoff rarely justifies the cost. Most clients are first-party and version-pinned — they don't dynamically follow links, they're coded against known endpoints. Tooling/codegen and developers expect fixed URLs. So the decoupling HATEOAS buys goes unused, and teams stop at Level 2. The senior move is to <em>know</em> that and say so, not to pretend everyone does L3.</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">13</span> When would you actually invest in HATEOAS / Level 3?</p><div class="answer"><p>When you have <strong>many third-party clients you can't redeploy</strong> and need to evolve URLs/workflows without breaking them; when the API models a <strong>state machine</strong> where the available actions genuinely change (e.g. a payment that can be captured/refunded/voided depending on state — links express the legal transitions); or where discoverability is a product feature.</p></div></div>
+
+<h2>Maturity model</h2>
+
+<div class="qa"><p class="q"><span class="tag t-core">Core</span> <span class="qnum">14</span> Describe the Richardson Maturity Model.</p><div class="answer"><p>A 0–3 ladder of how fully an API uses REST's ideas: <strong>L0</strong> one URI / one verb (RPC-over-HTTP, "Swamp of POX"); <strong>L1</strong> many resources, each a URI; <strong>L2</strong> proper HTTP verbs + status codes; <strong>L3</strong> hypermedia (HATEOAS).</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-core">Core</span> <span class="qnum">15</span> What level do most production "REST" APIs sit at?</p><div class="answer"><p>Level 2 — correct resources, verbs, and status codes, but no hypermedia. That's the pragmatic industry bar.</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">16</span> Is a Level 2 API "really REST" by Fielding's own definition?</p><div class="answer"><p>Strictly, no — Fielding argues that without the hypermedia constraint it isn't truly REST. But Level 2 is what the industry pragmatically means by "REST." The strong answer names that tension explicitly and then defends the pragmatic choice for the given context, rather than dodging it.</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">17</span> Give a concrete example of a Level 0 system.</p><div class="answer"><p>Classic SOAP / XML-RPC: a single endpoint (e.g. <code>POST /api</code>) where the action lives in the request body and HTTP is just a transport tunnel. Status and verbs carry no semantic meaning.</p></div></div>
+
+<h2>REST vs the alternatives</h2>
+
+<div class="qa"><p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">18</span> REST vs gRPC/RPC — when would you pick each?</p><div class="answer"><p><strong>REST</strong>: resource-oriented, leans on HTTP caching, broad client reach, easy to evolve, great for public/edge-facing APIs. <strong>gRPC/RPC</strong>: low-latency internal service-to-service, strict typed contracts (protobuf), bidirectional streaming, high throughput — but binary, less browser/edge-friendly, weaker HTTP-cache story. Rule of thumb: REST at the edge, gRPC between internal services.</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-senior">Senior</span> <span class="qnum">19</span> REST vs GraphQL — what are the trade-offs?</p><div class="answer"><p><strong>GraphQL</strong>: client shapes the query, killing over-/under-fetching; one endpoint; excellent for many varied clients. Costs: HTTP caching is hard (usually <code>POST</code>), query-cost/N+1 control, and you lose HTTP-native semantics (status, methods, conditional requests). <strong>REST</strong>: simpler, cache-friendly, ubiquitous, but fixed response shapes lead to over-/under-fetching. Many systems run both.</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-staff">Staff</span> <span class="qnum">20</span> A team says "let's make our API RESTful." How do you advise them?</p><div class="answer"><p>First ask <em>why</em> — what outcome do they want (evolvability, caching, DX, broad reach)? Then assess current maturity. For most, the goal is a clean Level 2: good resource modeling, correct verbs/status codes, real cache headers, consistent errors. Pursue L3/HATEOAS only if uncontrollable third-party clients or a genuine state machine demand it. Don't chase REST purity for its own sake — tie every constraint back to a concrete benefit.</p></div></div>
+
+<div class="qa"><p class="q"><span class="tag t-core">Core</span> <span class="qnum">21</span> Why do interviewers open with "what makes an API RESTful?"</p><div class="answer"><p>Because the answer reveals whether you understand the <em>why</em> behind design — the constraints and their trade-offs — versus just the surface mechanics (verbs, JSON). It's a fast, reliable predictor of the quality of every downstream design answer you'll give.</p></div></div>
+
+<hr/>
+<p class="src">Interview Bank 1 · pairs with Lesson 1.</p>
+</body>
+</html>

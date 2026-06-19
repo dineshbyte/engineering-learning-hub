@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 3 · Failure modes &amp; the LSM read path</title>
+<script>(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script>function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}</script>
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<style>:root{--accent:var(--track-bloom)}</style>
+</head>
+<body>
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="0002-sizing-a-bloom-filter.html" title="Sizing a Bloom filter">&#8249; Prev</a><a href="0004-variants-at-scale.html" title="Variants at scale">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Bloom Filters &#183; Senior</span></span>
+  </nav>
+  <div class="kicker">Lesson 3 · Senior</div>
+  <h1>Failure modes &amp; the <em>real</em> LSM read path</h1>
+  <p class="meta">~7 min · visual-first · retrieval practice at the end</p>
+
+  <div class="mission">
+    <strong>Why this, first.</strong> The senior gap is knowing how a Bloom filter <em>earns its keep</em>
+    in a real database — and how it silently rots if you ignore load.
+  </div>
+
+  <figure>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 320" font-family="ui-sans-serif,system-ui,sans-serif">
+      <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#136f63"/></marker></defs>
+      <rect width="720" height="320" fill="#fffff8"/>
+      <text x="360" y="28" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">LSM-tree read: the Bloom filter guards the disk</text>
+      <rect x="20" y="58" width="150" height="48" rx="8" fill="#e8f1ef" stroke="#136f63"/>
+      <text x="95" y="80" text-anchor="middle" font-size="14" fill="#0f4f47">read(key)</text>
+      <text x="95" y="97" text-anchor="middle" font-size="11" fill="#6b675f">look up one SSTable</text>
+      <rect x="225" y="52" width="186" height="60" rx="8" fill="#fff" stroke="#9a7a17"/>
+      <text x="318" y="76" text-anchor="middle" font-size="14" fill="#7a5e12">check SSTable&#8217;s Bloom</text>
+      <text x="318" y="96" text-anchor="middle" font-size="11" fill="#6b675f">in RAM &#8212; nanoseconds</text>
+      <path d="M170 82 L225 82" fill="none" stroke="#136f63" stroke-width="1.5" marker-end="url(#a)"/>
+      <rect x="470" y="44" width="232" height="50" rx="8" fill="#eef5ee" stroke="#2f5d3a"/>
+      <text x="586" y="66" text-anchor="middle" font-size="14" fill="#2f5d3a" font-weight="bold">&#8220;no&#8221; &#8594; SKIP the disk</text>
+      <text x="586" y="84" text-anchor="middle" font-size="11" fill="#2f5d3a">certain absent &#8212; no I/O at all</text>
+      <rect x="470" y="116" width="232" height="50" rx="8" fill="#fbf3e6" stroke="#9a7a17"/>
+      <text x="586" y="138" text-anchor="middle" font-size="14" fill="#7a5e12">&#8220;maybe&#8221; &#8594; READ disk</text>
+      <text x="586" y="156" text-anchor="middle" font-size="11" fill="#6b675f">then verify &#8212; may be a false positive</text>
+      <path d="M411 74 L470 68" fill="none" stroke="#2f5d3a" stroke-width="1.6" marker-end="url(#a)"/>
+      <path d="M411 92 L470 136" fill="none" stroke="#9a7a17" stroke-width="1.6" marker-end="url(#a)"/>
+      <text x="438" y="60" font-size="11" fill="#2f5d3a" font-weight="bold">no</text>
+      <text x="436" y="128" font-size="11" fill="#7a5e12" font-weight="bold">maybe</text>
+      <rect x="470" y="188" width="232" height="42" rx="6" fill="#f0ede2" stroke="#d8d4c8"/>
+      <text x="586" y="205" text-anchor="middle" font-size="12" fill="#3a372f">Disk / SSD: the slow path</text>
+      <text x="586" y="221" text-anchor="middle" font-size="11" fill="#6b675f">microseconds&#8211;milliseconds, &#215;1000s</text>
+      <path d="M586 166 L586 188" fill="none" stroke="#9a7a17" stroke-width="1.5" marker-end="url(#a)"/>
+      <rect x="20" y="252" width="682" height="48" rx="8" fill="#eef5ee" stroke="#2f5d3a"/>
+      <text x="361" y="272" text-anchor="middle" font-size="13" fill="#2f5d3a" font-weight="bold">No false negatives &#8594; a &#8220;no&#8221; is always safe to trust &#8594; skipping disk never loses data</text>
+      <text x="361" y="290" text-anchor="middle" font-size="11" fill="#6b675f">RocksDB &amp; Cassandra put one Bloom filter per SSTable for exactly this</text>
+    </svg>
+    <figcaption>A per-SSTable Bloom filter turns most <em>absent-key</em> lookups into a free RAM check<sup><a href="#s1" id="r1">1</a></sup>.</figcaption>
+  </figure>
+
+  <h2>Failure mode 1 — saturation: the FP rate is not constant</h2>
+  <p>Size for <code>n</code>; keep inserting past it; bits fill, and the FP rate climbs toward 1.</p>
+  <figure>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 280" font-family="ui-sans-serif,system-ui,sans-serif">
+      <rect width="680" height="280" fill="#fffff8"/>
+      <text x="340" y="26" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">More items &#8594; more bits set &#8594; FP rate rises</text>
+      <!-- axes -->
+      <line x1="70" y1="220" x2="640" y2="220" stroke="#6b675f" stroke-width="1"/>
+      <line x1="70" y1="60" x2="70" y2="220" stroke="#6b675f" stroke-width="1"/>
+      <text x="355" y="262" text-anchor="middle" font-size="12" fill="#6b675f">load = items inserted &#247; design n</text>
+      <text x="26" y="140" text-anchor="middle" font-size="12" fill="#6b675f" transform="rotate(-90 26 140)">FP rate</text>
+      <!-- bars: bits-set fraction (light) and FP rate (teal) at increasing load -->
+      <!-- 0.5x -->
+      <rect x="100" y="200" width="34" height="20" fill="#9fe7da" stroke="#0f4f47"/>
+      <rect x="138" y="208" width="34" height="12" fill="#136f63" stroke="#0f4f47"/>
+      <text x="135" y="236" text-anchor="middle" font-size="11" fill="#3a372f">0.5&#215;</text>
+      <!-- 1.0x design -->
+      <rect x="220" y="178" width="34" height="42" fill="#9fe7da" stroke="#0f4f47"/>
+      <rect x="258" y="196" width="34" height="24" fill="#136f63" stroke="#0f4f47"/>
+      <text x="255" y="236" text-anchor="middle" font-size="11" fill="#2f5d3a" font-weight="bold">1&#215; design</text>
+      <!-- 2x -->
+      <rect x="340" y="142" width="34" height="78" fill="#9fe7da" stroke="#0f4f47"/>
+      <rect x="378" y="158" width="34" height="62" fill="#136f63" stroke="#0f4f47"/>
+      <text x="375" y="236" text-anchor="middle" font-size="11" fill="#3a372f">2&#215;</text>
+      <!-- 4x -->
+      <rect x="460" y="92" width="34" height="128" fill="#9fe7da" stroke="#0f4f47"/>
+      <rect x="498" y="100" width="34" height="120" fill="#136f63" stroke="#0f4f47"/>
+      <text x="495" y="236" text-anchor="middle" font-size="11" fill="#3a372f">4&#215;</text>
+      <!-- legend -->
+      <rect x="560" y="64" width="14" height="14" fill="#9fe7da" stroke="#0f4f47"/><text x="580" y="76" font-size="11" fill="#3a372f">bits set</text>
+      <rect x="560" y="84" width="14" height="14" fill="#136f63" stroke="#0f4f47"/><text x="580" y="96" font-size="11" fill="#3a372f">FP rate</text>
+      <text x="355" y="118" text-anchor="middle" font-size="12" fill="#9a2417" font-weight="bold">designed FP &#8594; quietly multiplied as it fills</text>
+    </svg>
+    <figcaption>Past the design point, accuracy decays &#8212; the structure keeps answering, just worse<sup><a href="#s2" id="r2">2</a></sup>.</figcaption>
+  </figure>
+  <div class="cards">
+    <div class="card"><div class="v">FPR rises</div><div class="l">as n grows past design</div></div>
+    <div class="card"><div class="v">(1&#8722;e<sup>&#8722;kn/m</sup>)<sup>k</sup></div><div class="l">FPR grows with n</div></div>
+    <div class="card"><div class="v">no error</div><div class="l">it degrades silently</div></div>
+  </div>
+
+  <h2>Failure mode 2 — the LSM payoff, and when it breaks</h2>
+  <div class="steps">
+    <div class="step"><div class="lab">Absent key</div><div class="big">Bloom: &#8220;no&#8221;</div><div class="sub">skip disk &#8212; pure RAM cost</div></div>
+    <div class="arrow">&#8594;</div>
+    <div class="step"><div class="lab">Present key</div><div class="big">Bloom: &#8220;maybe&#8221;</div><div class="sub">read disk, then verify</div></div>
+    <div class="arrow">&#8594;</div>
+    <div class="step"><div class="lab">Saturated</div><div class="big">&#8220;maybe&#8221; for all</div><div class="sub">disk read on every miss</div></div>
+  </div>
+  <p>When the filter saturates, &#8220;no&#8221; nearly vanishes &#8212; the guard stops guarding and reads hit disk.</p>
+
+  <h2>Failure mode 3 — bad hashes, no deletes, unbounded growth</h2>
+  <table>
+    <tr><th>Failure mode</th><th>Symptom</th><th>Fix</th></tr>
+    <tr><td>Weak / correlated hashes</td><td>FP rate worse than theory</td><td>Independent, well-mixed hashes<sup><a href="#s2" id="r2b">2</a></sup></td></tr>
+    <tr><td>No-delete (standard filter)</td><td>Deleted keys stay &#8220;present&#8221;</td><td>Periodic rebuild or counting variant<sup><a href="#s2" id="r2c">2</a></sup></td></tr>
+    <tr><td>Unbounded growth</td><td>Set outgrows the array</td><td>Re-size / shard / scalable filter</td></tr>
+  </table>
+  <p>A standard Bloom filter cannot remove a bit safely &#8212; clearing it could un-set a bit shared by a live key.</p>
+
+  <p class="rule"><strong>A Bloom filter&#8217;s accuracy decays with load &#8212; size for peak n and rebuild, or it silently rots.</strong></p>
+
+  <hr class="note">
+
+  <h2>Retrieval practice</h2>
+  <p>Answer from memory — feedback is instant.</p>
+
+  <div class="quiz" id="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q1.</span> In an LSM read, a Bloom &#8220;no&#8221; lets the engine&#8230;</p>
+      <button class="opt">delete the stored row from the SSTable</button>
+      <button class="opt">rebuild the file index for the SSTable</button>
+      <button class="opt">skip the on-disk read for the SSTable</button>
+      <button class="opt">verify the lookup key in the SSTable</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q2.</span> Skipping disk on &#8220;no&#8221; is always safe because&#8230;</p>
+      <button class="opt">false positives can never occur here</button>
+      <button class="opt">false negatives can never occur here</button>
+      <button class="opt">the disk read is now cached in memory</button>
+      <button class="opt">the hash count is now tuned to load</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q3.</span> As the filter fills past its design n, the FP rate&#8230;</p>
+      <button class="opt">stays fixed at the rate you designed</button>
+      <button class="opt">falls off because more bits are set</button>
+      <button class="opt">resets back once the array is filled</button>
+      <button class="opt">climbs steadily up toward one in use</button>
+      <p class="fb"></p>
+    </div>
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q4.</span> A standard filter can&#8217;t delete keys, so over time&#8230;</p>
+      <button class="opt">stale entries pile up until rebuild</button>
+      <button class="opt">false negatives begin to appear too</button>
+      <button class="opt">the bit array shrinks back on its own</button>
+      <button class="opt">the hash count must drop to recover</button>
+      <p class="fb"></p>
+    </div>
+  </div>
+
+  <h2>Rehearse out loud</h2>
+  <p class="rehearse">Interviewer: <strong>"You're paging on a rising false-positive rate in a Bloom-fronted
+    cache in production — diagnose and fix."</strong> ~60 seconds, from memory — then reveal and compare.</p>
+  <div class="rehearse">
+    <textarea placeholder="Your 60-second answer, from memory…"></textarea><br>
+    <button class="btn ghost" onclick="document.getElementById('model').classList.add('show')">Reveal model answer</button>
+    <div class="model" id="model">
+      <p>First hypothesis: <strong>saturation</strong> — the set grew past the <code>n</code> we sized for,
+        so more bits are set and the FP rate climbed toward 1 (it's <code>(1&#8722;e<sup>&#8722;kn/m</sup>)<sup>k</sup></code>,
+        not a constant). I'd confirm by comparing current item count and bits-set fraction against the design.
+        Second: <strong>no-delete staleness</strong> — a standard filter can't remove keys, so churned/deleted
+        entries accumulate and keep matching. Fix: <strong>rebuild</strong> the filter from the live set on a
+        schedule (or compaction), <strong>resize</strong> for the new peak <code>n</code>, and if deletes are
+        frequent switch to a <strong>counting</strong> variant. I'd also verify the hashes are independent —
+        correlated hashes push FPR above theory.</p>
+      <p class="src"><strong>Why this scores:</strong> names saturation as primary cause, ties it to the
+        load-dependent FPR formula, and adds the no-delete staleness angle with rebuild/resize/counting fixes.</p>
+    </div>
+  </div>
+
+  <div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Want the math behind the saturation curve, how RocksDB
+    sizes its per-SSTable filters, or the next lesson (Staff: variants &amp; scale)? Say so.
+  </div>
+
+  <h3>Primary source (read this next)</h3>
+  <p>📖 <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter"><strong>RocksDB Wiki — Bloom Filter</strong></a><sup><a href="#s1" id="r1b">1</a></sup>. The per-SSTable filter and the disk-skip read path, in production.</p>
+
+  <div class="next">
+    <span>📄 Keep handy: <a href="../reference/bloom-filters-cheat-sheet.html">Bloom filters reference</a></span>
+    <span><em>Next ▸ Lesson 4: Variants &amp; scale (Staff) — planned</em></span>
+  </div>
+
+  <footer id="sources">
+    <strong>Sources</strong><br>
+    <span id="s1">1. RocksDB Wiki, "RocksDB Bloom Filter" — per-SSTable filter; a negative skips the SST read, default ~10 bits/key &#8776; 1% FP — <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter">github.com/facebook/rocksdb</a>. <a href="#r1">↩</a> <a href="#r1b">↩</a></span><br>
+    <span id="s2">2. Broder &amp; Mitzenmacher, "Network Applications of Bloom Filters: A Survey", Internet Mathematics 1(4), 2004 — FP rate <code>(1&#8722;e<sup>&#8722;kn/m</sup>)<sup>k</sup></code> rises with n; counting Bloom filters for deletion; the textbook formula is an optimum approximation (cf. NIST, Christensen et&nbsp;al.) — <a href="https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf">harvard.edu</a>, <a href="https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=903775">nist.gov</a>. <a href="#r2">↩</a> <a href="#r2b">↩</a> <a href="#r2c">↩</a></span><br>
+  </footer>
+</div>
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){
+          fb.textContent = '✓ Correct.';
+          fb.className = 'fb ok';
+        } else {
+          opt.classList.add('wrong');
+          fb.textContent = '✗ Not quite — the right answer is highlighted. Re-read it, then say it back out loud.';
+          fb.className = 'fb no';
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

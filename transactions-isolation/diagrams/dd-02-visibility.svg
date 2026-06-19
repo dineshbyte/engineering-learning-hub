@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 520" font-family="sans-serif">
+  <defs>
+    <marker id="av2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+    <style>
+      .title{font-size:16px;font-weight:bold;fill:#111}
+      .ver{fill:#f0f0f0;stroke:#999;stroke-width:1.3}
+      .verA{fill:#dbe7f3;stroke:#2a6099;stroke-width:2}
+      .verB{fill:#dff0e3;stroke:#1f7a1f;stroke-width:2}
+      .vt{font-size:12px;font-weight:bold;fill:#111}
+      .mono{font-size:10px;font-family:monospace;fill:#333}
+      .tx{fill:#eef1f4;stroke:#444;stroke-width:1.4}
+      .txT{font-size:12px;font-weight:bold;fill:#111}
+      .sub{font-size:10px;fill:#555}
+      .aA{stroke:#2a6099;stroke-width:2.2;fill:none}
+      .aB{stroke:#1f7a1f;stroke-width:2.2;fill:none}
+      .rule{font-size:11px;fill:#444}
+    </style>
+  </defs>
+  <rect width="1020" height="520" fill="#ffffff"/>
+  <text x="510" y="26" text-anchor="middle" class="title">Same row, two snapshots, two different visible versions</text>
+
+  <!-- versions of row x (center) -->
+  <text x="510" y="70" text-anchor="middle" class="sub">row x — version chain</text>
+  <rect class="ver" x="400" y="84" width="220" height="40" rx="5"/><text x="416" y="102" class="vt" fill="#888">val = A</text><text x="416" y="118" class="mono">xmin 100 · xmax 150</text>
+  <rect class="verA" x="400" y="134" width="220" height="40" rx="5"/><text x="416" y="152" class="vt">val = B</text><text x="416" y="168" class="mono">xmin 150 · xmax 200</text>
+  <rect class="verB" x="400" y="184" width="220" height="40" rx="5"/><text x="416" y="202" class="vt">val = C</text><text x="416" y="218" class="mono">xmin 200 · xmax — (live)</text>
+
+  <!-- Tx A -->
+  <rect class="tx" x="40" y="140" width="180" height="56" rx="6"/><text x="130" y="164" text-anchor="middle" class="txT">Tx A</text><text x="130" y="182" text-anchor="middle" class="sub">snapshot xmax = 180</text>
+  <line class="aA" x1="220" y1="158" x2="396" y2="154" marker-end="url(#av2)"/>
+  <text x="130" y="222" text-anchor="middle" class="vt" fill="#2a6099">sees B</text>
+  <text x="40" y="262" class="sub" fill="#2a6099">B: xmin 150 &lt; 180, committed ✓ · xmax 200 ≥ 180 (deleter not yet in past) → VISIBLE.</text>
+  <text x="40" y="280" class="sub">C: xmin 200 ≥ 180 → in the future → invisible.</text>
+
+  <!-- Tx B -->
+  <rect class="tx" x="800" y="180" width="180" height="56" rx="6"/><text x="890" y="204" text-anchor="middle" class="txT">Tx B</text><text x="890" y="222" text-anchor="middle" class="sub">snapshot xmax = 210</text>
+  <line class="aB" x1="800" y1="206" x2="624" y2="204" marker-end="url(#av2)"/>
+  <text x="890" y="262" text-anchor="middle" class="vt" fill="#1f7a1f">sees C</text>
+  <text x="980" y="302" text-anchor="end" class="sub" fill="#1f7a1f">C: xmin 200 &lt; 210, committed ✓ · xmax — live → VISIBLE.</text>
+  <text x="980" y="320" text-anchor="end" class="sub">B: xmax 200 &lt; 210, committed → deleted in the past → invisible.</text>
+
+  <rect x="120" y="360" width="780" height="116" rx="10" fill="#f6f7f6" stroke="#ddd"/>
+  <text x="510" y="386" text-anchor="middle" class="title" font-size="13">The visibility test (both must hold)</text>
+  <text x="140" y="414" class="rule"><tspan font-weight="bold">(1) xmin is in the past + committed:</tspan>  xmin committed · xmin &lt; snapshot.xmax · xmin not in xip[]  (or xmin is you).</text>
+  <text x="140" y="438" class="rule"><tspan font-weight="bold">(2) xmax is NOT in the past:</tspan>  xmax is 0 / aborted · or xmax ≥ snapshot.xmax · or xmax in xip[].</text>
+  <text x="510" y="464" text-anchor="middle" class="sub">You see a version created by a txn that committed before your snapshot, and not yet deleted by one that did.</text>
+</svg>

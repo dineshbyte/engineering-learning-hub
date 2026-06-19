@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Lesson 4 &#183; Variants at scale</title>
+<link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+<div class="kicker">Lesson 4 &#183; Staff</div>
+<h1>Variants at scale: pick the one whose limit bites</h1>
+
+<div class="mission">
+<strong>The Staff frame.</strong> Standard Bloom is the default. Reach for a variant only when one
+specific limit &#8212; no deletes, unknown <code>n</code>, or speed &#8212; actually hurts.
+</div>
+
+<h2>The decision matrix</h2>
+<figure>
+<img src="images/s4-matrix.png" alt="A matrix comparing four filters across delete support, growth with n, space, and locality. Standard Bloom: no delete, fixed size, best space (1x), k probes. Counting Bloom: supports delete, fixed size, about 4x bits, k probes. Scalable Bloom: no delete, grows automatically with n, space grows with n, k hashes per layer. Cuckoo filter: supports delete, fixed size, less space than Bloom when p is at or below 3 percent, only 2 candidate buckets probed."/>
+<figcaption>Each variant trades one of standard Bloom's costs for relief on a different axis.</figcaption>
+</figure>
+
+<h2>What each one actually changes</h2>
+<table>
+<tr><th>Variant</th><th>Limit it removes</th><th>How &#8212; and the cost</th></tr>
+<tr><td>Counting Bloom</td><td>delete</td><td>bits become ~4-bit counters; increment on add, decrement on remove &#8212; costs ~4&#215; the bits</td></tr>
+<tr><td>Scalable Bloom</td><td>unknown n</td><td>adds a new, larger filter when full; geometric error bounds keep total FP capped</td></tr>
+<tr><td>Cuckoo filter</td><td>delete + space</td><td>stores fingerprints in 2 candidate buckets; smaller than Bloom once p &#8804; 3%</td></tr>
+<tr><td>Blocked Bloom</td><td>speed</td><td>packs an item's k bits into one cache line &#8212; a lookup is one memory access</td></tr>
+</table>
+
+<h2>The Staff use: a cheap negative filter</h2>
+<figure>
+<img src="images/s4-dedup.png" alt="A distributed dedup diagram. N ingest nodes each hold a cheap in-RAM local Bloom filter. They feed a gate that asks: Bloom says? A no is certain, so the event is dropped or accepted locally with no lookup, and most traffic stops there. A maybe (a few percent of traffic) is forwarded to the expensive authoritative source of truth, a database or cross-node lookup, for verification. Bloom turns the expensive lookup from every event into only maybes."/>
+<figcaption>The filter never decides correctness &#8212; it just removes the cheap certainties so the
+authoritative store handles a fraction of the load.</figcaption>
+</figure>
+
+<p class="pull"><strong>Reach for a variant only when standard Bloom's specific limit bites: delete
+to counting / cuckoo; unknown n to scalable; speed to blocked.</strong></p>
+
+<h2>When NOT to use any of them</h2>
+<table>
+<tr><th>Situation</th><th>Use instead</th></tr>
+<tr><td>False positives are unacceptable; you need exact answers</td><td>a real set / index</td></tr>
+<tr><td>You must list or return the items themselves</td><td>a structure that stores keys</td></tr>
+<tr><td>The set is tiny (below ~thousands)</td><td>a plain hash set &#8212; smaller and exact</td></tr>
+</table>
+
+<hr/>
+
+<h2>Retrieval practice</h2>
+<p>Cover the answer key and answer from memory.</p>
+
+<p><strong>Q1.</strong> You need deletes but RAM is very tight. Pick&#8230;</p>
+<ol class="opts" type="a">
+<li>a scalable Bloom, sized for the peak load</li>
+<li>a counting Bloom, paying the extra counters</li>
+<li>a cuckoo filter, smaller at low error rates</li>
+<li>a standard Bloom, rebuilt on each delete</li>
+</ol>
+<p><strong>Q2.</strong> Item count n is unknown and may grow a lot. Use&#8230;</p>
+<ol class="opts" type="a">
+<li>a cuckoo filter with oversized buckets</li>
+<li>a counting Bloom with the widest counter</li>
+<li>a blocked Bloom for the cache-line speed</li>
+<li>a scalable Bloom that chains new layers</li>
+</ol>
+<p><strong>Q3.</strong> The Staff framing of Bloom in a pipeline is&#8230;</p>
+<ol class="opts" type="a">
+<li>the authoritative store of membership truth</li>
+<li>a cheap negative filter before a costly check</li>
+<li>a cache that returns the stored item values</li>
+<li>a replacement for the database index layer</li>
+</ol>
+<p><strong>Q4.</strong> Counting Bloom's cost versus a standard Bloom is&#8230;</p>
+<ol class="opts" type="a">
+<li>about four times the bits for the counters</li>
+<li>about half the bits because deletes free up</li>
+<li>about equal bits with slower lookups only</li>
+<li>about ten times the bits for safe counting</li>
+</ol>
+
+<div class="answerkey">
+<strong>Answer key.</strong>
+Q1 &#8212; (c) cuckoo filter; deletes with the smallest space at low FP rates.
+Q2 &#8212; (d) scalable Bloom; chains new layers as n grows, FP stays capped.
+Q3 &#8212; (b) a cheap negative filter in front of an expensive check.
+Q4 &#8212; (a) ~4&#215; the bits; counters replace single bits.
+</div>
+
+<h2>Rehearse out loud</h2>
+<p>Interviewer: <strong>"Design dedup for a 100-node, 10B-event/day ingest pipeline with a 0.1%
+duplicate tolerance &#8212; what do you use and why?"</strong> Answer in ~60 seconds from memory, then
+compare with the model.</p>
+<div class="model">
+<p>Put a per-node Bloom filter in front of an authoritative dedup store (Redis / a sharded KV). The
+Bloom is a <strong>cheap negative filter</strong>: a "no" is certain, so it drops the bulk of
+duplicates locally and only "maybe" hits pay the cross-node / store lookup &#8212; that's where the
+cost savings live. Size each filter from the target <code>p</code> (~0.1% to ~14.4 bits/item); if
+per-node n is unknown or unbounded, use a <strong>scalable Bloom</strong> so the FP rate stays
+capped as it grows. Plan to shard the authoritative store by key and rebuild / roll filters on a
+time window (events expire), so saturation never pushes the FP rate up. Cuckoo or counting only if I
+actually need deletes.</p>
+<p class="src"><strong>Why this scores:</strong> leads with the cheap-negative-filter framing, sizes
+from p, names the authoritative source of truth, picks scalable for unknown n, and has a rebuild /
+shard plan for saturation &#8212; not just "add a Bloom filter."</p>
+</div>
+
+<h3>Primary sources</h3>
+<p>Fan, Andersen, Kaminsky &amp; Mitzenmacher, "Cuckoo Filter: Practically Better Than Bloom" (ACM
+CoNEXT 2014) &#8212; delete support, locality, and the &#8804;3% space crossover. Almeida, Baquero,
+Pregui&#231;a &amp; Hutchison, "Scalable Bloom Filters" (Information Processing Letters 101(6),
+2007). Mitzenmacher &amp; Broder survey &#8212; counting Bloom filters.</p>
+
+<footer>
+<strong>Sources.</strong>
+1. Mitzenmacher &amp; Broder, "Network Applications of Bloom Filters: A Survey", Internet Mathematics 1(4).
+2. Fan, Andersen, Kaminsky &amp; Mitzenmacher, "Cuckoo Filter: Practically Better Than Bloom", ACM CoNEXT 2014.
+3. Almeida, Baquero, Pregui&#231;a &amp; Hutchison, "Scalable Bloom Filters", Information Processing Letters 101(6), 2007.
+</footer>
+</body>
+</html>
