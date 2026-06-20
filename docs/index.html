@@ -10,6 +10,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>StackDepth — Visual Lessons in System Design &amp; AI Engineering</title>
 <meta name="description" content="Free, visual lessons on system design, AI agents, distributed systems, REST and more. Each one has a quiz and the senior/staff interview questions you actually get asked.">
+<meta name="keywords" content="system design, ai engineering, distributed systems, context engineering, rest api, bloom filters, storage engines, transactions, streaming, interview preparation, senior staff interview, learning hub">
 <meta name="author" content="dineshbyte">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#5b54e6">
@@ -57,7 +58,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   .topbar{position:sticky; top:0; z-index:50; display:flex; align-items:center; gap:1rem;
     padding:.7rem clamp(1rem,4vw,2rem); background:rgba(245,245,242,.82);
     -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); border-bottom:1px solid var(--line)}
-  .brand{display:flex; align-items:center; gap:.5rem; font-weight:800; font-size:1rem; letter-spacing:-.01em}
+  .brand{margin:0; display:flex; align-items:center; gap:.5rem; font-weight:800; font-size:1rem; letter-spacing:-.01em}
   .brand .logo{display:grid; place-items:center; width:1.7rem; height:1.7rem; border-radius:7px;
     background:linear-gradient(135deg,#5b54e6,#0f8a7e); color:#fff; font-size:.9rem}
   .search{margin-left:auto; flex:1; max-width:24rem}
@@ -86,15 +87,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   .wrap{max-width:84rem; margin:0 auto; padding:1.6rem clamp(1rem,4vw,2rem) 5rem}
 
-  /* hero */
-  .hero h1{font-size:clamp(1.6rem,3.4vw,2.3rem); line-height:1.08; margin:.2rem 0 .3rem; letter-spacing:-.02em}
-  .hero p{margin:.2rem 0; color:var(--muted); font-size:.95rem; max-width:46rem}
-  .hero a.inline{color:#5b54e6; text-decoration:none; font-weight:600}
-  .stats{display:flex; flex-wrap:wrap; gap:.5rem .55rem; margin:.9rem 0 .2rem}
-  .stat{font-size:.74rem; color:var(--muted); background:var(--card); border:1px solid var(--line);
-    border-radius:20px; padding:.3rem .7rem}
-  .stat b{color:var(--ink)}
-
   /* topic filter chips */
   .filters{display:flex; flex-wrap:wrap; gap:.5rem; margin:1.3rem 0 .2rem}
   .fchip{display:inline-flex; align-items:center; font:inherit; font-size:.8rem; font-weight:600;
@@ -120,12 +112,17 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   a.ritem:active{background:var(--chip)}
   .themebtn:active, .ghbtn:active, .fpill:active, .soclink:active{transform:scale(.96)}
 
-  /* tile grid — CSS multicolumn masonry: tiles pack tightly, no ragged gaps */
-  .grid{columns:23rem; column-gap:1rem; margin-top:1.3rem}
+  /* tile grid — real CSS grid: even columns, cards top-aligned in clean rows
+     (the old `columns` multicolumn packed unequal-height cards into ragged,
+     unbalanced columns that read as broken). */
+  /* align-items:stretch (default) → every card in a row is the same height, so
+     bottoms line up; .tfoot is pinned to the bottom (margin-top:auto) to absorb
+     the slack in shorter cards. */
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(22rem,1fr));
+    gap:1rem; align-items:stretch; margin-top:1.3rem}
   .tile{background:var(--card); border:1px solid var(--line); border-top:3px solid var(--tc);
     border-radius:14px; padding:1rem 1.1rem 1.05rem; display:flex; flex-direction:column; gap:.7rem;
-    margin:0 0 1rem; break-inside:avoid; -webkit-column-break-inside:avoid; page-break-inside:avoid;
-    transition:box-shadow .15s, transform .15s}
+    margin:0; transition:box-shadow .15s, transform .15s}
   .tile:hover{box-shadow:0 12px 34px rgba(0,0,0,.09); transform:translateY(-2px)}
   .thead{display:flex; align-items:center; gap:.6rem}
   .ico{flex:none; width:2.3rem; height:2.3rem; border-radius:10px; display:grid; place-items:center;
@@ -151,8 +148,10 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   .tags .tag:nth-child(6n+5){--tg:#1f77d0}
   .tags .tag:nth-child(6n+6){--tg:#8a3fbf}
   /* Start CTA — brand accent (consistent across cards + the resume banner);
-     white text in light theme, dark text on the lighter dark-theme accent. */
-  .start{display:flex; align-items:center; justify-content:center; gap:.4rem; text-decoration:none;
+     white text in light theme, dark text on the lighter dark-theme accent.
+     order:2 places it AFTER the footer pills so the button is the last element,
+     pinned to the card bottom → Start/Continue buttons align across every row. */
+  .start{order:2; display:flex; align-items:center; justify-content:center; gap:.4rem; text-decoration:none;
     font-size:.84rem; font-weight:700; color:#fff; background:var(--accent);
     border-radius:9px; padding:.55rem .9rem; transition:filter .12s, transform .08s}
   html[data-theme="dark"] .start{color:#15140f}
@@ -201,7 +200,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   .lwrap[open] > summary{margin-bottom:.3rem}
   .lsum:hover{background:color-mix(in srgb, var(--tc) 16%, transparent)}
   .lsum:active{background:color-mix(in srgb, var(--tc) 24%, transparent)}
-  .tfoot{margin-top:0; display:flex; flex-wrap:wrap; gap:.4rem; padding-top:.7rem; border-top:1px solid var(--line)}
+  .tfoot{margin-top:auto; display:flex; flex-wrap:wrap; gap:.4rem; padding-top:.7rem; border-top:1px solid var(--line)}
   a.pill{font-size:.73rem; text-decoration:none; color:var(--ink); background:var(--chip);
     border:1px solid transparent; border-radius:20px; padding:.3rem .62rem; transition:filter .12s, background .12s}
   a.pill:hover{background:var(--line)}
@@ -224,6 +223,29 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   .ritem .rg{font-size:.7rem; color:var(--muted); margin-top:.08rem}
   .ritem .rkind{margin-left:auto; flex:none; font-size:.62rem; letter-spacing:.08em; text-transform:uppercase;
     color:var(--muted); border:1px solid var(--line); border-radius:5px; padding:.12rem .4rem; white-space:nowrap}
+
+  /* no-results empty state — turns a dead end into the track catalog */
+  .nr{text-align:center; padding:1.6rem .2rem .4rem}
+  .nr-ic{width:3rem; height:3rem; margin:0 auto .6rem; display:grid; place-items:center; border-radius:50%;
+    background:color-mix(in srgb,var(--accent) 12%,transparent); color:var(--accent); font-size:1.4rem}
+  .nr-h{font-weight:700; font-size:1.05rem; margin:0 0 .25rem}
+  .nr-h b{color:var(--accent); word-break:break-word}
+  .nr-sub{color:var(--muted); font-size:.86rem; margin:0 auto 1.2rem; max-width:30rem}
+  .nr-sugg{display:flex; flex-wrap:wrap; justify-content:center; gap:.4rem; margin:0 0 1.7rem}
+  .nr-sugg button{font:inherit; font-size:.78rem; font-weight:600; cursor:pointer; color:var(--ink);
+    background:var(--chip); border:1px solid var(--line); border-radius:20px; padding:.34rem .72rem; transition:border-color .12s,color .12s}
+  .nr-sugg button:hover{border-color:var(--accent); color:var(--accent)}
+  .nr-cap{font-size:.64rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:700; margin:0 0 .8rem}
+  .nr-cats{display:grid; grid-template-columns:repeat(auto-fit,minmax(13rem,1fr)); gap:.8rem; text-align:left}
+  .nr-grp{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:.75rem .85rem}
+  .nr-glab{display:flex; justify-content:space-between; align-items:center; font-size:.64rem; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--muted); font-weight:700; margin:0 0 .5rem}
+  .nr-glab i{font-style:normal; background:var(--chip); border-radius:20px; padding:.05rem .5rem; color:var(--ink); letter-spacing:0}
+  .nr-trk{display:flex; align-items:center; gap:.55rem; text-decoration:none; color:var(--ink);
+    border-radius:8px; padding:.36rem .4rem; font-size:.88rem; font-weight:600}
+  .nr-trk:hover{background:var(--chip)}
+  .nr-trk .d{flex:none; width:.55rem; height:.55rem; border-radius:50%; background:var(--c,#888)}
+  .nr-trk em{margin-left:auto; flex:none; font-style:normal; font-size:.7rem; color:var(--muted); font-weight:600}
 
   footer{margin-top:2.6rem; font-size:.78rem; color:var(--muted); border-top:1px solid var(--line); padding-top:1rem}
   footer em{color:var(--ink); font-style:normal; font-weight:600}
@@ -259,17 +281,14 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   .fbrand .ftxt{font-size:.8rem; line-height:1.5}
   .fbrand .ftxt b{color:var(--ink)}
   @media(max-width:640px){
-    /* tighter hero so the filter row + cards surface sooner */
     .wrap{padding-top:1rem}
-    .hero p{font-size:.86rem; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
-    .stats{margin:.7rem 0 .2rem}
     /* filter chips scroll horizontally instead of wrapping */
     .filters{flex-wrap:nowrap; overflow-x:auto; margin:1rem -.1rem .2rem; padding-bottom:.25rem; scrollbar-width:none}
     .filters::-webkit-scrollbar{display:none}
     .fchip{flex:none}
     /* compact track cards so ~3 fit on small screens: drop the prose (kept in
        the DOM for SEO) and lean on the header + keyword tags + Lessons toggle */
-    .grid{columns:auto; margin-top:1rem}
+    .grid{grid-template-columns:1fr; margin-top:1rem}
     .tile{padding:.7rem .85rem .75rem; gap:.45rem}
     .tdesc{display:none}
     .tags{gap:.28rem}
@@ -291,7 +310,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="logo">▦</span> StackDepth</div>
+  <h1 class="brand"><span class="logo">▦</span> StackDepth</h1>
   <div class="search"><input id="q" type="search" placeholder="Search tracks &amp; lessons…" aria-label="Search tracks and lessons" autocomplete="off"></div>
   <nav class="soc-hdr" aria-label="Social links">
     <a class="soclink" href="https://twitter.com/dineshxbyte" target="_blank" rel="noopener" title="Twitter / X" aria-label="Twitter / X">𝕏</a>
@@ -305,16 +324,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 </header>
 
 <div class="wrap">
-  <section class="hero">
-    <h1>StackDepth</h1>
-    <p><strong>Visual system design &amp; AI engineering, from first principles.</strong> Nine tracks — AI agents, context engineering, distributed systems, storage engines, transactions, streaming, REST APIs &amp; system design — built in engineering analogies, infographic-first, with quizzes and interview questions tuned for senior/staff interviews.</p>
-    <div class="stats">
-      <span class="stat"><b>9</b> tracks</span>
-      <span class="stat"><b>41</b> lessons</span>
-      <span class="stat"><b>10</b> reference sheets</span>
-      <span class="stat">interactive quizzes</span>
-    </div>
-  </section>
 
   <nav class="filters" id="filters" aria-label="Filter tracks by topic">
     <button type="button" class="fchip is-active" data-cat="all" aria-pressed="true">All tracks</button>
@@ -582,28 +591,39 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <script>
   (function(){
     var q=document.getElementById('q'), grid=document.getElementById('grid'),
-        results=document.getElementById('results'), idx=window.SEARCH_INDEX||[];
+        results=document.getElementById('results'), filters=document.getElementById('filters'),
+        idx=window.SEARCH_INDEX||[];
     var TOK={'AI Agents':'--track-agents','Context Engineering':'--track-context','REST API':'--track-rest',
       'Bloom Filters':'--track-bloom','Distributed Systems':'--track-distributed','Storage Engines':'--track-storage',
       'Transactions & Isolation':'--track-transactions','Streaming & Event-Driven':'--track-streaming',
       'Applied Systems Design':'--track-applied'};
     function esc(s){return s.replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+    function reEsc(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
     function run(){
-      var term=q.value.trim().toLowerCase();
-      if(!term){ results.style.display='none'; results.innerHTML=''; grid.style.display=''; applyFilter(); return; }
-      var toks=term.split(/\s+/), hits=[];
+      var raw=q.value.trim(), term=raw.toLowerCase();
+      if(!term){ results.style.display='none'; results.innerHTML=''; grid.style.display=''; filters.style.display=''; applyFilter(); return; }
+      // Word-boundary matching: a token must START a word in the title or body.
+      // (Plain substring made "rag" match "sto-rag-e" and rank Storage above RAG.)
+      var toks=term.split(/\s+/).filter(Boolean);
+      var pre=toks.map(function(t){return new RegExp('\\b'+reEsc(t));});
+      var whole=toks.map(function(t){return new RegExp('\\b'+reEsc(t)+'\\b');});
+      var hits=[];
       idx.forEach(function(d){
-        var score=0, all=true, tl=d.t.toLowerCase();
+        var tl=d.t.toLowerCase(), xb=d.x, score=0, ok=true;
         for(var i=0;i<toks.length;i++){
-          var inT=tl.indexOf(toks[i])>=0, inX=d.x.indexOf(toks[i])>=0;
-          if(!inT&&!inX){all=false;break;}
-          score+=(inT?5:0)+(inX?1:0);
+          var inT=pre[i].test(tl), inX=pre[i].test(xb);
+          if(!inT&&!inX){ ok=false; break; }
+          if(inT){ score+=10; if(whole[i].test(tl)) score+=8; }  // title hit, exact-word bonus
+          if(inX) score+=2;                                       // body hit
         }
-        if(all) hits.push({d:d,s:score});
+        if(ok) hits.push({d:d,s:score});
       });
       hits.sort(function(a,b){return b.s-a.s || a.d.t.length-b.d.t.length;});
-      grid.style.display='none';
-      if(!hits.length){ results.innerHTML='<p class="rhead">No results for “'+esc(q.value.trim())+'”.</p>'; results.style.display=''; return; }
+      // filter chips don't apply to search results — hide them so their track
+      // counts don't read as conflicting with the result count
+      grid.style.display='none'; filters.style.display='none';
+      results.style.display='block'; // '' would fall back to the .results{display:none} default
+      if(!hits.length){ results.innerHTML=renderEmpty(raw); return; }
       var html='<p class="rhead">'+hits.length+' result'+(hits.length>1?'s':'')+'</p>';
       hits.slice(0,25).forEach(function(h,i){
         var d=h.d, tk=TOK[d.g]||'--accent';
@@ -611,8 +631,46 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
           '<span class="rdot"></span><span class="rcol"><span class="rt">'+esc(d.t)+'</span>'+
           '<span class="rg">'+esc(d.g)+'</span></span><span class="rkind">'+d.k+'</span></a>';
       });
-      results.innerHTML=html; results.style.display='';
+      results.innerHTML=html;
     }
+
+    /* Empty state: instead of a dead end, show the full catalog grouped by the
+       four topic categories (read live from the track cards) plus a few popular
+       searches — so "no results" still tells the user what IS here. */
+    var CATS=[{id:'ai',label:'AI & LLMs'},{id:'distributed',label:'Distributed'},
+      {id:'data',label:'Data & storage'},{id:'design',label:'APIs & design'}];
+    var SUGGEST=['RAG','Idempotency','Caching','Bloom filters','Auth','Pagination','Kafka','System design'];
+    function catalog(){
+      return [].slice.call(grid.querySelectorAll('.tile')).map(function(t){
+        var s=t.querySelector('.start'), nm=t.querySelector('.tname');
+        return {name:nm?nm.textContent:'', cat:t.getAttribute('data-cat'),
+          href:s?s.getAttribute('href'):'#', tc:t.style.getPropertyValue('--tc')||'var(--accent)',
+          lessons:t.querySelectorAll('.lchip').length};
+      });
+    }
+    function renderEmpty(raw){
+      var tracks=catalog();
+      var h='<div class="nr"><div class="nr-ic" aria-hidden="true">🔍</div>'+
+        '<p class="nr-h">No matches for <b>“'+esc(raw)+'”</b></p>'+
+        '<p class="nr-sub">Nothing in the catalog matches that yet. Try a popular search, or jump into any of the '+tracks.length+' tracks below.</p>'+
+        '<div class="nr-sugg">'+SUGGEST.map(function(s){return '<button type="button" data-q="'+esc(s)+'">'+esc(s)+'</button>';}).join('')+'</div>'+
+        '<p class="nr-cap">Browse all '+tracks.length+' tracks</p><div class="nr-cats">';
+      CATS.forEach(function(c){
+        var inCat=tracks.filter(function(t){return t.cat===c.id;});
+        if(!inCat.length) return;
+        h+='<div class="nr-grp"><div class="nr-glab">'+esc(c.label)+' <i>'+inCat.length+'</i></div>'+
+          inCat.map(function(t){
+            return '<a class="nr-trk" href="'+esc(t.href)+'" style="--c:'+t.tc+'">'+
+              '<span class="d"></span>'+esc(t.name)+'<em>'+t.lessons+' lesson'+(t.lessons===1?'':'s')+'</em></a>';
+          }).join('')+'</div>';
+      });
+      return h+'</div></div>';
+    }
+    // popular-search chips re-run the search in place
+    results.addEventListener('click', function(e){
+      var b=e.target.closest('.nr-sugg button'); if(!b) return;
+      q.value=b.getAttribute('data-q'); run(); q.focus();
+    });
     function sel(items,n){ items.forEach(function(it){it.classList.remove('sel');}); if(items[n]){items[n].classList.add('sel'); items[n].scrollIntoView({block:'nearest'});} }
     q.addEventListener('input', run);
     q.addEventListener('keydown', function(e){
