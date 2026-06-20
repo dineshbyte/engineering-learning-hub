@@ -63,6 +63,414 @@
   footer{margin-top:2.4rem; font-size:.78rem; color:var(--muted)}
   @media print{ .controls{position:static} .a{display:block} .reveal{display:none} a{color:var(--ink)} }
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What is the current standard for HTTP API error bodies?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "RFC 9457, \"Problem Details for HTTP APIs\" — media type application/problem+json . It defines a single, consistent shape for error responses across an API. Naming the RFC number (not just \"problem+json\") is the senior tell; it supersedes RFC 7807 , so cite the right one in the room."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the standard fields of a Problem Details object?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "type (a URI identifying the problem type), title (short human summary), status (the HTTP status code), detail (human explanation of this occurrence), and instance (a URI for this specific occurrence). Plus free extension members for anything else you need to convey."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is one consistent error contract across the whole API a senior concern?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Inconsistent errors are the fastest way to make an API \"impossible to integrate against\" — a bare 500 here, a 200 with {\"ok\":false} there, a different JSON shape per endpoint. A client can only write robust error handling once, against one shape. One contract everywhere is the move that separates \"shipped the happy path\" from \"operated this in production.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Problem Details gives you a shape — what's still missing for clients?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A stable machine-readable error code (e.g. \"code\":\"card_declined\" ) clients can branch on. The RFC's title / detail are human prose you'll reword next sprint; clients must not parse them. Add the code as an extension member, pair it with a human message for logs/developers, and emit field-level errors for validation so a client knows which field failed and why."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why must clients branch on error codes, not error prose?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Prose is for humans and changes freely; codes are part of your contract and must stay stable. The moment you reword a string and a partner's if -statement breaks, you've taught them to never trust your contract again. So: stable codes, human prose — and document the codes as an error catalog they can code against."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why should you never put stack traces or SQL in an error response?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Two reasons. Security : stack traces, internal IDs, SQL fragments, and \"which layer failed\" hints are reconnaissance gifts to an attacker (this is the leakage side of OWASP API security). Maintenance : they leak implementation detail clients will accidentally couple to. Return a stable code and a safe human message; log the internals server-side, keyed by a request id."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A team returns 200 OK with {\"success\":false} for errors. What's wrong?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Don't tunnel errors through 200. The status line is part of the contract and every intermediary reads it: caches will cache the \"success,\" load balancers and clients treat it as healthy, retries/alerting/dashboards all misfire. It also forces every client to ignore HTTP and parse the body to learn it failed. Use the real status code and a problem+json body."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you roll out a consistent error contract across an existing API with many teams?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Make it the path of least resistance, not a memo. Provide a shared error middleware/library that emits problem+json by default and maps exceptions to status + code; publish an error catalog (every code, meaning, status); enforce in CI with contract tests / a linter on the OpenAPI spec. Migrate incrementally behind the existing surface, version where the shape genuinely changes, and treat code stability as a backward-compatibility guarantee."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "400 vs 422 — when each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "400 Bad Request for a syntactically malformed request — broken JSON, missing required structure, can't even parse it. 422 Unprocessable Content for a request that parsed fine but is semantically invalid — e.g. valid JSON whose email field fails validation. Parsed-but-wrong is the 422 signal."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "401 vs 403 — what's the distinction?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "401 Unauthorized = authentication failed — missing or invalid credentials; we don't know who you are. 403 Forbidden = authorization failed — we know who you are, you just may not do this. Two questions (who are you / what may you do), two codes. (Yes, 401 's name says \"unauthorized\" but it's really about authentication.)"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "404 vs 409 — when do you reach for each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "404 Not Found : the target resource doesn't exist (or you're deliberately hiding its existence). 409 Conflict : the resource exists but the request conflicts with its current state — e.g. creating a duplicate, editing a stale version (lost-update), or an operation illegal in the current state. 404 is \"no such thing\"; 409 is \"the thing is here but this clashes with where it is.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When is returning 404 instead of 403 the right call?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When even revealing that a resource exists leaks information — e.g. another tenant's object you're not allowed to see. A 403 confirms \"it exists, you just can't touch it,\" which is an enumeration aid. Returning 404 (\"as far as you're concerned, it isn't there\") avoids that side channel. The trade-off: it can confuse legitimate clients, so it's a deliberate security choice, not a default."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why does consistent status mapping matter beyond aesthetics?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because the whole HTTP ecosystem acts on the status: caches, retry logic, circuit breakers, monitoring, and clients all decide behavior from it. Map a transient overload to 400 and clients won't retry; map a validation error to 500 and you page yourself for client mistakes and inflate your error budget. The status class (4xx = \"you,\" 5xx = \"me\") drives who retries and who gets paged ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A partner's 4xx errors are spiking your 5xx dashboards. What's likely wrong and how do you fix it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Almost certainly miscategorized status codes : client mistakes (bad input, auth, conflicts) are being surfaced as 5xx , so they burn your server error budget and trigger pages for problems you can't fix. Audit the exception-to-status mapping: validation/auth/conflict → the right 4xx ; reserve 5xx for genuine server faults. Then split SLO dashboards by status class so client-driven 4xx doesn't pollute server-reliability signals."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why rate-limit an API at all?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Without limits, one client — a buggy retry loop, a scraper, or an attacker — can exhaust your capacity or run up your cloud bill, degrading the service for everyone. This is OWASP API4:2023 Unrestricted Resource Consumption . Rate limiting protects availability and cost ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the HTTP contract for a throttled request?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "429 Too Many Requests with a Retry-After header telling the client when to come back. Ideally also expose RateLimit-Limit / RateLimit-Remaining / RateLimit-Reset on every response so well-behaved clients self-throttle before they hit the wall."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the four common rate-limiting algorithms.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Fixed window , sliding window , token bucket , and leaky bucket . Be ready to give one trade-off for each, not just the names."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Fixed window — how it works and its flaw?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Count requests per calendar window (e.g. per minute), reset at the boundary. Trivial to implement and cheap on state. The flaw is the boundary burst : a client can fire a full limit at the end of one window and another full limit at the start of the next, getting 2× the limit in a short span straddling the edge."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Sliding window — what does it buy you?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A rolling time window (weighted counter or request log) instead of a fixed clock boundary. It smooths out the boundary burst — no edge double-spend — at modest extra state cost (you track more than a single counter). The middle ground between fixed window's simplicity and stricter shaping."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Token bucket — how it works and why it's the common default?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Tokens refill at a steady rate; each request spends one; the bucket size caps how many can accumulate. It allows bursts up to the bucket size, then settles to the steady refill rate . It's the common choice because real traffic is spiky-but-bounded — token bucket tolerates a legitimate spike while still enforcing a sustained average."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Leaky bucket — when would you pick it over token bucket?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Requests queue and drain at a fixed output rate , smoothing the output to a constant stream regardless of input spikes. Pick it when you're protecting a downstream that hates bursts (a fragile legacy system, a rate-limited third party). Token bucket lets bursts through; leaky bucket flattens them — at the cost of added latency/queueing."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Per-principal vs per-IP limiting — what's your default?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Limit per principal — API key, account, or user — so one tenant can't starve the rest, and so limits track the entity you actually bill and trust. Fall back to per-IP only for unauthenticated traffic. Per-IP alone is leaky: many users behind one NAT/proxy share a limit, and a single attacker rotates IPs to dodge it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why separate burst from sustained quotas?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "So a legitimate short spike isn't punished like genuine sustained abuse. You might allow 100/sec burst but 10k/hour sustained : the burst limit absorbs a normal flurry, while the sustained limit caps long-run consumption. One number can't express both \"spikes are fine\" and \"don't camp on my capacity all day.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you enforce a global rate limit across many distributed API nodes?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The naive per-node counter lets the real limit balloon by N nodes. Options, in tension: a shared store (Redis with atomic INCR/Lua, or a token-bucket script) gives an accurate global count but adds a hop and a dependency on every request; local counters with a per-node share are fast but approximate and unfair under skew; sampled/sync'd local buckets trade a little accuracy for latency. Most real systems do limiting at the gateway/edge with a shared store, accepting eventual-consistency slop near the boundary."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Clients hammer you, all retry on 429 at once, and the spike repeats every reset. What's happening?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A thundering herd / retry-storm synchronization : every throttled client wakes at the same Retry-After /reset instant and stampedes together. Fixes: tell clients to back off with exponential backoff plus jitter (and honor it server-side by varying Retry-After ); use a sliding/token-bucket scheme so resets aren't a single cliff; and consider per-client reset offsets so windows don't all align."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the three pillars of observability?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Logs , metrics , and traces . Logs = discrete events (what happened); metrics = aggregated numeric trends (how much/how fast); traces = the path of one request across services. You need all three — each answers a different question."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why structured (JSON) logs over free-text logs?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Structured logs carry named fields ( request_id , status , latency_ms , user_id ) you can filter, aggregate, and join on at scale. Free-text means regex-scraping and grep at 3am. Structured logging is what makes logs queryable instead of just readable."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the RED metrics?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "R ate (requests/sec), E rrors (failed requests), D uration (latency). Tracked per endpoint, they're the minimal dashboard that tells you whether a service is healthy — and the first thing to pull up when something's wrong."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a correlation / request id and why does it matter?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "An id attached to a request and propagated across every service it touches — W3C traceparent or X-Request-Id — so one request is traceable end to end. It's the connective tissue between the three pillars. Without it, a distributed bug is a needle in N separate haystacks."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why report latency as p95/p99 instead of the mean?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because the mean hides the tail. A p50 of 50ms can sit alongside a p99 of 4s — and that p99 is exactly the slow experience losing you the partner. Averages get dragged around by outliers and conceal them at once. Percentiles describe what real users actually feel; judge and alert on p95/p99 , never the mean."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does distributed tracing give you that logs and metrics don't?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It reconstructs one request's path across the whole call graph as a tree of timed spans, so you can see where the time went and which downstream call failed or was slow. Metrics tell you \"p99 is up\"; logs tell you \"this line errored\"; traces tell you \"the request spent 3.8s waiting on the payments service.\" Wire it up with OpenTelemetry for a vendor-neutral standard."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is an SLO and an error budget?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "An SLO is a target on a measurable signal (e.g. \"99.9% of requests succeed under 300ms p99 over 30 days\"). The error budget is the allowed shortfall — the 0.1% you may fail. It turns \"is this bad enough to page someone?\" into a number instead of a vibe, and gives a shared rule: burn the budget fast → freeze risky changes; budget healthy → ship faster."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Tracing every request is too expensive at scale. How do you sample without going blind?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Mix strategies. Head-based sampling (decide at ingress, e.g. keep 1%) is cheap but may drop the rare failure you needed. Tail-based sampling buffers spans and keeps traces that are interesting — errors, high latency — at the cost of more infrastructure. Keep 100% of error/slow traces and sample the boring success path; keep full-fidelity metrics always so aggregates stay accurate even when individual traces are sampled out."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"We have lots of dashboards but still can't answer new questions.\" What's the gap?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "That's monitoring, not observability . Dashboards answer pre-defined questions; observability is the ability to ask new ones about behavior you didn't anticipate — high-cardinality, explorable telemetry (rich structured events, traces you can slice by arbitrary attributes). The fix is investing in wide, high-cardinality events and trace-linked logs, not adding a 41st pre-built chart."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What problem do idempotency keys solve here?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Rate limits and outages cause client retries, and retries on writes (a non-idempotent POST ) cause duplicates — double charges, double orders. An idempotency key on the request lets the server recognize a retry and return the original result instead of re-executing. Observability tells you it's falling over; idempotency keeps recovery from corrupting state."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does an idempotency key actually work server-side?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The client sends a unique key (e.g. Idempotency-Key header). The server stores key → result on first success; a later request with the same key returns the stored response without re-running the operation . You handle the in-flight case (concurrent retry while the first is still processing) with a lock/\"in progress\" record, and expire keys after a sensible window. This makes a non-idempotent POST safe to retry."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why backoff with jitter , not just exponential backoff?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Plain exponential backoff still has every client retrying at the same doubled intervals, so they re-collide in synchronized waves — a self-inflicted thundering herd. Adding random jitter spreads the retries across time, smoothing load on the recovering service. Exponential controls the rate of retries; jitter de-correlates when they land."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does a circuit breaker do, and why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It watches calls to a dependency; when failures cross a threshold it \"opens\" and fails fast for a cooldown instead of piling more doomed requests onto a struggling service. After the cooldown it goes \"half-open,\" letting a trickle through to test recovery, then closes if they succeed. It stops cascading failure and gives the downstream room to recover rather than being retried to death."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When should a server return 503 with Retry-After ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "503 Service Unavailable signals a temporary inability to handle the request — overload, maintenance, a dependency down — and is retryable , unlike most other 5xx . Pair it with Retry-After so clients know when to come back instead of retrying immediately and deepening the overload. It's the honest \"I'm down right now, come back later\" signal."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is graceful degradation and how do you design for it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Shedding non-essential work to keep the core working under stress rather than failing wholesale. Tactics: load shedding (reject excess early with 429 / 503 before you fall over), serving stale-but-cached data when a dependency is down, disabling expensive optional features, and prioritizing critical traffic . The principle: a partial, degraded response beats a total outage — decide in advance what's droppable."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do rate limiting, retries, idempotency, and circuit breakers fit together as one story?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "They're a closed loop. Rate limits/outages trigger retries ; retries need backoff + jitter so they don't stampede; retries on writes need idempotency keys so they don't duplicate; a persistently failing dependency needs a circuit breaker so you stop retrying into the void and degrade gracefully ; and observability (correlation ids, RED, p99, traces) is how you see the whole loop and tune it. Naming the loop, not just one piece, is the staff signal."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"A partner says our API is impossible to integrate against and keeps falling over.\" Redesign it.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Three moves. (1) One error contract : RFC 9457 problem+json everywhere, with a stable machine-readable code, a human message, field-level validation errors, correct status codes ( 400 malformed vs 422 validation), zero internal leakage — plus a published error catalog. (2) Rate limiting : token bucket per API key, 429 + Retry-After + RateLimit-* headers so good clients back off. (3) Safe retries + visibility : idempotency keys on writes, and instrument with correlation ids, structured logs, RED metrics (p95/p99), and tracing so you can see where it breaks. Fixes the DX complaint, protects availability, proves observability."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Latency just spiked. Walk me through debugging it with the three pillars.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Metrics first to localize: which endpoint, is it p99 only or broad, did rate/errors move with it, when did it start (correlate with a deploy/traffic change)? Then traces on slow exemplars to see where the time goes across the call graph — a specific downstream, a DB query, lock contention. Then logs for that request_id to get the concrete error/parameters. Metrics say what and how bad , traces say where , logs say why — that ordering is the answer."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How would you choose a rate-limit algorithm for a public write-heavy API?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Start from the traffic shape and what you're protecting. For spiky-but-bounded client traffic, token bucket per API key is the default — absorbs legitimate bursts, enforces a sustained average. If a fragile downstream must see a constant rate, front it with a leaky bucket . Avoid plain fixed window if boundary bursts could hurt; use sliding window when you need smoother enforcement without queueing. Add separate burst vs sustained limits, and tie limits to billing tiers."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What should you log, and what must you never log?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Log : request id/trace id, method, route (templated, not the raw id-filled path), status, latency, principal id, error code, and enough context to debug. Never log : secrets and credentials (passwords, tokens, API keys, full card numbers/PANs) and raw PII beyond what's lawful and needed. Redact or hash sensitive fields at the logging boundary. Logs are widely accessible and long-lived — treat them as a data-exposure surface."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You inherit a fragile, hard-to-integrate API. What's your prioritized remediation plan?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Sequence by leverage. (1) Stop the bleeding : add rate limiting + correct status codes so abuse and miscategorized errors stop taking it down. (2) Make failures legible : one problem+json contract with stable codes + an error catalog, so partners can integrate. (3) Make it observable : correlation ids, structured logs, RED/p99, tracing — so you can see what's actually breaking. (4) Make recovery safe : idempotency keys, backoff+jitter guidance, circuit breakers. (5) Define SLOs/error budgets to govern further change. Each step is shippable and unblocks the next."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you decide whether a degradation is \"bad enough to page someone\" at 3am?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Tie paging to SLOs and error-budget burn rate , not raw error counts. Alert on fast budget burn against the user-facing SLI (e.g. p99 latency / success rate), so a page means \"users are being hurt at a rate that threatens the budget\" — symptom-based, not cause-based. Avoid paging on every internal blip (cause-based noise) that has no user impact. The number, agreed in advance, replaces the 3am judgment call."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why do interviewers probe errors, rate limiting, and observability together?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because they reveal whether you've actually operated an API in production, not just shipped a happy path. A consistent error contract, principled abuse protection, and real observability are senior table stakes — they decide whether partners can integrate and whether you can see what broke at 3am. Mid-level answers stop at \"return 500 and log it.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the error contract, abuse protection, and observability for a public write-heavy REST API a partner says is \"impossible to integrate against and keeps falling over.\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: diagnose the two complaints separately — \"impossible to integrate\" is an error-contract/DX problem, \"keeps falling over\" is an abuse/resilience problem -> error contract : adopt one RFC 9457 problem+json shape across every endpoint, add a stable machine-readable code as an extension member (clients branch on the code, never the prose), emit field-level validation errors , map status correctly ( 400 malformed vs 422 validation, 409 conflict, 401 / 403 ), leak no stack traces/SQL, and publish an error catalog enforced by contract tests in CI -> abuse protection : token bucket per API key (absorbs legitimate bursts, enforces a sustained average) with separate burst vs sustained quotas tied to billing tiers, return 429 + Retry-After and expose RateLimit-* headers so good clients self-throttle; enforce at the gateway with a shared store (Redis atomic INCR/Lua) accepting eventual-consistency slop; add load shedding ( 503 + Retry-After ) before you fall over -> safe recovery : require idempotency keys on writes so retried POST s don't double-charge, advise exponential backoff + jitter (and vary Retry-After server-side) to avoid a thundering herd, and circuit-break failing downstreams -> observability : structured logs keyed by a propagated correlation id (W3C traceparent ), RED metrics per endpoint, OpenTelemetry traces, alert on p95/p99 and SLO error-budget burn (not the mean), and split dashboards by status class so partner 4xx doesn't pollute server 5xx signals -> name the trade-off: a shared-store global limiter is accurate but adds a hop/dependency vs fast-but-approximate local counters, and tail-based trace sampling keeps the failures you need at the cost of more infrastructure."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the end-to-end resilience and observability story for a payments-style API where retries must never double-charge and outages must degrade gracefully.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: treat resilience as a closed loop, not isolated features -> idempotency is the backbone: every write carries an Idempotency-Key ; the server stores key -> result on first success and returns the stored response on replay, with a lock/\"in progress\" record for the concurrent in-flight retry and a sensible key-expiry window — this makes a non-idempotent charge safe to retry -> retry discipline : clients use exponential backoff + jitter so a recovering service isn't stampeded; the server signals retryability honestly — 429 + Retry-After for throttling, 503 + Retry-After for temporary overload, and never dresses a client error as a retryable 5xx -> circuit breakers around the payment processor and other dependencies: open on a failure threshold to fail fast, half-open to test recovery, so a struggling downstream gets room instead of being retried to death -> graceful degradation : load-shed excess early, serve stale-but-cached non-critical data, disable optional features, and prioritize the core charge path; decide in advance what's droppable -> error contract : RFC 9457 problem+json with stable codes (e.g. card_declined ) clients can branch on, correct status mapping, zero leakage of internal detail -> observability : correlation id propagated across every hop, structured logs that never log PANs/secrets/PII (redact at the boundary), RED metrics, OpenTelemetry traces to see where time/failures land, and paging tied to SLO error-budget burn against the user-facing SLI rather than raw error counts -> name the trade-off: idempotency adds storage + a write-path lookup and forces you to define exactly-once windows, but it's the only honest way to make money-moving retries safe."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <div class="wrap">

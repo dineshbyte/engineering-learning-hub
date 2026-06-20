@@ -26,6 +26,118 @@
 <link rel="stylesheet" href="../../assets/lesson.css">
 <link rel="stylesheet" href="../../assets/interview.css">
 <style>:root{--accent:var(--track-bloom)}</style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What two inputs do you need to size a Bloom filter, and what do they give you?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the number of items n you'll store, and the target false-positive rate p you can tolerate -> from those you derive the bit-array size m = -(n·ln p)/(ln 2) 2 and the hash count k = log (1/p) -> the senior move is to start from the error you accept and back out the memory, not guess a bit count -> everything else (bytes of RAM, bits/item) falls out of those two numbers."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "If you double n but keep p fixed, what changes — m, k, or both?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: only m changes — the bit array roughly doubles -> k stays the same, because k = log (1/p) depends on p alone, not on n -> intuition: the hash count is set by how accurate you want each lookup; the array size is set by how much you're storing -> this separation (\"k from rate, m from volume\") is the cleanest thing to say in an interview."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the rule-of-thumb for ~1% false positives, and the cost of going 10× tighter?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: ~1% FP costs about 10 bits per item (more precisely ~9.6) with k = 7 (numbers illustrative) -> each 10× cut in the FP rate adds roughly a fixed slice — about +4.8 bits/item and a few more hashes -> so 0.1% 14.4 bits/item, 0.01% 19.2 bits/item -> the cost is per item and linear: accuracy is cheap but never free -> bits/item 1.44·log (1/p) is the compact form to remember."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Size a filter for 1,000,000 URLs at 1% FP — walk the numbers.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: k = log (1/0.01) 6.6 -> 7 hashes -> bits/item 9.6, so m 9.6 x 1M 9.6 Mbit -> that's ~1.2 MB of RAM (illustrative) -> the whole membership index for a million URLs fits in about a megabyte — that's the headline that sells the structure -> round k to an integer and add a little headroom for growth."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Size a Bloom filter to dedupe 50M event IDs at 0.1% false-dupe rate.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: k = log (1000) 10 hashes, bits/item 14.4 — note k is fixed by the rate, independent of the 50M -> m 14.4 x 50M 720 Mbit 90 MB (illustrative) -> round k to 10, provision ~90–100 MB -> plan to rebuild or shard once the set grows past 50M, because the FP rate climbs as it fills past the design n -> structure the answer as \"derive p first, separate k-from-rate vs m-from-volume, land a number, flag saturation.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You guessed a bit count instead of starting from p. Why is that the junior move?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: picking m blindly leaves the actual FP rate implicit and load-dependent — you don't know the error you're shipping -> the right direction is goal-first: state the FP rate the system can tolerate, then derive m and k -> this makes the trade-off explicit and reviewable, and ties memory to a business-meaningful number (acceptable error) -> it also forces you to estimate n honestly, which is where saturation bugs hide -> \"choose the error, derive the rest.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why does k depend only on p and not on n — what's the intuition?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: at the optimal operating point you keep the array about half-full of set bits regardless of scale -> the FP rate at that point is roughly (0.5) k , which depends only on how many independent bits each lookup checks — i.e. k -> so the accuracy per query is governed by k , while n only dictates how big the array must be to stay half-full -> double the items and you grow m to hold the same bit density, but the number of probes per query that yields a given p is unchanged -> hence k = log (1/p) , free of n ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You sized for n=10M but the set quietly grew to 30M. What happens, and how do you catch it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: m and k are fixed, so the array overfills — bits-set fraction climbs past the ~50% sweet spot and the FP rate rises toward 1 -> nothing errors; the filter keeps answering, just worse — silent decay -> downstream the cheap \"no\" nearly vanishes, so the verify/disk path gets hammered -> catch it by monitoring the bits-set fraction and measured FP rate against the design point, and by tracking actual n vs designed n -> fix: rebuild larger, shard, or move to a scalable variant before it saturates, not after the pager fires."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Argue for over-provisioning the filter vs sizing it tight — make the principal call.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "For tight sizing: minimizes RAM, which matters when you run one filter per shard/segment across a fleet — small per-unit savings multiply. For over-provisioning: the FP rate is load-dependent and decays silently; headroom buys margin against under-estimated n and growth, avoiding a saturation incident. Synthesis: size from a realistic peak n (not today's n ) plus a modest factor, pick p from the cost of the verify path, and back it with monitoring + a rebuild/shard runbook so you can correct cheaply — the decision is \"tight with observability and a rebuild plan,\" not a one-time guess."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you pick the target FP rate p in the first place — what drives the number?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: p is an economic choice: it sets how often you pay the expensive verify/disk path on a false \"maybe\" -> quantify the cost of one false positive (a disk read, a cross-node lookup, an over-rejected user) and the query rate, then choose p so the expected wasted-work cost is well under the RAM cost of a tighter filter -> tighter p is roughly linear in bits/item, so there are diminishing returns — going from 1% to 0.01% nearly doubles memory -> the staff answer ties p to a measurable downstream cost, not a round number someone liked."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A service runs thousands of small Bloom filters (one per tenant). How does that change sizing?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: per-filter fixed overhead and small- n inefficiency dominate — at a few hundred items a filter may be larger than an exact hash set, so check the break-even first -> n varies wildly per tenant, so a single global size either wastes RAM on small tenants or saturates large ones — size per tenant from its own n , or bucket tenants by scale -> many tenants means aggregate RAM is the real budget, so the p -vs-bits trade-off is multiplied by tenant count -> consider scalable filters so each tenant auto-grows instead of being pre-sized -> the staff move: don't apply one sizing; treat it as a distribution of n with a per-tenant or per-bucket policy."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the sizing + memory budget for per-SSTable Bloom filters in an LSM store with 10,000 SSTables.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: one filter per SSTable, each sized from that table's key count n and a target p (~1% -> ~10 bits/key is the common default; numbers illustrative) -> aggregate RAM = sum over tables of bits/key x keys-per-table, so the fleet budget is the real constraint, not any one filter -> tighter p trades RAM for fewer wasted disk reads — pick p from disk-read cost x absent-key query rate -> SSTables are immutable, so filters are built once at flush/compaction and never need deletes — no counting variant -> on compaction, filters merge/rebuild with the new table, naturally avoiding saturation -> cache hot filters in RAM, possibly spill cold ones -> trade-off: bits/key (RAM across thousands of tables) vs read amplification on misses; tune per level if upper levels are hotter."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design sizing for a \"seen this request ID?\" idempotency filter where traffic is bursty and n is hard to predict.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: unknown/variable n is the core problem, so don't pre-size a single static filter — use a scalable Bloom (chained layers with geometric error bounds) or time-windowed filters that you roll and rebuild -> pick p from the cost of a false \"seen\" — here a false positive could drop a legitimate request, so it must fall through to an authoritative check, never be the final answer -> if request IDs expire (idempotency windows), roll filters per window so old IDs age out, sidestepping the no-delete limit and capping growth -> size each window's filter from the expected per-window peak n plus burst headroom, and monitor bits-set fraction to trigger an extra layer mid-window -> trade-off: scalable filters grow memory with n and add a probe per layer vs a static filter that saturates silently under a burst; favor scalable/windowed when n is genuinely unpredictable."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <div class="wrap">

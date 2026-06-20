@@ -63,6 +63,198 @@
   footer{margin-top:2.4rem; font-size:.78rem; color:var(--muted)}
   @media print{ .controls{position:static} .a{display:block} .reveal{display:none} a{color:var(--ink)} }
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What is REST, precisely?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "An architectural style defined by a set of constraints, coined by Roy Fielding — not a protocol, data format, or \"JSON over HTTP.\" An API is \"RESTful\" only to the degree it honors the constraints. Naming it as a style (not a spec) is the senior tell."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the six architectural constraints.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Client–server, stateless, cacheable, uniform interface, layered system, and code-on-demand (the only optional one)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is REST the same thing as HTTP?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "No. REST is a style ; HTTP is a protocol that happens to fit it very well. You can apply REST principles over other protocols, and you can absolutely use HTTP un -RESTfully — e.g. tunnelling everything through one POST endpoint (Richardson Level 0)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Resource vs representation — what's the difference?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A resource is the abstract thing identified by a URI (a user, an order). A representation is a snapshot of that resource's state in some format (JSON, XML) transferred over the wire. Clients manipulate representations, never the resource directly — and a resource can have several representations."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does the statelessness constraint actually require?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Each request must carry everything the server needs to process it; the server keeps no per-client session state between requests . State lives on the client (or in a shared datastore the request points at), not in server memory tied to a connection."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why does statelessness help you scale?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because any node can serve any request — no sticky sessions, no session affinity. You scale horizontally by adding boxes behind a load balancer, and a node dying doesn't lose a user's session. It also improves visibility (each request is self-contained, so caches/proxies/monitoring can reason about it alone)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Stateless\" means no database and no cookies, right?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "No — a common misconception. It means no server-side session state between requests. Application/resource state in a database is completely fine. Auth state moves into a token sent on every request (e.g. a Bearer/JWT) instead of a server-held session."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the costs of statelessness, and how do you mitigate them?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Every request must re-send context (auth, etc.), so requests are larger and you can't lean on cheap in-memory session affinity. You also can't trivially do server-push of session changes. Mitigations: compact signed tokens, caching/CDNs, idempotency keys to make retries safe, and a shared cache/store (Redis) when you genuinely need cross-request state — accepting it's then explicit, not hidden in a node's memory."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does statelessness shape your authentication design?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It pushes you toward token-based auth: a signed token (JWT) on every request that any node can validate independently, rather than a server-side session looked up from memory. That's why stateless REST and JWT pair so naturally — and why \"where does the session live?\" is the wrong question for a pure REST API."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the four sub-constraints of the uniform interface?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "(1) Identification of resources (URIs); (2) manipulation of resources through representations; (3) self-descriptive messages (each message carries enough to be understood — method, media type, status); (4) hypermedia as the engine of application state (HATEOAS)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is HATEOAS?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hypermedia As The Engine Of Application State: responses include links advertising the valid next actions , so the client discovers what it can do rather than hard-coding URIs and workflow. The server can then change its URL structure without breaking clients."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "If HATEOAS is part of REST, why is it so rare in real APIs?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because the payoff rarely justifies the cost. Most clients are first-party and version-pinned — they don't dynamically follow links, they're coded against known endpoints. Tooling/codegen and developers expect fixed URLs. So the decoupling HATEOAS buys goes unused, and teams stop at Level 2. The senior move is to know that and say so, not to pretend everyone does L3."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When would you actually invest in HATEOAS / Level 3?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When you have many third-party clients you can't redeploy and need to evolve URLs/workflows without breaking them; when the API models a state machine where the available actions genuinely change (e.g. a payment that can be captured/refunded/voided depending on state — links express the legal transitions); or where discoverability is a product feature."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Describe the Richardson Maturity Model.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A 0–3 ladder of how fully an API uses REST's ideas: L0 one URI / one verb (RPC-over-HTTP, \"Swamp of POX\"); L1 many resources, each a URI; L2 proper HTTP verbs + status codes; L3 hypermedia (HATEOAS)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What level do most production \"REST\" APIs sit at?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Level 2 — correct resources, verbs, and status codes, but no hypermedia. That's the pragmatic industry bar."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is a Level 2 API \"really REST\" by Fielding's own definition?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Strictly, no — Fielding argues that without the hypermedia constraint it isn't truly REST. But Level 2 is what the industry pragmatically means by \"REST.\" The strong answer names that tension explicitly and then defends the pragmatic choice for the given context, rather than dodging it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Give a concrete example of a Level 0 system.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Classic SOAP / XML-RPC: a single endpoint (e.g. POST /api ) where the action lives in the request body and HTTP is just a transport tunnel. Status and verbs carry no semantic meaning."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "REST vs gRPC/RPC — when would you pick each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "REST : resource-oriented, leans on HTTP caching, broad client reach, easy to evolve, great for public/edge-facing APIs. gRPC/RPC : low-latency internal service-to-service, strict typed contracts (protobuf), bidirectional streaming, high throughput — but binary, less browser/edge-friendly, weaker HTTP-cache story. Rule of thumb: REST at the edge, gRPC between internal services."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "REST vs GraphQL — what are the trade-offs?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "GraphQL : client shapes the query, killing over-/under-fetching; one endpoint; excellent for many varied clients. Costs: HTTP caching is hard (usually POST ), query-cost/N+1 control, and you lose HTTP-native semantics (status, methods, conditional requests). REST : simpler, cache-friendly, ubiquitous, but fixed response shapes lead to over-/under-fetching. Many systems run both."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A team says \"let's make our API RESTful.\" How do you advise them?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "First ask why — what outcome do they want (evolvability, caching, DX, broad reach)? Then assess current maturity. For most, the goal is a clean Level 2: good resource modeling, correct verbs/status codes, real cache headers, consistent errors. Pursue L3/HATEOAS only if uncontrollable third-party clients or a genuine state machine demand it. Don't chase REST purity for its own sake — tie every constraint back to a concrete benefit."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why do interviewers open with \"what makes an API RESTful?\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because the answer reveals whether you understand the why behind design — the constraints and their trade-offs — versus just the surface mechanics (verbs, JSON). It's a fast, reliable predictor of the quality of every downstream design answer you'll give."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a RESTful API for a blogging platform (posts, comments, authors). Walk the resource model and maturity level.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: resources as nouns — /posts , /posts/{id} , /posts/{id}/comments , /authors/{id} — with nesting only where ownership is real and a flat /comments/{id} for direct access -> verbs mapped cleanly (GET list/read, POST create, PATCH partial edit, DELETE) with correct status codes (201 + Location on create, 404 vs 410, 409 on conflict) -> statelessness: bearer token on every request, authorization checks per resource (an author edits only their own posts) -> caching with ETag / Last-Modified on reads and conditional requests on writes -> pagination + filtering on the collections (cursor-based, bounded page size) -> a consistent error envelope and a versioning/deprecation story -> name the maturity call: deliberately Level 2 (verbs + status codes, no HATEOAS) because clients are first-party, and say when you'd move to L3."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "An interviewer hands you a Level 0 \"JSON over HTTP\" API (one POST /api with an action field) and asks you to make it RESTful. How do you approach it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: first diagnose — it's RPC tunnelled through one endpoint, so HTTP verbs, status codes, and caching all carry zero meaning -> climb the Richardson ladder incrementally rather than big-bang: L1 split the single endpoint into resource URIs, L2 map each action onto the correct method + status code and expose real cache headers -> preserve the old endpoint behind a versioned facade so existing clients don't break; run both during migration -> tie every change to a benefit (cacheability, idempotent retries, intermediary visibility) instead of chasing purity -> stop at L2 unless uncontrollable third-party clients or a genuine state machine justify HATEOAS -> call out migration risks: dual-write/dual-read consistency, client cutover, and a deprecation timeline with metrics on old-endpoint traffic."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <div class="wrap">

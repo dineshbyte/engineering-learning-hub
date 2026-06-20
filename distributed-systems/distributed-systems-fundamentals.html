@@ -78,6 +78,118 @@ details.iq .a b{color:var(--track-rest)}
 .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
 @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "State CAP precisely, then correct the most common misreading.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: CAP = under a network partition you must choose Consistency (linearizability) or Availability — you cannot keep both -> P is not optional, partitions happen, so the real lever is C-vs-A during a partition: CP blocks the minority side, AP serves possibly-stale reads -> the misreading is \"pick 2 of 3\" as if a system is permanently one letter — CAP only speaks about partitions and says nothing about the healthy case -> that's exactly the gap PACELC fills: Else (no partition), you still trade Latency vs Consistency -> so a real label is two-part, e.g. PA/EL or PC/EC."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the consistency models from weakest to strongest and what each guarantees.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: eventual — if writes stop, replicas converge; any stale read is legal meanwhile -> read-your-writes / session — a client sees its own writes and monotonic reads within a session -> causal — operations that are causally related are seen in order by everyone; concurrent ones may differ -> linearizable — every operation appears to take effect atomically at one instant between invocation and response, as if on a single copy -> rule of thumb: buy the weakest model your correctness actually needs, since each rung up costs latency and availability."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a quorum, and why does R + W > N matter in a leaderless store?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: in a leaderless (Dynamo-style) store with N replicas, a write waits for W acks and a read gathers R responses -> if R + W > N the read set and the most recent write set must share at least one node, so a read overlaps every acknowledged write and can return the freshest value -> e.g. N=5, W=3, R=3 overlaps; W=2, R=2 does not -> quorums tune the C-vs-A/latency trade: bigger W = more durable, slower writes; smaller R = faster, riskier reads -> caveat: strict quorums still need read-repair / anti-entropy and don't by themselves give linearizability."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the three replication topologies and the price each pays.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: single-leader — all writes to one node, replicate to followers; simple and linearizable-able, but the leader is a write bottleneck and a failover hazard -> multi-leader — writes accepted at several leaders (e.g. multi-region); better write availability/latency, but concurrent writes create conflicts you must resolve -> leaderless — any replica takes writes, quorums for correctness; great availability, but you own conflict detection (version vectors) and read-repair -> the through-line: as you move away from one leader you buy availability and pay in conflict handling."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A payment call times out with no reply. What do you do, and why is \"just retry\" dangerous?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a timeout has four indistinguishable causes — lost request, slow node, lost reply, or dead node — so you cannot tell \"didn't happen\" from \"happened, ack lost\" -> the charge may already have succeeded, so a blind retry double-charges -> the fix is to make the operation idempotent with a client-generated key: at-least-once delivery + idempotent effect = exactly-once effect -> pair it with bounded retries, exponential backoff + jitter, and a retry budget so you don't amplify an overload -> red flag: treating a timeout as proof of failure."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is \"exactly-once delivery\" impossible, and what do we actually ship instead?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: an unacked send forces a choice — resend (risk a duplicate) or don't (risk loss); there is no third door, it's the Two Generals problem -> so \"exactly-once delivery\" over an unreliable network is unachievable -> what we build is exactly-once effects : at-least-once delivery + an idempotent or deduplicating endpoint = effectively-once -> always ask \"exactly-once across which boundary?\" — the guarantee is per consumer/store, not end-to-end magic -> mechanisms: idempotency keys, dedup windows, transactional outbox to avoid the dual-write."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Two replicas accepted writes; which one wins? Walk me through the clock issue.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: wall-clock timestamps on different machines aren't comparable — clock skew can make the later write carry the smaller timestamp -> so last-write-wins by physical time silently drops a genuinely-later write -> you need a logical notion of order: happens-before via Lamport clocks, or version vectors to actually detect concurrency rather than impose a false order -> once concurrency is detected you either merge (CRDT/app-level) or surface siblings to the application -> if you must use LWW, scope its data-loss risk explicitly and use it only where losing a concurrent write is acceptable."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You key a time-series table by timestamp and one node is melting. Why, and how do you fix it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: key-range partitioning by timestamp routes all current writes to the single partition holding the newest range — a moving write hot spot -> fix options: hash-partition the key for even write spread (cost: range scans now scatter across partitions) or prefix/salt the key so recent writes fan out -> never rebalance with mod N — adding a node remaps almost everything; use a fixed number of partitions or consistent hashing so adding a node moves only ~K/N keys -> for read-heavy time ranges, consider a compound key (e.g. tenant + time bucket) so writes spread but scans stay local."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Events are \"coming out of order.\" Diagnose it, then decide how much ordering to actually buy.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: first ask which order is required — FIFO (per source), causal, or total — because they cost wildly different amounts -> FIFO ⊂ causal ⊂ total; pick the lowest rung that satisfies correctness, over-ordering is over-engineering -> causal order is enforceable locally with vector clocks and no coordination; total order needs consensus (a single Kafka partition, a replicated log) and is the expensive, throughput-capping one -> diagnose by tracing whether the disorder is cross-partition (you chose total order but partitioned for throughput) or genuine concurrency -> synthesis: partition for throughput where order doesn't matter, reserve a totally-ordered lane only for the keys that need it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does Raft avoid two leaders, and what does FLP have to do with it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a node grants at most one vote per term and a leader needs a majority; any two majorities overlap in ≥1 node, so two leaders in the same term is impossible — that's the safety argument -> FLP proves no deterministic protocol can guarantee termination in a purely asynchronous model with even one crash -> Raft doesn't beat FLP; it sidesteps it by assuming partial synchrony (timeouts) for liveness and using randomized election timeouts to break symmetric split votes -> the principal framing: safety always, liveness only when the network is eventually calm -> so a permanently flaky network can stall progress without ever violating correctness."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How would you choose a failure detector, and why is \"perfect failure detection\" the wrong goal?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: in an async network you cannot distinguish a slow node from a dead one, so any timeout-based detector is a tunable guess trading completeness (always suspect real failures) against accuracy (never falsely suspect) -> aggressive timeouts cause false positives — needless failovers, re-elections, duplicate work; lax timeouts delay recovery -> prefer adaptive detectors (e.g. phi-accrual) that output a suspicion level from observed RTT history instead of a hard boolean -> pair detection with fencing tokens so a wrongly-suspected-then-revived node can't act as a stale leader -> the staff move: don't chase perfect detection — design so a wrong suspicion is safe (idempotent work, fencing, leader leases), because wrong suspicions are inevitable."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design an order-checkout flow across payment, inventory, and shipping that survives partial failure.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: idempotency keys on every external side effect so retries don't double-charge or double-ship -> bounded retries with exponential backoff + jitter and a retry budget to avoid retry storms -> the transactional outbox so the DB state change and the event publish commit atomically (kills the dual-write) -> a saga with compensating transactions (refund, restock) because you cannot 2PC across independent services -> dedup at each consumer with a window comfortably exceeding the worst-case redelivery delay -> choose consistency per step: inventory reservation may need strong/conditional writes, order history can be eventual -> the end-to-end argument — confirm the charge with the payment provider's own idempotency, don't infer success from a timeout -> name the trade-off: saga gives availability and loose coupling but exposes intermediate states, so model compensations and \"stuck saga\" alerts."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a globally replicated key-value store and state its consistency contract under partition.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: start from the contract — do callers need linearizable reads or is causal/eventual acceptable? that single choice drives everything -> partition the keyspace with consistent hashing (virtual nodes) so adding capacity moves only ~K/N keys and avoids hot spots; salt known hot keys -> replicate each partition N ways across failure domains/regions; expose tunable quorums (R + W > N for read-overlap, lower for latency) -> under a partition, declare the choice: CP (block the minority, stay linearizable) for a config/lock store, or AP (serve stale, reconcile later) for a cart -> conflict handling for AP: version vectors to detect concurrency, CRDTs or app merge for resolution, read-repair + anti-entropy to converge -> place it on PACELC and say it: e.g. PC/EC for a metadata store, PA/EL for a session cache -> ops: detect partitions and replica lag, fence stale leaders with tokens, and test failover with fault injection -> name the trade-off explicitly between availability and the strength of the read your callers can rely on."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

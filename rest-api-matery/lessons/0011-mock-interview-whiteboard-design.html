@@ -53,6 +53,118 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   details.iq .a b{color:var(--track-rest)}
   @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What is a \"design X's API\" round actually testing?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Not whether you produce the answer — there isn't one. It grades structure (did you clarify before designing?), breadth (writes got idempotency, reads got pagination, you named object-level auth), and judgment (you named a trade-off and what changes at 100×). It's a 45-minute integration exam over every prior topic at once, not a quiz on one."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What should you do first in a design round, before any endpoint?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify requirements and constraints — clients, scale, read/write ratio, consistency needs, auth model, SLAs. Diagnose, then design. The resource model falls out of the questions you ask; the endpoints fall out of the resource model. Drawing URIs before clarifying is the classic junior tell."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the winning arc of a design answer in one phrase?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Diagnose, design, defend. Clarify constraints first, walk the resource model and endpoints with a reason attached to each choice, then close with a trade-off and what changes at scale. A candidate who narrates a clear checklist and the why beats one who free-associates brilliant fragments."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "For any \"design X\" prompt, what two things must every list endpoint have?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Pagination (cursor-based at scale, with a bounded/hard-capped page size) and a filter/sort contract . An unbounded list is a latency and memory landmine. Reaching for these on every collection without being prompted is a fast breadth signal — the mirror of reaching for idempotency on every unsafe write."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the single biggest mistake candidates make in this round?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Starting to type endpoints. Don't design — diagnose, then design. The first five minutes are requirements and constraints. The endpoints fall out of the resource model; the resource model falls out of the questions you asked. Leading with verbs before you know the clients, scale, and consistency needs signals junior."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk the 11-step framework from memory.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "(1) Clarify requirements/constraints; (2) resource model & URIs; (3) endpoints — methods + status codes; (4) idempotency on unsafe writes; (5) collections — pagination/filter/sort; (6) caching & concurrency (ETag/If-Match); (7) versioning & evolution; (8) authN/authZ + object-level (BOLA); (9) errors, rate limiting, observability; (10) async/webhooks where needed; (11) trade-offs & \"what changes at 100×.\" Name the step, make the one decision that matters, signal you know the rest is there."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you communicate a trade-off so it reads as \"senior\"?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "State the option, pick a side , attach the reason, and name when you'd decide differently: \"That's a deliberate trade-off because X; at 100× I'd revisit it because Y.\" Defaulting silently (offset pagination, no idempotency) reads junior; choosing and defending reads senior. Other tells: \"it's at-least-once, so the consumer must be idempotent,\" \"I care about p99, not the mean,\" \"exactly-once effect, not exactly-once delivery.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Cursor vs offset pagination — defend your default.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Default to cursor (keyset) at any real scale: deep pages stay cheap (no OFFSET N scan) and stable under concurrent inserts/deletes — offset skips or repeats rows when the set shifts. Offset is fine only for small, slow-changing, jump-to-page-N UIs. Always cap page size. The senior tell is naming stability under writes , not just performance."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "The interviewer twists a constraint mid-answer (\"now there are 10M third-party clients\"). How do you respond?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Don't restart. Re-anchor to the framework and say what changes : untrusted third parties tighten authZ (object-level checks, scoped tokens), force strict versioning + deprecation discipline, demand per-tenant rate limits and abuse controls, and push you toward HATEOAS/discoverability so you can evolve URLs without redeploying their code. Naming the deltas — rather than re-drawing — is the signal that you understand which decisions are constraint-sensitive."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Consistency vs availability — how does CAP show up in API design?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Decide per resource/operation , not globally. Money, inventory, and bookings need strong consistency on the write path — refuse or fail ( 409 / 503 ) rather than risk a double-charge or oversell. Feeds, counts, search, and history can be eventually consistent and stay available. Make it visible in the contract: an explicit status / pending state, a \"may be stale\" note, read-your-writes only where it's promised. The senior move is naming which path is which and why."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"What changes at 100×?\" — how do you answer this generically?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Walk the bottlenecks in order: hot partitions / keys (a whale tenant or merchant — protect with per-entity caps), reads move to replicas + caching tiers + CDN, writes get sharded (and cursors must stay stable across shards), async work goes behind durable queues with back-pressure and DLQs, and the synchronous critical path gets kept narrow and wrapped in circuit breakers. Close with what you'd measure (p99 per route) to know when to act. This step is the headline senior signal."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for a payments service - charge a card, refund, list transactions.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: clarify first - untrusted merchant callers, write-heavy money path / read-heavy history, charges strongly consistent & exactly-once from the caller's view, server-to-server auth, \"never double-charge.\" Resources: Charge , Refund (sub-resource of a charge), Customer , PaymentMethod ; money as integer minor units + currency, never floats. Endpoints: POST /v1/charges -> 201 sync / 202 async capture; POST /v1/charges/{id}/refunds -> 201 ( 422 over captured total, 409 if fully refunded); GET /v1/charges?customer=&limit= cursor-paginated. Idempotency - the headline: Idempotency-Key on every charge/refund, key->result stored ~24h; a replay returns the original response. Auth + object-level: OAuth2 client-credentials, scopes like charges:write ; verify this account owns {id} or return 404 (don't leak existence); RFC 9457 errors; per-account 429 with limit headers. Async + at 100×: async capture -> 202 + HMAC-signed at-least-once charge.succeeded webhook (consumer dedups); shard idempotency/charge stores by account, watch hot merchants, replica for list reads, queue + DLQ behind webhooks, circuit-break the card-network path."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for a hotel / room booking system - search, hold, book, cancel.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: clarify - inventory is scarce and contended; double-booking is the cardinal sin; consistency over availability on the book path. Hold as a first-class resource: POST /holds reserves a room with a short TTL (e.g. 10 min) -> 201 + expiry, decrementing inventory atomically. Separating hold from book is the senior move. Book: POST /bookings {hold_id} -> 201 , idempotent via Idempotency-Key so a retried payment doesn't book twice; 409 if the hold expired. Concurrency: optimistic concurrency ( If-Match /version) on the inventory row so two simultaneous holds can't both win; loser gets 412 / 409 . Search/cancel: GET /rooms?dates=&guests=&limit= cursor-paginated, cacheable; POST /bookings/{id}/cancel enforces a refund-by-time policy and releases inventory. At 100×: sweep stale holds via a queue, partition inventory by property/date, guard thundering herds on hot dates; object-level checks so callers only touch their own bookings."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>

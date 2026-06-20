@@ -45,6 +45,118 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.85rem}
   @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What is REST, precisely?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "An architectural style defined by a set of constraints, coined by Roy Fielding — not a protocol, data format, or \"JSON over HTTP.\" An API is \"RESTful\" only to the degree it honors the constraints."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the six architectural constraints.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Client–server, stateless, cacheable, uniform interface, layered system, and code-on-demand (the only optional one)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is HATEOAS?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hypermedia As The Engine Of Application State: responses include links advertising the valid next actions , so the client discovers what it can do rather than hard-coding URIs and workflow -> the server can then change its URL structure without breaking clients."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Describe the Richardson Maturity Model.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A 0–3 ladder of how fully an API uses REST's ideas: L0 one URI / one verb (RPC-over-HTTP, \"Swamp of POX\"); L1 many resources, each a URI; L2 proper HTTP verbs + status codes; L3 hypermedia (HATEOAS). Most production \"REST\" APIs sit at L2."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is REST the same thing as HTTP?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "No. REST is a style ; HTTP is a protocol that fits it very well. You can apply REST principles over other protocols, and you can use HTTP un -RESTfully — e.g. tunnelling everything through one POST endpoint (Richardson Level 0)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why does statelessness help you scale — and what does it not forbid?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Any node can serve any request — no sticky sessions, no affinity — so you scale horizontally behind a load balancer and a dying node loses no session -> it also improves visibility (each request is self-contained). It does not forbid databases or cookies: it forbids server-side session state between requests. Auth moves into a token (Bearer/JWT) sent every request."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "If HATEOAS is part of REST, why is it so rare in real APIs?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because the payoff rarely justifies the cost. Most clients are first-party and version-pinned — coded against known endpoints, not dynamically following links. Tooling/codegen expect fixed URLs, so the decoupling HATEOAS buys goes unused and teams stop at Level 2. The senior move is to know that and say so, not pretend everyone does L3."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "REST vs GraphQL vs gRPC — when would you pick each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "REST : resource-oriented, leans on HTTP caching, broad reach, easy to evolve — great at the public edge. GraphQL : client shapes the query (kills over-/under-fetching), one endpoint for many varied clients — but HTTP caching is hard, plus query-cost/N+1 control. gRPC : low-latency internal service-to-service, typed contracts, streaming — but binary, less edge-friendly. Rule of thumb: REST at the edge, gRPC between internal services, GraphQL for rich multi-client read graphs."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is a Level 2 API \"really REST\" by Fielding's own definition — and how do you defend it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Strictly no — Fielding argues that without the hypermedia constraint it isn't truly REST. But Level 2 is what the industry pragmatically means by \"REST.\" The strong answer names that tension explicitly, then defends the pragmatic choice for the given context (first-party version-pinned clients, codegen, fixed URLs) rather than dodging it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When would you actually invest in HATEOAS / Level 3?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When you have many third-party clients you can't redeploy and must evolve URLs/workflows without breaking them; when the API models a state machine where available actions genuinely change (a payment that can be captured/refunded/voided — links express the legal transitions); or where discoverability is itself a product feature."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A team says \"let's make our API RESTful.\" How do you advise them?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "First ask why — what outcome (evolvability, caching, DX, broad reach)? Then assess current maturity. For most, the goal is a clean Level 2: good resource modeling, correct verbs/status codes, real cache headers, consistent errors. Pursue L3/HATEOAS only if uncontrollable third-party clients or a genuine state machine demand it. Don't chase REST purity for its own sake — tie every constraint back to a concrete benefit."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a RESTful API for a blogging platform (posts, comments, authors). Walk the resource model and maturity level.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: resources as nouns — /posts , /posts/{id} , /posts/{id}/comments , /authors/{id} — nesting only where ownership is real, plus a flat /comments/{id} for direct access -> verbs mapped cleanly (GET, POST, PATCH, DELETE) with correct status codes (201 + Location , 404 vs 410, 409 on conflict) -> statelessness: bearer token per request, per-resource authorization (an author edits only their own posts) -> caching with ETag / Last-Modified and conditional requests on writes -> pagination + filtering on collections (cursor-based, bounded size) -> a consistent error envelope and a versioning/deprecation story -> name the maturity call: deliberately Level 2, and say when you'd move to L3."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You're handed a Level 0 \"JSON over HTTP\" API (one POST /api with an action field) and asked to make it RESTful. How do you approach it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: diagnose first — it's RPC tunnelled through one endpoint, so verbs, status codes, and caching carry zero meaning -> climb the Richardson ladder incrementally, not big-bang: L1 split into resource URIs, L2 map each action to the correct method + status code and expose real cache headers -> keep the old endpoint behind a versioned facade so existing clients don't break; run both during migration -> tie every change to a benefit (cacheability, idempotent retries, intermediary visibility) over purity -> stop at L2 unless uncontrollable third-party clients or a genuine state machine justify HATEOAS -> call out migration risks: dual-write/dual-read consistency, client cutover, deprecation timeline with metrics."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>

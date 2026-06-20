@@ -45,6 +45,118 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.85rem}
   @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Why is POST /getOrder an anti-pattern?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It encodes the verb in the path , which is RPC wearing a REST costume. In resource-oriented design the URI names a noun — the thing — and the HTTP method is the verb. The read should be GET /orders/42 : the resource is /orders/42 , the action is GET ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is the difference between a collection URI and an item URI?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A collection URI ( /orders ) addresses the set: GET lists it, POST adds to it (server assigns the id). An item URI ( /orders/42 ) addresses one member: GET reads it, PUT / PATCH updates it, DELETE removes it. The method's meaning shifts with which level you're at."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does nesting like /customers/1/orders communicate?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Containment — \"the orders belonging to customer 1.\" That's a legitimate, readable use of nesting for a real ownership relationship. The mistake isn't nesting one level; it's going deep."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why prefer opaque identifiers over sequential integers in URIs?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Sequential ints leak business volume (reading order #100002 tells an attacker your throughput) and invite enumeration — walking /orders/1 , /orders/2 … UUIDs/ULIDs are opaque and non-guessable, so neither attack works from the id alone."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why does the noun/verb discipline matter beyond aesthetics?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because it's what keeps the contract uniform and cacheable . Once verbs leak into paths, every endpoint becomes a bespoke procedure and the HTTP machinery — caching, idempotency, conditional requests, status semantics — stops applying. GET /orders/42 is cacheable and safe by definition; POST /getOrder tells intermediaries nothing. Naming the resource correctly is the load-bearing decision the rest of the design hangs off."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the three principled ways to model a non-CRUD action?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Sub-resource / state collection: treat the outcome as a thing — POST /orders/42/cancellations , or a status you read back. Custom method (Google AIP): colon-suffixed verb on the resource — POST /orders/42:cancel . Reify the action as its own resource: promote the verb to a noun — POST /refunds with {order_id} . The senior signal is naming the trade-off, not just picking one."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is deep nesting like /customers/1/orders/42/items/9 fragile?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It hard-codes the entire hierarchy into the URL. The day a relationship changes — items move under a fulfillment, an order spans customers, you add line-item history — every client URL breaks. Deep paths couple your contract to today's org chart. They also bloat with redundant ids you don't need to locate the leaf."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a BOLA / IDOR vulnerability and how does id choice relate to it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Broken Object-Level Authorization (a.k.a. IDOR): a user swaps the id in /orders/42 for /orders/43 and reads someone else's data because the server checks authentication but not ownership . Opaque ids make resources harder to guess , but they are not the fix — they're defense in depth. The real fix is an authorization check on every object access (\"does this caller own this order?\"). Calling opaque ids a substitute for authz is a junior mistake."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Articulate the pure-REST vs pragmatist tension on custom methods.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Purists argue everything should be a resource: a custom method like :cancel smuggles a verb back into the URI and breaks the uniform interface, so they'd reify state into resources (a cancellation record, a status sub-resource). Pragmatists accept a colon-method for a genuinely non-CRUD verb because inventing nouns nobody queries is its own cost. The staff answer doesn't pick a religion — it picks by lifecycle: durable state and history → reify; momentary transition → sub-resource or custom method. Say the trade-off out loud; that's the signal."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the downsides of a flexible ?expand= / field-selection mechanism?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It pushes you toward GraphQL-shaped problems without GraphQL's tooling: every expansion combination is a distinct query and cache key, so caching fragments ; arbitrary expansion enables expensive N+1 / fan-out queries you must bound; authorization must be enforced per expanded field , not just on the root; and response shape becomes dynamic, complicating client typing and contract tests. Mitigate with an allowlist of expandable relations, depth/complexity limits, and per-field authz. At some point if clients need fully arbitrary shapes, that's the signal to consider GraphQL."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does URI shape interact with object-level authorization?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Identity-in-path makes the authorization target explicit: every /orders/{id} access needs an ownership check (BOLA defense), and consistent URI structure lets you enforce that with uniform middleware rather than ad-hoc checks. Aliases like /users/me remove a whole class of IDOR by not letting clients name other principals. Nesting can imply scope ( /customers/1/orders ) but you must still verify the caller may act as customer 1 — the path is a claim, not proof. Flat URIs + per-object authz is usually cleaner than relying on nesting for security."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Model an e-commerce checkout (cart, place order, cancel, refund) on a whiteboard.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: Cart is /carts/{id} with line items at /carts/{id}/items/{id} — one level, real containment. Place order: POST /orders , server assigns id, returns 201 + Location , built from the cart; require an Idempotency-Key so a retry doesn't double-charge. Cancel is a transition on an existing order, so POST /orders/{id}/cancellations or AIP-style POST /orders/{id}:cancel — no top-level noun. Refund has its own lifecycle (processed/settled/reversible) so reify it: POST /refunds with {order_id} , beside /payments . Ids opaque (UUID/ULID); list a customer's orders via /orders?customer_id= rather than deep nesting. That hits nouns-not-verbs, principled action modeling with a stated trade-off, shallow nesting + filtering, and security-aware ids."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the resource model for a multi-tenant project-management API with users, projects, tasks, comments, and memberships.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: Top-level collections by identity: /projects , /tasks , /users — each has its own life. Scope tenancy implicitly from the authenticated principal (resolve the tenant from the token), not via a /tenants/{id}/… prefix clients can tamper with. Tasks belong to a project, but keep nesting shallow: /projects/{id}/tasks for the owned list, and address a single task flatly by identity as /tasks/{id} so it doesn't break if it's re-homed; filter cross-cuts with /tasks?assignee=…&status=open . Comments are owned by their parent and have no independent life, so /tasks/{id}/comments (one level). Membership is a many-to-many between users and projects that carries data (role, joined-at), so reify the join : /memberships (or /projects/{id}/members as a filtered view) rather than deep-nesting under one side. Ids opaque (UUID/ULID); enforce per-object authorization on every access (BOLA) and tenant isolation so user A can't read project B in another tenant — the path is a claim, not proof. Use /users/me for the caller. Conventions consistent throughout; ?expand= bounded by an allowlist if clients need related data inline."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>

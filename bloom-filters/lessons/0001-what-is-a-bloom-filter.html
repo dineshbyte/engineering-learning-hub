@@ -26,6 +26,118 @@
 <link rel="stylesheet" href="../../assets/lesson.css">
 <link rel="stylesheet" href="../../assets/interview.css">
 <style>:root{--accent:var(--track-bloom)}</style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What is a Bloom filter, in one sentence, and what does it store?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a space-efficient probabilistic set-membership structure -> it stores no keys , just one m -bit array -> add(x) sets the k bits that x hashes to; contains(x) reads those k bits -> the whole point is the asymmetry: it answers \"definitely not here\" or \"probably here,\" never the reverse -> you trade exactness for a tiny, controllable footprint."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Which error can a standard Bloom filter make — and which can it never make?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: it can return a false positive — \"probably present\" for something never added -> it can never return a false negative — a \"not present\" is certain -> reason: a \"no\" requires at least one checked bit to be 0, which only happens if the item was never inserted -> \"all k bits set\" can be a coincidence from other items, so \"present\" is only a probability -> this is why a \"no\" is always safe to act on."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk through what add and contains actually do at the bit level.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: add(x) : run k independent hashes of x , take each mod m , set those k bits to 1 (some may already be 1) -> contains(x) : hash the same way, read those k bits -> if any is 0 -> \"definitely absent\"; if all are 1 -> \"probably present\" -> no comparison against stored keys ever happens — there are none -> cost is k hashes and k bit-probes, independent of how many items are in the set."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why can't a standard Bloom filter support delete?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: bits are shared across items -> clearing a bit to \"remove\" x might un-set a bit that a still-present key y also relies on -> that would introduce false negatives, which breaks the one guarantee the structure offers -> so deletion is simply unsupported in the standard form -> if you need deletes, reach for a counting Bloom filter (bits -> small counters) or a cuckoo filter, or periodically rebuild from the live set."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Where would you put a Bloom filter in a read-heavy database, and what does it buy you?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: put a small per-segment filter in front of the on-disk lookup — in an LSM store like RocksDB or Cassandra, one per SSTable -> on a read, check the filter first: a \"not present\" lets you skip that disk/SSD read entirely -> because there are no false negatives, you never skip a key that's actually there -> it cuts read amplification for absent keys, at the cost of a few bits of RAM per key and the occasional wasted lookup on a false positive -> size for ~1% FP (~10 bits/key, illustrative) and rebuild/partition if it saturates as segments grow."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Probably present\" is useless — why bother if you still have to verify?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the value isn't in the \"yes,\" it's in the certain \"no\" -> in workloads dominated by absent-key lookups, the filter eliminates the expensive path for most queries with a cheap RAM check -> only the small fraction that come back \"maybe\" pay the real lookup, and even there the FP rate is bounded by design -> so you swap \"every query hits disk/DB\" for \"only true hits plus a few-percent false positives hit disk/DB\" -> the win scales with how often the answer is genuinely \"not here.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is the optimal hash count, and what's the catch with using too many hashes?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: optimal k = (m/n)·ln 2 , which minimizes the FP rate for a given array size -> at that k the FP rate is about (0.5) k -> intuition: too few hashes means too few independent bits checked; too many hashes fills the array faster, so each query trips over more set bits -> there's a sweet spot — past it, adding hashes raises the FP rate and costs more CPU per op -> also: real hashes must be well-mixed and effectively independent, or you fall short of the theoretical rate (double-hashing is the common cheap trick)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "The textbook FP formula — what is it, and why call it an approximation, not a law?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: FP rate (1-e -kn/m ) k -> it assumes bit-set events are independent, which isn't strictly true — bits set by different items are correlated -> so it's an excellent estimate, slightly optimistic, not an exact identity (NIST has a more precise analysis) -> saying this out loud signals you understand the model's assumptions, not just the formula -> practically it's accurate enough to size with, but don't treat the last decimal as gospel, and always add headroom for hash quality and growth."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Make the case for a Bloom filter over just caching, then steelman the opposite.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "For: a Bloom filter answers \"is it absent?\" in a few bits/key with a certain \"no,\" so it kills the expensive path for misses at a fraction of a cache's memory; it doesn't store values, so it stays tiny even for billions of keys. Steelman against: if your workload is dominated by hits , the filter says \"maybe\" almost every time and buys nothing; a cache that actually returns values would serve those hits. Synthesis: Bloom for negative-lookup-heavy workloads (LSM reads, dedup, \"have I seen this?\"); a real cache when repeated hits dominate — they're complementary, often layered (filter to skip misses, cache to serve hits)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A teammate proposes a Bloom filter as the source of truth for \"has this user already claimed the coupon?\" Where does this break?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a false positive here means a legitimate user is wrongly told \"already claimed\" — a correctness/UX defect, not a perf nuisance -> the filter is only safe as a negative filter: \"no\" -> certainly not claimed, fast path; \"maybe\" -> must verify against the authoritative store -> never let \"maybe\" become the final answer for anything user-visible or money-touching -> also flag: no deletes (can't un-claim), and saturation drives the FP rate up silently over time -> the principal move: filter in front of an exact store, sized so the verify path is cheap, with a rebuild plan — not the filter as the store."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When would you NOT use a Bloom filter at all?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: when false positives are unacceptable and you can't afford a verify step — use an exact set/index -> when you must enumerate or return the items — the filter stores no keys, so it can't list anything -> when the set is tiny (a few thousand) — a plain hash set is smaller, exact, and supports deletes, so there's no win -> when the dominant query is a hit rather than a miss — \"maybe\" every time buys nothing -> the staff framing: a Bloom filter earns its keep only when negative answers are common and a cheap, certain \"no\" removes real work."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a \"have we already crawled this URL?\" check for a web crawler seeing billions of URLs.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: the workload is miss-heavy early and the cost of re-crawling is real, so a Bloom filter as a cheap negative filter fits -> \"no\" -> definitely unseen, schedule the crawl; \"maybe\" -> check the authoritative seen-set/store before crawling -> size from a tolerable FP rate (a false positive just skips a URL — acceptable if rare; numbers illustrative) and from the expected n -> n grows unboundedly, so use a scalable Bloom (chained layers) or shard filters by URL hash so the FP rate stays capped -> no deletes needed (URLs don't un-crawl), so standard/scalable beats counting -> instrument bits-set fraction and FP rate to trigger a new layer before saturation -> name the trade-off: a false positive silently drops a page vs the memory of an exact set of billions of URLs."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a \"weak / breached password\" rejection check at signup using a Bloom filter.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: goal — reject any password in a huge known-breached list without shipping or querying the full list per request -> load the breached set into a Bloom filter: \"maybe present\" -> reject (ask for another password); \"definitely absent\" -> allow -> here the asymmetry flips in your favor: a false positive just makes a user pick a different password (mildly annoying, safe); a false negative would let a breached password through — and Bloom has none -> size for a low FP rate so you rarely over-reject (illustrative), from the known n of the breach corpus -> the set is static and rebuilt on corpus updates, so no deletes and a simple rebuild pipeline -> ship the filter to the edge/client for latency, since it stores no actual passwords -> name the trade-off: occasional over-rejection (false positive) vs the privacy/size cost of querying or shipping the raw list."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <div class="wrap">

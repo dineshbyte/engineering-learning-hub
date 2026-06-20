@@ -90,6 +90,118 @@ details.iq .a b{color:var(--accent)}
 
 @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Walk me through the design method you run on any blank-page prompt.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: clarify functional + the four non-functionals (scale, latency, availability, consistency) -> estimate QPS, storage, bandwidth -> API for the hot operation -> data model for the hot query -> draw the high-level boxes -> deep-dive the one bottleneck and name its trade-off -> the system changes but the method does not; skipping a step (usually estimation) is the #1 failure mode -> \"I clarify before estimating because the read:write ratio falls out of scope.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "100M DAU at 10 reads/day each — size the read QPS and storage out loud.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: 100M x 10 = 1B reads/day -> 86,400 s 12K avg QPS -> x2-3 for peak 35K peak QPS (numbers illustrative) -> if those were 1 KB writes: 1B x 1 KB = 1 TB/day, x3 replicas 1 PB/year -> conclusion each number drives: 35K QPS is past one box -> cache + replicas; 1 PB forces a sharded fleet -> estimate reads and writes separately because the ratio picks the architecture."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What goes in the API and data model for a URL shortener, and why a KV store?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: two endpoints - POST /urls {longUrl} -> short code, and GET /{code} -> 301/302 redirect -> data model is pure key-value: code (PK) -> longUrl, createdAt -> access is single-key point lookups, no joins or range scans -> so a KV engine beats a relational schema you'd never query relationally -> the mapping is immutable, so cache invalidation is nearly free and TTLs can be long."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the five reusable levers and what each one buys you.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: cache -> faster reads + DB load shed (trade: staleness) -> replicate -> survive node loss + scale reads (trade: replication lag / write cost) -> partition / shard -> more storage + write throughput past one box (trade: cross-shard queries, rebalancing) -> queue -> absorb spikes + decouple producers from consumers (trade: async, eventual) -> tune consistency -> lower latency / higher availability by accepting staleness (trade: read-your-writes is no longer free) -> every design is \"which lever, on which box, at what cost.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A teammate wants to size the database first and check the math later. Push back.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the estimate IS the design constraint, not a sanity check bolted on after -> the QPS and storage arithmetic is what decides single box vs replicas vs a sharded fleet -> design decisions differ by ~1000x (one machine vs a thousand), so being off by 2x never flips the answer - that's why two minutes of back-of-envelope is enough -> without it you've committed to a shape arbitrarily and may discover at build time that storage alone forces sharding you didn't plan for -> estimate reads and writes separately: 100:1 read-heavy screams cache + replicas, write-heavy screams LSM-trees and a log-first ingest path."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A rate limiter shares a Redis counter across N gateway replicas. What's the trap and the fix?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the lost-update race - naive GET -> +1 -> SET interleaves across replicas and silently drops increments, so the effective limit drifts above the target -> fix: atomic INCR , which is a single uninterruptible step -> for multi-step token-bucket logic (refill + decrement + TTL) wrap it in a Lua EVAL so it runs as one atomic unit -> don't use per-replica local counters: N replicas fragment the count to an effective NxL -> decide fail-open vs fail-closed when Redis is unreachable (usually fail-open: availability over precision, with a local fallback bucket)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your cache fronts the DB at a 95% hit ratio. Which two failure modes will page you?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: first quantify the win - 100K rps at 95% hit leaves the DB serving ~5K rps, a 20x reduction -> (1) cache stampede : a hot key expires and every concurrent request misses at once, stampeding the DB; fix with request coalescing (single-flight) + jittered/staggered TTLs + probabilistic early refresh -> (2) invalidation : a cache is derived data with no idea when its source changed; TTL is blunt, explicit invalidation races, CDC from the DB change stream is the robust answer -> bonus: a cold-cluster restart is a self-inflicted stampede across every key at once."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When does fan-out-on-write break for a news feed, and how do you resolve it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: push (fan-out on write) is the default because reads dominate (~5:1), so a feed read becomes a cheap precomputed cache lookup -> it breaks on the celebrity: one post by a millions-follower account = millions of feed writes, a fan-out explosion that floods the write path and is a hot, skewed partition -> resolution is the hybrid: push for normal accounts, pull (merge their recent posts at read time) for accounts above a follower threshold -> store post IDs not bodies (a viral post is stored once, referenced N times) in a capped Redis sorted set -> run fan-out as an async, idempotent outbox/log job so a spike degrades freshness, not availability."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Make the case that the estimate, not the feature list, should drive the architecture — then steelman the opposite.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "For: decisions span ~1000x (one box vs a fleet) and fall directly out of the QPS/storage/bandwidth arithmetic; features tell you what to build, numbers tell you what shape survives; clarifying then estimating makes the rest of the design near-inevitable rather than improvised. Steelman against: early-stage products with unknown load shouldn't shard from day one - over-architecting for hypothetical scale is real cost and operational drag, and premature partitioning can be harder to undo than to add. Synthesis: let the estimate set the shape (stateless app tier, clean partition key chosen even if you run one shard), but defer the cost (actual fleet size) until load is real; design so scaling is \"add replicas / split shards,\" never \"re-architect.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You're handed a system that's slow at p99 but fine at the mean. How do you reason about it as the senior in the room?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the SLO is the tail, not the average - p99 can be 10x the mean under load, and at high fan-out a 1-in-100 slow call hits nearly every request, so a \"fine average\" hides a broken experience -> attribute the tail before tuning: is it GC pauses, a cold cache, lock/queue contention, a hot/skewed partition, or a slow downstream dependency? -> instrument with percentile histograms and per-dependency latency, not just means -> common levers map to causes: stampede -> coalescing + jittered TTLs; hot key -> better partition key / replication of the hot item; tail amplification from fan-out -> hedged requests or reducing fan-out width -> name the trade-off of each fix and verify with a before/after percentile, not a vibe."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "An engineer proposes adding a cache to \"make everything faster.\" Make the principal-level call.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a cache is not free speed - it's a bet that you can tolerate staleness in exchange for not touching the DB, and it adds the two hardest operational problems in the book (invalidation and stampede) -> first ask whether the workload is actually read-heavy and re-readable; caching a write-heavy or low-hit-ratio path adds complexity for little load shed -> decide the consistency need: is a 200 ms-stale read OK? If not, you've committed to write-through or a quorum path, which has its own cost -> choose the strategy deliberately (cache-aside workhorse vs write-through vs write-back, where write-back can lose acknowledged data on crash) -> require a hit-ratio target and an invalidation story (TTL vs CDC) up front -> the principal move: cache the specific hot read path with a measured hit-ratio and a defined staleness budget, not \"everything.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a news feed for 300M users with a sub-200 ms feed-read budget.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: clarify - home timeline of followees' posts, ranked or reverse-chron, read-your-own-writes for the author, eventual for others -> estimate - reads dominate (~5:1), so the read path is the SLO; size feed-read QPS and fan-out write amplification -> data model - feed = per-user list of (postId, authorId, createdAt) in a capped Redis sorted set; posts stored once in a KV/blob store -> core decision: aggregate at write time (push) or read time (pull) -> default push so reads are a cheap precomputed lookup; the celebrity breaks pure push (fan-out explosion / hot partition), so go hybrid: pull for high-follower accounts, merged in at read time -> run fan-out as an async idempotent outbox/log job so spikes degrade freshness not availability -> cache the hot feeds; CDN media -> failure modes: fan-out lag, hot partitions, the inactive-user wasted-work problem -> trade-off: push pays at write time and wastes work on inactive users; pull pays at read time; the hybrid pays pull only where push would explode."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a distributed key-value store that stays writeable under node and network failure.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: clarify - durability, target availability, and the consistency bar (do we accept eventual + conflict resolution?) -> placement: a consistent-hashing ring with virtual nodes so a membership change moves only ~K/N keys and load stays even -> replication: each key to the next N=3 distinct physical nodes clockwise (the preference list), skipping vnodes of the same host -> leaderless, tunable quorums R + W > N for strong-ish reads; W=1 for always-writeable (Dynamo's shopping cart) at the cost of more reconciliation -> concurrent writes -> vector clocks (or version vectors) return siblings to merge, not blind last-write-wins -> per-node storage: an LSM-tree for write-heavy load -> anti-entropy: Merkle-tree comparison + read-repair + gossip-based membership and failure detection -> failure modes: hinted handoff for a briefly-down node, permanent-loss re-replication, and the partition behavior -> trade-off: this is an AP design (CAP) - it chooses availability and accepts temporary inconsistency you resolve at read time; if the use case needs strong consistency, you'd move to single-leader-per-shard with synchronous replication instead."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

@@ -90,6 +90,118 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Walk me through what a storage engine does to turn \"find me row 42\" into disk I/O.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the engine consults an index to convert a scan into a seek -> the mechanism depends on the engine: a B-tree walk root->leaf, a hash-map lookup to a byte offset, or memtable-then-SSTables for an LSM -> without an index a read is a linear scan whose cost grows with data size -> the unit of I/O is the page (~4-8 KB), not the row, so the engine reads whole pages and the index is a small structure kept off to the side -> the punchline: every index turns \"search the data\" into \"consult a structure, then seek.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a clustered index versus a secondary index, and where does the row actually live?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a clustered index stores the full row in the index leaf , ordered by the key - InnoDB clusters on the primary key, so the table is the PK B-tree -> a secondary index is a separate structure keyed on another column whose leaf holds only the key plus a pointer back to the row -> that pointer differs by engine: InnoDB stores the primary key (so a secondary lookup walks two B-trees, secondary->PK->clustered), Postgres uses a heap and every index holds a ctid heap pointer -> consequence: a wide PK bloats every secondary index in a clustered engine -> a secondary index is pure redundancy you build, pay for on every write, and keep in sync."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a composite index on (a, b) , and which queries can use it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: it stores entries sorted lexicographically by a then b -> so it serves any left-anchored prefix : a=… and a=… AND b=… -> it does not serve b=… alone, because there is no left-anchored prefix to seek on -> rule of thumb: put the equality column first and the range column second, since a range on the leading column \"uses up\" the sort order for everything after it -> verify with EXPLAIN rather than guessing what the planner picks."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a write-ahead log (WAL), and why does a B-tree need one?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a WAL is an append-only log of intent written and fsync'd before the change is applied to the data pages -> a B-tree updates pages in place, and overwriting a page is not crash-atomic - a torn write mid-update (or mid-split) can corrupt the page -> the WAL records the change first so recovery can replay it and reach a consistent state -> it also turns many random page writes into one sequential log write for durability, and engines add full-page images / doublewrite to survive torn writes -> the durability contract: a commit is acknowledged once its WAL record is on stable storage, even if the dirty page is still in memory."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A teammate says \"LSM-trees are just faster than B-trees.\" Correct them.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: it's not \"faster,\" it's a different corner of the amplification triangle -> an LSM has low write amp now (sequential appends, work deferred into compaction) but higher read amp (a point lookup may probe many sorted runs) and space amp (stale versions and tombstones until compacted) -> a B-tree has low, predictable read amp (bounded by tree height) but random write I/O plus WAL + whole-page rewrites -> latency profile differs too: B-tree is predictable, LSM is spiky under compaction stalls -> so the answer is \"depends on the workload\": ingest-heavy -> LSM, read-heavy/tail-latency-sensitive OLTP -> B-tree."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Define read, write, and space amplification, and explain why you can't drive all three to zero.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: read amp = pages/files touched per logical read; write amp = bytes written to disk per byte of user data; space amp = disk bytes ÷ live data bytes -> they trade off against each other: a B-tree keeps read amp ≈ 1 (the leaf) but pays write amp on every in-place page rewrite + WAL; an LSM keeps write amp low by deferring it, but pays read amp (many runs) and space amp (stale versions) until compaction runs -> compaction itself converts space/read amp back into write amp - you're moving the cost, not removing it -> this is the RUM conjecture: optimize any two of read/write/space and the third suffers -> the skill is reading the workload and choosing which currency to spend."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "An InnoDB secondary-index lookup is slow. Explain the mechanics and a fix.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: InnoDB is clustered, so the secondary leaf stores the primary key , not a direct row pointer -> a secondary lookup therefore walks two B-trees: secondary index -> PK value -> clustered index to fetch the row (the \"bookmark lookup\") -> a wide PK makes this worse because it bloats every secondary index and every lookup -> fix: a covering index that includes the selected columns so the query is answered from the index alone (Index Only Scan), avoiding the second walk -> or narrow the PK -> confirm with EXPLAIN that you actually got the covering/index-only plan."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does the page / buffer cache do, and how does it change how you reason about read cost?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the buffer pool / page cache holds recently-used pages in RAM, so a \"disk read\" is often actually a memory hit -> the real read cost is the miss rate, not the raw page count: a B-tree's upper levels stay cached, so a billion-row lookup is usually one uncached leaf read, not four disk reads -> an LSM's read amp also softens once hot SSTable blocks and index/Bloom-filter blocks are cached -> writes go through it too: dirty pages are buffered and flushed later, which is why durability rides on the WAL, not on the page being written -> the senior framing: amplification numbers are worst-case/cold; the working-set fit in the cache is what dominates steady-state latency -> watch the cache hit ratio, not just the plan."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you choose between a B-tree (row store) and an LSM-tree for a new service, and how would you defend reversing that choice later?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: start from the access pattern and SLO, not the brand: write:read ratio, point vs range reads, p99 latency target, dataset vs RAM size, and storage budget -> map them onto the triangle - write-heavy ingest with disk to spare -> LSM (sequential writes, low write amp); read-heavy, tail-latency-sensitive OLTP -> B-tree (predictable, low read amp) -> name the second-order costs: LSM compaction stalls and tunable strategy vs B-tree random-write ceiling and page slack -> make it reversible: hide the engine behind a repository boundary, keep the data model engine-agnostic, and define the metric that would trigger a switch (e.g. compaction can't keep up -> write stalls, or p99 read latency from probing too many runs) -> the staff move is committing to a default and the measured trip-wire that says you chose wrong."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Add an index, the query's slow\" — make the principal-level case for when not to add one.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: every secondary index is redundant data you maintain on every write - it taxes write throughput, write amp, and disk, and on a clustered engine it carries the PK in every entry -> so an index is a read optimization paid for by all writers, and on a write-heavy table that tax can dwarf the read it saves -> before adding one, ask: is the query hot enough and selective enough to matter? would an existing composite index serve it via a left-anchored prefix? is the planner ignoring an index that already exists (stale stats, non-sargable predicate)? -> alternatives: rewrite the predicate, a covering index instead of two, a different data layout, or denormalize against a measured read pattern -> the principal framing: indexes aren't free reads, they're a standing write liability - justify each one against the workload and measure with EXPLAIN , don't cargo-cult."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When is a column store the right call over a row store, and what exactly are you trading?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the discriminator is the access pattern: row stores keep a record's columns contiguous (great for OLTP point reads/writes of whole rows), column stores keep each column contiguous (great for OLAP scans that touch few columns over many rows) -> columnar wins because a scan reads only the columns it needs and homogeneous data compresses hard (run-length, dictionary, bit-packing), so you trade space amp for huge scan throughput -> what you give up: single-row writes and updates are expensive (a row is scattered across column segments), so column stores favor bulk/append loads, not OLTP mutation -> the synthesis: don't pick one - run OLTP on a row store and ETL into a columnar warehouse on a star schema, refreshed so analytics scans don't starve user I/O -> justify each side by its access pattern and the amplification it spends."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the storage for a product with live order pages AND an analytics dashboard.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: two access patterns, two layouts - don't force one engine to do both -> OLTP path: a row store (B-tree/InnoDB, or LSM if ingest-heavy), normalized, indexed on the actual query predicates, with covering indexes for the hot read paths and a sensibly narrow clustered key -> OLAP path: ETL/CDC the data into a column store / warehouse on a star schema (narrow fact table + dimension tables), refreshed periodically so heavy scans run on isolated resources -> justify each choice by its access pattern and the amplification it spends (row store pays write amp for predictable reads; column store trades single-row write cost for compressed, fast scans) -> keep them decoupled so a dashboard query can't starve order-page I/O -> name the freshness trade-off: live OLTP vs periodically-refreshed analytics, and how stale the dashboard is allowed to be."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the storage engine + indexing for a write-heavy event-ingest service that also needs fast recent-event reads.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: start from the workload - very high sustained write rate, mostly append, reads skewed to recent data -> that points at an LSM-tree: turn every write into a sequential append (WAL + memtable), flush immutable SSTables, defer cleanup to compaction - low write amp is exactly what an ingest firehose needs -> protect read latency with Bloom filters (skip SSTables that definitely lack a key) and a partitioning/clustering key on time so recent events sit in the freshest, smallest runs -> choose compaction by sub-pattern: size-tiered for the raw write-heavy table (cheap writes, accept space + read amp), or time-windowed if events carry TTLs so whole old buckets drop at once -> size the buffer cache to the recent working set so hot reads stay in RAM -> durability via WAL fsync policy and replication -> the trip-wire to monitor: write stalls when L0/pending-compaction crosses the back-pressure trigger - sustainable write rate is bounded by compaction throughput, so the fix is more compaction I/O or a cheaper-write strategy, never \"write faster\" -> name the trade-off: LSM buys ingest throughput by paying read + space amp on cold data, which is acceptable because reads target recent (hot) events."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

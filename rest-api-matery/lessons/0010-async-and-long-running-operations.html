@@ -53,6 +53,118 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   details.iq .a b{color:var(--track-rest)}
   @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What does 202 Accepted mean?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "\"I've accepted the request for processing, but it isn't done and may not even have started.\" It's deliberately non-committal about the outcome — unlike 201 Created , nothing is guaranteed to exist yet. The response points the client at where to check progress."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does the Location header point to in a 202 response?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "To the status/operation resource the client should poll (e.g. /jobs/{id} or /operations/{id} ), not to the final result. Contrast with 201 Created , where Location points at the newly created resource itself."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a webhook, and how does it differ from polling?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A webhook inverts the direction: instead of the client polling, the client registers a callback URL and the server POST s an event to it when something happens. It's push-based — efficient and near-real-time — but it makes the client a server and hands it a fistful of distributed-systems problems (duplicates, ordering, auth)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What delivery guarantee do webhooks give, and what follows from it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Delivery is at-least-once : failed deliveries are retried, so the same event can arrive more than once. The direct consequence: the consumer must be idempotent and dedupe on a stable event id . Assuming exactly-once delivery is the classic bug — it's how you bill a customer twice."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the core mental shift when moving from sync to async design?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Turn the work into a resource. Instead of returning the result, you create a first-class operation / job resource the client can address, query, and recover against. The request returns fast with a handle to that resource; the result becomes a separate resource the operation links to once it's done."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why keep the operation queryable after it has completed?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "So a client that crashed or lost the network mid-poll can recover — it re-queries the operation id and learns the outcome and result link. If you delete the operation the instant it finishes, you create a race where the client never learns it succeeded. Retain completed operations for a sensible TTL."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Webhooks aren't ordered. How do you build a correct consumer anyway?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Carry a timestamp and/or sequence number in each event and never assume the last event you received is the latest write. Reconcile against current state (e.g. \"ignore an update older than what I've already applied\"), or fetch authoritative state from a status resource. Design so out-of-order arrival is merely handled , not fatal ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A valid signed request can be captured and resent. How do you stop replay?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Include a timestamp in the signed payload and reject stale ones (outside a small tolerance window, e.g. a few minutes). A replayed event then fails even though its signature is genuine, because it's too old. Combine with consumer-side dedupe on event id so a replay inside the window is also a no-op."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Just give me exactly-once delivery.\" How do you respond?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Exactly-once delivery is effectively unachievable over an unreliable network (the two-generals problem). What you can get is exactly-once effect : at-least-once delivery plus an idempotent consumer keyed on the event id. The senior framing is \"I want exactly-once effect , not exactly-once delivery\" — and then you build dedupe rather than chase an impossible guarantee."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do idempotency keys interact with the 202 submission?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The submitting POST is not idempotent, so a retried submission could spawn a duplicate job. Accept an Idempotency-Key : on a repeat, return the same 202 and Location for the already-created operation instead of starting a second one. That makes \"submit a long job\" safely retryable — the client gets one operation no matter how many times the request is replayed."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you keep one slow or failing consumer from degrading webhook delivery for everyone?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Isolate per-consumer: independent delivery queues, per-endpoint concurrency limits and circuit breakers so a timing-out endpoint backs off without starving others; bound and parallelize retries; and dead-letter aggressively rather than letting a black-hole endpoint consume the retry budget. The principle is bulkheading — failure of one tenant's endpoint must not become a shared-fate outage of the delivery pipeline."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design an API for a large data export that can take several minutes, then notifies the client when it's ready.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: don't block - POST /exports -> 202 Accepted + Location to /exports/{id} , a status resource -> client polls ( pending -> running -> succeeded ) honoring Retry-After ; on done it links to a result resource - a signed, expiring download URL -> also offer a completion webhook: an HMAC-signed event POST -> because delivery is at-least-once, the consumer dedupes on event id and stays idempotent, doesn't rely on ordering, and uses a timestamp to reject replays -> receiver acks fast 2xx and works async; non- 2xx -> retries with backoff -> dead-letter -> protect the result URL with auth + expiry -> keep the operation queryable after completion so a client that crashed mid-poll can recover."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a webhook delivery platform that guarantees every event eventually lands without one bad endpoint taking the system down.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: persist every event durably first, then deliver from a queue - never couple producing the event to delivering it -> delivery is at-least-once : sign each payload (HMAC over raw bytes, constant-time compare) with a timestamp so consumers verify authenticity and reject replays -> on non- 2xx /timeout, retry with exponential backoff + jitter over a bounded window, then dead-letter and surface the failing endpoint -> give a webhook-independent recovery path: a list/status API to fetch the gap and a replay of dead-lettered events -> isolate per consumer (independent queues, per-endpoint concurrency limits, circuit breakers) so one black-hole endpoint can't starve the fleet - bulkheading -> coalesce at high fan-out, apply back-pressure, and track delivery/retry/lag per endpoint -> name the trade-off: exactly-once delivery is impossible over an unreliable network, so you ship at-least-once delivery + an idempotent consumer keyed on event id (exactly-once effect )."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>

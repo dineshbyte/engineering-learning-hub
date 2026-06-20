@@ -78,6 +78,118 @@ details.iq .a b{color:var(--track-rest)}
 
 @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What does multi-version storage mean — what happens to old data when a row is updated?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: an UPDATE never overwrites in place — it creates a new version of the row and keeps the old one around -> in Postgres the new tuple is inserted into the heap with xmin = the current xid and the old tuple's xmax is stamped; the old version lives until VACUUM removes it -> in InnoDB the clustered row is changed in place but the prior image is written to the undo log, reachable via DB_ROLL_PTR -> so a logical row is really a chain of physical versions -> \"no overwrite\" is the core idea — both engines retain the prior version so concurrent readers can still see it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What exactly is a snapshot, and what is in it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a snapshot is the set of information a txn uses to decide which versions it may see -> in Postgres it's xmin (oldest still-running xid), xmax (next xid not yet assigned), and xip[] (the list of in-progress xids) -> together they define \"committed as of this instant\" -> Read Committed takes a fresh snapshot per statement; Repeatable Read / SI takes one snapshot at the first read and reuses it for the whole txn -> the snapshot is the txn's frozen view of the commit timeline — it never sees writes that commit after it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "State the visibility rule: how does a reader decide a given version is visible?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: for each tuple the reader checks two gates against its snapshot -> the creating xid ( xmin ) must be committed and in the past (not in xip[] , below xmax ) -> the deleting xid ( xmax ) must be absent, aborted, or still in the future relative to the snapshot -> if both hold, that version is the one this reader sees; otherwise it walks to the next version in the chain -> commit status comes from the commit log (clog) -> \"visible = created-by-a-committed-past-txn AND not-yet-deleted-as-of-my-snapshot.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is version GC — VACUUM in Postgres, purge in InnoDB — and why is it needed?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: because updates and deletes leave old versions behind, something must reclaim the ones no live snapshot can ever see again -> Postgres VACUUM marks dead tuples reusable (and updates the visibility map / freezes old xids); plain VACUUM frees space for reuse but VACUUM FULL is what actually shrinks the file -> InnoDB's purge thread reclaims undo records and delete-marked rows once no read view needs them -> the cleanup ceiling is the oldest live transaction's horizon: nothing that died after it can be removed -> without GC the table bloats and reads slow down."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk me through exactly what happens on disk when you UPDATE one row in Postgres vs InnoDB.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: Postgres inserts a new tuple ( xmin = current xid), stamps the old tuple's xmax , and writes new index entries unless HOT applies; the old version stays in the heap for VACUUM -> InnoDB modifies the clustered-index row in place but first writes an undo record reachable via DB_ROLL_PTR , and old readers walk the undo chain backward -> key contrast: Postgres keeps history in the heap (cheap update, expensive cleanup, index churn), InnoDB keeps history in undo (in-place update, cheaper indexes, purge pressure) -> in neither case is the prior version destroyed at write time."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A table is 5x the size of its live row count and seq scans are slow. Diagnose it.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: bloat from dead tuples VACUUM can't reclaim -> find the cause: an old or idle in transaction connection, or a long analytics query, pinning the xmin horizon so nothing that died after it can be removed — and the effect is DB-wide, not just that table -> check pg_stat_activity ( xact_start , backend_xmin ) and n_dead_tup -> fix the offending txn, don't just run VACUUM -> remember plain VACUUM frees space for reuse but won't shrink the file — only VACUUM FULL does, and it takes an exclusive lock."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is updating an indexed column more expensive under MVCC — in both engines?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a new version generally means new or changed index entries -> Postgres writes new index tuples unless HOT applies (HOT needs the update to stay on the same page and touch no indexed column) -> index bloat; and because visibility lives in the heap, index-only scans depend on the visibility map -> InnoDB delete-marks the old secondary-index entry and inserts a new one, and secondary-index reads often drop to clustered + undo to find the visible version -> net effect in both: write amplification on the write path plus extra read cost — which is why \"just add an index\" isn't free under heavy updates."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Connect a long-running analytics query to table bloat, and give the operational fix.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the query's snapshot pins the xmin horizon, so VACUUM can't reclaim anything that died after the query started — bloat grows for the whole duration of that one read -> it also holds back freezing, so it's a wraparound risk too -> the read path is fine (snapshots are cheap); the damage is to cleanup -> levers: idle_in_transaction_session_timeout and statement timeouts to bound txn age, route heavy analytics to a read replica, and alert on the oldest xact_start / backend_xmin (and InnoDB history list length) -> the rule: cleanup is only as current as your oldest open transaction."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"The database suddenly stopped accepting writes.\" What's your first hypothesis and how does it tie to MVCC?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: first hypothesis: transaction-ID wraparound — Postgres went read-only to avoid silent data loss -> mechanism: xids are finite and compared modulo-2^31, so old versions must be frozen (\"visible to all, ignore xmin\") before the oldest unfrozen xid ages past the safety threshold -> root cause is always \"freezing fell behind\": autovacuum disabled or starved, or blocked by a long-running txn pinning the horizon -> recovery: let anti-wraparound autovacuum run (or VACUUM in single-user mode), then kill the long txn and fix monitoring -> prevention: never disable autovacuum, alert on max xid age and oldest open txn -> cite the Sentry / Mailchimp postmortems — every one is \"autovacuum couldn't keep up.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Postgres heap-history vs InnoDB undo-history — how does that one design choice ripple through operations?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the storage location of old versions sets the whole operational profile -> Postgres keeps history in the heap: cheap in-place-ish writes but cleanup (VACUUM) competes for I/O, index entries churn, and a pinned horizon bloats the live table -> you monitor n_dead_tup , autovacuum lag, backend_xmin , and freeze age, and you never disable autovacuum -> InnoDB keeps history in undo: cheaper indexes and in-place clustered updates, but a long read view grows the undo/history list and purge falls behind -> you monitor history list length and purge lag, and keep undo bounded -> synthesis: different janitor, same root cause — a long transaction starving cleanup -> the staff move is operating each engine to its specific failure mode rather than treating MVCC as one thing."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How is PostgreSQL SERIALIZABLE built on top of MVCC, and what does it add — and cost?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: SSI runs txns on ordinary MVCC snapshots with no extra locks on reads, then additionally tracks read/write dependencies -> when it detects the dangerous structure (rw-antidependencies forming a potential cycle) that causes write skew, it aborts one txn with SQLSTATE 40001 -> so MVCC is the substrate and SSI is an optimistic safety layer over it, not a replacement -> cost: it's conservative (aborts some serializable histories), abort rate climbs with contention, and it consumes predicate-lock (SIRead) memory -> operational contract: the app must retry on 40001 and keep txns short and reads selective -> the guarantee is single-node only -> the synthesis: SSI buys serializability without read locks by paying in aborts and lock memory instead of blocking."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the version-storage and GC strategy for an append-mostly audit-log table that is rarely updated but read by long analytics scans.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: the workload is insert-heavy with few updates, so version churn is low — the real risk is long read scans, not write amplification -> because updates are rare, dead-tuple bloat from updates is minimal; the threat is a long analytics snapshot pinning the cleanup horizon DB-wide and holding back freezing -> defenses: run those scans on a read replica or under READ ONLY DEFERRABLE for a safe snapshot with no SSI cost, and cap them with statement timeouts -> aggressively freeze old, immutable rows (they never change) so wraparound is a non-issue and they're skipped by VACUUM -> partition by time so old partitions become read-only/freeze-once and cleanup stays local -> observability: alert on oldest xact_start / backend_xmin and max xid age -> trade-off: replica isolation (fresh-enough, isolates bloat) vs same-DB simplicity (one long scan can bloat the primary)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You're choosing between a Postgres-style (heap history) and an InnoDB-style (undo history) engine for a write-heavy, high-contention OLTP service. Walk the decision.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: clarify the workload first — heavy updates on hot rows, short txns, many indexes -> heap-history (Postgres-style): updates are cheap but every non-HOT update churns index entries and leaves dead tuples, so under heavy writes you pay in VACUUM I/O, bloat, and a wraparound/freeze obligation; you must tune autovacuum hard and never let a long txn pin the horizon -> undo-history (InnoDB-style): in-place clustered updates and cheaper secondary indexes suit write-heavy workloads, but long read views grow the undo/history list and reads via secondary indexes pay a clustered+undo hop -> for write-heavy high-contention OLTP the undo model often operates more smoothly, provided you keep read views short so purge keeps up -> name the decisive trade-off: VACUUM/bloat discipline vs purge/history-list discipline -> whichever you pick, the binding constraint is the same — bound transaction duration, because the oldest open txn sets the cleanup cost; instrument it before deciding."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

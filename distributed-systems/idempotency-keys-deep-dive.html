@@ -78,6 +78,118 @@ details.iq .a b{color:var(--track-rest)}
 .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
 @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What is an idempotency key and what problem does it solve?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a client-generated unique token attached to a request so the server can recognize a retry of the same logical operation rather than a new one -> it exists because a network call can time out after succeeding, so the client must be able to safely retry without re-executing the effect -> the server records the key on first execution and, on any later request with the same key, replays the original result instead of re-running the side effect -> this turns a non-idempotent operation (\"charge $10\", \"create order\") into one that's safe to retry -> it is per-operation, per-store dedup — not a delivery guarantee."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Beyond the key itself, what do you store in the idempotency record — and why is a bare key not enough?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the scoped claim (account_id + key) , a request_fingerprint (hash of the params), a status (in_progress/completed), the saved response_code/body to replay, and created_at/locked_at for TTL + lease -> a bare key can't catch the same-key-different-body trap: the fingerprint lets you tell a genuine retry (params match → replay) from a key-reuse bug (params differ → reject 400) instead of returning a confidently-wrong cached result -> the saved response lets a retry return the original outcome verbatim -> scoping by account prevents one tenant's key from colliding with another's."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is \"exactly-once delivery\" impossible, and what's the real guarantee?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: an unacked send forces resend (risk duplicate) or no resend (risk loss) — no third option; that's the Two Generals problem -> so exactly-once delivery over an unreliable network can't exist -> the achievable guarantee is at-least-once delivery + an idempotent (or deduplicating) endpoint = exactly-once effect -> the idempotency key is the most common way to make an endpoint that idempotent -> always pin down \"exactly-once across which boundary?\" — the property is per receiver, not a magic end-to-end promise."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Which operations don't need an idempotency key, and why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: operations that are already idempotent — an absolute write SET balance = 100 , DELETE /orders/42 , \"mark invoice paid\", and in general well-behaved GET/PUT/DELETE -> re-applying them yields the same state, so a retry is harmless and the extra machinery is just noise -> keys are for the unsafe , non-idempotent ops: relative mutations like \"charge $10\" or \"create an order\" (which would duplicate) -> the design instinct: prefer making the operation naturally idempotent (absolute, not relative) before reaching for a key."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Two retries with the same key hit two app servers at the same instant. Why does the naive design double-charge, and how do you fix it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the naive design is check-then-act : both requests read the store, both see \"not seen\" before either writes, so both proceed and charge — a classic race -> the fix is an atomic claim : a UNIQUE(account_id, key) INSERT … status=in_progress performed before any work, so exactly one racer wins the insert -> the loser catches the unique-violation, reads the row, and branches: completed → replay the saved response; in_progress → return 409 (retry later) -> alternatives: SELECT … FOR UPDATE or an advisory lock -> the principle: replace check-then-act with a single atomic conditional write."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You've solved the race. The server still occasionally double-charges. Where's the remaining window?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a crash between performing the side effect and recording the completed result — the effect happened, no completion record exists, so the retry re-runs it -> the fix: recording the result must be atomic with the side effect , not a second step -> for a local effect, wrap the business mutation and the idempotency record in one DB transaction -> red flag: \"just save the key right after the charge\" — that's two operations a crash can tear apart, which is the dual-write problem in miniature."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When can you wrap the side effect and the idempotency record in one transaction — and when can't you?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: Case A — local effect: the business mutation and the idempotency record live in the same database, so a single transaction commits both or neither — clean and atomic -> Case B — external effect (e.g. a Stripe charge): no transaction can span your DB and a remote API — that's the dual-write problem — so you delegate by passing your own key through to the downstream's idempotency mechanism -> if the downstream has no idempotency support, fall back to reconciliation: detect duplicates after the fact and refund/compensate -> the first question to ask of any payment integration: \"is this API idempotent, and how do I pass a key?\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A request claims the key (in_progress) then the process crashes. What happens to future retries, and how do you prevent a permanent outage?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the orphaned in_progress row blocks every future retry with a permanent 409 — the operation can never complete, a self-inflicted outage on that key -> prevention is a recovery lease: store locked_at and treat an in_progress record older than a timeout as reclaimable, so a later retry can take it over and resume -> ideally pair with recovery points (Stripe's model) so a retry resumes a half-finished request rather than restarting it blindly -> the lease timeout must exceed the operation's worst-case legit duration, or you'll reclaim a still-running request and risk concurrent execution."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you choose the retention TTL, and what goes wrong if it's too short?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: records can't live forever (storage growth), so they expire — Stripe keeps keys ≈ 24h (illustrative) -> after expiry the same key is treated as brand new, so a late retry — a message stuck in a queue 25h, a long backoff, a DLQ replayed days later — re-executes and double-charges -> so the TTL must comfortably exceed your worst-case retry horizon : max queue redelivery delay + retry-backoff cap + DLQ replay window, with margin -> derive it from those actual bounds, not a round number -> the staff framing: the TTL is a contract between your dedup window and every retry source upstream — if any source can outlive the window, the guarantee is silently void."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A team says \"we added idempotency keys, so the whole payment pipeline is exactly-once.\" Push back.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a key guards one operation against one store — it is not a distributed-transaction substitute and gives no exactly-once across a chain of services -> three services in a row = three independent dedup guards, each with its own key, store, and TTL; a gap in any one re-opens the duplicate window -> the underlying theorem: there is no exactly-once delivery ; there is at-least-once delivery + an idempotent/deduplicating endpoint = exactly-once effect, scoped per endpoint -> also name the TTL hole, the downstream-without-idempotency hole, and the dual-write hole -> the correct claim is \"each step is individually idempotent,\" verified end to end — not \"the pipeline is exactly-once.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Producer-side keys vs consumer-side dedup — how do you decide where to put the guarantee?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: apply the end-to-end argument — put the guarantee at the layer that actually has the knowledge to enforce it -> producer-side idempotency keys work when the caller can generate a stable key and the receiving service owns an atomic store to claim it -> but if the producer is external, non-idempotent, and offers no hook (you can't make it send a stable key or pass one downstream), you can't fix it there — move dedup to the consumer , which sees every delivery and can dedup on a natural business key or content hash -> trade-off: producer keys are precise but require cooperation; consumer dedup is robust to uncooperative producers but needs a good dedup key and a window sized to redelivery -> the staff move: choose by who holds the stable identifier and atomic store, not by habit."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design an idempotent payment API: charge a customer exactly once despite client retries.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: the client generates an idempotency key per logical charge and sends it on every retry of that charge -> on receipt, atomically claim the key with INSERT … UNIQUE(account_id, key) status=in_progress before doing work; the unique constraint makes exactly one concurrent racer win -> store a request fingerprint and reject same-key-different-body with 400 -> perform the charge, then record completed + the response atomically with the effect : one DB transaction for a local ledger, or pass the key through to the payment processor's own idempotency for an external charge (dual-write → delegate) -> on a duplicate request, branch on status: completed → replay the saved response, in_progress → 409 -> add a recovery lease so a crashed in_progress row is reclaimable, not a permanent 409 -> set the TTL to exceed the worst-case retry horizon so a late retry can't re-charge -> for the external leg with no idempotency support, add reconciliation (detect + refund) -> name the trade-off: strong dedup needs a stable client key and an atomic store; without them you fall back to consumer-side reconciliation."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design exactly-once consumption from an at-least-once message queue (e.g. payments off Kafka/SQS).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: accept that the broker is at-least-once, so the consumer must be idempotent — there is no exactly-once delivery to lean on -> pick a stable dedup key: a producer-supplied message/event ID, else a content hash or a natural business key -> on each message, atomically claim that key in a dedup store before applying the effect (unique insert / conditional write), so reprocessing a redelivered message is a no-op replay -> make \"apply the effect\" and \"mark the message processed\" atomic — same transaction for a local DB sink, or delegate to the sink's idempotency for an external one — so a crash between them doesn't double-apply -> only ack/commit the offset after the effect is durably recorded; an ack-before-effect crash loses the message -> size the dedup window (TTL) to exceed max redelivery delay + DLQ replay window, or duplicates slip through after expiry -> handle poison messages with a DLQ and bounded retries with backoff + jitter -> name the trade-off: a large dedup window costs storage but is the only thing that closes the late-redelivery hole, and the dedup store itself must be at least as available/consistent as the effect it guards."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

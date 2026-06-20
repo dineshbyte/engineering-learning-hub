@@ -45,6 +45,118 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.85rem}
   @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Define a safe and an idempotent HTTP method.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Safe = read-only intent , no intended state change ( GET , HEAD , OPTIONS ). Idempotent = N identical requests have the same effect on server state as one ( GET , HEAD , OPTIONS , PUT , DELETE ). The key word is effect on state , not a byte-identical response."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is POST idempotent? Why does it matter?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "No. A retried POST can create a duplicate (a second charge or order). It matters because dropped connections and retries are normal in distributed systems — non-idempotency is exactly why POST creation needs an Idempotency-Key to be retry-safe."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "200 vs 201 vs 204 , and what must a 201 include?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "200 OK : success with a body. 201 Created : a new resource was created and must carry a Location header to it. 204 No Content : success with no body (common for DELETE and for PUT / PATCH that don't echo the resource)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "401 vs 403 — what's the difference?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "401 Unauthorized = authentication failed (\"we don't know who you are\" — credentials missing/invalid/expired; re-authenticate). 403 Forbidden = authorization failed (\"we know who you are, you're not allowed\" — re-authenticating won't help)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Explain \"safe idempotent,\" and why \"safe means secure\" is false.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Every safe method is idempotent (reading changes nothing, so repeating it changes nothing); the reverse fails — PUT / DELETE are idempotent but not safe. \"Safe\" is about read-only intent , nothing about authn/authz/TLS: a GET can still expose sensitive data and still needs authorization and transport security. Keep safe / idempotent / cacheable as three separate axes."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is PATCH idempotent, and how do JSON Merge Patch vs JSON Patch relate?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Not guaranteed — it depends on the patch document. A \"set field to X\" patch is idempotent; \"increment by 1\" / \"add to array\" is not. JSON Merge Patch (RFC 7386) sets values ( null = remove), so it tends to be idempotent; JSON Patch (RFC 6902) is an op sequence where add isn't. Make PATCH idempotent when you can, and know why a given patch isn't."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why prefer 307 / 308 over 302 / 301 , and why is 304 a feature?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "307 / 308 preserve the method and body ; with 301 / 302 clients historically rewrote a POST into a GET , dropping the body. 304 Not Modified is the payoff of conditional GET: the client revalidates with If-None-Match / If-Modified-Since and, if nothing changed, gets 304 with no body and reuses its cache — bandwidth saved, not a failure."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When should a forbidden resource return 404 instead of 403 ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When the very existence of the resource is sensitive. A 403 confirms \"this exists, you just can't see it,\" which leaks information (resource enumeration — e.g. private repo names). 404 hides existence entirely. Trade-off: 404 is harder to debug for legitimate users, so reserve it for genuinely sensitive resources, not as a blanket policy."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A teammate puts \"mark as read\" behind GET /messages/42?read=true . What breaks?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It makes a state-changing operation safe-in-name only, and the ecosystem assumes GET is safe: prefetchers, crawlers, link-preview bots, and proxies fire it and silently mutate state, and caches may serve stale results. Intended state change belongs on a non-safe verb — POST , or PATCH / PUT for an idempotent update. The classic casualty was an admin panel where a crawler followed every \"delete\" link."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A downstream dependency is timing out under load. Walk the status codes and behavior you'd return.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "If a circuit breaker is open / you're shedding load, return 503 + Retry-After so clients back off. If you actually called upstream and it timed out, 504 is honest; if it returned garbage, 502 . Don't let upstream's timeout surface as a 500 for a valid client request, and never convert it into a 4xx — the client did nothing wrong. Combine with idempotency keys so the inevitable retries don't double-act."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Status code as the contract, or body error codes — how do you reconcile them?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Use both at the right layer. The HTTP status is the coarse, machine-actionable verdict that infrastructure (caches, LBs, retry logic, alerting) acts on — get it right first. The body carries a stable, fine-grained error code plus human/field detail for the application to branch on (e.g. \"code\": \"card_declined\" alongside a 402 / 422 ). Status for the network, body codes for the application — not one instead of the other."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the request/response contract for POST /payments where the connection can drop mid-flight. Walk the methods and status codes.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: POST is correct because the server assigns the payment id -> sync path returns 201 Created + Location ; async path returns 202 Accepted + a status URL to poll, never 200 for unfinished work -> the dropped connection is the hard part: POST isn't idempotent, so a client-generated Idempotency-Key lets a retry replay the original result instead of double-charging -> map the failure modes to honest codes: 422 for validation, 409 for a state conflict, 402 /body error code for a declined card, 503 + Retry-After when shedding load, 504 if upstream timed out -> never tunnel an error through 200 , never return 5xx for bad client input -> name the contract split: status code for the network/infra, stable body error code for the application."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the update + concurrency story for a resource many clients edit at once (PUT vs PATCH, conditional requests).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: choose PUT (full replace, idempotent by construction) vs PATCH (partial edit) by resource size and whether \"set to null\" must differ from \"leave untouched\" -> for PATCH , pick the format deliberately — JSON Merge Patch (value-setting, tends to be idempotent) vs JSON Patch (op sequence, add isn't idempotent) -> guard lost updates with optimistic concurrency: hand out an ETag on reads, require If-Match on writes, return 412 Precondition Failed on a stale version -> distinguish 412 (\"your version is stale\") from 409 (\"this action conflicts with current state\") -> make retries safe: idempotent verbs retry freely, and a turned-into-explicit conflict is retryable after a re-read -> name the trade-off: PUT is simpler and retry-safe but bandwidth-heavy; PATCH saves bytes but adds format and idempotency nuance."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>

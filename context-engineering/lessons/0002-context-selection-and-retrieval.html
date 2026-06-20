@@ -85,6 +85,134 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Your code assistant keeps missing the actual buggy file. Where in the selection pipeline do you look first, and how do you prove it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: instrument the pipeline per stage, don't guess -> first check candidate generation recall : was the buggy file ever in the candidate set? if no, ranking/packing are irrelevant -> if recall is the gap, add the missing signal — usually structural (imports/call sites) or lexical for an exact symbol the embedding model washed out -> if recall is fine but the file ranked low, fix ranking / add a re-rank -> if it ranked high but got dropped, it's a packing/budget problem -> measure retrieval hit-rate as a first-class metric, not just end-answer quality."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Users complain semantic search returns \"close but wrong\" results and sometimes whiffs on exact error codes. What's your fix and why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: name the root cause — embeddings score topical similarity, so they return plausible-but-wrong and wash out rare exact tokens like error codes -> add hybrid : run BM25 alongside the vector search and fuse (RRF) so exact strings are caught by lexical and meaning by semantic -> add a cross-encoder re-rank over the fused top-N to push the genuinely best result to the top (precision) -> frame the split: hybrid fixes recall, re-rank fixes precision -> verify with retrieval hit-rate on a labelled set, not just end-answer vibes; tune fusion weights against that set."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the three stages of the selection pipeline, in order, and what each one does.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: candidate generation -> cast a wide net to pull anything that might be relevant -> ranking -> score those candidates so the best ones rise -> selection / packing -> fit the top of the list into the token budget. The whole point is choosing the smallest set that still contains the answer when you can't send everything."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does lexical / BM25 search actually match on, and what is it good at?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: it scores documents by overlap of the exact terms , weighted by term frequency and rarity (TF-IDF / BM25) -> meaning plays no part, only the literal strings -> strong on identifiers, error codes, function names, exact IDs -> fast, cheap, interpretable, no model required — you can read why it matched."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does semantic / embedding search match on, and why use it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: it encodes query and chunks into vectors and ranks by similarity (cosine over an ANN index) -> matches on meaning , so synonyms and paraphrase still find the right passage even with zero shared words -> exists because users rarely use the document's exact wording -> robust to phrasing, weak on rare exact tokens."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is hybrid search, and what does fusion (e.g. RRF) do in it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: run lexical and semantic together , then merge their two result lists into one ranking -> fusion (Reciprocal Rank Fusion or a weighted blend) combines the per-engine ranks into a single ordered list -> the reason: the two engines fail on opposite cases, so one usually catches what the other drops -> gives you exact-match and meaning-match coverage at once."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Users say semantic search returns \"close but wrong\" results and sometimes whiffs on exact error codes. What's your fix and why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: name the root cause — embeddings score topical similarity, so they return plausible-but-wrong and wash out rare exact tokens like error codes -> add hybrid : run BM25 alongside the vector search and fuse (RRF) so exact strings are caught by lexical and meaning by semantic -> add a cross-encoder re-rank over the fused top-N to push the genuinely best result up (precision) -> frame the split: hybrid fixes recall, re-rank fixes precision -> verify with retrieval hit-rate on a labelled set, not end-answer vibes; tune fusion weights against that set."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your code assistant keeps missing the actual buggy file. Where in the pipeline do you look first, and how do you prove it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: instrument per stage, don't guess -> first check candidate-generation recall : was the buggy file ever in the candidate set? if no, ranking and packing are irrelevant -> if recall is the gap, add the missing signal — usually structural (imports / call sites) or lexical for an exact symbol the embedding washed out -> if recall is fine but it ranked low, fix ranking / add a re-rank -> if it ranked high but got dropped, it's a packing/budget problem -> track retrieval hit-rate as a first-class metric, not just end-answer quality."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Distinguish ranking from re-ranking. When is a cross-encoder worth its cost, and when is it a waste?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: ranking = first stage, cheap score (BM25 / cosine) over many candidates, optimizing recall — \"don't miss it\" -> re-ranking = second stage, expensive cross-encoder reading query + document jointly over the top-N, optimizing precision — \"best at the top\" -> worth it when the final top-k reaching the window must be high-precision and first-stage ordering is noisy -> a waste if recall is the real gap — it can't recover a missed doc -> bound cost by running it on top-N only and caching; prove the precision lift on a labelled set before keeping it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Someone proposes \"just embed everything and drop BM25 — embeddings are strictly better.\" Push back.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: embeddings are weak on exact tokens — error codes, IDs, function names get washed into topical neighbours -> for a query that is the literal string, meaning is irrelevant and lexical is exactly right -> the two engines have opposite blind spots, so dropping BM25 trades one failure mode for another -> hybrid keeps BM25 precisely for those cases; the small extra infra is cheaper than silently missing every ID lookup -> decide with hit-rate on a query mix that includes exact-token queries, not a vibe."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a retrieval strategy when you don't yet know the query mix — some lookups are exact IDs, some are vague conceptual questions, and the corpus keeps changing.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: start from recall first : a missed doc can't be ranked or packed, so over-invest stage 1 -> default to hybrid (BM25 + vector, fused) so exact-token and conceptual queries are both covered without knowing the split up front -> add a cross-encoder re-rank on the fused top-N for precision where it matters -> layer signals the domain needs — structural for code, recency/version for changing docs, authority for canonical sources -> keep re-indexing fresh as the corpus changes -> instrument hit-rate by query type, learn the real mix, then tune fusion weights and decide where re-rank earns its latency."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Relevant\" means different things per system. Contrast a billing platform, a code repo, and a docs portal — and say how that changes your retrieval.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: relevance is set by the question's intent, not one universal score -> billing : the exact account / ledger rows — lexical/ID match + authority; a \"similar\" account is actively harmful -> repo : the right symbols plus their dependencies — semantic concept + structural call sites and imports -> docs : the right article at the right version — semantic gated by recency/version + authority -> so you pick and weight signals to the domain's notion of relevance, rather than shipping one generic retriever everywhere."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You can raise recall (wider net) or precision (aggressive re-rank + tighter packing), but not both for free. How do you reason about the trade-off?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the two failures cost differently — a recall miss means the answer never reaches the model (unrecoverable), a precision miss means noise the model must see past -> so buy recall cheaply and wide in stage 1, then buy precision narrowly in stage 2 where it's affordable -> watch the packing tension: more candidates raise recall but bury the right lines in the \"lost in the middle\" zone and cost more -> tie the dial to the domain's cost of a miss (billing error vs a fuzzy docs answer) -> measure both hit-rate and top-k precision on a labelled set and move the knob deliberately, not by feel."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the retrieval layer for a documentation Q&A bot over versioned, frequently-updated docs.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: the query mix is mostly conceptual \"how do I…\" questions, so semantic carries weight — but keep BM25 for exact API names and error strings -> gate on recency / version so an old article doesn't beat the current one, and on authority for canonical pages -> hybrid stage 1, fuse with RRF, re-rank the top-N for precision since users read only the first answer -> pack the best article(s) within budget; prefer the right section over dumping whole pages -> re-index on every doc change so freshness holds -> call the failure modes: plausible-but-wrong from semantic, vocabulary mismatch from lexical -> measure hit-rate on labelled questions, not end-answer vibes."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design retrieval for an internal-search feature across code, tickets, and wiki docs in one box.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: the corpus is heterogeneous, so \"relevant\" differs per source — code wants structural signals (imports, call sites) plus lexical for exact symbols; tickets/wiki lean semantic -> run hybrid per source and fuse, or fuse across sources, so exact-token and conceptual queries both land -> recall first: a missed file can't be ranked or packed -> re-rank the fused top-N for precision; weight by recency where it matters (latest ticket, newest doc) and authority for canonical sources -> pack within budget — signatures/docstrings for code, snippets for docs -> keep indexes fresh as all three sources change -> instrument hit-rate by source and query type, then tune fusion weights and decide where re-rank pays for its latency."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

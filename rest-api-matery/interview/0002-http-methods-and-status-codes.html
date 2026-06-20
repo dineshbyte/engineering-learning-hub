@@ -63,6 +63,422 @@
   footer{margin-top:2.4rem; font-size:.78rem; color:var(--muted)}
   @media print{ .controls{position:static} .a{display:block} .reveal{display:none} a{color:var(--ink)} }
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Define a safe HTTP method.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A method the client intends as read-only — no intended change to resource state. GET , HEAD , and OPTIONS are safe. The key word is intent : a safe request shouldn't be relied on to mutate anything."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Define an idempotent method.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "One where N identical requests have the same effect on server state as a single request . GET , HEAD , OPTIONS , PUT , and DELETE are idempotent. This is the property that makes a retry safe — note it's about effect on state , not about the response being byte-identical."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does cacheable mean, and which methods are cacheable by default?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A cacheable response is one a client or intermediary may store and reuse. GET and HEAD are cacheable by default. Cacheability is an axis independent of safe and idempotent."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Explain \"safe ⊂ idempotent.\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Every safe method is idempotent: if reading changes nothing, repeating the read still changes nothing. The reverse doesn't hold — PUT and DELETE are idempotent but not safe, because they do change state; repeating them just lands you in the same final state. Keep the three axes (safe / idempotent / cacheable) separate; conflating them is a mid-level tell."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Safe means secure.\" True or false, and why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "False — a common trap. \"Safe\" is about read-only intent , nothing about authentication, authorization, or transport security. A GET can still expose sensitive data and still needs authz and TLS. Safe ≠ secure, and safe ≠ free of all side effects."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Can a safe method have side effects? Give an example.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Yes. \"Safe\" forbids only intended state change to the resource; incidental side effects are fine. A GET that writes an access log, increments analytics, or warms a cache is still safe — the client didn't request those mutations and shouldn't be held responsible for them."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A teammate puts a \"mark as read\" action behind GET /messages/42?read=true . What's wrong, and what breaks?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It makes a state-changing operation safe-in-name only, and the ecosystem assumes GET is safe: prefetchers, crawlers, link-preview bots, and proxies will fire it and silently mutate state, and caches may serve stale results. Intended state change belongs on a non-safe verb — POST , or PATCH / PUT if it's an idempotent update. The classic real-world casualty was an admin panel where a crawler followed every \"delete\" link."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is POST idempotent? Why does it matter?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "No. A retried POST can create a duplicate (e.g. a second charge or order). It matters because dropped connections and retries are normal in distributed systems — non-idempotency is exactly why POST creation needs an Idempotency-Key to be retry-safe."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Lead with idempotency, not the verb — what's the senior framing?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "\" POST isn't idempotent, so a dropped-connection retry can double-create — that's why creation either uses PUT at a client-known URI, or POST plus an idempotency key.\" Naming the property and its consequence signals senior; reciting \"GET reads, POST creates\" signals junior."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "PUT vs PATCH — what's the difference?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "PUT replaces the whole resource with the representation you send — omitted fields are treated as removed/reset. PATCH applies a partial modification , touching only the fields in the patch. Sending a partial body with PUT is a common bug: it wipes the fields you left out."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "PUT vs POST for creation — what's the deciding question?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Who owns the URI. Use PUT when the client knows/controls the target URI — \"create-or-replace at this address,\" e.g. PUT /users/42 . Use POST when the server assigns the URI; it creates and returns 201 with a Location header to the new resource."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is PUT idempotent but POST isn't, for creation?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "PUT /users/42 targets a specific URI: doing it twice yields exactly one user 42 in the same state. POST /users says \"make a new one under a server-chosen id\" — repeat it and you get two users. That's the whole reason PUT -at-a-known-URI is the retry-safe creation path when the client can choose the id."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is PATCH idempotent?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Not guaranteed — it depends on the patch document. PATCH that sets fields to absolute values is idempotent; one expressing a delta (\"add 1 to the array\", \"increment by 5\") is not. The senior move: make your PATCH idempotent when you can , and know why a given patch isn't."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "JSON Merge Patch vs JSON Patch — how do they relate to idempotency?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "JSON Merge Patch (RFC 7386) sends a partial object whose fields overwrite the target (with null meaning \"remove\") — that's value-setting, so it tends to be idempotent. JSON Patch (RFC 6902) is a sequence of ops ( add , remove , replace , test …); ops like \" add to an array\" are not idempotent. Choose the format deliberately based on the semantics you need."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A client must atomically guard a PATCH against a concurrent edit. How?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Use conditional requests: the client sends If-Match with the resource's ETag ; the server applies the patch only if the version still matches, else returns 412 Precondition Failed . With JSON Patch you can also encode a test op to assert current state before mutating. This turns a lost-update race into an explicit, retryable conflict."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is DELETE idempotent given that a second call returns 404 ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Yes. Idempotency is about effect on server state , not the response code. First DELETE removes the resource ( 204 / 200 ); a repeat finds it already gone and returns 404 — but the end state (\"resource does not exist\") is identical. Different status, same effect."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "On a repeated DELETE of an already-gone resource, do you return 404 or 204 ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Both are defensible; pick one and be consistent. 404 is most honest (\"nothing here now\") and matches normal GET semantics. 204 is friendlier to naive retry logic that treats only 2xx as success. Many teams choose 204 precisely so a retried delete doesn't look like a failure — just document the choice."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is HEAD for?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Same as GET but returns headers only, no body . Use it to check existence, size ( Content-Length ), or freshness ( ETag / Last-Modified ) without transferring the payload — e.g. a cheap \"does this exist / has it changed?\" probe. It's safe, idempotent, and cacheable."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is OPTIONS for?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "To discover the communication options / capabilities for a resource — which methods are allowed (via the Allow header) and, critically, it's the verb browsers use for CORS preflight requests. Safe and idempotent; typically answered with 204 ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A client sends DELETE to a read-only resource. What do you return, and what's required?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "405 Method Not Allowed , and the response must include an Allow header listing the methods that are supported (e.g. Allow: GET, HEAD ). The Allow header is what makes 405 actionable rather than just a dead end."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When does an action genuinely not map to any standard verb, and what do you do?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Some operations are inherently procedural — \"send email\", \"transcode\", \"search with a huge body\". Prefer modeling them as resources where possible (a /transcodes collection you POST to, returning a job resource). When you can't, use POST on a clearly-named sub-resource or controller URI ( POST /orders/42/cancel ) and accept it as a pragmatic, non-idempotent action — just don't tunnel everything through one POST."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "200 vs 201 vs 204 — when each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "200 OK : success with a body (typical read or update returning the resource). 201 Created : a new resource was created (must carry Location ). 204 No Content : success with no body — common for DELETE and for PUT / PATCH when you don't echo the resource back."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What header MUST a 201 Created include?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A Location header pointing at the URI of the newly created resource, so the client can fetch or reference it without guessing. Returning 201 without Location is the most common 201 mistake."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does 202 Accepted mean, and how does it differ from 201 ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "202 Accepted = \"request accepted for processing, not done yet .\" The work is async; you typically return a status/Location URL the client can poll. 201 asserts the resource now exists ; 202 makes no such promise — it may still fail later. Don't return 201 for work that hasn't actually completed."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the codes for synchronous vs asynchronous creation.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Sync: do the work, return 201 Created + Location to the finished resource. Async: return 202 Accepted + a Location /status URL for a job resource the client polls (which later reports success/failure and links to the result). The mistake is returning 200 for async work and pretending it's done."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Successful DELETE — which code?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Usually 204 No Content (deleted, nothing to return). 200 is fine if you return a body, e.g. a representation of what was deleted or a status envelope. 202 if the deletion is queued for async processing rather than done immediately."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Permanent vs temporary redirect — which codes?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Permanent: 301 and 308 (\"this resource has moved for good\" — clients/SEO should update the URL). Temporary: 302 and 307 (\"go here for now, keep using the original\"). Permanent redirects are cacheable and rewrite bookmarks; temporary ones aren't."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why prefer 307 / 308 over 302 / 301 ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because 307 and 308 preserve the original method and body . With 301 / 302 , clients historically rewrote a POST into a GET on the redirect, silently dropping the body. If you redirect a non- GET request, use 307 (temp) or 308 (permanent) to keep the verb intact."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is 304 Not Modified a feature, not an error?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It's the payoff of conditional GET. The client revalidates with If-None-Match ( ETag ) or If-Modified-Since ; if nothing changed, the server returns 304 with no body and the client reuses its cache. It saves bandwidth and latency while confirming freshness — a core piece of HTTP caching, not a failure."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A browser POST form keeps re-submitting on refresh. Which redirect pattern fixes it and why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Post/Redirect/Get: after a successful POST , respond 303 See Other with a Location to the result page. 303 explicitly tells the client to GET that URL, so a refresh re-issues the safe GET rather than re-POSTing. This is the one case where switching the method on redirect is intended — which is exactly why 303 exists separately from 307 ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "400 vs 422 — what's the distinction?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "400 Bad Request : the request is malformed / syntactically broken — unparseable JSON, missing required structure, bad framing. 422 Unprocessable Content : the request is well-formed but semantically invalid — it parses fine but fails business validation (e.g. email already taken, end-date before start-date)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is 422 mandatory for validation failures?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "No — it's a useful convention, not a requirement. 422 precisely says \"I understood the request but can't process its contents,\" which is more expressive than a blanket 400 . Some teams standardize on 400 for all client input errors to keep the surface small. Either is acceptable if it's consistent and the body carries machine-readable field-level details."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "401 vs 403 — what's the difference?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "401 Unauthorized = authentication failed: \"we don't know who you are\" — credentials missing, invalid, or expired; re-authenticate. 403 Forbidden = authorization failed: \"we know who you are, you're not allowed\" — re-authenticating won't help. (The names are historically swapped, but that's the meaning.)"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When should a forbidden resource return 404 instead of 403 ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When the very existence of the resource is sensitive. A 403 confirms \"this exists, you just can't see it,\" which leaks information (resource enumeration, e.g. private repo names). Returning 404 hides existence entirely. The trade-off: 404 is harder to debug for legitimate users — so reserve it for genuinely sensitive resources, not as a blanket policy."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When do you return 409 Conflict ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When the request can't be completed because it conflicts with the current state of the resource — a duplicate-creation clash, a version/edit conflict, or a state-machine violation (e.g. cancelling an already-shipped order). The body should explain the conflict so the client can reconcile and retry."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does 429 require, and what should the client do?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "429 Too Many Requests means rate-limited. Include a Retry-After header (seconds or a date) so the client knows when to try again; pairing it with rate-limit headers (limit/remaining/reset) is even better. The client should honor Retry-After and back off — ideally with jitter — rather than hammering."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "404 vs 410 — when is 410 Gone the right call?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "404 Not Found means \"no resource here\" (maybe never existed, maybe temporary). 410 Gone is the stronger, deliberate signal: \"this existed and is permanently removed , stop asking.\" Use 410 for sunset endpoints or purged content so clients and crawlers drop the URL instead of retrying."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you express optimistic-concurrency conflicts at the HTTP layer?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hand out an ETag on reads; require If-Match on writes. If the version still matches, apply the write; if it doesn't, return 412 Precondition Failed (the precondition the client asserted is no longer true). Use 409 for a higher-level domain/state conflict that isn't expressed as a precondition. The distinction: 412 = \"your version is stale,\" 409 = \"this action conflicts with current state.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does the 5xx family signify, and what's the cardinal rule?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "5xx means the server failed to fulfill an otherwise valid request — it's our fault, not the client's. Cardinal rule: never return 5xx for bad client input — malformed or invalid input is 4xx . Mislabeling client errors as 5xx pollutes error budgets, pages on-call needlessly, and triggers pointless retries."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "500 vs 502 vs 504 — distinguish them.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "500 Internal Server Error : a generic unhandled failure in this server (e.g. an exception). 502 Bad Gateway : this server was acting as a gateway/proxy and got an invalid response from upstream. 504 Gateway Timeout : as a gateway, it didn't get a response in time from upstream. 502 / 504 point at a dependency; 500 points at this service."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When is 503 the right code, and what should accompany it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "503 Service Unavailable for a temporary inability to serve — overload, maintenance, or a dependency down — with the expectation that it'll recover. Include a Retry-After header so well-behaved clients (and load balancers) back off instead of retrying immediately and deepening the outage. It's the politest 5xx because it signals \"transient, try later.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A downstream dependency is timing out under load. Walk through the status codes and behavior you'd return.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "If a circuit breaker is open / you're shedding load, return 503 + Retry-After so clients back off. If you actually called upstream and it timed out, 504 is the honest code; if it returned garbage, 502 . Crucially, don't let upstream's timeout surface as a 500 for what was a valid client request, and never convert it into a 4xx — the client did nothing wrong. Combine with idempotency keys so the inevitable retries don't double-act."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's wrong with returning 200 OK with an error in the body?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It tunnels failures through success, defeating the entire point of status codes. Caches, retries, monitoring, and generic client code all key off the status line — a 200 tells them \"all good,\" so failures get cached, never retried, and never alert. Let the status code carry the outcome; put details in the body, not the verdict."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A GraphQL-style API returns 200 for everything. Is that ever defensible?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "For GraphQL it's the spec's transport convention — partial successes are real, errors travel in an errors array, and tooling expects it; that's a different contract. For a REST API it's an anti-pattern: you forfeit HTTP-native semantics (caching, conditional requests, intermediary behavior). The point is that the contract must be explicit and consistent — don't accidentally adopt 200-for-all in something claiming to be REST."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the problem with tunnelling everything through POST ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "That's Richardson Level 0 — HTTP as a dumb tunnel. You lose idempotency and safety guarantees (everything becomes non-idempotent), lose HTTP caching, and lose the self-describing semantics intermediaries rely on. Reads can't be cached or retried freely; the method no longer tells anyone what's happening. Use the verbs so the protocol works for you."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When is reaching for PATCH over-engineering?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When the resource is small or you always send the full representation anyway — then PUT is simpler, idempotent by construction, and avoids patch-format ambiguity. PATCH earns its keep for large resources, bandwidth-sensitive partial edits, or when distinguishing \"set to null\" from \"don't touch\" matters. Don't add JSON Patch machinery for a two-field update."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Status code as the contract, or body error codes — how do you reconcile them?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Use both at the right layer. The HTTP status is the coarse, machine-actionable verdict that infrastructure (caches, LBs, retry logic, alerting) acts on — get it right first. The body carries a stable, fine-grained error code plus human/field detail for the application to branch on (e.g. a documented \"code\": \"card_declined\" alongside a 402 / 422 ). Status for the network, body codes for the application — not one instead of the other."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Run the senior \"gotcha checklist\" for methods and status codes.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "201 needs a Location header. 401 is authn (who are you), 403 is authz (you can't). 404 can hide a resource's existence on purpose. 307 / 308 preserve the method and body. PATCH idempotency depends on the patch document. Never tunnel errors through a 200 ; never use 5xx for bad client input."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"A client calls POST /payments and the connection drops before they get a response.\" Design for a safe retry.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "POST is right because the server assigns the payment id — the client can't know the URI ahead of time. Sync: 201 Created + Location ; async: 202 Accepted + a status URL to poll. The dropped connection is the hard part: POST isn't idempotent, so a blind retry risks a double-charge. Fix it with a client-generated Idempotency-Key — the server records it and a retry with the same key returns the original result instead of charging again. On a genuine state conflict return 409 ; on validation failure 422 ; and never return 200 with an error in the body."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the request/response contract for POST /payments where the connection can drop mid-flight. Walk the methods and status codes.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: POST is correct because the server assigns the payment id -> sync path returns 201 Created + Location ; async path returns 202 Accepted + a status URL to poll, never 200 for unfinished work -> the dropped connection is the hard part: POST isn't idempotent, so a client-generated Idempotency-Key lets a retry replay the original result instead of double-charging -> map the failure modes to honest codes: 422 for validation, 409 for a state conflict, 402 /body error code for a declined card, 503 + Retry-After when shedding load, 504 if upstream timed out -> never tunnel an error through 200 , never return 5xx for bad client input -> name the contract split: status code for the network/infra, stable body error code for the application."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the update + concurrency story for a resource many clients edit at once (PUT vs PATCH, conditional requests).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: choose PUT (full replace, idempotent by construction) vs PATCH (partial edit) by resource size and whether \"set to null\" must differ from \"leave untouched\" -> for PATCH , pick the format deliberately - JSON Merge Patch (value-setting, tends to be idempotent) vs JSON Patch (op sequence, add isn't idempotent) -> guard lost updates with optimistic concurrency: hand out an ETag on reads, require If-Match on writes, return 412 Precondition Failed on a stale version -> distinguish 412 (\"your version is stale\") from 409 (\"this action conflicts with current state\") -> make retries safe: idempotent verbs retry freely, and a turned-into-explicit conflict is retryable after a re-read -> name the trade-off: PUT is simpler and retry-safe but bandwidth-heavy; PATCH saves bytes but adds format and idempotency nuance."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <div class="wrap">

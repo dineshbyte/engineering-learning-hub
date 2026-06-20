@@ -63,6 +63,118 @@ details.iq .a b{color:var(--accent)}
 .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
 @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What is the difference between a log and a message queue?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: a queue deletes on ack and is point-to-point (one competing consumer); a log retains by policy and lets many consumers each hold an independent offset. The log keeps history -> replay, fan-out, and new consumers added later with no producer change. Bonus: Kafka can emulate competing-consumer within one group, but the store still retains everything."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does the offset of a record identify, and to what scope does Kafka guarantee ordering?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: the offset is both the record's identity and its ordered position within one partition . Strict total order holds only within a partition, none across them, and there is no global offset. The design consequence: choosing what must be ordered together is choosing what shares a partition, via the key."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Define at-most-once, at-least-once, and exactly-once delivery in one line each.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: at-most-once = each record delivered zero or one time (loss possible, no dupes); at-least-once = one or more times (dupes possible, no loss); exactly-once = the effect applied precisely once, which over a network is achieved by at-least-once delivery + idempotent effects, not by a magic delivery channel."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is an event vs a command, and how does that shape coupling?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: an event is an immutable past-tense fact, broadcast to anyone ( OrderPlaced ); the producer is coupled to nothing. A command is a request directed at one handler ( PlaceOrder ), expecting an action. Event-driven architecture trades the producer's knowledge of consumers for loose coupling and fan-out — the cost is no single place that \"owns\" the flow."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A consumer reads, processes, then commits the offset. Walk me through the failure modes.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: crash between process and commit -> re-read & reprocess = at-least-once (dupes, no loss); commit then process, crash between -> record skipped = at-most-once (loss). Default to commit-after + idempotent processing. Bonus: enable.auto.commit fires on a timer before your work, silently leaning at-most-once — the classic source of \"we thought we had at-least-once\" data loss."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Someone says \"we use Kafka exactly-once, so duplicates are impossible.\" Push back.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: EOS = idempotent producer (PID + sequence) + transactions binding output records and offset commits — but it's a closed-world guarantee, Kafka-to-Kafka only. The moment you charge Stripe or write Mongo, the transaction doesn't enroll that system. You engineer exactly-once effects with idempotency keys + the outbox. Exactly-once delivery over a network is impossible (two generals)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Explain CQRS and the consistency trade-off you're signing up for.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: separate the write model (normalized, validates invariants, sole source of truth) from N read models (denormalized projections, one shape per query, disposable). The read side is eventually consistent — a projection trails the log, so read-your-writes can fail; mitigate by returning the written offset and having the read side wait for it. The payoff: rebuild any read model by replaying the log. Red flag: defaulting to CQRS everywhere."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is backpressure in a streaming pipeline, and how does Kafka's model handle it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: backpressure is the slow consumer signalling the fast producer to slow down so buffers don't overflow. Kafka inverts the problem with a pull model: consumers fetch at their own pace and the log is the buffer, bounded by retention/disk, not by memory. A lagging consumer grows offset lag, not an unbounded in-memory queue. Red flag: assuming push semantics and unbounded broker buffering — lag and retention expiry are the real failure surface."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When is event sourcing the right call, and what does it cost you?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: right when you need auditability, time-travel, or many retroactive read models — regulated ledgers, etc. Costs: you replay to get state (so you keep snapshots, which are caches that drift), and you version event schemas forever because old events are immutable facts you can't migrate. Bonus: it's a cousin of the outbox, not a twin — if you only need reliable publication, you don't need the schema-versioning tax."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Event time vs processing time — why do they diverge, and how do you decide a window is \"done\"?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: no global clock; buffering, network delay, and replay mean arrival lags origin, unboundedly. Bucket by event time for reproducibility. There's no \"all arrived\" signal in the data, so a watermark (max-seen - allowed lateness) decides heuristically when to fire; late data is dropped or side-output. Deep point: completeness, latency, and cost are three axes you trade — there is no correct watermark setting, only a choice about which failure you tolerate."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does a stateful stream operator survive a crash without recomputing from the beginning?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: local state lives in a state store (RocksDB / LSM-tree); every update is also appended to a compacted changelog topic keyed by the store key. A recovering instance replays the changelog to rebuild — the WAL-and-replay idea, distributed. Compaction keeps recovery snapshot-sized. Bonus: standby replicas trade memory for faster recovery; stateful ops force a key-based shuffle that often dominates cost. Flink does it differently — Chandy-Lamport barrier checkpoints, exactly-once only with a transactional/idempotent sink."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a reliable order-events pipeline that is safe to operate at 3 a.m.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: a transactional outbox (event row + business data in one local txn) to defeat the dual-write problem; a CDC relay to a keyed topic ordered by orderId ; at-least-once delivery as the contract; idempotent consumers deduping by eventId in the same txn as the effect; a DLQ after N failures with alerting on depth; replay by offset reset with pure handlers + a schema registry; backpressure handled by the pull model; and the one-sentence invariant — assume at-least-once, make every consumer idempotent."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a read-model / CQRS layer that can be rebuilt at will.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: one authoritative write model on the log; N denormalized projections, each owning its own offset checkpoint so it can be rebuilt independently; idempotent projection handlers (replay must be safe); a versioned event schema (registry, backward-compatible evolution) because old events are immutable; read-your-writes mitigated by returning the written offset and having the read side wait for it; and an explicit rebuild procedure (reset projection offset to 0, replay) plus monitoring of projection lag against the head of the log."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

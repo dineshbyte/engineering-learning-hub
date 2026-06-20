@@ -85,6 +85,238 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "You're reviewing a vendor's \"AI code assistant.\" What's the first question you ask, and why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: \"What's the context strategy — pre-indexed embeddings, read-on-demand tools, or just history?\" -> that single answer predicts strengths, cost shape, and the failure mode -> pre-index -> ask about index freshness/invalidation and identifier recall; read-on-demand -> ask about round-trip latency and search-coverage gaps; history/none -> ask what grounds it in live systems -> then ask if there's hybrid + rerank to cover the embedding blind spot -> frame: I'm not comparing models, I'm comparing retrieval architectures."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the retrieval layer for a billing-support agent that must quote exact charges. Walk the trade-offs.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: charges are exact, transactional, auditable -> retrieve via deterministic SQL keyed by account_id /invoice id, not embeddings -> embeddings would return the most-similar amount, i.e. a confidently-wrong number -> reliability rule: the agent may quote only values it pulled, never synthesize amounts -> log every assembled context + tool call for audit and dispute resolution -> if the user also asks policy questions, that's a different data type -> layer hybrid KB retrieval for the textual part -> one agent, two retrieval mechanisms matched to two data types."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name each product's context strategy: Cursor, Claude Code, ChatGPT, GitHub Copilot.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: Cursor = pre-indexed embeddings of the repo + semantic retrieval (plus open files) -> Claude Code = agentic read-on-demand via tools (grep / glob / read), follows the dependency graph live, no persistent index -> ChatGPT = conversation history + optional uploads / connectors / memory -> GitHub Copilot = open files + nearby code, with newer repo/workspace indexing for chat -> the frame: each is a context strategy with a model attached , and the strategy — not the model — is what you're naming."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is the pre-indexed <-> read-on-demand spectrum, and where do those four products sit on it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the axis is when retrieval happens — precompute an index ahead of time vs search the live source per task -> pre-indexed (left) : Cursor builds embeddings up front so retrieval is one fast lookup -> read-on-demand (right) : Claude Code searches the live tree each task, always fresh -> Copilot is local-window-plus-index (left-of-centre), ChatGPT is history/connectors which is \"none-to-shallow\" grounding -> placing a product on the axis is the reviewer's first move because position predicts the failure mode."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Match each production agent to the retrieval its data type demands: billing, support, engineering, research.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: billing = exact/transactional -> deterministic structured query (SQL keyed by account_id ), never embeddings -> support = fuzzy natural-language KB + customer history -> hybrid + rerank, cite sources -> engineering = structured code (imports, symbols, tests) -> hybrid + structural retrieval or read-on-demand, run tests as a grounding signal -> research = volatile, multi-source -> fan-out web/doc retrieval, compress intermediate findings, keep provenance per claim -> the rule underneath: match the retrieval mechanism to the data type."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Define agent, runtime, and RAG as you'd use them in a production-design review.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: an agent is an LLM that uses tools to act, not just generate text -> the runtime is the orchestration layer around it — it wires tools, retrieval, memory, and the loop that feeds context in and reads results back -> RAG is the pattern retrieve -> assemble -> LLM -> answer, so the answer is grounded in fetched facts rather than the model's parametric memory -> in a review these let you separate \"what does the model see\" (RAG/retrieve) from \"what can it do\" (agent/tools) from \"who assembles it\" (runtime)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Cursor and Claude Code use opposite strategies. Name each one's signature failure mode and why position on the spectrum causes it.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: Cursor (pre-indexed) fails by retrieving a topically-similar but wrong file — embeddings match meaning, not exact identifiers — and by serving a stale index after code changes -> that's the structural tax of precompute: the index drifts from reality the moment the repo moves -> Claude Code (read-on-demand) fails by missing a file it never thought to grep, and pays more tool round-trips -> latency & token cost -> that's the tax of searching live: freshness is bought with hops and a dependence on a good search plan -> neither is \"better\"; the review names which failure your use-case can't tolerate."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is semantic embedding search the wrong retrieval for a billing agent, and what does the right design cost you?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: embeddings return the most-similar value, not the correct one — for a charge that means a confidently-wrong amount with no audit trail -> financial data is exact, transactional, and disputable, so it needs a deterministic structured query keyed by account_id /invoice id -> the design rule: the agent may quote only values it pulled, never synthesize a number -> the cost you accept is less \"magic\" — you can't fuzzily match a vaguely-worded question to a row, so you invest in intent parsing and exact keys -> and you must log the assembled context per call, which billing needs anyway for audit and dispute resolution."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A research agent fans out across many sources. Which failure modes does that shape invite, and how do you defend each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: conflicting — sources disagree and the model silently picks one -> dedupe, prefer authoritative sources, surface the conflict rather than hide it -> outdated — fetch live for volatile facts, don't lean on a stale cache -> excessive — fan-out blows the budget and buries signal (\"lost in the middle\") -> compress intermediate findings before assembly -> cost: fan-out multiplies calls, so cap breadth and cache repeated lookups -> reliability: adversarial verification of claims -> observability: source provenance per claim so any sentence is traceable to where it came from."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"We'll add observability later — ship the agent first.\" Push back like a reviewer.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: without logging the assembled context per call, a wrong answer is undebuggable — there's no stack trace pointing at \"wrong document retrieved\" -> you can't tell a retrieval bug (wrong context in) from a reasoning bug (right context, bad answer), so you can't decide whether to fix retrieval or the model -> for billing it's not optional: audit and dispute resolution legally require the trail -> observability is a design property of the retrieve/assemble stages, not a follow-up sprint -> minimum bar: log what was retrieved and assembled per call, plus retrieval hit-rate, before launch."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You're reviewing an unfamiliar vendor \"AI assistant\" with 20 minutes. What's your line of questioning, and what would make you walk away?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: first question is always \"what's the context strategy — pre-indexed embeddings, read-on-demand tools, or just history?\" — that one answer predicts strengths, cost shape, and failure mode -> pre-indexed -> probe index freshness/invalidation and exact-identifier recall -> read-on-demand -> probe round-trip latency and search-coverage gaps -> history/none -> ask what grounds it in our live systems -> then: is retrieval hybrid + reranked to cover the embedding blind spot, and is retrieval evaluated (recall@k) not just answers? -> walk away if there's no observability of assembled context and no answer on freshness — that's an undebuggable, stale-by-default system -> frame throughout: I'm comparing retrieval architectures, not models."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Build vs buy: a VP asks whether to adopt a vendor assistant or build our own retrieval. Make the principal-level call.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: decide by where the differentiation lives — buy when the data is generic and the vendor's context strategy already fits the use-case; build when our edge is the retrieval over proprietary data the vendor can't reach -> the model is a commodity any competitor can rent; the retrieval pipeline over our live systems is the moat -> the pivot question: does off-the-shelf grounding actually reach our systems, or does it hallucinate without connectors? -> sequence it: instrument the failing cases first — if the gap is retrieval coverage, no vendor model upgrade closes it -> hybrid stance is common: buy the model/runtime, build the retrieval and evaluation that compound across every feature."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Across billing, support, engineering, and research agents, where does retrieval investment actually pay off — and where would you NOT over-invest?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: investment compounds where wrong answers carry the highest business/compliance risk and where the data is yours — billing (audit/dispute exposure) and engineering (proprietary code) reward deep, exact retrieval -> support rewards hybrid + rerank plus caching hot articles, because volume and deflection make small accuracy gains pay back fast -> research rewards verification and provenance more than index sophistication, since freshness beats precompute on volatile sources -> where not to over-invest: building a bespoke embedding stack for generic data a vendor already serves, or chasing a model upgrade (a flat tax on every call) to paper over a retrieval gap -> the staff move: instrument, attribute failures by class, and put the build effort where it compounds across features rather than where it's merely fashionable."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the context system for a billing assistant that quotes exact charges and also answers billing-policy questions.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: spot two data types in one product -> charges are exact/transactional/auditable -> deterministic SQL keyed by account_id /invoice id, never embeddings, because a semantic match returns the most-similar amount — a confidently-wrong number -> policy is fuzzy natural-language text -> hybrid retrieval + rerank over the help-center KB, with citations -> one agent, two retrieval mechanisms matched to two data types -> reliability rule: figures are quoted from a pulled record, never synthesized -> guardrails: PII redaction and access control at the retrieve stage, injection defense on KB content -> observability: log every assembled context + tool call for audit and dispute resolution -> name the failure modes the naive \"vector DB for everything\" design invites: wrong (similar-not-correct amounts) and outdated (stale figures) -> close with freshness: invalidate on write since balances and policies change."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the context system for a research agent that fans out across many sources and must produce a cited answer.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: the data is volatile and spread across many fresh sources, so fetch live rather than rely on a precomputed index -> orchestration: a planner decomposes the question, fans out retrieval across web/docs/APIs, each sub-step returning candidates -> recall wide then rerank per sub-question; dedupe near-identical sources -> compress intermediate findings into a running summary so the budget survives the fan-out, but keep a citation handle on every retained fact -> reliability: adversarial verification — cross-check claims against independent sources and surface conflicts instead of silently picking one -> provenance per claim so the final answer is traceable sentence-by-sentence -> cost is the dominant constraint — cap breadth, cache repeated lookups, and stop when marginal sources stop changing the answer -> observability: log the source set, what each sub-step retrieved, and which claims survived verification -> name the failure modes this shape invites: conflicting, outdated, excessive — and the defense for each."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Core — What is a context window and why can't an LLM just read the whole codebase?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the window is a fixed token budget — the model's only channel -> real repos are orders of magnitude larger -> bigger windows cost more, run slower, and recall the middle poorly -> so you must select a relevant subset -> the job is \"which slice,\" not \"read it all.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Core — Lexical vs semantic vs hybrid retrieval — when each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: lexical (BM25) nails exact tokens/identifiers but misses synonyms -> semantic (embeddings) matches meaning but misses exact strings and can drift -> hybrid runs both and fuses (e.g. reciprocal rank fusion) -> rerank then sharpens precision -> default to hybrid + rerank in production."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Mid — Walk me through a RAG pipeline and where each failure mode enters.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: ingest -> chunk -> index -> retrieve -> rerank -> assemble -> LLM -> log -> missing enters at retrieve (recall gap), wrong at rerank, outdated at index freshness, conflicting at assemble, excessive at assemble/budget -> each stage gets its own metric."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Senior — How do you evaluate retrieval quality, not just answer quality?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: build a labeled set of query->gold-doc pairs -> measure recall@k and rerank precision separately from end-answer accuracy -> log assembled context per call so failures are attributable -> a wrong answer with the right context is a reasoning bug; with the wrong context it's a retrieval bug -> you can't fix what you can't separate."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Senior — Why is matching retrieval to data type a senior decision?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: exact/transactional (a balance) -> deterministic structured query; semantic search would return the most-similar, i.e. wrong -> fuzzy text -> hybrid + rerank -> volatile -> fetch live, don't cache stale -> long-running -> compress + remember -> the mistake juniors make is one-size-fits-all vector search."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Staff — Review this design: an AI agent answers finance questions over a vector DB of reports. Pushback?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: numbers must be exact and auditable — vector search returns similar, not correct -> risk: confidently-wrong amounts, no audit trail -> redesign: structured query for the figures, vector/hybrid only for narrative text -> add a rule that figures are quoted, never synthesized -> log assembled context per call -> add freshness/invalidation since reports update -> name the failure modes this design currently invites (wrong, outdated)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Staff — Same model, two products, one feels far smarter. Explain to a skeptical interviewer.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the model is the constant; context is the variable -> the smarter product retrieves and assembles better context per call -> \"smart vs dumb\" is mostly an artifact of what got loaded -> therefore investment goes to retrieval, evaluation, and assembly — not chasing model versions -> verify by logging context for the failing cases."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "VP — Build vs buy: when do we build our own retrieval vs adopt a vendor assistant?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: buy when the data is generic and the vendor's context strategy fits our use-case -> build when our differentiation is the retrieval over proprietary data -> the model is a commodity; the retrieval pipeline is the moat -> decision pivots on whether off-the-shelf grounding reaches our live systems."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "VP — Where are the cost levers in an AI feature?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: cost scales with tokens sent -> tighter selection + rerank cuts wasted context -> compress long sessions; trim history -> cache hot retrievals -> right context on a cheaper model often beats wrong context on the flagship — a structural saving, not a discount."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "VP — Where does investment in retrieval actually pay off?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: retrieval fixes compound across every feature on the stack -> a model upgrade is a flat tax on every call -> better retrieval lifts accuracy, lowers cost, and reduces hallucination simultaneously -> prioritize where wrong answers carry the highest business/compliance risk."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "VP — How do we measure retrieval quality as a leadership metric?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: recall@k and rerank precision on a labeled set -> retrieval hit-rate in production -> deflection/escalation for support, audit-pass for billing -> track these separately from end-answer accuracy so we know whether to invest in retrieval or the model."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "VP — What are the risk and compliance exposures?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: PII in retrieved context -> redaction + access control at the retrieve stage -> prompt injection via poisoned/retrieved content (OWASP LLM Top 10) -> guardrails before the model -> auditability: log assembled context per call -> for finance, deterministic retrieval + no-synthesis rule."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "VP — When do we upgrade the model vs invest in retrieval?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: instrument first: was the right context retrieved for the failing cases? -> if no -> fix retrieval (cheaper, compounds) -> if yes and reasoning is the bottleneck (multi-step synthesis) -> pay for model capability -> never upgrade the model to paper over a retrieval gap."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

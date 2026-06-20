@@ -85,6 +85,142 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Your team's embedding-indexed code assistant keeps citing a function that was deleted last week. What's happening and how do you fix it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a pre-built embedding index is a snapshot — if it isn't reindexed on change, it serves stale vectors pointing at code that no longer exists -> the fix is incremental reindexing on commit/save, plus a freshness check or TTL on the index -> pair embeddings with a lexical/grep pass so exact current identifiers are verified against the live tree -> or move latency-tolerant queries to read-on-demand so they always hit fresh files -> root cause is index/source skew, not the model."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A RAG bot answers most questions but always whiffs on \"what is the rate limit?\" even though the docs clearly state it. Where do you look first?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: suspect context fragmentation — the fact (\"limit is set to 5/min\") likely straddles a chunk boundary, so neither chunk is a complete, retrievable answer -> inspect the actual chunks around that sentence, not the model output -> fixes: add overlap so the fact survives whole; switch to structure-aware splitting so the sentence isn't cut; apply contextual chunking so the chunk carries its section heading -> verify by checking whether the right chunk now appears in top-k for that query — a retrieval check, not an answer check."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Sketch a docs-Q&A or support assistant as RAG, then name the three places it most often breaks in production.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: pipeline — chunk the help center / docs, embed + index, then per question retrieve top chunks, assemble into the window with the question, LLM answers with citations -> break 1: chunking destroyed the fact (fragmentation / fixed-size cuts) -> break 2: retrieval missed — embedding-only with no hybrid/rerank, so the right doc is buried below top-k or lost in the middle -> break 3: stale index — the doc changed but wasn't reindexed, or conflicting passages confuse the model -> in all three the model is innocent; the fix is upstream, and you must measure retrieval hit-rate , not just answer quality."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the three discovery steps a tool runs before it assembles a codebase-context window?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: file discovery — which files are even relevant, by path/glob/tree -> symbol discovery — the definitions and references of the functions/classes in play (an LSP/ctags-style lookup) -> dependency traversal — what those symbols import and call, the surrounding graph -> then assembly packs the slice within the token budget, preferring signatures over full bodies -> the goal throughout: surface the smallest sufficient slice, the way a human navigates an unfamiliar repo."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Contrast Cursor's and Claude Code's strategy for understanding a large repo.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: Cursor pre-indexes — at setup it chunks + embeds files and stores vectors; at query time it does semantic retrieval over that index -> Claude Code is read-on-demand — no persistent embedding index; it fetches live via tools (grep/glob/read) and follows imports like a human -> the trade-off is freshness vs round-trips: pre-index is fast recall but a snapshot that drifts; read-on-demand is always current but pays latency and tokens per hit -> same end goal: the right symbols within the budget."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is chunking, and what makes one chunk \"good\"?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: chunking is the rule for splitting a document into retrievable units — you can't embed or retrieve a whole file, it's too big and too coarse -> a good chunk is complete (it answers on its own) and retrievable (its embedding matches the questions it should serve) -> one chunk = one retrievable unit, ideally one coherent idea -> how you cut decides what you can ever retrieve, so the chunk grain is the retrieval grain."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the five stages of the RAG pipeline in order, and say what RAG is.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: Question -> Retrieval -> Context assembly -> LLM -> Answer -> RAG retrieves relevant external chunks at query time and packs them into the window so the model answers from them instead of its frozen weights -> that's what lets it cite a source, stay current, and reach your private data -> it's the productized form of \"context is the new database query\" — the LLM only ever sees what Retrieval surfaced."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your embedding-indexed assistant keeps citing a function deleted last week. What's wrong and how do you fix it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a pre-built embedding index is a snapshot — if it isn't reindexed on change it serves stale vectors pointing at code that no longer exists -> root cause is index/source skew, not the model -> fix with incremental reindexing on commit/save plus a freshness check or TTL on the index -> pair embeddings with a lexical/grep pass so exact current identifiers are verified against the live tree -> or route latency-tolerant queries to read-on-demand so they always hit fresh files."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk through chunk-size trade-offs, and explain how zero-overlap fixed-size splitting silently loses facts.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: too big = diluted/averaged embedding, imprecise hits, wasted tokens; too small = lost surrounding context and many scattered fragments -> fixed-size character splitting cuts mid-function/mid-sentence, so chunks are incoherent -> with zero overlap a fact that straddles a boundary (\"retry limit is set\" | \"to 5/min\") lives whole in neither chunk, so no chunk is a complete answer and retrieval misses it — context fragmentation -> fixes: structure-aware splitting on function/heading bounds, modest overlap so cross-boundary facts survive, and contextual chunking that prepends the section heading."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A RAG bot answers most questions but always whiffs on \"what is the rate limit?\" though the docs state it. Where do you look first?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: suspect context fragmentation — the fact likely straddles a chunk boundary, so neither chunk is a complete retrievable answer -> inspect the actual chunks around that sentence, not the model output -> check whether the right chunk even appears in top-k for that query — a retrieval check, not an answer check -> fixes: add overlap so the fact survives whole, switch to structure-aware splitting so the sentence isn't cut, apply contextual chunking so the chunk carries its heading -> the model is innocent; the bug is upstream in chunking/retrieval."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "An embedding-only RAG returns the right document for paraphrased questions but misses when users type an exact error code. Why, and what do you add?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: embeddings capture semantic similarity, so they shine on paraphrase but can fail to match a rare exact token — an error code or identifier sits in a sparse region where nearest-neighbor recall is weak -> that's a recall miss, not a model failure -> add lexical retrieval (BM25) so exact strings hit, and run it as a hybrid with embeddings -> rerank the merged candidates so the best chunk rises above the cut -> verify with a retrieval eval that includes exact-match queries, not just semantic ones — otherwise the gap stays invisible in answer-only vibes."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "At scale, how do you decide between a pre-built embedding index and read-on-demand — and when do you combine them?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: read-on-demand when freshness and exact-identifier precision dominate and the repo changes constantly — nothing to maintain or go stale, but you pay latency + tokens per round-trip -> pre-index when fast semantic recall across a huge corpus matters and queries are fuzzy (\"find the code that does X\" before you know the name), accepting upfront/reindex cost and staleness risk -> the senior move is to combine: embeddings for semantic recall, lexical/live read to verify exact current code, hybrid (embeddings + BM25), reindex incrementally on change -> the choice is a staleness-vs-latency trade-off, not a winner."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A team says \"our RAG is bad, the model hallucinates — we need a smarter model.\" Diagnose this as the senior in the room.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: reframe — most \"the LLM is dumb\" bugs are retrieval bugs: garbage in, fluent garbage out -> first instrument what was actually retrieved per failing query; teams grade the answer and never the recall -> check the usual suspects: fixed-size chunking destroyed the fact, embedding-only retrieval missed exact terms, no reranking so the right doc sits below top-k (or lost in the middle), or a stale index / conflicting passages -> fixes map to chunking + retrieval: structure-aware + contextual chunking, hybrid + rerank, reindex on change -> gate on a retrieval-quality eval (hit-rate / recall@k), not end-answer vibes -> only after retrieval is verified good is model capability the lever worth paying for."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Make the case that retrieval quality matters more than model quality for a code assistant — then steelman the opposite.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "For: the model only reasons over what it's given, so a stale index or a fragmented chunk yields a wrong answer at any model size; the model is a shared commodity while retrieval is your design, and retrieval fixes compound across features and cost far less than model upgrades. Steelman against: below a capability floor a weak model can't synthesize even a perfectly retrieved slice — multi-file refactors, long dependency reasoning — so there the model is the binding constraint. Synthesis: fix retrieval first; it's the common cause and the cheapest lever, and you can't even tell whether reasoning is the bottleneck until retrieval is verified good. Pay for model capability once recall@k is high and reasoning is provably the limit."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a RAG system for a help-center support bot over a changing knowledge base.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: ingest the help center, chunk structure-aware on headings/sections with overlap, and apply contextual chunking so each chunk carries its article/section context -> embed + index, and add lexical (BM25) so exact product names and error codes match -> per question: retrieve hybrid candidates, rerank the top-N, assemble into the window with the question, and have the LLM answer with citations to the source chunk -> keep the index fresh — reindex changed articles incrementally, TTL stale ones -> name the three break points: chunking destroyed the fact, retrieval missed (no hybrid/rerank, buried below top-k or lost in the middle), stale/conflicting index -> close the loop with a retrieval-hit-rate eval, not just end-answer quality."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the code-context layer for a coding agent over a 2M-token monorepo with a 200k window.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: you can surface ~10% of the repo at most, so retrieval is the product, not the window size -> index symbols + a dependency/call graph, not just flat text chunks -> on a query, gather candidates by exact symbol match (lexical) and semantic similarity, then walk imports/call-sites for structural context -> rerank, then pack within budget: signatures and docstrings over full bodies, the files named in the query first, and reserve fixed budget for history + the answer -> keep it fresh — incremental re-embed/ctags on change, or read-on-demand for always-fresh precision on exact identifiers -> instrument what was retrieved so you can measure hit-rate -> name the trade-off explicitly: pre-indexed embeddings (fast, can go stale) vs read-on-demand (fresh, more round-trips)."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

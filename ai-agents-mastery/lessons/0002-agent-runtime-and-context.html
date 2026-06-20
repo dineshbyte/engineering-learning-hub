@@ -85,6 +85,158 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Walk me through the lifecycle of one agent loop iteration from the moment the LLM returns output.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: LLM returns text with a tool-call block -> runtime parses the output and extracts tool name + args -> validates tool name against the allowed list and validates arg schema -> executes the real function (file read, API call, DB query) -> captures output or error -> appends a [tool_result] message to the conversation history -> calls LLM again with updated context -> repeat until the LLM returns a final answer (no tool call) or max-steps is exceeded and the runtime halts."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does a runtime prevent an agent from running forever or spending $500?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: loop cap (max iterations per session) -> token budget per turn so no single call exceeds limits -> wall-clock timeout on the entire session -> per-session cost tracking with a hard ceiling -> circuit breakers on tool failures (max retries + exponential backoff before aborting) -> human-in-the-loop interrupt hooks that pause execution and request confirmation before high-risk or high-cost actions."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is context management often more important than the model itself?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: The model can only reason about what it's given — wrong or irrelevant context produces wrong answers regardless of model capability. Right context with a smaller model often beats wrong context with the best model. Budget is also a direct function of tokens sent — context selection is the primary cost lever. Finally, context errors are silent: the model doesn't say \"you gave me the wrong files\" — it just answers incorrectly based on what it received."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You are building a coding agent. The codebase is 2M tokens but your window is 200k. What is your retrieval strategy?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: embed + similarity search for relevant files by function/class/symbol name -> supplement with structural context (file tree, import graph, dependency map) -> prioritize files the user's query mentions by name — exact matches first -> compress large files by showing only function signatures and docstrings, not bodies -> reserve a fixed token budget for tool outputs and conversation history and enforce it -> track what you've loaded to avoid refetching -> instrument retrieval quality so you can measure and improve hit rate over time."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your support agent needs to remember a customer's product preferences across sessions. What memory tier handles this and what's your storage/retrieval design?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: long-term memory — persists across sessions by definition -> store as structured facts in a relational DB keyed by customer_id (not raw transcripts) -> retrieve by customer_id lookup at session start and inject into the system prompt as a short, structured block -> update after each interaction where a new preference is expressed — write a derived fact, not the full transcript -> version or timestamp facts so stale data can be pruned -> avoid PII in long-term store unless you have a compliant data-retention policy for it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the difference between working memory and context window?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: Context window is the physical token budget passed to the LLM each call — it's a technical constraint of the model API. Working memory is a higher-level concept: the scratchpad state the agent maintains for the current task — plans, intermediate results, tool outputs in progress. Working memory is often what fills the context window for a given turn, but short-term history and long-term retrieved facts also compete for that same budget. The distinction matters: context window is the constraint; working memory is one category of content that consumes it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is an agent runtime, and name the things it does that the LLM cannot do for itself?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the runtime is the orchestration layer wrapping a stateless LLM in a loop -> it reads the model's output and parses any tool-call block -> executes the real tool (file, API, DB) and feeds the result back -> manages conversation state across turns -> enforces retries/backoff, loop caps, token budget, timeouts and cost ceilings -> the LLM only predicts text — it can't call tools, keep state, retry, or stop itself, so every one of those jobs is runtime code, not model behaviour."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Define the context window and explain what competes for it on a single agent call.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the context window is a fixed token budget the model accepts per call — a hard ceiling, the same for everyone on that model -> everything shares that one budget: the system prompt, the tool/function definitions (grow with #tools), the conversation history (grows every turn — the quiet eater), the retrieved data you pull in, and the space reserved for the model's own answer -> only what's left after the overhead is yours for useful context -> so window size isn't the real constraint — what you choose to spend it on is."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the three memory tiers and what each one is for.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: short-term = the conversation history living in the context window — like RAM, gone on reset -> working = the task scratchpad/plan: current notes, intermediate results, in-flight tool outputs -> long-term = a persisted knowledge store that survives across sessions and is retrieved on demand -> the through-line: the LLM remembers nothing between calls, so each tier is just a different place state is stored and a different cost to read it back into the window."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Define memory in an agent system — why is \"the agent remembers\" a misleading phrase?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: memory is persisted state that lives outside the model and is only \"known\" if the runtime retrieves it back into the context window -> the LLM is a stateless pure function — it recalls nothing from past calls on its own -> so \"the agent remembers a past conversation\" really means \"something stored a fact and something retrieved it into this call\" -> if it wasn't stored and re-injected, it does not exist to the model -> the phrase hides the two steps (store, retrieve) where the real engineering — and the real bugs — live."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is context management often a bigger lever than which model you pick?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the model can only reason over what it's given — the right document missing means a wrong answer at any model size -> right context on a smaller model routinely beats wrong context on the flagship, and costs less -> cost and latency scale with tokens sent, so context selection is also your primary cost lever -> context failures are silent: the model never says \"you gave me the wrong files,\" it just answers confidently from what it has -> a model upgrade is a flat tax on every call; better retrieval is an asset that compounds across features."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What belongs in long-term memory and what should never go there?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: store derived, structured facts — a customer's preferences, settled decisions, durable entities keyed for lookup -> don't dump raw conversation transcripts: noisy, expensive to search, and they bury the one fact that mattered -> don't store redundant or stale facts — version/timestamp so they can be pruned -> keep volatile, high-stakes data (current balance, plan, open-ticket status) as live look-ups, not stale embeddings -> avoid PII unless you genuinely need it and have a compliant retention policy -> rule of thumb: persist the conclusion, not the conversation."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"A bigger context window means we don't need context engineering anymore.\" Where does that break?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a bigger window raises the ceiling, not the relevance — selection still decides what the model reasons over -> real corpora (a multi-million-token monorepo) still exceed any window, so you're choosing a subset regardless -> cost and latency scale with tokens sent, so a 5x bigger context is roughly a 5x bigger bill on every call (illustrative) -> long-context recall is uneven — facts in the middle get lost while start and end are over-weighted -> irrelevant tokens dilute attention and degrade the answer; they're not free padding -> the fix is a better working context, not more raw capacity."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the runtime guardrails so an agent can't loop forever or burn $500 on one task.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: layer independent limits so no single failure is unbounded: a loop cap (max iterations per session) -> a per-turn token budget so one call can't blow up -> a per-session cumulative cost ceiling tracked in real dollars, checked before every model call, that hard-stops when crossed -> a wall-clock timeout on the whole session -> circuit breakers on tool failures (max retries + exponential backoff, then abort instead of retrying forever) -> loop-detection on repeated identical tool calls/outputs -> human-in-the-loop interrupts that pause before high-cost or irreversible actions -> make every limit observable and alarmed, and fail closed — halt with a clear error rather than silently continuing."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design memory for an agent that must keep meaningful state across sessions and across many users.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: separate the tiers by durability and backend — short-term in the live message list, working in fast scratch state (in-process/Redis), long-term in a persisted store -> for cross-session state, write derived facts keyed by a stable id (user/account), not raw transcripts -> scope every read and write to the authenticated user so one account can never retrieve another's memory -> choose the store by access pattern: relational/key-value for exact keyed facts, a vector store for fuzzy semantic recall, and live look-ups for volatile data -> define a write policy (what gets promoted to long-term, and when) and a retention/versioning policy so stale facts are pruned -> on session start, retrieve the small relevant set and inject it as a compact structured block, never the whole history -> instrument it: measure \"had-the-right-fact\" rate, and budget the slice of the window memory may consume."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Answers are wrong. A teammate wants to spend the quarter upgrading the model. Make the principal-level call.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: don't decide by opinion — instrument the failing cases and attribute them by class: was the needed fact even in the context, or was it present and the model still failed? -> control test: hand-feed the correct context to the same model; if it now answers, the defect was retrieval, not reasoning, and a bigger model just reasons better over the wrong input -> in most products retrieval/context is the dominant cause, so a model swap pays a flat per-token tax while leaving the real bug in place -> frame the trade-off: model upgrade = recurring cost, one-time bump any competitor can also rent; retrieval + memory investment = an asset you own that compounds -> sequence it — fix and evaluate context first, then pay for model capability only once data shows reasoning is the binding constraint, with a clear before/after metric and a kill criterion."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the runtime + context strategy for a long-running production agent that may run for hours over a 2M-token codebase with a 200k window.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: the loop is the spine — parse output, validate tool calls against an allow-list, execute, append [tool_result] , re-call until done or a guardrail trips -> because a long run is unbounded by default, every limit must be explicit: loop cap, per-turn token budget, a cumulative session cost ceiling in real dollars checked before each call, a wall-clock timeout, tool retries with backoff, and loop-detection on repeated identical calls -> you can show ~10% of the repo at most, so context selection is the product: retrieve by exact symbol match + semantic similarity, walk the import/dependency graph for structure, re-rank, then pack signatures/docstrings over full bodies with the query-named files first -> reserve fixed budget for history and the answer, and compress or summarize old turns as the run grows so history doesn't crowd out fresh context -> checkpoint progress (a durable plan/scratchpad) so a long task survives a restart -> instrument assembled context + token/cost spend per call, alarm on ceilings, and fail closed with a clear halt rather than silently continuing -> name the trade-off: pre-indexed embeddings (fast, can go stale) vs read-on-demand (fresh, more round-trips)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the memory architecture for a customer-support agent that must recall prior interactions across sessions under a fixed token budget.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: map the three tiers to backends — short-term is the live conversation in the window; working is the in-flight task state (current ticket, steps taken); long-term is a persisted store of derived facts (preferences, past resolutions, entitlements) keyed by customer_id -> never persist raw transcripts to long-term: write structured, derived facts so retrieval is cheap and precise -> partition the window into fixed slices (system prompt & policy, retrieved facts, recent history, current question, reserved answer) so no source starves the others -> on session start, look up the customer's facts by id and inject a compact structured block; pull volatile, exact data (current plan, open tickets, balance) live rather than from stale storage -> define the write policy: after an interaction, promote new durable facts to long-term, version/timestamp them, and prune stale ones -> scope every read/write to the authenticated customer so you never leak another account's memory -> observability: measure \"had-the-right-fact\" rate and retrieval hit-rate, not just CSAT -> failure modes: missing fact -> ask or escalate rather than hallucinate; conflicting KB vs customer fact -> prefer the customer-specific one; budget overflow -> drop lowest-ranked history before identity/policy -> name the trade-off: pre-stored facts (fast, can lag) vs live look-ups (fresh, exact, more latency), plus the privacy line that history is always retrieved per-customer."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

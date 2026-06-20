@@ -85,6 +85,134 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Your RAG answers look 90% correct on a spot-check, but users complain on hard queries. Which retrieval metric do you pull first, and what would it reveal?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: compute recall@k per query on a labelled set, not aggregate answer accuracy -> the spot-check is biased toward easy queries the model can answer from parametric memory -> low recall@k on the hard slice means the relevant doc never reached the window — a retrieval miss, not a reasoning miss -> segment recall by query type / length to find where first-stage drops it -> only after recall is high do precision@k and nDCG (reranker order) become the lever worth pulling."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Faithfulness scores are high but users still report wrong answers. What's happening, and which metrics confirm it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: faithful means \"grounded in the retrieved context\" — but the context can be wrong or incomplete, so the model is faithfully repeating junk -> this is the bottom-left quadrant: a retrieval bug masquerading as a good answer -> check context recall (did retrieval capture all the ideal answer needs) and context precision (are chunks relevant + well-ranked) -> also check answer relevance for off-topic-but-grounded replies -> conclusion: faithfulness alone is necessary, not sufficient — pair it with context-side metrics so you don't \"fix\" generation when retrieval is the cause."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"The bot gave a wrong answer last Tuesday.\" With tracing in place, how do you go from that complaint to a root cause?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: pull the trace by request ID / timestamp -> check layer 2 — was the relevant doc in the retrieved IDs+scores? if absent, it's a recall miss (fix first-stage retrieval) -> if present but low-ranked or dropped at packing (layer 3), it's a ranking/budget bug (add rerank / adjust budget) -> if it was in the assembled context (layer 4) yet the answer ignored it, it's a generation/faithfulness bug (prompt/model) -> add the failing query to the golden set so offline eval catches the regression next time -> the trace is what turns \"the bot was wrong\" into a specific, fixable stage."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Define recall@k and precision@k, and say which one matters most for first-stage RAG retrieval.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: recall@k = is at least one relevant doc present in the top-k — about presence -> precision@k = what fraction of the top-k are actually relevant — about purity -> recall@k is the most important RAG metric because nothing downstream can use a doc that wasn't retrieved -> so you tune first-stage retrieval to maximize recall@k first, then buy precision later with a reranker -> one line: recall = \"did we fetch it at all,\" precision = \"how clean is the top-k.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What do MRR and nDCG measure, and when do you reach for each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: MRR (mean reciprocal rank) = how high the first relevant result sits, averaged over queries — reach for it when one good hit is enough, like a lookup -> nDCG = graded, position-discounted relevance — rewards putting the best doc at the top -> nDCG is what you use to judge the reranker / final ordering, not just whether the doc is present -> recall@k says \"is it in the cart\"; nDCG says \"is it on top of the cart.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the four RAGAS-style answer-quality metrics and the one question each answers.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: faithfulness /groundedness — is every claim supported by the retrieved context? (catches hallucination) -> answer relevance — does the answer actually address the question? (catches off-topic/evasive) -> context precision — are the retrieved chunks relevant and well-ranked? (catches noisy/mis-ordered context) -> context recall — did retrieval capture all the info the ideal answer needs? (catches missing facts; needs ground truth) -> first two grade generation, last two grade retrieval."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a golden set, and what's the difference between offline and online eval?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a golden set = labelled triples — (query, relevant doc IDs, ideal answer) — versioned in source control -> offline eval replays that set in CI before deploy and reports recall@k / nDCG / faithfulness vs the last release — a deterministic regression gate -> online eval reads production behaviour after deploy: thumbs, deflection/escalation, citation-clicks, follow-up/rephrase rate -> offline catches regressions you anticipated; online catches the long tail you didn't -> you curate online misses back into the golden set."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your RAG answers look ~90% correct on a spot-check, but users complain on hard queries. Which metric do you pull first, and what would it reveal?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: compute recall@k per query on a labelled set, not aggregate answer accuracy -> the spot-check is biased toward easy queries the model can answer from parametric memory, so it hides the failures -> low recall@k on the hard slice means the relevant doc never reached the window — a retrieval miss, not a reasoning miss -> segment recall by query type / length to find where first-stage drops it -> only after recall is high do precision@k and nDCG (reranker order) become the lever worth pulling."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Just optimize precision@k everywhere — fewer, cleaner chunks.\" Where does that advice mislead you?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: first-stage you want recall , not tidiness — dropping chunks to raise precision can drop the one relevant doc and cap the answer -> recall@k is the ceiling; precision can't recover a doc that's no longer in the set -> the right ordering is recall first (first-stage retrieval), then buy precision/nDCG with a reranker on top of high recall -> also: aggregate precision can look great while a hard slice silently misses — always segment -> the metric to optimize depends on the stage; conflating the two stages is the trap."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You want to grade faithfulness on every production call. How do you do it, and what are the risks?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: use LLM-as-judge — feed answer + retrieved context, score each claim's support 0-1 -> it scales where human labelling can't -> risks: judge bias (verbosity, position, self-preference), drift across model versions, and cost per call -> mitigate by calibrating against a human-labelled sample, pinning the prompt + judge version, and spot-auditing disagreements -> frame it: the judge is a calibrated proxy to scale grading, not the definition of truth -> track judge-vs-human agreement as its own metric so you notice drift."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"The bot gave a wrong answer last Tuesday.\" With tracing in place, how do you go from that complaint to a specific stage?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: pull the trace by request ID / timestamp -> check the retrieved IDs+scores — was the relevant doc fetched at all? if absent, it's a recall miss (fix first-stage retrieval) -> if present but low-ranked or dropped at packing, it's a ranking/budget bug (add rerank / adjust budget) -> if it made the assembled context yet the answer ignored it, it's a generation/faithfulness bug (prompt/model) -> add the failing query to the golden set so offline eval regresses on it -> the trace is what turns \"the bot was wrong\" into a specific, fixable stage — without it the context bug is silent."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Offline eval is green but users still complain. What does that tell you, and what do you change?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: green offline only means you pass the cases you wrote — the golden set has coverage gaps -> the complaints are the long tail offline never modelled -> lean on online signals (thumbs-down, escalation, rephrase/follow-up rate) to surface failing real queries -> pull their traces to localize the failing stage (recall vs ranking vs generation) -> curate those queries (with correct doc IDs + ideal answers) back into the golden set so the next offline run regresses on them -> the eval set is a living artifact, not a one-time deliverable."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A teammate proposes a single end-to-end \"answer correctness\" score as the one metric to rule them all. Make the principal-level call.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: one number for the whole pipeline hides where it broke — you can't tell a retrieval miss from a hallucination, so you'll fix the wrong half -> a high end-to-end score can mask low recall@k: the model bluffs from parametric memory on easy queries while quietly missing the hard ones -> the durable design measures the two halves separately (retrieval metrics + RAGAS-style answer metrics) plus per-call tracing to attribute failures -> keep a headline end-to-end number for trend-watching, but never as the only signal or the debugging tool -> the principal move: instrument by stage, decide by attribution, not by a single vanity metric."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the eval and observability for a production RAG support assistant from zero. What do you build first and why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: build the golden set first — (query, relevant doc IDs, ideal answer), seeded by synthetic generation + human curation, versioned so it diffs in review -> wire offline eval into CI: replay the set and report recall@k / nDCG for retrieval and faithfulness / answer relevance / context precision-recall for generation, gating deploys on regression vs the last release -> instrument tracing from day one — query, retrieved IDs+scores, packed chunks, assembled context, answer — so any failure maps to a stage -> after launch add online signals (thumbs, deflection/escalation, citation-clicks, rephrase rate) and curate the misses back into the golden set -> scale grading with an LLM-as-judge calibrated against human labels, tracking judge-vs-human agreement -> name the trade-off: offline is deterministic but only covers what you imagined; online is real but lagging and noisy — you need both, plus tracing to connect a complaint to a cause."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a golden-set plus CI gate for retrieval specifically. How do you build it, keep it honest, and decide when to block a deploy?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: start from labelled triples — for retrieval the load-bearing part is (query, relevant doc IDs); seed queries from real production logs + synthetic generation, then have humans verify the relevant-doc labels -> version it in source control so additions/edits are reviewable and the set diffs over time -> the CI job replays every query through first-stage retrieval and computes recall@k (the gate metric) plus nDCG for ordering, comparing against the last release -> block the deploy on a recall@k regression beyond a small tolerance, and on per-slice drops (segment by query type/length so an aggregate average can't hide a hard slice cratering) -> keep it honest: refresh labels when the corpus changes (a \"relevant\" doc can be deleted/edited), guard against the set going stale, and avoid leakage where the index was tuned to the eval queries -> feed online recall misses back in so the gate keeps catching real failures -> trade-off: a tight tolerance catches more regressions but creates flaky/noisy gates; a loose one ships silent recall drops — pick the threshold from the cost of a missed answer in this product."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

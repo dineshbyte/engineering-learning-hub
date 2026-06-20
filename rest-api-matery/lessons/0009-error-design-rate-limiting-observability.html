@@ -45,6 +45,118 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.85rem}
   @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What is the current standard for HTTP API error bodies?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "RFC 9457, \"Problem Details for HTTP APIs\" — media type application/problem+json . It defines a single, consistent shape for error responses across an API. Naming the RFC number (not just \"problem+json\") is the senior tell; it supersedes RFC 7807 , so cite the right one in the room."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "400 vs 422 — when each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "400 Bad Request for a syntactically malformed request — broken JSON, missing required structure, can't even parse it. 422 Unprocessable Content for a request that parsed fine but is semantically invalid — e.g. valid JSON whose email field fails validation. Parsed-but-wrong is the 422 signal."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the HTTP contract for a throttled request?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "429 Too Many Requests with a Retry-After header telling the client when to come back. Ideally also expose RateLimit-Limit / RateLimit-Remaining / RateLimit-Reset on every response so well-behaved clients self-throttle before they hit the wall."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the RED metrics?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "R ate (requests/sec), E rrors (failed requests), D uration (latency). Tracked per endpoint, they're the minimal dashboard that tells you whether a service is healthy — and the first thing to pull up when something's wrong."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why must clients branch on error codes, not error prose?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Prose is for humans and changes freely; codes are part of your contract and must stay stable. The moment you reword a string and a partner's if -statement breaks, you've taught them to never trust your contract again. So: stable codes, human prose — and document the codes as an error catalog they can code against."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why does consistent status mapping matter beyond aesthetics?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because the whole HTTP ecosystem acts on the status: caches, retry logic, circuit breakers, monitoring, and clients all decide behavior from it. Map a transient overload to 400 and clients won't retry; map a validation error to 500 and you page yourself for client mistakes and inflate your error budget. The status class (4xx = \"you,\" 5xx = \"me\") drives who retries and who gets paged ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Token bucket — how it works and why it's the common default?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Tokens refill at a steady rate; each request spends one; the bucket size caps how many can accumulate. It allows bursts up to the bucket size, then settles to the steady refill rate . It's the common choice because real traffic is spiky-but-bounded — token bucket tolerates a legitimate spike while still enforcing a sustained average."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why report latency as p95/p99 instead of the mean?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because the mean hides the tail. A p50 of 50ms can sit alongside a p99 of 4s — and that p99 is exactly the slow experience losing you the partner. Averages get dragged around by outliers and conceal them at once. Percentiles describe what real users actually feel; judge and alert on p95/p99 , never the mean."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you enforce a global rate limit across many distributed API nodes?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The naive per-node counter lets the real limit balloon by N nodes. Options, in tension: a shared store (Redis with atomic INCR/Lua, or a token-bucket script) gives an accurate global count but adds a hop and a dependency on every request; local counters with a per-node share are fast but approximate and unfair under skew; sampled/sync'd local buckets trade a little accuracy for latency. Most real systems do limiting at the gateway/edge with a shared store, accepting eventual-consistency slop near the boundary."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do rate limiting, retries, idempotency, and circuit breakers fit together as one story?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "They're a closed loop. Rate limits/outages trigger retries ; retries need backoff + jitter so they don't stampede; retries on writes need idempotency keys so they don't duplicate; a persistently failing dependency needs a circuit breaker so you stop retrying into the void and degrade gracefully ; and observability (correlation ids, RED, p99, traces) is how you see the whole loop and tune it. Naming the loop, not just one piece, is the staff signal."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Tracing every request is too expensive at scale. How do you sample without going blind?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Mix strategies. Head-based sampling (decide at ingress, e.g. keep 1%) is cheap but may drop the rare failure you needed. Tail-based sampling buffers spans and keeps traces that are interesting — errors, high latency — at the cost of more infrastructure. Keep 100% of error/slow traces and sample the boring success path; keep full-fidelity metrics always so aggregates stay accurate even when individual traces are sampled out."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the error contract, abuse protection, and observability for a public write-heavy REST API a partner says is \"impossible to integrate against and keeps falling over.\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: diagnose the two complaints separately — \"impossible to integrate\" is an error-contract/DX problem, \"keeps falling over\" is an abuse/resilience problem -> error contract : adopt one RFC 9457 problem+json shape across every endpoint, add a stable machine-readable code as an extension member (clients branch on the code, never the prose), emit field-level validation errors , map status correctly ( 400 malformed vs 422 validation, 409 conflict, 401 / 403 ), leak no stack traces/SQL, and publish an error catalog enforced by contract tests in CI -> abuse protection : token bucket per API key (absorbs legitimate bursts, enforces a sustained average) with separate burst vs sustained quotas tied to billing tiers, return 429 + Retry-After and expose RateLimit-* headers so good clients self-throttle; enforce at the gateway with a shared store (Redis atomic INCR/Lua) accepting eventual-consistency slop; add load shedding ( 503 + Retry-After ) before you fall over -> safe recovery : require idempotency keys on writes so retried POST s don't double-charge, advise exponential backoff + jitter (and vary Retry-After server-side) to avoid a thundering herd, and circuit-break failing downstreams -> observability : structured logs keyed by a propagated correlation id (W3C traceparent ), RED metrics per endpoint, OpenTelemetry traces, alert on p95/p99 and SLO error-budget burn (not the mean), and split dashboards by status class so partner 4xx doesn't pollute server 5xx signals -> name the trade-off: a shared-store global limiter is accurate but adds a hop/dependency vs fast-but-approximate local counters, and tail-based trace sampling keeps the failures you need at the cost of more infrastructure."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the end-to-end resilience and observability story for a payments-style API where retries must never double-charge and outages must degrade gracefully.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: treat resilience as a closed loop, not isolated features -> idempotency is the backbone: every write carries an Idempotency-Key ; the server stores key -> result on first success and returns the stored response on replay, with a lock/\"in progress\" record for the concurrent in-flight retry and a sensible key-expiry window — this makes a non-idempotent charge safe to retry -> retry discipline : clients use exponential backoff + jitter so a recovering service isn't stampeded; the server signals retryability honestly — 429 + Retry-After for throttling, 503 + Retry-After for temporary overload, and never dresses a client error as a retryable 5xx -> circuit breakers around the payment processor and other dependencies: open on a failure threshold to fail fast, half-open to test recovery, so a struggling downstream gets room instead of being retried to death -> graceful degradation : load-shed excess early, serve stale-but-cached non-critical data, disable optional features, and prioritize the core charge path; decide in advance what's droppable -> error contract : RFC 9457 problem+json with stable codes (e.g. card_declined ) clients can branch on, correct status mapping, zero leakage of internal detail -> observability : correlation id propagated across every hop, structured logs that never log PANs/secrets/PII (redact at the boundary), RED metrics, OpenTelemetry traces to see where time/failures land, and paging tied to SLO error-budget burn against the user-facing SLI rather than raw error counts -> name the trade-off: idempotency adds storage + a write-path lookup and forces you to define exactly-once windows, but it's the only honest way to make money-moving retries safe."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>

@@ -78,6 +78,118 @@ details.iq .a b{color:var(--track-rest)}
 .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
 @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What problem does consensus solve, and what are its three required properties?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: consensus = a set of nodes agree on a single value (or a single ordering of commands) despite crashes and message delays -> the three properties: Agreement (no two correct nodes decide different values), Validity (the decided value was proposed), Termination (every correct node eventually decides) -> agreement + validity are safety , termination is liveness -> consensus is equivalent to total-order broadcast, which is exactly what a replicated state machine / replicated log needs -> so \"build a replicated log\" and \"solve consensus\" are the same problem."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why does crash tolerance need 2f+1 nodes but Byzantine tolerance need 3f+1?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: it's all quorum-overlap reasoning -> crash (CFT) : with 2f+1 nodes a majority is f+1, and any two majorities overlap in ≥1 node — that shared node is honest (crashed nodes just stop), so it carries the agreed value forward -> Byzantine (BFT) : the overlapping node could be the liar, so a single shared node isn't enough; you need quorums of 2f+1 out of 3f+1 so any two intersect in f+1 nodes, guaranteeing ≥1 honest node in the overlap -> mnemonic: CFT survives nodes that stop , BFT survives nodes that lie -> PBFT does this in three phases; Nakamoto/PoW gives only probabilistic finality."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does FLP state precisely, and what's the standard escape hatch?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: FLP: no deterministic protocol can guarantee termination in a purely asynchronous model that tolerates even one crash -> it does not say consensus is impossible — safety is fine; it says you can't guarantee both safety and liveness with no timing assumptions -> the escape is partial synchrony (DLS 1988): assume the network is eventually timely, use timeouts for liveness, and never let timeouts compromise safety -> randomization is the other escape (terminate with probability 1) -> that's why every real protocol (Paxos, Raft) keeps safety unconditional and makes liveness depend on the network calming down."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does Raft elect a leader and guarantee at most one per term?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: time is divided into terms ; a follower whose election timeout fires becomes a candidate, increments the term, votes for itself, and requests votes -> each node grants at most one vote per term -> a candidate wins only with a majority ; since two majorities always overlap and the overlap node already voted, two leaders in one term is impossible (Election Safety) -> split votes are resolved by randomized election timeouts so candidates rarely time out together -> the leader sends periodic heartbeats; a higher term seen anywhere makes a node step down."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "State FLP precisely, then explain why the bivalence argument is sharper than \"the adversary delays a message.\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: no deterministic protocol can guarantee termination in a purely asynchronous model tolerating one crash -> bivalence is the engine: Lemma 1 shows a bivalent (outcome-undecided) initial configuration must exist , and Lemma 2 shows from any bivalent state the adversary can always reach another bivalent state -> so the protocol can be kept perpetually undecided -> the key subtlety: the adversary only reorders messages, it never drops them or crashes more than one node — far weaker than \"messages get lost,\" which is why the result is so strong -> bonus: names the partial-synchrony escape (DLS) and that randomized protocols sidestep it too."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A new Raft leader is never told what was committed. Why is it guaranteed to already hold every committed entry?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the election restriction — a voter grants its vote only to a candidate whose log is at least as up-to-date (compare last-entry term, then index) -> a committed entry lives on a majority; a winning candidate also needs a majority; those two majorities overlap in ≥1 voter -> that overlapping voter holds the committed entry and would refuse to vote for a candidate missing it -> therefore the winner already has every committed entry — this is Leader Completeness -> red flag answer: \"the old leader hands its log over\" — there is no handover; safety comes from the vote-time check, not from the predecessor."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk me through Raft's Figure 8 and state the commitment rule that prevents it.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: an entry from a previous term can be replicated to a majority and still be overwritten — a later leader (S5) can win with a higher last-term entry and clobber it -> so \"replicated on a majority\" is not sufficient to call a prior-term entry committed -> the rule: a leader may only mark an entry committed once it has replicated an entry from its current term on a majority; earlier entries then commit indirectly via Log Matching -> the trap is committing by replica count alone -> bonus: this bug hides because it needs a specific crash/election interleaving, so naive tests pass — you need a model checker (TLA+) or targeted fault injection to force it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does Raft change cluster membership without risking two leaders?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a naive single-step cutover from C_old to C_new lets each configuration independently form a majority during the overlap → split brain, two leaders -> joint consensus routes through a combined C_old,new in which every election and every commit requires a majority of both the old and new sets simultaneously -> sequence: commit C_old,new, then commit C_new; once C_new is committed the old config can retire -> because both majorities are required during transition, two disjoint majorities can never form -> bonus: single-server add/remove (changing membership one node at a time) is the later, simpler optimization that avoids full joint consensus."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your team's homegrown Raft loses a committed write under one rare crash sequence. What's your first hypothesis and how do you confirm it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: first hypothesis: the Figure-8 commitment bug — committing a prior-term entry by replica count instead of waiting to replicate a current-term entry on a majority -> second candidates: missing fsync-before-ack (durability lost on crash), or a broken election restriction letting a less-up-to-date candidate win -> confirm not by adding logs and hoping the race reappears, but by writing a TLA+/model-checked spec or a deterministic-scheduler test that forces the exact crash-then-elect interleaving -> reproduce → fix the commit rule → keep the model check in CI as a regression -> the staff move is treating safety bugs as specification problems, not log-spelunking problems, because the failing interleaving is too rare to catch by chance."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When would you choose Multi-Paxos, Raft, EPaxos, or PBFT — and when none of them?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: all crash-fault options give identical safety, so choose on operational and performance axes -> Raft for implementability and a strong leader's simple mental model (most teams); Multi-Paxos as the battle-tested incumbent where it already exists; EPaxos to remove the single-leader throughput/latency bottleneck for commuting commands, accepting a sharp jump in complexity; PBFT only when you must tolerate lying nodes across a trust boundary (3f+1, 3 phases) -> none when you don't actually need linearizable agreement — if eventual consistency / CRDTs / a single-writer design satisfy correctness, consensus is needless coordination cost -> the principal framing: consensus is the most expensive coordination primitive; justify the need before picking a flavor."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Distinguish safety from liveness in a replicated log, and which one you're allowed to sacrifice.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: safety = nothing bad happens: never two leaders in a term, never lose or reorder an acknowledged committed entry, never let two correct nodes diverge -> liveness = something good eventually happens: a request eventually commits, a new leader is eventually elected -> FLP says you cannot guarantee both under pure asynchrony, so the universal design choice is: safety is unconditional, liveness is best-effort under partial synchrony -> concretely, during a partition a CP log refuses progress (sacrifices liveness/availability) rather than risk two leaders (sacrificing safety) -> the staff point: any protocol that \"stays available\" through a partition by relaxing majority is silently trading away safety — make that trade explicit and intentional, never accidental."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Whiteboard the commit path for a replicated log that must never lose an acknowledged write.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: replicate to a majority before acking the client, and on each replica fsync the entry to durable storage before counting its vote — an in-memory ack that a power loss erases is not a commit -> mark an entry committed only after a current-term entry reaches a majority (Figure-8 rule), so a later leader can't overwrite a \"committed\" prior-term entry -> enforce the election restriction so any new leader already holds every committed entry (Leader Completeness) — no log handover -> bound stale reads with a leader lease or read-index so a deposed leader can't serve a linearizable read -> make client requests idempotent (request IDs / dedup) so a retried proposal after a timeout commits at most once -> change membership via joint consensus to preserve Election Safety -> verify the safety properties with a model checker and force the rare crash/election interleavings with fault injection -> name the trade-off: fsync-before-ack and majority replication add tail latency, which you accept as the price of RPO = 0."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a consensus-backed configuration / coordination store (think etcd / ZooKeeper).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: a small odd-sized cluster (3 or 5) running a single replicated log via Raft/Multi-Paxos — crash-fault model, 2f+1, since it's inside one trust domain -> all writes go through the leader and the log, giving linearizable, totally-ordered updates; expose compare-and-swap / leases / watches on top of the log -> serve reads via the leader with a read-index or lease so they're linearizable without a full log round-trip, or offer explicitly-stale follower reads as a separate, labeled API -> durability: fsync-before-ack, periodic snapshots + log compaction so the log doesn't grow unbounded -> under partition, the minority side stops serving writes (CP) — correctness over availability, which is right for locks/config -> clients use sessions + fencing tokens so a client that loses its lease (GC pause, partition) can't act on a stale lock -> membership changes via joint consensus; keep the cluster small because write latency = majority round-trip and grows with size -> name the trade-off: this store is deliberately low-throughput and strongly consistent — it coordinates other systems, it is not your data plane."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

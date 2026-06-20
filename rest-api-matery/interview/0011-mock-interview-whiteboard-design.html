@@ -78,6 +78,398 @@
   [data-interview] details.iq[open] .a{display:block}
   [data-interview] details.iq .a b{color:var(--track-rest,#7a1f12)}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What is a \"design X's API\" round actually testing?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Not whether you produce the answer — there isn't one. It grades structure (did you clarify before designing?), breadth (writes got idempotency, reads got pagination, you named object-level auth), and judgment (you named a trade-off and what changes at 100×). It's a 45-minute integration exam over every prior topic at once, not a quiz on one."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What should you do first in a design round, before any endpoint?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify requirements and constraints — clients, scale, read/write ratio, consistency needs, auth model, SLAs. Diagnose, then design. The resource model falls out of the questions you ask; the endpoints fall out of the resource model. Drawing URIs before clarifying is the classic junior tell."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the winning arc of a design answer in one phrase?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Diagnose, design, defend. Clarify constraints first, walk the resource model and endpoints with a reason attached to each choice, then close with a trade-off and what changes at scale. A candidate who narrates a clear checklist and the why beats one who free-associates brilliant fragments."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "For any \"design X\" prompt, what two things must every list endpoint have?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Pagination (cursor-based at scale, with a bounded/hard-capped page size) and a filter/sort contract . An unbounded list is a latency and memory landmine. Reaching for these on every collection without being prompted is a fast breadth signal — the mirror of reaching for idempotency on every unsafe write."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Which write should return 202 instead of 201 ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A write whose work hasn't finished yet. 201 Created means the resource exists now; 202 Accepted means \"I've taken the request and will process it asynchronously\" — return it for async capture, job submission, fan-out, or anything long-running, along with a status resource the client can poll."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Which HTTP methods are already idempotent, so they don't need an idempotency key?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "GET , HEAD , PUT , and DELETE are idempotent by HTTP semantics — repeating them has the same effect as doing them once. POST is the exception: it's not idempotent, so unsafe POST s (create, charge) are the ones that need an Idempotency-Key ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why prefer a structured error format (RFC 9457) over a bare string?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "So clients can react programmatically and humans can debug. RFC 9457 problem+json carries a stable machine-readable code / type , a human title / detail , and a per-request trace_id that ties the response to your logs/traces. A bare string forces clients to brittle string-matching and gives you nothing to grep on when it breaks."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What makes an API horizontally scalable in the first place?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Statelessness — each request carries everything the server needs, so any node can serve any request. No sticky sessions, so you scale by adding boxes behind a load balancer and a node dying loses nothing. That property is the foundation everything else (caching, replicas, sharding) builds on."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Why is object-level authorization so important?\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because authentication only proves who you are, not what you're allowed to touch. Without a per-object ownership check, a logged-in user A can pass user B's id in the path ( /orders/{B} ) and read B's data — that's BOLA , the #1 real-world API vulnerability. Every read/write must verify the caller owns this object, not just that they're authenticated."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the single biggest mistake candidates make in this round?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Starting to type endpoints. Don't design — diagnose, then design. The first five minutes are requirements and constraints. The endpoints fall out of the resource model; the resource model falls out of the questions you asked. Leading with verbs before you know the clients, scale, and consistency needs signals junior."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the clarifying questions you ask before drawing anything.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clients: first-party only, or untrusted third parties (changes auth, rate limits, versioning rigor)? Scale & read/write ratio: read-heavy (cache, replicas) vs write-heavy (contention, idempotency)? Consistency: which paths must be strongly consistent vs eventually consistent? Auth model and tenancy: who owns what; multi-tenant isolation? SLAs / latency budget and the one operation that absolutely cannot fail (e.g. never double-charge). Pin these before any URI."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk the 11-step framework from memory.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "(1) Clarify requirements/constraints; (2) resource model & URIs; (3) endpoints — methods + status codes; (4) idempotency on unsafe writes; (5) collections — pagination/filter/sort; (6) caching & concurrency (ETag/If-Match); (7) versioning & evolution; (8) authN/authZ + object-level (BOLA); (9) errors, rate limiting, observability; (10) async/webhooks where needed; (11) trade-offs & \"what changes at 100×.\" Name the step, make the one decision that matters, signal you know the rest is there."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you drive a whiteboard round — manage time and structure?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Narrate the framework as a spine so the interviewer can follow. Box the first ~5 min for clarify + resource model (the part that earns the most). Don't boil the ocean: name each step, make the headline decision, move on — \"I'd also add ETags here, but let me keep moving and come back if you want depth.\" Leave the last few minutes for trade-offs at scale. Re-state assumptions when they twist a constraint, and think out loud so they grade your reasoning, not just your output."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you communicate a trade-off so it reads as \"senior\"?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "State the option, pick a side , attach the reason, and name when you'd decide differently: \"That's a deliberate trade-off because X; at 100× I'd revisit it because Y.\" Defaulting silently (offset pagination, no idempotency) reads junior; choosing and defending reads senior. Other tells: \"it's at-least-once, so the consumer must be idempotent,\" \"I care about p99, not the mean,\" \"exactly-once effect, not exactly-once delivery.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for a URL shortener (create, redirect, analytics).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify: read-dominated (redirects ≫ creates), public reads but authed creates, custom-alias support, latency-critical redirect path. Resources/writes: POST /links {url, custom_alias?} → 201 ; make it idempotent via Idempotency-Key or by hashing the long URL so retries don't mint duplicate codes. Redirect: GET /{code} → 301 for permanent/SEO vs 302 when you must count every hit or may re-point. 301 is cached hard so analytics suffer — a deliberate trade-off. Analytics: GET /links/{code}/stats with cursor pagination; counts are eventually consistent, aggregated async off a click stream, never on the hot redirect path. Protect & auth: rate-limit creates per key ( 429 ), object-level ownership on stats/delete, edge-cache redirects. At 100×: precompute codes from a key-gen service to avoid write contention; the redirect becomes a cache lookup, not a DB hit."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for a notifications service (multi-channel send, preferences, delivery status).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify: fan-out across channels (push/email/SMS), each provider is flaky and async, users have preferences/quiet hours, dedup matters. Resources: Notification , Template , Preference , DeliveryAttempt . POST /notifications → 202 Accepted + a status resource (sending is inherently async). Idempotency: Idempotency-Key so a retried send doesn't notify the user twice — the whole point of the service is to not spam. Status: GET /notifications/{id} shows per-channel delivery state; or push results via signed at-least-once webhooks. Lists/auth: GET /notifications?status=&limit= cursor-paginated; object-level checks; per-tenant rate caps to protect providers and budget. At 100×: durable queue per channel with retry/back-off + DLQ for poison messages; respect provider rate limits as a back-pressure source."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a rate-limited public API (developer-facing, plans, quotas).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify: untrusted third-party developers, tiered plans, abuse is expected, contract stability is a product promise. Auth: API keys or OAuth2 client-credentials with scopes; key identifies the plan/quota bucket. Limiting: token-bucket per key , returning 429 with RateLimit-Limit/Remaining/Reset and Retry-After ; document the algorithm so clients can back off correctly. Errors/observability: RFC 9457 problem+json with a stable machine code and a per-request trace_id ; publish an OpenAPI spec and a changelog. Versioning: additive-first; breaking changes get a version bump + Sunset header and a long deprecation window — you can't redeploy their clients. At 100×: distributed limit counters (Redis), per-endpoint cost weighting, edge caching, and a separate burst tier so one abuser can't starve neighbors."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for a job/task queue service (submit work, poll status, get result).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify: work is long-running and may fail/retry; clients want submit-and-forget plus a way to track and fetch results. Resources: Job with a status (queued/running/succeeded/failed). POST /jobs → 202 Accepted + a status resource (this is the canonical async pattern, not 201 ). Idempotency: Idempotency-Key on submit so a retry doesn't enqueue the work twice. Status/result: GET /jobs/{id} to poll, with the result inline or a link when done; or push completion via a signed webhook. Support POST /jobs/{id}/cancel . Errors/auth: failed jobs carry a structured error; object-level checks so callers only see their jobs. At 100×: durable queue with retry/back-off + DLQ, priority lanes, and back-pressure ( 429 ) when the queue is saturated."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "REST vs GraphQL vs gRPC — how do you pick for a given need?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "REST : resource-oriented, HTTP-cache-friendly, broad reach — default for public/edge-facing APIs. GraphQL : client shapes the query (kills over-/under-fetching), one endpoint, great for many varied clients (e.g. mobile + web) — but HTTP caching is hard, and you manage query cost / N+1. gRPC : typed protobuf contracts, low latency, streaming — best for internal service-to-service, weaker browser/edge story. Rule of thumb: gRPC between services, REST at the edge, GraphQL when client-shaped fetching is the dominant pain."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Sync vs async — how do you decide per endpoint?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Go async ( 202 + status resource / webhook) when the work is long-running, depends on a flaky downstream, or fans out — anything that would blow your latency budget or pin a request thread. Stay sync ( 201 / 200 ) when the operation is fast and the caller genuinely needs the result inline. The trade-off: async adds a status/polling or webhook surface and forces idempotent consumers, but protects p99 and survives downstream failures."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Cursor vs offset pagination — defend your default.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Default to cursor (keyset) at any real scale: deep pages stay cheap (no OFFSET N scan) and stable under concurrent inserts/deletes — offset skips or repeats rows when the set shifts. Offset is fine only for small, slow-changing, jump-to-page-N UIs. Always cap page size. The senior tell is naming stability under writes , not just performance."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Versioning: URI path vs header vs date-based — which and why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "There's no purist winner — pick for the audience. Path ( /v1 ) is explicit, cache- and router-friendly, easiest for third parties — most common. Header/media-type is \"purer\" but invisible and easy to get wrong. Date-pinned per account (Stripe model) enables fine-grained non-breaking evolution. A strong answer: coarse path boundary + additive-first evolution, bumping the version only on a true breaking change, with a Sunset /deprecation window."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Should every endpoint support idempotency keys?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "No — only non-idempotent unsafe writes need them: POST s that create resources or move money/inventory. GET / PUT / DELETE are already idempotent by HTTP semantics, so a key adds nothing. Blanketing every endpoint adds a dedup store and latency for no benefit. The judgment is identifying which writes are dangerous on retry and protecting exactly those."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Tell me about an API you designed and a decision you'd redo.\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Structure it: context + constraints → the decision → the consequence → what you learned. Pick a real trade-off you got wrong (e.g. chose offset pagination and deep pages melted under load; or skipped idempotency keys and a retry storm double-charged). Show you now know why it was wrong and what you'd do instead. Owning a concrete mistake with a clear lesson reads far more senior than a flawless fairy tale."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"What's the biggest API mistake you've seen or made?\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Good candidates: BOLA — trusting an id in the path without an object-level ownership check, letting user A read user B's data (the #1 real-world API vuln); a non-idempotent money POST with no key; a \"small\" breaking change shipped without a version bump that broke every third-party client. Name the failure, the blast radius, and the systemic fix (object-level authZ middleware, idempotency by default on writes, contract tests in CI) — not just the one-off patch."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"How do you decide a resource model?\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Start from the domain nouns and their relationships/ownership, not the screens or the verbs. Pick plural collections, opaque ids, and shallow nesting (deep /a/b/c/d hierarchies couple you to one access path). Model state transitions as either status fields or action sub-resources. Pressure-test it: can every required operation map cleanly to a method on a resource? If a key operation only fits as an RPC verb, that's a signal to reconsider the nouns — or to deliberately allow one action endpoint."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"How do you ensure API quality across a whole team?\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Make quality systematic, not heroic: a written style guide (naming, errors, pagination, versioning conventions) so APIs look like one team built them; linting on the OpenAPI spec (e.g. Spectral) in CI to enforce it automatically; contract tests so changes can't silently break consumers; design review for new resources before code; and a single source-of-truth OpenAPI spec that drives docs and client codegen. The point is to move correctness left and make the right thing the default."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"A stakeholder demands a breaking change next sprint. How do you handle it?\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Don't just say no — quantify and redirect. First check if it can be done additively (new field/endpoint, old path untouched) — usually it can, removing the conflict. If it's genuinely breaking, surface the cost: who's on the old contract (usage data), the deprecation window required, and the migration work. Offer a versioned path with a Sunset timeline so the stakeholder gets the capability now without breaking existing clients. Frame it as protecting their customers, and bring options, not a blanket refusal."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"How do you balance shipping speed against API design rigor?\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Make the high-cost-to-change decisions carefully and defer the rest. The public contract (URIs, resource shapes, error format, auth, versioning) is expensive to undo, so get it right up front. Internal details and additive features can iterate fast behind that stable contract. Where you're unsure, ship behind a version/feature flag or mark it experimental so you keep the freedom to change it. The senior judgment is knowing which decisions are one-way doors."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "The interviewer twists a constraint mid-answer (\"now there are 10M third-party clients\"). How do you respond?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Don't restart. Re-anchor to the framework and say what changes : untrusted third parties tighten authZ (object-level checks, scoped tokens), force strict versioning + deprecation discipline, demand per-tenant rate limits and abuse controls, and push you toward HATEOAS/discoverability so you can evolve URLs without redeploying their code. Naming the deltas — rather than re-drawing — is the signal that you understand which decisions are constraint-sensitive."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for a hotel / room booking system (search, hold, book, cancel).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify: inventory is scarce and contended — double-booking is the cardinal sin; consistency over availability on the book path. Hold as a first-class resource: POST /holds reserves a room with a short TTL (e.g. 10 min) → 201 + expiry, decrementing inventory atomically. Separating hold from book is the senior move. Book: POST /bookings {hold_id} → 201 , idempotent via Idempotency-Key so a retried payment doesn't book twice; 409 if the hold expired. Concurrency: optimistic concurrency ( If-Match /version) on the inventory row so two simultaneous holds can't both win; loser gets 412 / 409 . Search/cancel: GET /rooms?dates=&guests=&limit= cursor-paginated, cacheable; POST /bookings/{id}/cancel enforces a refund-by-time policy and releases inventory. At 100×: sweep stale holds via a queue, partition inventory by property/date, guard thundering herds on hot dates."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for a file storage service like Dropbox (upload large files, share, list, versions).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify: files can be GBs, uploads must survive flaky networks, sharing needs fine-grained access; bytes go to object storage, metadata to the API. Large uploads: resumable/multipart — POST /uploads opens a session → 202 + session URL; client PUTs chunks; POST /uploads/{id}/complete . Decouples bytes from metadata and lets retries resume. Content addressing: identify blobs by content hash so identical files dedup and uploads are naturally idempotent ; If-Match /ETag on metadata mutations. Sharing: signed URLs (time-boxed, scoped) for direct transfer to object storage, plus permission resources; object-level checks throughout (BOLA). List/versions: GET /folders/{id}/files?limit=&cursor= cursor-paginated; versions as a sub-resource GET /files/{id}/versions with restore. At 100×: push transfer to CDN/object store via signed URLs (the API never proxies bytes), shard metadata, fan out share events via webhooks."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for a payments / charges service (charge, refund, list).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify: untrusted merchant callers, write-heavy money path / read-heavy history, charges strongly consistent & exactly-once from the caller's view, server-to-server auth, \"never double-charge.\" Resources: Charge , Refund (sub-resource of a charge), Customer , PaymentMethod . Money as integer minor units + currency, never floats. Endpoints: POST /v1/charges → 201 sync / 202 async capture; POST /v1/charges/{id}/refunds → 201 ( 422 if over captured total, 409 if fully refunded); GET /v1/charges?customer=&limit= . Idempotency: headline of the answer — Idempotency-Key on every charge/refund, key→result stored 24h; a replay returns the original response. Auth + object-level: OAuth2 client-credentials, scopes like charges:write ; verify this account owns the charge or return 404 (don't leak existence). Errors as RFC 9457; per-account 429 with limit headers. Async + at 100×: async capture → 202 + pending , poll or HMAC-signed at-least-once webhooks (consumer dedups). Shard idempotency/charge stores by account, watch hot merchants, replica for list reads, queue + DLQ behind webhooks."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for a chat / messaging service (send, fetch history, real-time delivery).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify: real-time delivery, ordering and dedup matter, fan-out to many recipients, presence/read receipts, mobile reconnects. Resources: Conversation , Message (sub-resource), Membership . POST /conversations/{id}/messages → 201 . Idempotency: client-generated message id (or Idempotency-Key ) so a resend on flaky mobile networks doesn't duplicate the message — critical here. History: GET /conversations/{id}/messages?before=&limit= — cursor pagination keyed on a monotonic message id/timestamp; immutable messages cache well. Real-time: REST for send + history; push delivery over WebSocket/SSE (or webhooks for bots). At-least-once → recipients dedup by message id. Auth + at 100×: object-level membership check on every read/write; shard by conversation id, fan-out via a queue, cap per-conversation message rate to limit abuse."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for a ride-hailing booking flow (request ride, match, track, complete).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify: a ride is a long-lived state machine (requested → matched → en route → completed/cancelled); location updates are high-frequency; matching is async. Resources: Ride with an explicit status ; POST /rides {pickup, dropoff} → 202 Accepted + a ride in requested (matching can't be synchronous). Idempotency: Idempotency-Key on POST /rides so a double-tap or retry doesn't create two rides / two charges. State + async: poll GET /rides/{id} or subscribe to push for status; this is where HATEOAS earns its keep — links advertise legal transitions (cancel only while cancellable). Tracking: high-rate location via a streaming channel, not REST polling on the hot path; POST /rides/{id}/cancel with policy. Auth + at 100×: object-level checks (rider/driver own this ride); geo-shard the matching service, back-pressure on the dispatch queue."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for a multi-tenant SaaS (tenant isolation, roles, per-tenant config).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify: hard tenant isolation is the cardinal requirement (cross-tenant leakage is a breach), role-based access within a tenant, per-tenant limits/config. Tenancy model: tenant derived from the token/subdomain, never from a client-supplied body field; every query is tenant-scoped server-side. Auth + object-level: OAuth2/OIDC with tenant + role claims; every object access checks tenant ownership and role — BOLA across tenants is the worst failure here. Resources: avoid putting tenant in the path (leaks it); keep it implicit in auth. Standard CRUD with cursor pagination, RFC 9457 errors. Limits/config: per-tenant rate limits and feature flags so a noisy tenant can't degrade others; per-tenant API version pinning eases migrations. At 100×: shard or pool-vs-silo by tenant tier, isolate the largest tenants, and watch for one tenant's hot keys becoming everyone's problem."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for e-commerce cart → order → fulfilment.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Clarify: a multi-step flow with money and inventory; the order-placement step is the consistency-critical one; fulfilment is async and long-running. Resources: Cart (mutable), Order (immutable once placed, with a status state machine), Shipment . POST /carts/{id}/items ; POST /orders {cart_id} → 201 . Idempotency: Idempotency-Key on POST /orders so a retried checkout doesn't place two orders / double-charge — non-negotiable. Concurrency: If-Match on cart edits; reserve inventory at order time with optimistic concurrency to avoid overselling. Async fulfilment: placement returns fast; payment capture + warehouse + shipping run async, statuses surfaced on the order and pushed via webhooks ( order.shipped ), at-least-once → consumers dedup. Auth + at 100×: object-level checks (user owns this cart/order); cursor-paginate order history off a read replica; decouple fulfilment via a durable queue."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Consistency vs availability — how does CAP show up in API design?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Decide per resource/operation , not globally. Money, inventory, and bookings need strong consistency on the write path — refuse or fail ( 409 / 503 ) rather than risk a double-charge or oversell. Feeds, counts, search, and history can be eventually consistent and stay available. Make it visible in the contract: an explicit status / pending state, a \"may be stale\" note, read-your-writes only where it's promised. The senior move is naming which path is which and why."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When is it right to break REST conventions?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When the resource model genuinely doesn't fit and forcing it hurts clarity. Common justified breaks: action/RPC-style sub-resources for state transitions ( POST /orders/{id}/cancel ) where modeling a verb as a noun is contortion; batch endpoints to avoid chatty round-trips; a search endpoint with a body when query strings can't express the filter. The rule: break a convention deliberately, name the cost (less uniform, harder to cache), and keep the rest of the API consistent — don't break it out of laziness."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When does HATEOAS actually earn its cost?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Rarely, and naming that is the senior tell. It pays off with many third-party clients you can't redeploy (evolve URLs/workflows without breaking them), or a genuine state machine where legal actions change with state (a payment that's capturable/refundable/voidable, a ride that's cancellable only while pending) — links express the legal transitions. For version-pinned first-party clients it's dead weight, which is why most production \"REST\" stops at Level 2."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"What changes at 100×?\" — how do you answer this generically?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Walk the bottlenecks in order: hot partitions / keys (a whale tenant or merchant — protect with per-entity caps), reads move to replicas + caching tiers + CDN, writes get sharded (and cursors must stay stable across shards), async work goes behind durable queues with back-pressure and DLQs, and the synchronous critical path gets kept narrow and wrapped in circuit breakers. Close with what you'd measure (p99 per route) to know when to act. This step is the headline senior signal."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does caching / CDN change your API design at scale?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "You design for cacheability: keep reads on GET (so proxies/CDNs can cache), set honest Cache-Control + ETag , and separate immutable resources (long TTL, content-addressed URLs) from volatile ones. Push large/static payloads to a CDN and serve bytes via signed URLs so the API never proxies them. Watch the trade-offs: aggressive caching fights read-your-writes and skews analytics (the 301-redirect problem), and cache invalidation becomes a real design surface."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do read replicas / sharding leak into the API contract?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Replicas introduce replication lag → reads can be stale, so you must either not promise read-your-writes on replica-served reads or route the just-written read to the primary. Sharding constrains queries: cursors must encode the shard/sort key to stay stable, and cross-shard list/aggregation gets expensive — you may need to push filters into the contract or precompute. Surface an explicit status field rather than letting clients infer consistency."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you design rate limiting & abuse protection at scale?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Multi-layer: per-key/tenant token buckets (distributed counters in Redis) returning 429 + RateLimit-* and Retry-After ; per-endpoint cost weighting so an expensive call counts more; a separate burst tier so one abuser can't starve neighbors; and quota tiers by plan. Add edge defenses (WAF, bot detection) and per-account caps so a hot tenant degrades only itself. The fairness goal — protecting neighbors — is the staff framing."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does backward-compatible evolution actually require?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Be additive : new optional fields, new endpoints, new enum values handled tolerantly (clients ignore unknown fields — \"must-ignore\"). Never remove/rename fields, tighten validation, change types, or repurpose a status code within a version — those are breaking and need a version bump. Defaults must preserve old behavior. Contract tests + a published OpenAPI spec catch accidental breaks before they ship."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you deprecate an endpoint or version at scale?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Announce, then measure, then sunset. Mark responses with a Deprecation header and a Sunset date + a link to the migration guide; instrument usage per client so you know who's still on it; reach out to the heaviest callers directly. Give third parties a long window (months), offer a migration path or shim, and only then turn it off — possibly with brownouts to surface stragglers. Never silently break; for internal-only clients the window can be much shorter."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the API for a payments service - charge a card, refund, list transactions.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: clarify first - untrusted merchant callers, write-heavy money path / read-heavy history, charges strongly consistent & exactly-once from the caller's view, server-to-server auth, \"never double-charge.\" Resources: Charge , Refund (sub-resource of a charge), Customer , PaymentMethod ; money as integer minor units + currency, never floats. Endpoints: POST /v1/charges -> 201 sync / 202 async capture; POST /v1/charges/{id}/refunds -> 201 ( 422 over captured total, 409 if fully refunded); GET /v1/charges?customer=&limit= cursor-paginated. Idempotency - the headline: Idempotency-Key on every charge/refund, key->result stored ~24h; a replay returns the original response. Caching/concurrency: settled charges get long-lived Cache-Control + ETag ; mutable metadata needs If-Match -> 412 on a stale tag. Auth + object-level: OAuth2 client-credentials, scopes like charges:write ; verify this account owns {id} or return 404 (don't leak existence); RFC 9457 errors; per-account 429 with limit headers. Async + at 100×: async capture -> 202 + HMAC-signed at-least-once charge.succeeded webhook (consumer dedups); shard idempotency/charge stores by account, watch hot merchants, replica for list reads, queue + DLQ behind webhooks, circuit-break the card-network path."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "The interviewer twists the constraint mid-answer: \"now there are 10M untrusted third-party clients.\" Walk the deltas.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: don't restart - re-anchor to the framework and name what changes -> authZ tightens : strict object-level (BOLA) checks on every access, scoped/least-privilege tokens, return 404 not 403 to avoid leaking existence -> versioning becomes a product promise : additive-first evolution, version bump only on true breaking changes, Deprecation / Sunset headers + a long window because you can't redeploy their clients -> abuse & fairness : per-tenant token-bucket rate limits with RateLimit-* / Retry-After , per-endpoint cost weighting, a burst tier and per-account caps so one abuser can't starve neighbors -> discoverability : a published OpenAPI spec, stable machine-readable error code s, and HATEOAS/links where you need to evolve URLs without breaking pinned clients -> at 100× : distributed limit counters (Redis), edge caching/CDN, shard by tenant and isolate the largest, and watch one tenant's hot keys becoming everyone's problem -> the signal is naming the constraint-sensitive deltas, not re-drawing the API."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <div class="wrap">

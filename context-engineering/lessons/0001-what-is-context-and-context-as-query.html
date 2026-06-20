@@ -85,6 +85,142 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "An engineer says \"let's just use the 1M-token model and paste the whole repo in.\" Where is this wrong?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: real repos exceed even 1M tokens, so you still choose a subset -> cost and latency scale with tokens sent, so you'd pay 5x for mostly-irrelevant text -> long-context recall is uneven — relevant lines in the middle get \"lost in the middle\" -> noise lowers signal: irrelevant code actively degrades answers, it isn't free padding -> the right framing is \"select the smallest sufficient context,\" not \"fit more in.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your AI feature gives wrong answers. A teammate wants to swap to the most expensive model. How do you push back as the senior in the room?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: first ask \"is this a retrieval problem or a reasoning problem?\" -> instrument what context was actually sent for the failing cases — usually the right document wasn't retrieved, so a bigger model just reasons better over the wrong input -> \"right context + cheaper model often beats wrong context + flagship,\" and it's cheaper and faster -> only after retrieval is verified good is model capability the bottleneck worth paying for -> name the trade-off: model upgrade is a flat tax on every call; fixing retrieval compounds across every feature."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Frame \"context is the new database query\" for a VP who knows backend but not LLMs.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: in our stack the DB is the source of truth and the SQL query decides what a request sees -> with LLMs the model is a rented, commodity engine — the same one our competitors use -> so the leverage moves to the \"query\" that feeds it: which of our data we retrieve and how we pack it into a fixed token budget -> that pipeline is where our differentiation, our cost, and most of our bugs now live -> therefore we invest in retrieval & context quality the way we'd invest in schema and indexing, not in chasing model versions."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Define context, context window, token, and working context, and how they relate.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: token = the unit (~3/4 word) everything is counted in -> context window = the fixed max tokens per call, a hard ceiling like total RAM -> context = the actual text you pass for one call (prompt + history + retrieved + tools + question) -> working context = the curated subset you assemble for this turn, the relevant few not all that exists -> relationship: working context is what you choose to spend the window's budget on, and context engineering is the act of choosing it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Besides the documents you retrieve, what else competes for the context window?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the system prompt and instructions -> the tool / function definitions (grow with the number of tools) -> the running conversation history (grows every turn — the quiet budget eater) -> reserved space for the model's own answer -> only what's left is yours for retrieved context, which is why selection, not window size, is the real constraint."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a token, and why are both the window limit and the bill measured in tokens rather than words or characters?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a token is the sub-word chunk the model actually processes — roughly 3/4 of an English word, ~4 characters (illustrative) -> the model never sees raw text; the tokenizer splits input into tokens and the model reads and emits those -> so the natural unit for \"how much fits\" is tokens, which is why the window is a token ceiling, not a character or word count -> cost follows the same unit because you pay per token of input and output processed -> practical consequence: code, JSON, and rare words tokenize less efficiently than plain prose, so a \"small\" file can spend more budget than you'd guess from its character count."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the difference between the context window and the working context?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the context window is the fixed physical ceiling — the max tokens the model accepts for one call, the same for everyone on that model -> the working context is the curated subset you actually assemble for this specific turn: the relevant few documents, not everything that exists -> the window is capacity; the working context is the choice you make inside it -> you can have a huge window and a terrible working context (dump the whole repo) or a small window and an excellent one (the three right files) -> context engineering is the work of building a good working context, and the window only bounds how much room you have to do it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why can't an LLM \"just read\" a 5-million-line codebase to answer a question about it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the model has no I/O — it can't open files; it only sees the window -> the codebase is orders of magnitude larger than any window -> even the largest windows cost more, run slower, and recall the middle poorly -> so the system must select a small relevant subset (files, symbols, dependencies) and pack it -> the problem is \"which slice,\" not \"read it all\" -> this is why Cursor and Claude Code build retrieval rather than leaning on window size."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A context bug and a SQL bug both return wrong data. Why is the context bug operationally scarier?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a SQL bug usually surfaces loudly — wrong rows, an error, a slow query you can profile -> a context bug is silent: the model gives a fluent, confident answer from the wrong input and nothing throws -> there's no stack trace pointing at \"wrong document retrieved\" -> so you have to add the observability a DB gives you for free: log exactly what context was assembled per call, make retrieval auditable, and track retrieval hit-rate, not just end-answer vibes."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Just use a bigger window and the problem goes away.\" Why isn't that a real fix?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a bigger window raises the ceiling, not the relevance — selection still decides what the model reasons over -> cost and latency scale with tokens sent, so a 5x bigger context is roughly a 5x bigger bill and a slower response on every call (numbers illustrative) -> recall is uneven across a long window: facts in the middle get \"lost in the middle\" while the model over-weights the start and end -> irrelevant text is not free padding — it dilutes signal and actively degrades the answer -> and real corpora still exceed any window, so you're choosing a subset regardless -> the fix is a better working context, not more raw capacity; reserve the big window for genuinely large single inputs."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "An answer is wrong. How do you tell whether the context was wrong versus the model being incapable?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: reproduce the failing case and dump exactly what context was assembled and sent — if the needed fact isn't in the window, it's a retrieval/context problem and a bigger model won't help -> control test: paste the correct context in by hand and re-ask the same model; if it now answers correctly, retrieval was the cause, not reasoning -> conversely, if the right context is present and it still fails, that points at a reasoning/capability ceiling (multi-step logic, long synthesis) -> check for \"lost in the middle\" — try moving the relevant chunk to the start/end before blaming the model -> the durable version is instrumentation: log assembled context per call and track retrieval hit-rate so you can attribute failures by class instead of guessing."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Make the case that retrieval quality matters more than model quality — then steelman the opposite.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "For: the model only reasons over what it's given; wrong context -> wrong answer at any model size; the model is a shared commodity while context is your design; retrieval fixes compound across features and cost less than model upgrades. Steelman against: below a capability floor a weak model can't reason over even perfect context (multi-step logic, long synthesis), so there model choice is the binding constraint. Synthesis: fix retrieval first — it's the common cause and the cheapest lever; pay for model capability once retrieval is verified good and reasoning is provably the bottleneck."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A teammate wants to \"fix\" wrong answers by switching to a 1M-token model and pasting the whole repo in. Where does this break at scale?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: real repos still exceed even 1M tokens, so you're back to choosing a subset -> cost and latency scale with tokens sent, so you pay several-fold for mostly-irrelevant text on every call -> long-context recall is uneven — the relevant lines get lost in the middle -> noise actively lowers answer quality; irrelevant code is not free padding -> the durable fix is selection + retrieval evaluation, not a bigger window; reserve the large window for genuinely large single inputs, not as a substitute for retrieval."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A strong engineer wants to spend the quarter upgrading the model to fix quality. Make the principal-level call on model-vs-retrieval investment.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: don't decide by opinion — decide by evidence: instrument the failing cases and attribute them by class (wrong context retrieved vs right context but bad reasoning) before committing a quarter -> in most products the dominant cause is retrieval, not reasoning, so a model upgrade pays a flat tax on every call while leaving the real defect in place -> framing the trade-off: a model swap is a recurring per-token cost increase with a one-time quality bump that any competitor can also rent; retrieval investment is an asset you own that compounds across every feature and lowers cost -> sequence it: fix and evaluate retrieval first because it's the common cause and cheapest lever, then — only if data shows reasoning is the binding constraint — spend on model capability with a clear before/after metric -> redirect the engineer's energy into retrieval evals and observability, which also tells you when the model genuinely is the bottleneck -> the principal move is making it a measured decision with a kill criterion, not a quarter-long bet on a hunch."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the context-retrieval layer for a coding assistant over a 2M-token monorepo with a 200k window.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: you can show ~10% of the repo at most, so retrieval is the product -> index symbols + a dependency graph, not just flat text chunks -> on a query, gather candidates by exact symbol match (lexical) and semantic similarity, then walk imports/call-sites for structural context -> re-rank, then pack within budget: signatures and docstrings over full bodies, the files named in the query first -> reserve fixed budget for history + the answer -> keep the index fresh (re-embed/ctags on change) or read on demand for always-fresh precision -> instrument what was retrieved so you can measure and improve hit-rate -> name the trade-off: pre-indexed embeddings (fast, can go stale) vs read-on-demand (fresh, more round-trips)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the context assembly for a customer-support assistant — knowledge base plus per-customer history — under a fixed token budget.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: start from the budget — partition the window into fixed slices (system prompt & policy, KB passages, customer history, the current question, reserved answer) so no source can starve the others -> two retrieval sources with different shapes: the KB is semi-static, so pre-embed it and retrieve top-N passages by hybrid lexical + semantic match on the question; the customer's history (tickets, orders, entitlements) is volatile and account-scoped, so fetch it live by customer ID rather than embedding it -> re-rank candidates and pack the highest-precision few — summarize or truncate older history rather than dumping the full transcript -> treat exact, high-stakes facts (current plan, balance, open-ticket status) as live look-ups, never stale embeddings -> freshness & correctness: invalidate KB chunks on article edits; scope every retrieval to the authenticated customer so you never leak another account's data -> observability: log the assembled context per call and measure KB hit-rate and \"had-the-right-fact\" rate, not just CSAT -> failure modes: missing KB article -> say \"I don't know / escalate\" rather than hallucinate; conflicting KB vs history -> prefer the customer-specific fact; budget overflow -> drop lowest-ranked KB passages before touching identity/policy -> name the trade-off: pre-indexed KB (fast, can lag edits) vs live history (fresh, exact, more latency), and the privacy line that history must always be retrieved per-customer."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->

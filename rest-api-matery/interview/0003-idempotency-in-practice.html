@@ -63,6 +63,334 @@
   footer{margin-top:2.4rem; font-size:.78rem; color:var(--muted)}
   @media print{ .controls{position:static} .a{display:block} .reveal{display:none} a{color:var(--ink)} }
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What does it mean for an operation to be idempotent?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Making the same request N times has the same effect on server state as making it once. The key word is state , not response: it's about what's left behind, not what comes back."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Safe vs idempotent — what's the difference?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Safe = read-only intent , no intended state change ( GET , HEAD , OPTIONS ). Idempotent = repeating has the same effect as doing it once. Every safe method is idempotent, but not vice-versa: PUT and DELETE change state yet are idempotent."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Which HTTP methods are idempotent?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "GET , HEAD , OPTIONS , PUT , and DELETE . POST is not . PATCH is not guaranteed — it depends on the patch document."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why isn't POST idempotent?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "POST creates — each call can mint a new resource or fire a new side effect (a charge, a transfer). Two identical POST /orders calls produce two orders. Contrast PUT /orders/42 , which replaces a named resource, so repeats converge on one state."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is PATCH \"not guaranteed\" to be idempotent?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It depends entirely on the patch document. A \"set field to X\" patch is idempotent — applying it twice lands on the same state. An \"increment by 1\" patch is not — each application changes state further. The spec leaves it to your semantics, so you can't assume retry-safety."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is \"idempotent\" the same as \"returns the same response\"?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "No — a classic trap. Idempotency is about effect on state , not the response body or status. A repeated DELETE is idempotent even though the first returns 204 and the second may return 404 — the resource is absent either way. Likewise \"no side effects\" is wrong: a GET may still log or update analytics."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why does idempotency matter so much in distributed systems?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because delivery is fundamentally unreliable: a request can succeed while its acknowledgement is lost to a timeout or dropped connection. The client can't tell, so it retries. Idempotency makes that retry safe — it lets you embrace at-least-once delivery instead of chasing the impossible (exactly-once delivery). The request most worth retrying is exactly the one most dangerous to repeat naïvely."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you make a non-idempotent POST safe to retry?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Bolt on the Idempotency-Key pattern : the client sends a unique key per logical operation in an Idempotency-Key header; the server stores key → outcome on first execution and replays the stored response on any retry carrying the same key. Stripe is the canonical implementation."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Who generates the idempotency key, and why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The client — typically a UUID v4 , one key per logical operation , reused across every retry of that one intent. Only the client knows that \"this retry\" and \"the first attempt\" are the same intent; the server can't infer it from two byte-identical requests. Putting key generation on the client is what makes the dedup correct rather than a guess."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk through the server-side flow on first request vs retry.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "First (miss): the server executes the operation inside a transaction that also persists the key plus the resulting status code, response body, and a request fingerprint. Retry (hit): it finds the key, skips execution entirely, and returns the stored response. The duplicate is now harmless."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why store a fingerprint of the request, not just the key?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "So a key can't be smuggled onto a different operation. The server hashes the request parameters and, on a retry, checks the new request matches the stored fingerprint. A reused key with a different body is rejected . Without this, a buggy or malicious client could reuse one key to suppress a genuinely new operation."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why does Stripe keep idempotency keys for ~24h rather than forever?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The TTL must be long enough to cover realistic client retry windows (network outages, queued retries) but short enough to bound storage growth. ~24h comfortably covers retry budgets without keeping a key→response row for every operation ever made. Trade-off: too short and a late retry re-executes; too long and you pay storage forever."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Should the idempotency layer live in the gateway or the service?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A gateway/middleware layer is clean for caching the stored response and short-circuiting retries cheaply, but it can't atomically fold the key-write into the business transaction. The strongest guarantee comes from writing the key in the same transaction as the effect , which forces it into the service/data layer. Common compromise: gateway handles the fast-path replay and concurrency gate, the service owns the transactional write of key+effect. Name the trade-off rather than asserting one is \"correct.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Where do you store the key → response mapping?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A durable store — a DB table, or Redis with a TTL. It must outlive a single process and survive a crash mid-request, because the whole point is to handle a retry that arrives after the original attempt's machine is gone."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Two requests arrive concurrently with the same key — what happens?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "They must not both execute . Guard the key with a unique constraint or a lock: the first wins and writes; the loser either waits for the in-flight result, or gets a 409 Conflict (\"operation in progress\"). This concurrency case — not the header — is where the interview actually lives."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why fold the key-write into the same transaction as the effect?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "So the effect and the record-of-the-effect commit atomically . If they're separate, a crash between \"did the work\" and \"saved the key\" leaves you having executed without a record — the next retry re-executes and duplicates. One transaction makes \"executed\" and \"remembered\" inseparable."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How should you scope idempotency keys?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Per endpoint + per account/tenant . That stops one tenant's key colliding with another's, and stops a key minted for one operation replaying on a different endpoint. Without scoping you risk cross-tenant leakage and accidental collisions."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Should you apply idempotency keys to every endpoint?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "No — only to unsafe, non-idempotent operations: payments, order creation, message sends, transfers. Reads and naturally idempotent writes ( GET , PUT , DELETE ) don't need the machinery; adding it everywhere is wasted storage and complexity."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A retry arrives while the original is still running. Wait or 409 ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Both are defensible. Wait for the in-flight result and return it — best client experience, but holds a connection and risks pile-up. Return 409 \"in progress\" — fail-fast and simple, but pushes the retry decision back to the client. Pick based on operation latency and client tolerance; just don't let the second request execute ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "The process crashes after the effect commits but before responding. What does the next retry see?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "If key+effect were written in one transaction , the retry hits a stored key and replays the original response — correct. If they were separate and only the effect committed, the retry sees a miss and re-executes — duplicate. This is exactly why atomic key+effect persistence is the load-bearing detail, not an optimization."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What goes wrong if you cache the response but the original operation actually failed?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "You'd replay a failure forever, or — worse — cache a 5xx and turn a transient error into a permanent one. Best practice: only persist the key for terminal outcomes ; for in-flight or transient failures, leave the key open (or store a \"pending\" state) so a legitimate retry can complete the operation rather than being told it already failed."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Does idempotency give you exactly-once delivery?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "No — say this out loud, it's the differentiator. Exactly-once delivery is impossible in a distributed system. Idempotency gives you exactly-once effect : the network may deliver five times, but the operation takes effect once."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Write the equation for exactly-once effect.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "exactly-once effect = at-least-once delivery + idempotent processing (dedup on the receiver). You keep retrying until acknowledged, and the receiver deduplicates so duplicates are harmless."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is exactly-once delivery actually impossible?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The sender can never know with certainty whether a lost acknowledgement means \"message not delivered\" or \"delivered, ack lost.\" To be safe it must retry — which risks a duplicate — or not retry — which risks a loss. You cannot avoid both with an unreliable network and crash-prone nodes (the Two Generals problem). So you stop trying to deliver once and make duplicate delivery harmless instead."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "In a message/event consumer, what do you deduplicate on?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "On a stable event id or operation id carried by the message — the broker's idempotency key. The consumer records processed ids (with a TTL) and skips any it has already handled. Same pattern as HTTP idempotency keys, just at the messaging layer."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Brokers advertise \"exactly-once\" — is that a contradiction?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It's exactly-once processing within a closed system , achieved by at-least-once delivery plus dedup/transactional offset commits — not magic exactly-once delivery over the wire. The instant an effect crosses to an external system that isn't part of that transaction (a charge, an email), you're back to at-least-once + idempotency. Know where the boundary is."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is PUT naturally idempotent?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "PUT is a full replace of a named resource. Sending the same representation twice converges on the same state — the second call overwrites with identical content. If the client can name the resource (client-chosen ID), prefer PUT and retries are safe for free."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is DELETE idempotent? What status do you return on a repeat?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Yes — the resource is absent after one or many calls. On a repeat you can return 204 (treat absence as success) or 404 (it genuinely isn't there). The effect is idempotent either way; only the response differs."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "204 vs 404 on a repeated DELETE — name the trade-off.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "204 is friendlier to retries — a flaky client that re-sends gets a clean success and doesn't error-handle a phantom failure. 404 is more truthful — it accurately says \"nothing here now.\" Either is fine; what's not fine is the second DELETE erroring as if it were a failed state change."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you design a create to be naturally safe to retry?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Let the client choose the resource ID and use PUT /orders/{client-id} instead of POST /orders . The client-named ID acts as a built-in idempotency key: a repeated PUT converges instead of creating a duplicate. When the client genuinely can't name the resource, fall back to the Idempotency-Key pattern."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Design for natural idempotency vs bolt on a key\" — how do you decide?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Prefer natural idempotency when the client can name the resource (use PUT ) or the operation is intrinsically convergent — it's simpler, needs no extra store, and can't be misconfigured. Reach for an Idempotency-Key when the operation is irreducibly create-or-side-effect (charge, transfer, message send) and the client can't supply a meaningful ID. Design beats machinery; use machinery only where design can't reach."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Which operations are safe to retry blindly?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Only idempotent ones — naturally idempotent methods, or non-idempotent operations guarded by an Idempotency-Key . Never blindly retry a bare POST ; you risk double charges and duplicate resources."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is exponential backoff with jitter, and why both?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Retry after growing intervals (1s, 2s, 4s…) to give a struggling dependency room to recover — that's exponential backoff . Add jitter (randomized delay) so a fleet of clients doesn't synchronize their retries into a coordinated spike. Backoff alone still lets everyone retry at the same instants."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a thundering herd, and how do retries cause it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When a dependency hiccups, every client's retry timer can fire together , slamming the recovering service with a synchronized wave that knocks it back down — a self-reinforcing outage. Jitter de-synchronizes the herd; backoff thins the rate; circuit breakers stop the herd forming at all."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What should you do when a response carries Retry-After ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Honor it. On a 429 or 503 , Retry-After is the server explicitly telling you when to come back — obeying it beats your own guessed backoff and avoids hammering a service that's asked for room. Treat it as authoritative over your local retry schedule."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does a circuit breaker add on top of backoff?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Backoff still retries; a circuit breaker stops retrying entirely once a downstream is clearly down — it \"opens,\" fails fast, and periodically probes (\"half-open\") before closing again. It protects both the caller (no wasted latency) and the callee (no retry storm), letting it actually recover."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why cap the number of retry attempts?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "To fail fast rather than hammering a dead dependency forever. Unbounded retries waste resources, blow latency budgets, and amplify outages. Bound total attempts (and overall deadline), then surface the failure."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design POST /orders so a flaky client can retry without duplicates.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The client mints an Idempotency-Key (UUID) per order and sends it on every retry of that order. The server keeps a durable key→response store (status + body) with a TTL and a request fingerprint . The first request executes inside a transaction that also writes the key under a unique constraint ; a concurrent or retried request with the same key returns the stored response, waits for the in-flight one, or gets a 409 . Validate the body matches the original so a key can't be reused for a different order. Frame it precisely: this gives exactly-once effect , not exactly-once delivery — pair it client-side with backoff + jitter and honor Retry-After ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design POST /orders so a flaky client can retry without creating duplicate orders.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: the client mints an Idempotency-Key (UUID v4) per logical order and sends it on every retry -> the server keeps a durable key->response store (status + body) with a TTL (~24h) and a request fingerprint so a key can't be reused for a different order -> the first request executes inside a transaction that also writes the key under a unique constraint, making \"executed\" and \"remembered\" atomic -> a concurrent/retried request with the same key replays the stored response, waits for the in-flight one, or gets a 409 - it must never re-execute -> persist the key only for terminal outcomes so a transient failure stays retryable -> scope keys per endpoint + per tenant -> frame it precisely: this delivers exactly-once effect , not exactly-once delivery; pair it client-side with bounded retries, exponential backoff + jitter, and honor Retry-After ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a message/event consumer that must not double-process a payment when the broker delivers at-least-once.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: accept that exactly-once delivery is impossible (Two Generals) - the design goal is exactly-once effect = at-least-once delivery + idempotent processing -> deduplicate on a stable event/operation id carried by the message, recording processed ids with a TTL and skipping any already handled -> fold the dedup write and the business effect into one transaction (or use transactional offset commits) so a crash between \"did the work\" and \"recorded it\" can't duplicate -> recognize the boundary: in-broker exactly-once stops the moment the effect crosses to an external system (a charge, an email), where you're back to at-least-once + an idempotency key -> protect the downstream with backoff + jitter and a circuit breaker to prevent a thundering herd -> only mark terminal outcomes as processed so a transient failure can be retried."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <div class="wrap">
