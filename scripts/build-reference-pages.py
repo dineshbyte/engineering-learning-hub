@@ -76,7 +76,7 @@ def build():
 {THEME}
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>{title} · StackDepth</title>
 <meta name="description" content="{desc}">
 <meta name="keywords" content="{keywords}">
