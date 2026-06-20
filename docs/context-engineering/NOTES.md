@@ -3,7 +3,7 @@
 ## Learner profile
 - Senior Lead Engineer / VP Engineering. Strong backend / distributed-systems / SaaS background.
 - Already owns the AI-agents stack: LLM, tools, agents, agent loop, runtime, memory, MCP, Claude
-  Code architecture, Cursor architecture, AI system basics (see `../ai-agents-mastery`).
+  Code architecture, Cursor architecture, AI system basics (see `../ai-agents`).
 - Entry rung: **Senior → Staff.** Do NOT drag through Foundation hand-holding. Teach trade-offs,
   failure modes, and "name the tension, pick a side."
 

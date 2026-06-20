@@ -3,7 +3,7 @@
 ## Learner profile
 - Senior Lead Engineer / VP Engineering. Strong backend / distributed-systems / SaaS background.
 - Comfortable with: Laravel, SOA, AWS, Kubernetes, CI/CD, queues, microservices, API design.
-- Has just completed a REST-API mastery track in the sibling workspace (`../rest-api-matery`).
+- Has just completed a REST-API mastery track in the sibling workspace (`../rest-api`).
 
 ## How they want to be taught (stated explicitly)
 - **Dependency order, no skipping.** Do not introduce a term until the previous one is owned.

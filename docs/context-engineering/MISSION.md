@@ -35,5 +35,5 @@ AI products succeed or fail — not a vocabulary of buzzwords.
 - Token-level cost optimization math beyond the budgeting mental model.
 
 ## Sibling track
-- Builds directly on `../ai-agents-mastery` (runtime, context window, memory tiers). Context
+- Builds directly on `../ai-agents` (runtime, context window, memory tiers). Context
   Engineering is the deep-dive on the "context" layer that track introduced.
