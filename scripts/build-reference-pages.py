@@ -28,6 +28,14 @@ TRACK_KEYWORDS = {
     'context-engineering': 'context engineering, rag, retrieval augmented generation, embeddings, semantic search, hybrid, bm25, rerank, chunking, context window, tokens, working memory',
     'rest-api': 'rest api, http methods, status codes, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors, rate limiting',
 }
+# visible topic chips per track (the same set the hub card shows) — rendered as
+# multi-colour .ltags chips and led into the keyword list so visible == meta.
+TRACK_TAGS = {
+    'ai-agents': ['Agent loop', 'Tool use', 'MCP', 'Memory', 'Runtime'],
+    'bloom-filters': ['Probabilistic', 'Hashing', 'Sizing', 'LSM reads', 'False positive'],
+    'context-engineering': ['RAG', 'Retrieval', 'Embeddings', 'Chunking', 'Reranking'],
+    'rest-api': ['HTTP', 'Idempotency', 'Pagination', 'Caching', 'Auth'],
+}
 THEME = ('<script>\n'
          "(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();\n"
          "function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}\n"
@@ -50,6 +58,18 @@ def build():
                     if kind == 'GLOSSARY' else
                     f'{name} resources — the high-trust sources (specs, docs, papers) behind the StackDepth {name} lessons.')
             canon = f'{BASE}/{slug}/{kind}.html'
+            # masthead consistency: add a kicker eyebrow + multi-colour topic
+            # chips into the pandoc body so glossary/resources match lessons.
+            tags = TRACK_TAGS.get(slug, [])
+            kicker = f'<div class="kicker">Reference · {word}</div>'
+            chips = ('<div class="ltags">'
+                     + ''.join(f'<span class="lt">{t}</span>' for t in tags)
+                     + '</div>')
+            body = re.sub(r'(<h1\b)', kicker + r'\n\1', body, count=1)
+            body = re.sub(r'(</h1>)', r'\1\n' + chips, body, count=1)
+            keywords = ', '.join([t.lower() for t in tags]
+                                 + [k.strip() for k in TRACK_KEYWORDS.get(slug, '').split(',')
+                                    if k.strip() and k.strip() not in [t.lower() for t in tags]])
             html = f'''<!DOCTYPE html>
 <html lang="en" style="--accent:var({token})">
 <head>
@@ -59,7 +79,7 @@ def build():
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title} · StackDepth</title>
 <meta name="description" content="{desc}">
-<meta name="keywords" content="{word.lower()} {slug.replace('-', ' ')}, {TRACK_KEYWORDS.get(slug, '')}">
+<meta name="keywords" content="{keywords}">
 <link rel="canonical" href="{canon}">
 <meta name="robots" content="index, follow">
 <meta property="og:type" content="article">
