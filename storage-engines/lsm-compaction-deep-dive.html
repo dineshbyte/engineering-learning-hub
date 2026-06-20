@@ -9,24 +9,25 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LSM Compaction — Deep Dive · visual edition</title>
-<meta name="description" content="Your bar: redraw the two compaction strategies, the amplification triangle, and the resurrection bug on a whiteboard — and pick a strategy per table by its…">
+<title>LSM-Tree Compaction Explained · StackDepth</title>
+<meta name="description" content="LSM-tree compaction in depth: leveled vs tiered strategies, the write/read/space amplification trade-off, and the tombstone resurrection bug — pick per table.">
 <meta name="author" content="dineshbyte">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/storage-engines/lsm-compaction-deep-dive.html">
 <meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Learning Hub">
-<meta property="og:title" content="LSM Compaction — Deep Dive · visual edition · Engineering Learning Hub">
-<meta property="og:description" content="Your bar: redraw the two compaction strategies, the amplification triangle, and the resurrection bug on a whiteboard — and pick a strategy per table by its…">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="LSM-Tree Compaction Explained">
+<meta property="og:description" content="LSM-tree compaction in depth: leveled vs tiered strategies, the write/read/space amplification trade-off, and the tombstone resurrection bug — pick per table.">
 <meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/storage-engines/lsm-compaction-deep-dive.html">
 <meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="LSM Compaction — Deep Dive · visual edition · Engineering Learning Hub">
-<meta name="twitter:description" content="Your bar: redraw the two compaction strategies, the amplification triangle, and the resurrection bug on a whiteboard — and pick a strategy per table by its…">
+<meta name="twitter:title" content="LSM-Tree Compaction Explained">
+<meta name="twitter:description" content="LSM-tree compaction in depth: leveled vs tiered strategies, the write/read/space amplification trade-off, and the tombstone resurrection bug — pick per table.">
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../assets/tokens.css">
 <link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/interview.css">
 <style>:root{--accent:var(--track-storage)}
   /* ---- decomposition chips ---- */
   .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
@@ -89,6 +90,118 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Walk the LSM write path from a client write to a key on disk: memtable, WAL, SSTable.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a write appends to the WAL for durability and inserts into the in-RAM memtable (a sorted map — skip list / RB-tree) -> no in-place disk write happens, which is why writes are fast -> when the memtable fills it is frozen and flushed as a new immutable SSTable : an on-disk file sorted by key -> SSTables are never modified, only merged away by compaction -> updates and deletes are also just writes - a newer value or a tombstone is appended and shadows the old one -> the WAL exists so a crash before flush doesn't lose the memtable's contents."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is an SSTable, and why does its sortedness make merging cheap?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: an SSTable is an immutable on-disk file of key,value entries sorted by key , with a sparse index so a key can be found with one seek into a block -> immutability means readers and compaction never contend over in-place edits - you only ever create new files and delete old ones -> because every SSTable is already sorted, merging N of them is a linear k-way merge in one pass, like merge-sort's merge step: no random I/O, no re-sorting -> during the merge you keep the newest value per key and drop shadowed/tombstoned ones -> that \"two sorted files merge in one sequential pass\" is the property the whole engine is built on."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the three amplifications and say who pays for each.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: write amp = disk bytes ÷ app bytes - pays in flash wear and write throughput -> read amp = SSTables (disk reads) touched per logical read - pays in read latency and p99 -> space amp = disk bytes ÷ live data bytes - pays the storage bill -> the iron law (RUM conjecture): lowering one amplification raises another, so there is no free strategy -> every compaction policy is just a chosen point in this trade-off space."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does a Bloom filter do in an LSM read path, and what guarantee does it give?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: each SSTable carries a Bloom filter over its keys; before opening the file a read probes the filter -> the guarantee is one-sided : \"definitely absent\" is never wrong, \"probably present\" can be a false positive -> so a \"definitely absent\" answer lets the read safely skip that SSTable - turning an absent-key read that would touch every run into one (rare) false-positive open -> cost is small: ~10 bits/key for a ~1% false-positive rate (illustrative) -> it attacks read amp specifically for negative/point lookups; it does nothing for range scans, which must still consult overlapping runs."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Compare size-tiered and leveled compaction. When do you pick each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: STCS groups SSTables by size and merges a batch of same-size tables into one of the next size up; tiers grow geometrically so a key is rewritten only ~ log N times -> that buys low write amp but costs space (a big merge needs ~2× the dataset, and stale copies linger across un-merged tiers) and med-high read amp -> LCS keeps levels L1+ non-overlapping, each ~10× the last, merging one table down into the few it overlaps -> that buys low read amp (≤1 file per level + L0) and low space amp (~1.1×) but pays write amp ~T·log_T(N) ≈ 10-30× -> pick STCS for write-heavy ingest with disk to spare; LCS for read-heavy, space-constrained data."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why can leveled compaction guarantee a point read touches at most one SSTable per level?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the LCS invariant: in every level except L0 , SSTables have non-overlapping key ranges -> so each level below L0 is effectively one sorted run with disjoint ranges, and any given key can fall in exactly one table there -> L0 is the exception because it takes raw memtable flushes that do overlap, so a read still scans all of L0 -> total files consulted ≈ all of L0 + one per level ≈ log_T(N) -> that bounded read amp is exactly what you pay the 10-30× write amp to get."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk me through the tombstone resurrection bug and how engines prevent it.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a delete can't erase data in immutable SSTables, so it writes a tombstone : \"this key is dead as of this sequence number\" -> the value still lives in an older SSTable; the tombstone shadows it on read -> the bug: if the tombstone is purged before the older SSTable holding the value is compacted away, the value reappears with nothing to mask it - a deleted record comes back to life -> prevention: only drop a tombstone once compaction has carried it past every older copy of that key (the bottom level / past all older tiers) -> distributed twist: Cassandra holds tombstones for gc_grace_seconds (default 10d) so the delete propagates to every replica before GC, or a node that missed the delete re-replicates the stale value."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What triggers compaction, and why does an LSM under heavy ingest start stalling writes?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: compaction is triggered by structural thresholds, not a timer: STCS fires when enough same-size SSTables accumulate in a tier; LCS fires when a level exceeds its size target; engines also track L0 file count and pending-compaction bytes -> under sustained ingest, writes can outrun compaction's drain rate, so L0 / pending-compaction-bytes crosses a slowdown then stop trigger and the engine applies back-pressure - that's the stall -> what you do not do is \"write faster\" -> the fixes give compaction more throughput (more threads, faster disk), switch to a cheaper-write strategy, or smooth/shard the ingest -> the underlying truth: sustainable write rate is bounded by compaction throughput."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Should one compaction strategy apply to the whole database? Make the principal-level call.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: no - a single global setting forces one corner of the read/write/space triangle on every table regardless of its access pattern -> the senior move is to choose per table / column family, the same way you choose indexes per query -> a write-once-read-rarely audit log wants tiered or time-windowed; a hot read-mostly profile table wants leveled; a TTL'd time-series wants TWCS -> trade-off to name: per-table tuning adds operational surface and reasoning cost, so default sensibly and only override where the workload data justifies it -> the discipline is matching each table's dominant amplification to a measured access pattern, not picking one strategy by reputation."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Leveled is the modern default, just use it everywhere.\" Steelman it, then take it apart.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Steelman: leveled gives bounded read amp (≤1 file/level) and low space amp (~1.1×), so reads are predictable and you don't risk running out of disk during a merge - for read-mostly, space-constrained, SSD-backed data that's genuinely the right corner. Take it apart: leveled pays 10-30× write amplification, so on a write-heavy or ingest-firehose table it burns write bandwidth and flash endurance and is the first to hit write stalls -> \"default everywhere\" forces that write tax onto tables that are mostly appended and rarely read -> for append-only TTL'd time-series, TWCS beats it on all three by dropping whole old buckets at once. Synthesis: there is no globally-best strategy - leveled is one well-chosen point; match the corner to each table's workload and disk profile, and watch write-amp/stall metrics to know when you chose wrong."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Where do TWCS and RocksDB's universal compaction sit relative to STCS and LCS, and why do hybrids exist?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: STCS and LCS are the write-optimized and read/space-optimized corners; real workloads often sit between them, which is why hybrids exist -> RocksDB universal compaction is tiered-leaning - write-friendly, fewer rewrites than leveled, accepting more space/read amp -> Cassandra TWCS buckets SSTables by time window for append-only, TTL'd time-series, so whole old buckets expire and drop at once - achieving low write + low space + low read within a window by exploiting the access pattern rather than beating RUM -> the staff signal is naming the workload that justifies the hybrid (time-series with TTLs, immutable events) instead of treating compaction as one global knob -> the lesson: you escape the triangle only by changing the workload's shape, not by tuning harder."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the compaction strategy for a write-heavy ingest table vs a read-heavy lookup table in the same cluster.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: reject one global setting - choose per table / column family by access pattern -> write-heavy ingest (firehose, mostly appended, rarely point-read): size-tiered, because ~ log N rewrites keep write amp low and protect the sustainable write rate; accept the ~2× space spikes and med-high read amp, and provision disk headroom so a big merge can't exhaust the volume -> if events carry TTLs, prefer TWCS so whole old buckets drop at once - lowest write + space + read within a window -> read-heavy lookup (point reads, latency-sensitive, space-constrained): leveled, paying 10-30× write amp to buy ≤1 file/level read amp and ~1.1× space; lean on Bloom filters and block cache for negative/point lookups -> name the trade-offs: STCS risks running out of disk during merges and slower reads; LCS risks write stalls if the \"read-heavy\" table actually takes heavy writes -> monitor L0/pending-compaction and p99 read per table, and re-tune when a table's real workload diverges from the assumption - sustainable write rate is bounded by compaction throughput, so size compaction I/O to the ingest table's rate."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design deletes + compaction for a Cassandra time-series store that must honor data-retention (TTL) and GDPR-style erasure.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: the workload is append-only, time-ordered, with TTL expiry and occasional hard deletes - that points at TWCS , bucketing SSTables by time window so whole expired windows drop in one operation instead of rewriting live data -> model the partition/clustering key on time so a window maps cleanly to a bucket and old data ages out as a unit -> deletes/expiry produce tombstones ; the resurrection rule still binds - a tombstone must outlive every older copy, so set gc_grace_seconds long enough for the delete to reach every replica (default 10d) before GC, balanced against not letting tombstones pile up -> avoid tombstone-heavy access (no queue/range-scan-over-deleted patterns) since reads scan tombstones and hit tombstone_failure_threshold -> for GDPR erasure, ensure the delete propagates and is actually purged after the older SSTables compact away - TTL alone shadows but doesn't immediately reclaim, so verify space returns after compaction -> name the trade-offs: TWCS gives near-free retention drops but is wrong if the table takes out-of-window updates or random deletes; tuning gc_grace_seconds trades resurrection safety against tombstone read cost and erasure latency."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->
@@ -99,9 +212,9 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 </defs></svg>
 <div class="wrap">
   <nav id="hubbar">
-    <a href="../index.html">&#8592; Learning Hub</a>
+    <a href="../index.html">&#8592; StackDepth</a>
     <span class="pn"><a href="storage-engines-fundamentals.html" title="Storage Engines from first principles">&#8249; Prev</a><span style="color:var(--muted);opacity:.45">Next &#8250;</span></span>
-    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><a href="lsm-compaction-deep-dive.epub">&#8595; EPUB</a><span style="color:var(--muted)">Storage Engines</span></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Storage Engines</span></span>
   </nav>
   <div class="kicker">Deep Dive · Storage Engines · visual edition</div>
   <h1>LSM Compaction — the trade-off you cannot escape</h1>
@@ -445,32 +558,104 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   </section>
 
   <!-- ================= INTERVIEW QUESTIONS ================= -->
-  <h2 class="sec" id="interview">Interview questions on compaction</h2>
-  <p>Use each one <strong>twice</strong>: answer from memory (recall), then ask it of a candidate to test depth. Reveal shows what a strong answer <em>hits</em> — a checklist, not a script.</p>
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
 
-  <details class="iq"><summary>1 · Name the three amplifications and say who pays for each.</summary>
-    <div class="a"><b>Hits:</b> <em>Write</em> = disk bytes ÷ app bytes (flash wear, write throughput); <em>Read</em> = SSTables touched per read (latency, p99); <em>Space</em> = disk bytes ÷ live bytes (storage cost). Bonus: state the iron law — lowering one raises another (RUM).</div></details>
+  <div data-interview>
+    <details class="iq" data-level="core">
+      <summary>Walk the LSM write path from a client write to a key on disk: memtable, WAL, SSTable.</summary>
+      <div class="a">
+        <b>Hit these points:</b> a write appends to the <b>WAL</b> for durability and inserts into the in-RAM <b>memtable</b> (a sorted map — skip list / RB-tree) &rarr; no in-place disk write happens, which is why writes are fast &rarr; when the memtable fills it is frozen and flushed as a new immutable <b>SSTable</b>: an on-disk file sorted by key &rarr; SSTables are never modified, only merged away by compaction &rarr; updates and deletes are also just writes &mdash; a newer value or a tombstone is appended and shadows the old one &rarr; the WAL exists so a crash before flush doesn't lose the memtable's contents.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What is an SSTable, and why does its sortedness make merging cheap?</summary>
+      <div class="a">
+        <b>Hit these points:</b> an SSTable is an immutable on-disk file of <code>key,value</code> entries <em>sorted by key</em>, with a sparse index so a key can be found with one seek into a block &rarr; immutability means readers and compaction never contend over in-place edits &mdash; you only ever create new files and delete old ones &rarr; because every SSTable is already sorted, merging N of them is a linear <em>k-way merge</em> in one pass, like merge-sort's merge step: no random I/O, no re-sorting &rarr; during the merge you keep the newest value per key and drop shadowed/tombstoned ones &rarr; that "two sorted files merge in one sequential pass" is the property the whole engine is built on.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Name the three amplifications and say who pays for each.</summary>
+      <div class="a">
+        <b>Hit these points:</b> <b>write amp</b> = disk bytes ÷ app bytes &mdash; pays in flash wear and write throughput &rarr; <b>read amp</b> = SSTables (disk reads) touched per logical read &mdash; pays in read latency and p99 &rarr; <b>space amp</b> = disk bytes ÷ live data bytes &mdash; pays the storage bill &rarr; the iron law (RUM conjecture): lowering one amplification raises another, so there is no free strategy &rarr; every compaction policy is just a chosen point in this trade-off space.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What does a Bloom filter do in an LSM read path, and what guarantee does it give?</summary>
+      <div class="a">
+        <b>Hit these points:</b> each SSTable carries a Bloom filter over its keys; before opening the file a read probes the filter &rarr; the guarantee is <em>one-sided</em>: "definitely absent" is never wrong, "probably present" can be a false positive &rarr; so a "definitely absent" answer lets the read safely <em>skip</em> that SSTable &mdash; turning an absent-key read that would touch every run into one (rare) false-positive open &rarr; cost is small: ~10 bits/key for a ~1% false-positive rate (illustrative) &rarr; it attacks read amp specifically for negative/point lookups; it does nothing for range scans, which must still consult overlapping runs.
+      </div>
+    </details>
 
-  <details class="iq"><summary>2 · Compare size-tiered and leveled compaction. When do you pick each?</summary>
-    <div class="a"><b>Hits:</b> STCS groups by size, merges same-size tables upward → low write amp (~log N) but high space (~2× spikes) and med–high read. LCS keeps non-overlapping levels ~10× each → low read (≤1 file/level) and low space (~1.1×) but write amp 10–30×. STCS for write-heavy with disk to spare; LCS for read-heavy and space-constrained.</div></details>
+    <details class="iq" data-level="senior">
+      <summary>Compare size-tiered and leveled compaction. When do you pick each?</summary>
+      <div class="a">
+        <b>Hit these points:</b> <b>STCS</b> groups SSTables by size and merges a batch of same-size tables into one of the next size up; tiers grow geometrically so a key is rewritten only ~<code>log N</code> times &rarr; that buys <em>low write amp</em> but costs space (a big merge needs ~2× the dataset, and stale copies linger across un-merged tiers) and med&ndash;high read amp &rarr; <b>LCS</b> keeps levels L1+ non-overlapping, each ~10× the last, merging one table down into the few it overlaps &rarr; that buys <em>low read amp</em> (≤1 file per level + L0) and <em>low space amp</em> (~1.1×) but pays write amp ~T·log_T(N) ≈ 10&ndash;30× &rarr; pick STCS for write-heavy ingest with disk to spare; LCS for read-heavy, space-constrained data.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Why can leveled compaction guarantee a point read touches at most one SSTable per level?</summary>
+      <div class="a">
+        <b>Hit these points:</b> the LCS invariant: in every level <em>except L0</em>, SSTables have non-overlapping key ranges &rarr; so each level below L0 is effectively one sorted run with disjoint ranges, and any given key can fall in exactly one table there &rarr; L0 is the exception because it takes raw memtable flushes that <em>do</em> overlap, so a read still scans all of L0 &rarr; total files consulted ≈ all of L0 + one per level ≈ <code>log_T(N)</code> &rarr; that bounded read amp is exactly what you pay the 10&ndash;30× write amp to get.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Walk me through the tombstone resurrection bug and how engines prevent it.</summary>
+      <div class="a">
+        <b>Hit these points:</b> a delete can't erase data in immutable SSTables, so it writes a <b>tombstone</b>: "this key is dead as of this sequence number" &rarr; the value still lives in an older SSTable; the tombstone shadows it on read &rarr; the bug: if the tombstone is purged before the older SSTable holding the value is compacted away, the value reappears with nothing to mask it &mdash; a deleted record comes back to life &rarr; prevention: only drop a tombstone once compaction has carried it past every older copy of that key (the bottom level / past all older tiers) &rarr; distributed twist: Cassandra holds tombstones for <code>gc_grace_seconds</code> (default 10d) so the delete propagates to every replica before GC, or a node that missed the delete re-replicates the stale value.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>What triggers compaction, and why does an LSM under heavy ingest start stalling writes?</summary>
+      <div class="a">
+        <b>Hit these points:</b> compaction is triggered by structural thresholds, not a timer: STCS fires when enough same-size SSTables accumulate in a tier; LCS fires when a level exceeds its size target; engines also track L0 file count and pending-compaction bytes &rarr; under sustained ingest, writes can outrun compaction's drain rate, so L0 / pending-compaction-bytes crosses a slowdown then stop trigger and the engine applies back-pressure &mdash; that's the stall &rarr; what you do <em>not</em> do is "write faster" &rarr; the fixes give compaction more throughput (more threads, faster disk), switch to a cheaper-write strategy, or smooth/shard the ingest &rarr; the underlying truth: sustainable write rate is bounded by compaction throughput.
+      </div>
+    </details>
 
-  <details class="iq"><summary>3 · Why can leveled compaction guarantee a point read touches at most one SSTable per level?</summary>
-    <div class="a"><b>Hits:</b> the non-overlapping-key-range invariant in L1+. Each level is one sorted run with disjoint ranges, so a key falls in exactly one table per level. L0 is the exception (raw flushes overlap), which is why a read still scans all of L0. Total ≈ <code>log_T(N)</code> files.</div></details>
+    <details class="iq" data-level="staff">
+      <summary>Should one compaction strategy apply to the whole database? Make the principal-level call.</summary>
+      <div class="a">
+        <b>Hit these points:</b> no &mdash; a single global setting forces one corner of the read/write/space triangle on every table regardless of its access pattern &rarr; the senior move is to choose per table / column family, the same way you choose indexes per query &rarr; a write-once-read-rarely audit log wants tiered or time-windowed; a hot read-mostly profile table wants leveled; a TTL'd time-series wants TWCS &rarr; trade-off to name: per-table tuning adds operational surface and reasoning cost, so default sensibly and only override where the workload data justifies it &rarr; the discipline is matching each table's dominant amplification to a measured access pattern, not picking one strategy by reputation.
+      </div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>"Leveled is the modern default, just use it everywhere." Steelman it, then take it apart.</summary>
+      <div class="a">
+        <b>Steelman:</b> leveled gives bounded read amp (≤1 file/level) and low space amp (~1.1×), so reads are predictable and you don't risk running out of disk during a merge &mdash; for read-mostly, space-constrained, SSD-backed data that's genuinely the right corner. <b>Take it apart:</b> leveled pays 10&ndash;30× write amplification, so on a write-heavy or ingest-firehose table it burns write bandwidth and flash endurance and is the first to hit write stalls &rarr; "default everywhere" forces that write tax onto tables that are mostly appended and rarely read &rarr; for append-only TTL'd time-series, TWCS beats it on all three by dropping whole old buckets at once. <b>Synthesis:</b> there is no globally-best strategy &mdash; leveled is one well-chosen point; match the corner to each table's workload and disk profile, and watch write-amp/stall metrics to know when you chose wrong.
+      </div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>Where do TWCS and RocksDB's universal compaction sit relative to STCS and LCS, and why do hybrids exist?</summary>
+      <div class="a">
+        <b>Hit these points:</b> STCS and LCS are the write-optimized and read/space-optimized corners; real workloads often sit between them, which is why hybrids exist &rarr; RocksDB <em>universal</em> compaction is tiered-leaning &mdash; write-friendly, fewer rewrites than leveled, accepting more space/read amp &rarr; Cassandra <em>TWCS</em> buckets SSTables by time window for append-only, TTL'd time-series, so whole old buckets expire and drop at once &mdash; achieving low write + low space + low read <em>within a window</em> by exploiting the access pattern rather than beating RUM &rarr; the staff signal is naming the workload that justifies the hybrid (time-series with TTLs, immutable events) instead of treating compaction as one global knob &rarr; the lesson: you escape the triangle only by changing the workload's shape, not by tuning harder.
+      </div>
+    </details>
 
-  <details class="iq"><summary>4 · Walk me through the tombstone resurrection bug and how engines prevent it.</summary>
-    <div class="a"><b>Hits:</b> deletes write a tombstone (can't erase immutable SSTables). The tombstone must outlive every older SSTable still holding the value; purge early and the old value reappears unmasked. Prevention: only drop a tombstone once compaction carries it past all older copies (bottom level / past every older tier). Distributed: <code>gc_grace_seconds</code> (default 10d) so the delete reaches every replica before GC.</div></details>
-
-  <details class="iq"><summary>5 · "My Cassandra queue table's reads suddenly time out." Diagnose it.</summary>
-    <div class="a"><b>Hits:</b> tombstone overload. Write/read/delete patterns bury a partition in tombstones, which are scanned on every range read; Cassandra aborts past <code>tombstone_failure_threshold</code> (default 100k). Fixes: don't model queues on Cassandra; use TWCS/TTL, avoid range scans over deleted ranges, reconsider the access pattern.</div></details>
-
-  <details class="iq"><summary>6 · An LSM DB that was fast all week now shows write stalls under heavy ingest. What's happening, and what do you NOT do?</summary>
-    <div class="a"><b>Hits:</b> back-pressure — L0 / pending-compaction-bytes crossed a slowdown/stop trigger because writes outran compaction's drain rate. Do NOT "write faster." Give compaction more I/O (threads, faster disk), switch to a cheaper-write strategy, or smooth ingest. The truth: sustainable write rate is bounded by compaction throughput.</div></details>
-
-  <details class="iq"><summary>7 · Should one compaction strategy apply to the whole database? Defend your answer.</summary>
-    <div class="a"><b>Hits:</b> no — choose per table / column family by access pattern, like choosing indexes per query. A write-once-read-rarely audit log (tiered/TWCS) and a hot read-mostly profile table (leveled) have opposite needs. A single global setting forces one corner of the triangle on everyone.</div></details>
-
-  <details class="iq"><summary>8 · Where do TWCS and RocksDB's universal compaction sit relative to STCS and LCS?</summary>
-    <div class="a"><b>Hits:</b> hybrids between the corners. Universal is tiered-leaning (write-friendly). TWCS buckets SSTables by time window for append-only, TTL'd time-series — whole old buckets drop at once, giving low write + low space + low read within a window. Naming the workload (time-series with TTLs) is the senior signal.</div></details>
+    <div class="designrubric" data-level="design">
+      <b>Design-round framework</b> — drive any compaction-strategy prompt through these, out loud:
+      <ol>
+        <li>Clarify the workload per table: write:read ratio, point vs range reads, update/delete rate, TTLs.</li>
+        <li>State the SLO and budget: p99 read latency, sustainable write rate, disk headroom.</li>
+        <li>Map onto RUM: which of read/write/space can you afford to spend, which must stay low.</li>
+        <li>Pick the corner: STCS (write-heavy), LCS (read/space-heavy), TWCS (time-series + TTL), or a hybrid.</li>
+        <li>Handle deletes: tombstone GC vs replication window (<code>gc_grace_seconds</code>), avoid tombstone-heavy access patterns.</li>
+        <li>Protect reads: Bloom filters, block cache, partition/clustering key so hot data sits in fresh runs.</li>
+        <li>Trip-wires: L0 / pending-compaction bytes, write stalls, space-amp spikes during merges — and the metric that says re-tune.</li>
+      </ol>
+    </div>
+    <details class="iq" data-level="design">
+      <summary>Design the compaction strategy for a write-heavy ingest table vs a read-heavy lookup table in the same cluster.</summary>
+      <div class="a">
+        <b>A strong answer covers:</b> reject one global setting &mdash; choose per table / column family by access pattern &rarr; <b>write-heavy ingest</b> (firehose, mostly appended, rarely point-read): size-tiered, because ~<code>log N</code> rewrites keep write amp low and protect the sustainable write rate; accept the ~2× space spikes and med&ndash;high read amp, and provision disk headroom so a big merge can't exhaust the volume &rarr; if events carry TTLs, prefer TWCS so whole old buckets drop at once &mdash; lowest write + space + read within a window &rarr; <b>read-heavy lookup</b> (point reads, latency-sensitive, space-constrained): leveled, paying 10&ndash;30× write amp to buy ≤1 file/level read amp and ~1.1× space; lean on Bloom filters and block cache for negative/point lookups &rarr; name the trade-offs: STCS risks running out of disk during merges and slower reads; LCS risks write stalls if the "read-heavy" table actually takes heavy writes &rarr; monitor L0/pending-compaction and p99 read per table, and re-tune when a table's real workload diverges from the assumption &mdash; sustainable write rate is bounded by compaction throughput, so size compaction I/O to the ingest table's rate.
+      </div>
+    </details>
+    <details class="iq" data-level="design">
+      <summary>Design deletes + compaction for a Cassandra time-series store that must honor data-retention (TTL) and GDPR-style erasure.</summary>
+      <div class="a">
+        <b>A strong answer covers:</b> the workload is append-only, time-ordered, with TTL expiry and occasional hard deletes &mdash; that points at <b>TWCS</b>, bucketing SSTables by time window so whole expired windows drop in one operation instead of rewriting live data &rarr; model the partition/clustering key on time so a window maps cleanly to a bucket and old data ages out as a unit &rarr; deletes/expiry produce <b>tombstones</b>; the resurrection rule still binds &mdash; a tombstone must outlive every older copy, so set <code>gc_grace_seconds</code> long enough for the delete to reach every replica (default 10d) before GC, balanced against not letting tombstones pile up &rarr; avoid tombstone-heavy access (no queue/range-scan-over-deleted patterns) since reads scan tombstones and hit <code>tombstone_failure_threshold</code> &rarr; for GDPR erasure, ensure the delete propagates and is actually purged after the older SSTables compact away &mdash; TTL alone shadows but doesn't immediately reclaim, so verify space returns after compaction &rarr; name the trade-offs: TWCS gives near-free retention drops but is wrong if the table takes out-of-window updates or random deletes; tuning <code>gc_grace_seconds</code> trades resurrection safety against tombstone read cost and erasure latency.
+      </div>
+    </details>
+  </div>
 
   <!-- ================= INTERACTIVE RECALL ================= -->
   <h2 class="sec" id="quiz">Retrieval practice — mix the levels</h2>
@@ -566,7 +751,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   </div>
 
   <div class="nav">
-    <span>📄 Supplement to <a href="book-3-storage-engines-fundamentals.epub">Book 3</a>, Lessons 3–4 · <a href="../index.html">Learning Hub</a></span>
+    <span>📄 Supplement to , Lessons 3–4 · <a href="../index.html">StackDepth</a></span>
     <span><em>Next ▸ Bloom filters &amp; the read path (ask me to build it)</em></span>
   </div>
 
@@ -595,5 +780,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     });
   });
 </script>
+<script src="../assets/interview.js" defer></script>
 </body>
 </html>

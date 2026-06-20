@@ -9,24 +9,25 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lesson 3 · How Coding Agents Work</title>
+<title>How Coding Agents Work: Claude Code, Cursor, MCP · StackDepth</title>
 <meta name="description" content="Your bar: explain step-by-step how Claude Code executes a real task, how Cursor retrieves context from a large repo, and how MCP turns any business function…">
 <meta name="author" content="dineshbyte">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/ai-agents-mastery/lessons/0003-how-coding-agents-work.html">
 <meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Learning Hub">
-<meta property="og:title" content="Lesson 3 · How Coding Agents Work · Engineering Learning Hub">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="How Coding Agents Work: Claude Code, Cursor, MCP · StackDepth">
 <meta property="og:description" content="Your bar: explain step-by-step how Claude Code executes a real task, how Cursor retrieves context from a large repo, and how MCP turns any business function…">
 <meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/ai-agents-mastery/lessons/0003-how-coding-agents-work.html">
 <meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Lesson 3 · How Coding Agents Work · Engineering Learning Hub">
+<meta name="twitter:title" content="How Coding Agents Work: Claude Code, Cursor, MCP · StackDepth">
 <meta name="twitter:description" content="Your bar: explain step-by-step how Claude Code executes a real task, how Cursor retrieves context from a large repo, and how MCP turns any business function…">
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../../assets/tokens.css">
 <link rel="stylesheet" href="../../assets/lesson.css">
+<link rel="stylesheet" href="../../assets/interview.css">
 <style>
   :root{--accent:var(--track-agents)}
 
@@ -84,6 +85,166 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "A user reports Claude Code is reading files that seem irrelevant to the task. What is likely causing this and how would you fix it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Without a good initial prompt + CLAUDE.md scoping, the agent reads broadly to form context. Fix by: providing a tighter task description ; using CLAUDE.md to specify project structure so Claude knows where relevant code lives; using /compact to drop old context that is pulling in stale references; and breaking the task into smaller scoped steps so each loop iteration has a clear, bounded goal."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does Claude Code handle a failing test during an iterative fix loop?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It reads the test output (stderr/stdout returned by the Bash tool), identifies which assertion failed and why, re-reads the relevant source code if needed, forms a new hypothesis, makes a targeted edit, and re-runs the test — repeating until all tests pass or the max iteration limit is hit. Each iteration adds tool results to the context window , consuming token budget. Long loops on large repos can exhaust context; breaking the task into focused sub-tasks is the mitigation."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When would you use Claude Code instead of Cursor for a coding task?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Use Claude Code when you need: precise iterative fixing (run tests, read output, fix, repeat); tasks that require Bash/shell commands or git operations; or when the task is well-scoped and the correct files are already known. Use Cursor when you need: broad codebase exploration; multi-file refactors where you don't know which files are relevant; or IDE-integrated tab completion and inline edits during active development."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is the main weakness of an embedding-based retrieval system for code?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Semantic similarity does not equal logical or structural relevance. An embedding search for \"authentication\" may miss files that implement auth logic but use domain-specific naming conventions. Import graphs and call graphs carry structural relationship information that embeddings do not capture. Cursor partially mitigates this with additional signals (file structure, user-provided @mentions), but it remains a known limitation — especially in large monorepos with non-obvious dependency chains."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your team is building a billing agent. Walk me through how you'd expose the billing system to the agent using MCP.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "(1) Identify the business functions : get_invoice, apply_credit, retry_charge, get_customer_balance. (2) Implement each as a function with validated input/output (e.g. TypeScript or Python with schema validation). (3) Create an MCP server using an MCP SDK; declare each function as an MCP Tool with name, description, and JSON schema for args. (4) Configure the agent runtime to connect to the MCP server via stdio or SSE. (5) At runtime, the agent discovers tools via tools/list ; the LLM sees them as available capabilities. (6) When the LLM calls get_invoice , the MCP client routes the call to the server, executes the function, and returns the structured result."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is the difference between an MCP Tool, an MCP Resource, and an MCP Prompt?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Tool = a function the agent can invoke to take an action or query data (read or write); it has a name, description, and JSON schema, and returns a result. Resource = a URI-addressable, read-only data source (like a file or database row) that the host application chooses to surface to the model — fetched, not invoked. Prompt = a pre-authored template for a common task the user or agent can invoke to get a structured starting prompt (e.g. \"draft a support reply\"). Tools are the most commonly used; Resources and Prompts add richness for advanced server-agent integration."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk the agent tool-loop in one breath: what happens between the LLM and the runtime on each turn?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the LLM is the reasoning model — it doesn't act, it emits a tool call -> the runtime (the orchestration layer) validates the call against the tool's schema, then executes it -> the result is appended to the context as the next observation -> the runtime re-invokes the LLM with that result -> loop repeats until the LLM returns a final answer instead of a tool call."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is Claude Code, concretely — what is the LLM and what is the runtime?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: Claude Code = Claude (the LLM, the reasoning model) + a runtime that exposes filesystem read/write, Bash/terminal, git, and MCP as tools -> the LLM chooses which tool to call; the runtime executes it on your machine with your permissions -> it reads files on demand via tool calls — no pre-built index -> you are the approval gate."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does Cursor get context from a large repo, and how is that different from Claude Code?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: Cursor pre-builds an embedding index of the repo at open time (chunk -> embed -> vector store) -> at query time it embeds the question and does a similarity search, then assembles the top chunks into the window -> retrieval is a fast lookup, not a file-by-file read -> Claude Code instead reads-on-demand: it fetches live file contents via tools each turn, so it always sees current state but pays a round-trip per read."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name MCP's three primitives and say what each one is.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: MCP is a protocol exposing tools, resources, and prompts to AI clients -> Tool = an invokable function with a name + JSON schema that takes an action or queries data -> Resource = host-selected, read-only data the client surfaces to the model (a URI like file://… or a DB row) — fetched, not freely browsed by the agent -> Prompt = a pre-authored template the user/agent invokes (e.g. \"draft a support reply\")."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Cursor's pre-built embedding index vs Claude Code's read-on-demand — what's the real trade-off?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: index-first buys speed and scale — similarity search is ~ms even on a 1M-token repo — at the cost of freshness : the index goes stale after edits and must be re-indexed -> read-on-demand is always current because it fetches live file state, but each read is a round-trip, so latency and token cost grow with how much it has to explore -> embeddings also retrieve by semantic similarity, which can miss structurally-related code under domain-specific names -> pick by workload: broad exploration/refactor on a settled repo -> index; precise, verify-as-you-go fixes on changing code -> read-on-demand."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why does MCP matter? What was the world like before it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: before MCP every framework had its own tool format — OpenAI function calling, Anthropic tool use, LangChain tools — so each integration was rewritten per agent (NxM glue) -> MCP standardizes the tool-agent interface: write the server once, any MCP-compatible client consumes it -> it decouples capability (the server owns it) from invocation (the runtime owns it) over plain JSON-RPC -> the server is ordinary code that doesn't know it's talking to an LLM -> net effect: tool integration becomes a reusable ecosystem instead of bespoke per-vendor wiring."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "In the loop, who decides when to stop — and why does that placement matter?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the LLM adapts to errors (errors are just observations fed back), but it does not decide when to stop -> hard limits live in the runtime: loop cap, no-progress detection, wall-clock timeout, cost ceiling, user interrupt -> left alone the model will retry the same failing command forever or burn the token budget -> for mutating tools (a retried git push or a charge) idempotency is what separates a safe retry from an incident -> the design rule: agency in the model, stops in the runtime."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "An agent keeps reading files that seem irrelevant to the task. Diagnose it.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: read-on-demand means a vague task forces the agent to explore broadly to build context -> tighten the task description so the goal is bounded -> use a project scoping file (CLAUDE.md) so it knows where relevant code lives instead of crawling to find out -> compact/drop stale context that's pulling in old references -> split the work into smaller scoped steps so each loop iteration has a clear target -> note the cost angle: every extra read adds tool results to the window and eats token budget on a long loop."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the tool registry and guardrails for a coding agent that runs unattended. What goes in?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: registry = each tool declared with a strict input/output schema the runtime validates before execution (reject malformed calls, don't pass them through) -> classify tools read vs mutating; gate mutating ones (write, push, deploy) behind approval or dry-run, and make them idempotent so a retry isn't a second action -> least privilege: scope filesystem and shell access, deny destructive commands, bound the blast radius -> runtime-owned limits: loop cap, per-tool timeout, retry-with-backoff, cost ceiling, no-progress kill -> observability: log every tool call + result for audit and replay -> the principle — the model proposes, the runtime authorizes, validates, bounds, and records."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You're choosing a context strategy for a huge monorepo. How do you reason it through?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: no single answer — place it on the freshness-vs-round-trips axis for the dominant workload -> a huge, relatively stable repo with lots of exploration favors a pre-built embedding index for ms-scale retrieval; but embeddings miss structural relationships, so layer in structural signals (import/call graphs, path filters, @mentions) rather than relying on similarity alone -> for surgical edits on actively-changing files, read-on-demand avoids stale-index risk -> the pragmatic design is hybrid: index for \"find the candidate files,\" read-on-demand to load the exact current versions before editing -> account for re-index cost/cadence and the token budget each strategy spends per task."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A teammate says \"just give the agent a Resource for the whole DB and let it read whatever it needs.\" Push back.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: that misreads the primitive — an MCP Resource is host-selected, read-only data the client surfaces, not a pipe the agent browses freely -> unbounded reads blow the token budget and bury signal in noise, degrading answers -> uncurated data is a security/privacy surface: the agent could surface PII or rows it shouldn't -> for parameterized, action-shaped access you want a Tool with a schema and authorization, not a firehose Resource -> the right design: expose narrow Tools for queries (validated, scoped, audited) and surface only specific Resources the host deliberately chooses — capability stays decoupled from invocation."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design an MCP server that exposes a business system (say, a billing platform) to an agent.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: identify the business functions and split them — reads (get_invoice, get_customer_balance) vs mutating (apply_credit, retry_charge) -> implement each as a Tool with a validated JSON input/output schema; make mutating ones idempotent (idempotency key) so a retried call isn't a double charge -> expose only deliberately-chosen, read-only Resources (e.g. a specific invoice doc) rather than the whole DB; authorize and scope every call -> declare the server with an MCP SDK; the client discovers tools via tools/list and the LLM sees them as capabilities -> runtime concerns: transport (stdio/SSE), per-tool timeouts, audit logging of every call+result, and approval gates on money-moving actions -> call out failure modes: retries on charges, stale balances, and partial multi-step operations."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a coding agent tailored to one specific codebase (e.g. a large internal monorepo). What do you build?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: start from the codebase's shape — size, change rate, language(s), test setup — and pick a context strategy on the freshness-vs-round-trips axis -> likely hybrid: a pre-built embedding index plus structural signals (import/call graphs, path scoping) to find candidate files, then read-on-demand to load current versions before editing -> a project scoping file so the agent knows conventions and where things live, cutting wasted exploration -> tool registry scoped to this repo: read/write files, run the test command, git, and a few repo-specific Tools (codegen, lint), all schema-validated -> loop with runtime-owned stops and a verify step (run tests, git diff ) before reporting -> guardrails: least-privilege shell, approval before pushing, audit log -> trade-offs: index staleness vs read latency, and how re-index cadence is triggered by large changes."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->
@@ -96,7 +257,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
 <div class="wrap">
   <nav id="hubbar">
-    <a href="../../index.html">&#8592; Learning Hub</a>
+    <a href="../../index.html">&#8592; StackDepth</a>
     <span class="pn"><a href="0002-agent-runtime-and-context.html" title="Agent Runtime, Context &amp; Memory">&#8249; Prev</a><a href="0004-agent-systems-and-production.html" title="Multi-agent Systems &amp; Production">Next &#8250;</a></span>
     <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">AI Agents</span></span>
   </nav>
@@ -722,50 +883,94 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     </div>
   </div>
 
-  <!-- ============ INTERVIEW QUESTIONS ============ -->
-  <h2 class="sec" id="interview">Interview questions — Modules 4–6</h2>
+  <!-- ============ INTERVIEW ============ -->
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
 
-  <details class="iq">
-    <summary>A user reports Claude Code is reading files that seem irrelevant to the task. What is likely causing this and how would you fix it?</summary>
-    <div class="a">
-      Without a good initial prompt + CLAUDE.md scoping, the agent reads broadly to form context. Fix by: <b>providing a tighter task description</b>; using <b>CLAUDE.md to specify project structure</b> so Claude knows where relevant code lives; using <b>/compact</b> to drop old context that is pulling in stale references; and <b>breaking the task into smaller scoped steps</b> so each loop iteration has a clear, bounded goal.
-    </div>
-  </details>
+  <div data-interview>
 
-  <details class="iq">
-    <summary>How does Claude Code handle a failing test during an iterative fix loop?</summary>
-    <div class="a">
-      It reads the test output (stderr/stdout returned by the Bash tool), identifies which assertion failed and why, re-reads the relevant source code if needed, forms a new hypothesis, makes a targeted edit, and re-runs the test — repeating until all tests pass or the max iteration limit is hit. <b>Each iteration adds tool results to the context window</b>, consuming token budget. Long loops on large repos can exhaust context; breaking the task into focused sub-tasks is the mitigation.
-    </div>
-  </details>
+    <!-- ===== CORE ===== -->
+    <details class="iq" data-level="core">
+      <summary>Walk the agent tool-loop in one breath: what happens between the LLM and the runtime on each turn?</summary>
+      <div class="a"><b>Hit these points:</b> the LLM is the reasoning model — it doesn't act, it emits a tool call &rarr; the runtime (the orchestration layer) validates the call against the tool's schema, then executes it &rarr; the result is appended to the context as the next observation &rarr; the runtime re-invokes the LLM with that result &rarr; loop repeats until the LLM returns a final answer instead of a tool call.</div>
+    </details>
 
-  <details class="iq">
-    <summary>When would you use Claude Code instead of Cursor for a coding task?</summary>
-    <div class="a">
-      Use <b>Claude Code</b> when you need: precise iterative fixing (run tests, read output, fix, repeat); tasks that require Bash/shell commands or git operations; or when the task is well-scoped and the correct files are already known. Use <b>Cursor</b> when you need: broad codebase exploration; multi-file refactors where you don't know which files are relevant; or IDE-integrated tab completion and inline edits during active development.
-    </div>
-  </details>
+    <details class="iq" data-level="core">
+      <summary>What is Claude Code, concretely — what is the LLM and what is the runtime?</summary>
+      <div class="a"><b>Hit these points:</b> Claude Code = Claude (the LLM, the reasoning model) + a runtime that exposes filesystem read/write, Bash/terminal, git, and MCP as tools &rarr; the LLM chooses which tool to call; the runtime executes it on your machine with your permissions &rarr; it reads files on demand via tool calls — no pre-built index &rarr; you are the approval gate.</div>
+    </details>
 
-  <details class="iq">
-    <summary>What is the main weakness of an embedding-based retrieval system for code?</summary>
-    <div class="a">
-      <b>Semantic similarity does not equal logical or structural relevance.</b> An embedding search for "authentication" may miss files that implement auth logic but use domain-specific naming conventions. Import graphs and call graphs carry structural relationship information that embeddings do not capture. Cursor partially mitigates this with additional signals (file structure, user-provided @mentions), but it remains a known limitation — especially in large monorepos with non-obvious dependency chains.
-    </div>
-  </details>
+    <details class="iq" data-level="core">
+      <summary>How does Cursor get context from a large repo, and how is that different from Claude Code?</summary>
+      <div class="a"><b>Hit these points:</b> Cursor pre-builds an embedding index of the repo at open time (chunk &rarr; embed &rarr; vector store) &rarr; at query time it embeds the question and does a similarity search, then assembles the top chunks into the window &rarr; retrieval is a fast lookup, not a file-by-file read &rarr; Claude Code instead reads-on-demand: it fetches live file contents via tools each turn, so it always sees current state but pays a round-trip per read.</div>
+    </details>
 
-  <details class="iq">
-    <summary>Your team is building a billing agent. Walk me through how you'd expose the billing system to the agent using MCP.</summary>
-    <div class="a">
-      (1) <b>Identify the business functions</b>: get_invoice, apply_credit, retry_charge, get_customer_balance. (2) <b>Implement each as a function</b> with validated input/output (e.g. TypeScript or Python with schema validation). (3) <b>Create an MCP server</b> using an MCP SDK; declare each function as an MCP Tool with name, description, and JSON schema for args. (4) <b>Configure the agent runtime</b> to connect to the MCP server via stdio or SSE. (5) At runtime, the agent discovers tools via <code>tools/list</code>; the LLM sees them as available capabilities. (6) When the LLM calls <code>get_invoice</code>, the MCP client routes the call to the server, executes the function, and returns the structured result.
-    </div>
-  </details>
+    <details class="iq" data-level="core">
+      <summary>Name MCP's three primitives and say what each one is.</summary>
+      <div class="a"><b>Hit these points:</b> MCP is a protocol exposing tools, resources, and prompts to AI clients &rarr; <b>Tool</b> = an invokable function with a name + JSON schema that takes an action or queries data &rarr; <b>Resource</b> = host-selected, read-only data the client surfaces to the model (a URI like <code>file://…</code> or a DB row) — fetched, not freely browsed by the agent &rarr; <b>Prompt</b> = a pre-authored template the user/agent invokes (e.g. "draft a support reply").</div>
+    </details>
 
-  <details class="iq">
-    <summary>What is the difference between an MCP Tool, an MCP Resource, and an MCP Prompt?</summary>
-    <div class="a">
-      <b>Tool</b> = a function the agent can invoke to take an action or query data (read or write); it has a name, description, and JSON schema, and returns a result. <b>Resource</b> = a URI-addressable, read-only data source (like a file or database row) that the host application chooses to surface to the model — fetched, not invoked. <b>Prompt</b> = a pre-authored template for a common task the user or agent can invoke to get a structured starting prompt (e.g. "draft a support reply"). Tools are the most commonly used; Resources and Prompts add richness for advanced server-agent integration.
+    <!-- ===== SENIOR ===== -->
+    <details class="iq" data-level="senior">
+      <summary>Cursor's pre-built embedding index vs Claude Code's read-on-demand — what's the real trade-off?</summary>
+      <div class="a"><b>Hit these points:</b> index-first buys speed and scale — similarity search is ~ms even on a 1M-token repo — at the cost of <b>freshness</b>: the index goes stale after edits and must be re-indexed &rarr; read-on-demand is always current because it fetches live file state, but each read is a round-trip, so latency and token cost grow with how much it has to explore &rarr; embeddings also retrieve by <em>semantic</em> similarity, which can miss structurally-related code under domain-specific names &rarr; pick by workload: broad exploration/refactor on a settled repo &rarr; index; precise, verify-as-you-go fixes on changing code &rarr; read-on-demand.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>Why does MCP matter? What was the world like before it?</summary>
+      <div class="a"><b>Hit these points:</b> before MCP every framework had its own tool format — OpenAI function calling, Anthropic tool use, LangChain tools — so each integration was rewritten per agent (N&times;M glue) &rarr; MCP standardizes the tool-agent interface: write the server once, any MCP-compatible client consumes it &rarr; it decouples capability (the server owns it) from invocation (the runtime owns it) over plain JSON-RPC &rarr; the server is ordinary code that doesn't know it's talking to an LLM &rarr; net effect: tool integration becomes a reusable ecosystem instead of bespoke per-vendor wiring.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>In the loop, who decides when to stop — and why does that placement matter?</summary>
+      <div class="a"><b>Hit these points:</b> the LLM adapts to errors (errors are just observations fed back), but it does <em>not</em> decide when to stop &rarr; hard limits live in the runtime: loop cap, no-progress detection, wall-clock timeout, cost ceiling, user interrupt &rarr; left alone the model will retry the same failing command forever or burn the token budget &rarr; for mutating tools (a retried <code>git push</code> or a charge) idempotency is what separates a safe retry from an incident &rarr; the design rule: agency in the model, stops in the runtime.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>An agent keeps reading files that seem irrelevant to the task. Diagnose it.</summary>
+      <div class="a"><b>Hit these points:</b> read-on-demand means a vague task forces the agent to explore broadly to build context &rarr; tighten the task description so the goal is bounded &rarr; use a project scoping file (CLAUDE.md) so it knows where relevant code lives instead of crawling to find out &rarr; compact/drop stale context that's pulling in old references &rarr; split the work into smaller scoped steps so each loop iteration has a clear target &rarr; note the cost angle: every extra read adds tool results to the window and eats token budget on a long loop.</div>
+    </details>
+
+    <!-- ===== STAFF ===== -->
+    <details class="iq" data-level="staff">
+      <summary>Design the tool registry and guardrails for a coding agent that runs unattended. What goes in?</summary>
+      <div class="a"><b>Hit these points:</b> registry = each tool declared with a strict input/output schema the runtime validates before execution (reject malformed calls, don't pass them through) &rarr; classify tools read vs mutating; gate mutating ones (write, push, deploy) behind approval or dry-run, and make them idempotent so a retry isn't a second action &rarr; least privilege: scope filesystem and shell access, deny destructive commands, bound the blast radius &rarr; runtime-owned limits: loop cap, per-tool timeout, retry-with-backoff, cost ceiling, no-progress kill &rarr; observability: log every tool call + result for audit and replay &rarr; the principle — the model proposes, the runtime authorizes, validates, bounds, and records.</div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>You're choosing a context strategy for a huge monorepo. How do you reason it through?</summary>
+      <div class="a"><b>Hit these points:</b> no single answer — place it on the freshness-vs-round-trips axis for the dominant workload &rarr; a huge, relatively stable repo with lots of exploration favors a pre-built embedding index for ms-scale retrieval; but embeddings miss structural relationships, so layer in structural signals (import/call graphs, path filters, @mentions) rather than relying on similarity alone &rarr; for surgical edits on actively-changing files, read-on-demand avoids stale-index risk &rarr; the pragmatic design is hybrid: index for "find the candidate files," read-on-demand to load the exact current versions before editing &rarr; account for re-index cost/cadence and the token budget each strategy spends per task.</div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>A teammate says "just give the agent a Resource for the whole DB and let it read whatever it needs." Push back.</summary>
+      <div class="a"><b>Hit these points:</b> that misreads the primitive — an MCP Resource is <em>host-selected, read-only</em> data the client surfaces, not a pipe the agent browses freely &rarr; unbounded reads blow the token budget and bury signal in noise, degrading answers &rarr; uncurated data is a security/privacy surface: the agent could surface PII or rows it shouldn't &rarr; for parameterized, action-shaped access you want a <b>Tool</b> with a schema and authorization, not a firehose Resource &rarr; the right design: expose narrow Tools for queries (validated, scoped, audited) and surface only specific Resources the host deliberately chooses — capability stays decoupled from invocation.</div>
+    </details>
+
+    <!-- ===== SYSTEM DESIGN ===== -->
+    <div class="designrubric" data-level="design"><b>Design-round framework</b> — there's no single right answer; the interviewer is watching how you move from a vague ask to a bounded design. Hit these beats:
+      <ol>
+        <li>Restate the goal and name constraints: who calls it, scale, latency budget, security/blast-radius limits.</li>
+        <li>Enumerate capabilities and split them read vs mutating — that split drives most later decisions.</li>
+        <li>Choose the integration surface: which capabilities are Tools (schema + auth), which data is a host-selected Resource, which flows deserve a Prompt template.</li>
+        <li>Define the loop contract: validate &rarr; execute &rarr; append result &rarr; re-invoke, with runtime-owned stops (loop cap, timeout, cost ceiling).</li>
+        <li>Guardrails: least privilege, approval/idempotency for mutating actions, schema validation, audit logging.</li>
+        <li>Failure modes: stale data, partial writes, retries, prompt injection via tool results — and how each is contained.</li>
+        <li>State the trade-offs you took and what you'd revisit at higher scale.</li>
+      </ol>
     </div>
-  </details>
+
+    <details class="iq" data-level="design">
+      <summary>Design an MCP server that exposes a business system (say, a billing platform) to an agent.</summary>
+      <div class="a"><b>A strong answer covers:</b> identify the business functions and split them — reads (get_invoice, get_customer_balance) vs mutating (apply_credit, retry_charge) &rarr; implement each as a Tool with a validated JSON input/output schema; make mutating ones idempotent (idempotency key) so a retried call isn't a double charge &rarr; expose only deliberately-chosen, read-only Resources (e.g. a specific invoice doc) rather than the whole DB; authorize and scope every call &rarr; declare the server with an MCP SDK; the client discovers tools via <code>tools/list</code> and the LLM sees them as capabilities &rarr; runtime concerns: transport (stdio/SSE), per-tool timeouts, audit logging of every call+result, and approval gates on money-moving actions &rarr; call out failure modes: retries on charges, stale balances, and partial multi-step operations.</div>
+    </details>
+
+    <details class="iq" data-level="design">
+      <summary>Design a coding agent tailored to one specific codebase (e.g. a large internal monorepo). What do you build?</summary>
+      <div class="a"><b>A strong answer covers:</b> start from the codebase's shape — size, change rate, language(s), test setup — and pick a context strategy on the freshness-vs-round-trips axis &rarr; likely hybrid: a pre-built embedding index plus structural signals (import/call graphs, path scoping) to find candidate files, then read-on-demand to load current versions before editing &rarr; a project scoping file so the agent knows conventions and where things live, cutting wasted exploration &rarr; tool registry scoped to this repo: read/write files, run the test command, git, and a few repo-specific Tools (codegen, lint), all schema-validated &rarr; loop with runtime-owned stops and a verify step (run tests, <code>git diff</code>) before reporting &rarr; guardrails: least-privilege shell, approval before pushing, audit log &rarr; trade-offs: index staleness vs read latency, and how re-index cadence is triggered by large changes.</div>
+    </details>
+
+  </div>
 
   <!-- ============ NAV ============ -->
   <div class="nav">
@@ -799,5 +1004,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     });
   });
 </script>
+<script src="../../assets/interview.js" defer></script>
 </body>
 </html>

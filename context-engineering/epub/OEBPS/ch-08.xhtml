@@ -7,10 +7,6 @@
 <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
 <body>
-
-<!-- shared arrowheads -->
-
-
 <div class="wrap">
   
 
@@ -103,11 +99,9 @@
       <li>Why is changing the embedding model a migration? <span class="ans">&#8594; new and old vectors are in different spaces; you must re-embed the whole corpus and rebuild the index</span></li>
     </ul></div>
 
-    <div class="iq"><p class="qs"><b>A teammate wants to bump the embedding model to the newest one "for a quick quality win." What do you flag?</b></p>
-      <div class="a">
+    <div class="iq"><p class="qs"><b>A teammate wants to bump the embedding model to the newest one "for a quick quality win." What do you flag?</b></p><div class="a">
         <b>Hit these points:</b> it's not a flag flip — old and new vectors are incomparable, so every chunk must be re-embedded and the index rebuilt &#8594; that's a corpus-wide embed-token bill plus pipeline time, and a cutover plan (dual-write / shadow index) so search isn't down mid-migration &#8594; quantify it: tokens-per-chunk &#215; chunk count &#215; price &#8594; validate the win with an eval set before committing, since "newest" isn't always better on <em>your</em> domain &#8594; consider Matryoshka truncation or a domain model as cheaper alternatives if the goal is quality-per-dollar.
-      </div>
-    </div>
+      </div></div>
   </section>
 
   <!-- ============ MODULE 2 ============ -->
@@ -162,11 +156,9 @@
       <li>Why prefer pre-filter over post-filter? <span class="ans">&#8594; pre-filter scopes the search (right result count + tenant isolation); post-filter can leave too few results</span></li>
     </ul></div>
 
-    <div class="iq"><p class="qs"><b>Your vector search is fast but misses obviously relevant chunks for some queries. Where do you look?</b></p>
-      <div class="a">
+    <div class="iq"><p class="qs"><b>Your vector search is fast but misses obviously relevant chunks for some queries. Where do you look?</b></p><div class="a">
         <b>Hit these points:</b> "fast but misses" smells like low recall from the ANN settings — raise ef-search / n-probe and re-measure recall against an exact baseline &#8594; check if PQ compression is too aggressive (lossy codes drop near-neighbours) and whether the index needs a rebuild after heavy upserts &#8594; verify metadata filtering isn't post-filtering away good hits, or scoping to the wrong tenant/date &#8594; confirm the query is embedded with the <em>same</em> model and normalization as the corpus &#8594; if recall is genuinely good and ranking is wrong, that's a reranker problem (Lesson 2), not the index.
-      </div>
-    </div>
+      </div></div>
   </section>
 
   <!-- ============ MODULE 3 ============ -->
@@ -227,82 +219,111 @@
       <li>Name three levers to cut per-query cost. <span class="ans">&#8594; fewer/better chunks, rerank only top-n, cheaper embedding model (and prompt caching, batch embedding)</span></li>
     </ul></div>
 
-    <div class="iq"><p class="qs"><b>Your RAG feature's cost-per-query is 3&#215; the budget. Walk through how you'd bring it down.</b></p>
-      <div class="a">
+    <div class="iq"><p class="qs"><b>Your RAG feature's cost-per-query is 3&#215; the budget. Walk through how you'd bring it down.</b></p><div class="a">
         <b>Hit these points:</b> first attribute the cost — break it into LLM input, LLM output, query embed, ANN search, rerank; the input tokens usually dominate &#8594; cut retrieved chunks to fewer-but-better (helps accuracy too) and trim the prompt; rerank only the top-n &#8594; cache the stable prefix with prompt caching (Lesson 9) so you stop re-paying for system prompt and tool defs &#8594; drop to a cheaper embedding model or truncated Matryoshka dims if quality holds on an eval set &#8594; batch corpus embedding instead of real-time &#8594; only then consider a smaller generation model. Measure each change against an eval set so you don't trade dollars for accuracy.
-      </div>
-    </div>
+      </div></div>
 
-    <div class="iq"><p class="qs"><b>How do you keep an index fresh for a docs site that updates daily, with some live-changing fields?</b></p>
-      <div class="a">
+    <div class="iq"><p class="qs"><b>How do you keep an index fresh for a docs site that updates daily, with some live-changing fields?</b></p><div class="a">
         <b>Hit these points:</b> split by volatility — stable prose goes through incremental ingestion (CDC / re-embed only changed pages, delete removed ones) &#8594; fast-changing fields (price, availability) shouldn't be embedded at all; fetch them live via a structured tool at query time, or TTL them &#8594; wire invalidation so a source edit triggers re-chunk/re-embed of just that doc &#8594; on an embedding-model change, run a full re-embed behind a shadow index and cut over &#8594; monitor staleness (oldest-chunk age) as an SLO, because a stale index is the silent outdated-context failure from Lesson 4.
-      </div>
-    </div>
+      </div></div>
   </section>
 
   <!-- ============ QUIZ ============ -->
   <h2 class="sec" id="quiz">Retrieval practice — test the three modules</h2>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q1.</span> An embedding is best described as…</p><ol class="opts"><li class="opt">A compressed copy of the original text the model can later decode back word for word</li><li class="opt">A keyword index that records which terms appear in a document for exact-match lookup</li><li class="opt"><b>&#10003; A vector placing the text in meaning-space, where nearby points have similar meaning</b></li><li class="opt">A cache of the model's previous answers keyed by the question that produced each one</li></ol></div>
-  
+  </div>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q2.</span> Cosine similarity is popular for embeddings because it…</p><ol class="opts"><li class="opt"><b>&#10003; Scores the angle between vectors, so topic matters and document length does not</b></li><li class="opt">Counts how many exact keywords two pieces of text happen to share in common</li><li class="opt">Always runs faster than every other distance metric on modern vector hardware</li><li class="opt">Returns the raw byte size difference between the two text strings being compared</li></ol></div>
-  
+  </div>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q3.</span> An approximate-nearest-neighbour (ANN) index exists primarily to…</p><ol class="opts"><li class="opt">Guarantee that the exact true top-k neighbours are returned on every single query</li><li class="opt">Compress the original documents so the raw text takes far less disk space overall</li><li class="opt">Translate queries between languages before the embedding model ever sees the text</li><li class="opt"><b>&#10003; Trade a little recall for sub-linear search so millions of vectors stay fast to query</b></li></ol></div>
-  
+  </div>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q4.</span> Switching to a different embedding model requires you to…</p><ol class="opts"><li class="opt">Only update a config value, since vectors from any model are directly comparable</li><li class="opt"><b>&#10003; Re-embed the entire corpus and rebuild the index, because the spaces differ</b></li><li class="opt">Re-rank existing results at query time without touching the stored vectors at all</li><li class="opt">Lower the similarity threshold so the old vectors keep matching the new queries</li></ol></div>
-  
+  </div>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q5.</span> The biggest lever on per-query cost in a RAG pipeline is usually to…</p><ol class="opts"><li class="opt">Buy faster GPUs so the approximate search step finishes a few milliseconds sooner</li><li class="opt">Increase the context window size so more retrieved chunks fit into a single call</li><li class="opt"><b>&#10003; Select fewer but better chunks, since input tokens usually dominate the total bill</b></li><li class="opt">Add a second reranker stage that re-scores every candidate the index returns each</li></ol></div>
+  </div>
+
+  <!-- ============ INTERVIEW ============ -->
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&#160;Design</b> = open design round (a different axis, not a harder level).</p>
+
   
 
-  <!-- ============ INTERVIEW QUESTIONS ============ -->
-  <h2 class="sec" id="interview">Interview questions — Modules 1–3</h2>
+    <div class="iq"><p class="qlevel"><b>Core</b></p><p class="qs"><b>What is an embedding, and what does "near" mean in embedding space?</b></p><div class="a">
+        <b>Hit these points:</b> an embedding is a dense vector of meaning — text mapped to a point in a learned high-dimensional space &#8594; the model places semantically similar text close together, so "near" is a distance/angle, not keyword overlap &#8594; "log the user out" and "revoke the session" share no words yet land close &#8594; that's why semantic search catches paraphrase where lexical match misses &#8594; the unit you embed is the chunk, so chunk granularity decides vector quality.
+      </div></div>
 
-  <div class="iq"><p class="qs"><b>M1 — Explain what an embedding is and why semantic search beats keyword match for paraphrases.</b></p>
-    <div class="a">
-      <b>Hit these points:</b> an embedding maps text to a vector in a learned meaning-space; the model places semantically similar text close together &#8594; "log the user out" and "revoke the session" share no keywords yet land near each other, so distance (cosine) finds the match where lexical search misses &#8594; this is why dense retrieval (Karpukhin et al.) complements the BM25 lexical baseline rather than replacing it &#8594; the unit you embed is the chunk, and chunk granularity controls vector quality &#8594; the metric must match how the model was trained, and you normalize first.
-    </div>
-  </div>
+    <div class="iq"><p class="qlevel"><b>Core</b></p><p class="qs"><b>Name the three similarity metrics and say what cosine actually measures.</b></p><div class="a">
+        <b>Hit these points:</b> cosine, dot product, Euclidean &#8594; cosine scores the <em>angle</em> between two vectors — direction, not magnitude — so a long doc and a short one on the same topic still score close &#8594; normalize vectors to unit length and cosine and dot product agree, and Euclidean ranks the same way &#8594; the metric must match how the model was trained &#8594; the failure mode is mixing a metric the model wasn't trained for and quietly getting worse rankings.
+      </div></div>
 
-  <div class="iq"><p class="qs"><b>M1 — How do dimensions, model choice, and Matryoshka embeddings let you trade quality for cost?</b></p>
-    <div class="a">
-      <b>Hit these points:</b> more dimensions encode more nuance but cost proportionally more storage, RAM, and compute per query &#8594; model choice sets what "similar" means — domain models win on jargon, multilingual on mixed languages, at different speed/price points &#8594; Matryoshka embeddings are trained so you can truncate to fewer dims and keep most quality, trading dims for cost without re-embedding &#8594; the senior move is to pick model and dims against an eval set measuring quality-per-dollar, not to default to the biggest.
-    </div>
-  </div>
+    <div class="iq"><p class="qlevel"><b>Core</b></p><p class="qs"><b>What does ANN stand for, and why approximate instead of exact?</b></p><div class="a">
+        <b>Hit these points:</b> approximate nearest neighbour &#8594; exact k-NN compares the query to every vector — O(n) per query, too slow at millions of vectors &#8594; ANN gives up a few percent recall to make search sub-linear, orders of magnitude faster &#8594; recall = fraction of the true top-k the index actually returns &#8594; the bargain is fine for retrieval: 95% recall at ~1ms beats 100% at 500ms, and a reranker cleans up the top.
+      </div></div>
 
-  <div class="iq"><p class="qs"><b>M2 — Compare HNSW, IVF, and PQ, and explain the recall / latency / memory triangle.</b></p>
-    <div class="a">
-      <b>Hit these points:</b> HNSW is a navigable graph — fast and high recall but memory-heavy and slower to build &#8594; IVF partitions the space into cells and probes a few, so #probes tunes speed vs recall &#8594; PQ compresses vectors into codes for big memory savings at the cost of recall, often combined as IVF+PQ &#8594; the triangle: you can't maximize recall, latency, and memory at once (build time too) — every index is a chosen point &#8594; HNSW spends memory for recall+latency; PQ buys memory back by spending recall.
-    </div>
-  </div>
+    <div class="iq"><p class="qlevel"><b>Core</b></p><p class="qs"><b>What are the five stages of an ingestion pipeline?</b></p><div class="a">
+        <b>Hit these points:</b> load &#8594; parse &#8594; chunk &#8594; embed &#8594; upsert &#8594; embed is the stage that bills you per token &#8594; the key idea is it's a pipeline that runs forever, not a one-time script — it re-runs incrementally as data changes &#8594; the canonical failure is treating it as "index once at launch," which lets the store drift out of sync with the source.
+      </div></div>
 
-  <div class="iq"><p class="qs"><b>M2 — When would you NOT reach for a dedicated vector database, and why does pre-filter beat post-filter?</b></p>
-    <div class="a">
-      <b>Hit these points:</b> for a small corpus, brute-force or pgvector in existing Postgres is simpler, cheaper to operate, and fast enough — don't add infrastructure before scale, latency, or filtering demand it &#8594; reach for a vector DB when n is large, p99 latency matters, or you need rich metadata filtering at scale &#8594; pre-filter scopes the ANN search to the allowed set first, giving the right result count and serving as tenant/security isolation (a Lesson 9 hook) &#8594; post-filter retrieves k then drops non-matches, so you can end up with too few results.
-    </div>
-  </div>
+    <div class="iq"><p class="qlevel"><b>Senior</b></p><p class="qs"><b>A teammate wants to bump the embedding model "for a quick quality win." What do you flag?</b></p><div class="a">
+        <b>Hit these points:</b> it's not a config flip — old and new vectors live in different spaces and are incomparable, so every chunk must be re-embedded and the index rebuilt &#8594; that's a corpus-wide embed-token bill plus pipeline time, and a cutover plan (dual-write / shadow index) so search isn't down mid-migration &#8594; quantify it: tokens-per-chunk &#215; chunk count &#215; price &#8594; validate the win on an eval set first — "newest" isn't always better on <em>your</em> domain &#8594; cheaper alternatives: Matryoshka truncation or a domain model if the real goal is quality-per-dollar.
+      </div></div>
 
-  <div class="iq"><p class="qs"><b>M3 — Model the cost of a RAG query and name the highest-leverage places to cut it.</b></p>
-    <div class="a">
-      <b>Hit these points:</b> per-call cost &#8776; (input + output tokens) &#215; price, plus query-embed and ANN-search latency before the model runs; input tokens usually dominate &#8594; highest leverage: select fewer-but-better chunks (also more accurate, per Liu et al.) and trim the prompt &#8594; rerank only the top-n, use a cheaper embedding model, batch corpus embedding &#8594; prompt caching (Lesson 9) stops re-paying for the stable prefix &#8594; validate every cut against an eval set so you don't trade accuracy for dollars.
-    </div>
-  </div>
+    <div class="iq"><p class="qlevel"><b>Senior</b></p><p class="qs"><b>Pick an index family for 50M vectors with tenant filtering and a p99 latency budget. Walk the trade-offs.</b></p><div class="a">
+        <b>Hit these points:</b> you can't max recall, latency, and memory at once — name the triangle and pick a corner &#8594; HNSW buys recall and low latency by spending memory; IVF tunes speed via n-probe; PQ buys memory back by spending recall, often IVF+PQ at this scale &#8594; tenant filtering must be a <em>pre-filter</em> that scopes the search to the allowed set — right result count and a security/isolation boundary — not a post-filter that can return too few &#8594; size RAM against vector count &#215; dims, and validate recall against an exact baseline before shipping.
+      </div></div>
 
-  <div class="iq"><p class="qs"><b>M3 — Why is a stale index a correctness bug, and how do you keep one fresh?</b></p>
-    <div class="a">
-      <b>Hit these points:</b> a stale index serves deleted docs and old facts as fluent, confident answers — it's exactly Lesson 4's outdated-context failure, just upstream &#8594; treat ingestion as a forever-running pipeline: incremental upserts / CDC for edits, deletes for removed chunks, invalidation on source change &#8594; don't index volatile fields — TTL them or fetch live via a structured tool &#8594; a model change forces a full re-embed behind a shadow index, then cutover &#8594; monitor oldest-chunk age as an SLO so staleness is observable, not silent.
+    <div class="iq"><p class="qlevel"><b>Senior</b></p><p class="qs"><b>Vector search is fast but misses obviously relevant chunks for some queries. Where do you look?</b></p><div class="a">
+        <b>Hit these points:</b> "fast but misses" smells like low recall from ANN settings — raise ef-search / n-probe and re-measure recall against an exact baseline &#8594; check whether PQ compression is too aggressive (lossy codes drop near-neighbours) and whether the index needs a rebuild after heavy upserts &#8594; confirm metadata filtering isn't post-filtering away good hits or scoping to the wrong tenant/date &#8594; verify the query is embedded with the <em>same</em> model and normalization as the corpus &#8594; if recall is genuinely good but ranking is wrong, that's a reranker problem, not the index.
+      </div></div>
+
+    <div class="iq"><p class="qlevel"><b>Senior</b></p><p class="qs"><b>Your RAG cost-per-query is 3&#215; the budget. Name the levers, in order.</b></p><div class="a">
+        <b>Hit these points:</b> first attribute it — break cost into LLM input, LLM output, query embed, ANN search, rerank; input tokens usually dominate &#8594; cut retrieved chunks to fewer-but-better (helps accuracy too) and trim the prompt &#8594; rerank only the top-n, not every candidate &#8594; cache the stable prefix (system prompt, tool defs) so you stop re-paying for it &#8594; drop to a cheaper / smaller-dim embedding model if quality holds on an eval set &#8594; batch corpus embedding instead of real-time &#8594; only then consider a smaller generation model — and measure each change against an eval set so you don't trade dollars for accuracy.
+      </div></div>
+
+    <div class="iq"><p class="qlevel"><b>Staff</b></p><p class="qs"><b>Design an embedding + index + cost strategy for a 200M-chunk corpus on a fixed monthly budget.</b></p><div class="a">
+        <b>Hit these points:</b> start from the budget and work backwards — model the dominant cost line (LLM input tokens at serve time, plus one-off corpus embedding) and set targets per line &#8594; choose model + dims by quality-per-dollar on an eval set, lean on Matryoshka so you can dial dims down without re-embedding &#8594; index family scoped to scale: IVF+PQ for memory at 200M, pre-filter for tenancy, tune n-probe to hit a recall floor at a latency ceiling &#8594; serve-time levers: fewer-better chunks, rerank top-n, cache the stable prefix &#8594; ingestion is incremental (CDC) with batched embedding, not real-time &#8594; close the loop with recall and cost-per-query as monitored SLOs so a regression is visible, not a surprise invoice.
+      </div></div>
+
+    <div class="iq"><p class="qlevel"><b>Staff</b></p><p class="qs"><b>When is a vector index the wrong tool, and what would you build instead?</b></p><div class="a">
+        <b>Hit these points:</b> name the cases where it's the wrong default — small corpus (brute-force or pgvector in existing Postgres is simpler and fast enough), data that's exact-match or highly structured (a relational/keyword index beats meaning-space), and volatile facts like price or stock that are stale minutes after embedding &#8594; for volatile fields, fetch live via a structured tool at query time or TTL them, don't bake them into the index &#8594; the staff judgement is matching retrieval mechanism to data shape and freshness, and not adding vector-DB infrastructure before scale, latency, or filtering actually demand it.
+      </div></div>
+
+    <div class="iq"><p class="qlevel"><b>Staff</b></p><p class="qs"><b>A stale index keeps serving a deleted doc. Frame this as a systemic failure and fix it at the root.</b></p><div class="a">
+        <b>Hit these points:</b> name it — a stale index is the outdated-context failure: deleted docs and old facts served fluently and confidently &#8594; root cause is treating ingestion as a one-time script with no invalidation, not a bad query &#8594; fix the system: incremental upserts / CDC for edits, hard deletes for removed chunks, invalidation triggered on source change &#8594; split by volatility — stable prose ingested, volatile fields fetched live &#8594; model changes go through a full re-embed behind a shadow index, then cutover &#8594; make staleness observable: monitor oldest-chunk age as an SLO so it's caught by a dashboard, not a user.
+      </div></div>
+
+    <div class="designrubric" data-level="design"><b>Design-round framework</b> — there's no single right answer; a strong candidate drives the structure. Steer the open prompts below through:
+      <ol>
+        <li><b>Clarify scope &amp; constraints</b> — corpus size, change rate, query volume, latency SLO, budget ceiling, multi-tenant?</li>
+        <li><b>Data shape &amp; freshness</b> — what's stable prose vs volatile fields; what must be fetched live vs embedded.</li>
+        <li><b>Embedding choice</b> — model, dimensions (Matryoshka headroom), metric; justified on an eval set, not by defaults.</li>
+        <li><b>Index &amp; retrieval</b> — index family vs the recall/latency/memory triangle; pre-filter for tenancy; rerank top-n.</li>
+        <li><b>Ingestion &amp; freshness</b> — incremental CDC, deletes, invalidation, batched embedding; re-embed-the-world handled via shadow index.</li>
+        <li><b>Cost model</b> — per-line cost (LLM input dominates), the levers, and where you'd spend vs save.</li>
+        <li><b>Observability &amp; failure modes</b> — recall, cost-per-query, oldest-chunk age as SLOs; what breaks first.</li>
+      </ol>
     </div>
-  </div>
+
+    <div class="iq"><p class="qlevel"><b>System Design</b></p><p class="qs"><b>Design the vector index + ingestion pipeline for a fast-changing corpus (news + product catalog, edits every minute).</b></p><div class="a">
+        <b>A strong answer covers:</b> clarifies scale, edit rate, and latency/freshness SLOs first &#8594; splits by volatility — article prose is embedded and incrementally ingested via CDC (re-embed only changed docs, delete removed ones); price/stock/availability are <em>not</em> embedded but fetched live at query time or TTL'd, because a stale index is the outdated-context failure &#8594; index family chosen for scale and recall needs (HNSW for high recall if memory allows, IVF+PQ if it doesn't), pre-filter for category/tenant scoping &#8594; embedding model + dims justified on an eval set, with Matryoshka headroom &#8594; invalidation wired to source changes so a single edit re-chunks/re-embeds just that doc &#8594; model upgrades run behind a shadow index then cut over &#8594; staleness monitored as an SLO (oldest-chunk age) so drift is visible.
+      </div></div>
+
+    <div class="iq"><p class="qlevel"><b>System Design</b></p><p class="qs"><b>Design a cost-bounded retrieval stack: serve relevant context under a hard per-query dollar/latency ceiling.</b></p><div class="a">
+        <b>A strong answer covers:</b> starts from the ceiling and attributes cost per line — LLM input usually dominates, then output, query embed, ANN search, rerank &#8594; primary lever is fewer-but-better chunks (cheaper <em>and</em> more accurate) plus a trimmed prompt &#8594; rerank only the top-n; cache the stable prefix so the system prompt and tool defs aren't re-paid every call &#8594; embedding cost controlled with a cheaper/smaller-dim or Matryoshka-truncated model, validated on an eval set &#8594; latency budget met by tuning recall vs latency (ef-search / n-probe) and the right index family, not by buying hardware &#8594; corpus embedding batched, not real-time &#8594; cost-per-query and recall tracked as SLOs with alerts, so a regression shows on a dashboard before it shows on the invoice &#8594; every cut measured against an eval set so dollars aren't traded for accuracy.
+      </div></div>
 
   
+
+  <!-- ============ NAV ============ -->
   
 
   <footer>
@@ -316,8 +337,5 @@
   </footer>
 
 </div><!-- /wrap -->
-
-
-
 </body>
 </html>

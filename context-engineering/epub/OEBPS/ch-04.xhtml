@@ -7,10 +7,6 @@
 <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
 <body>
-
-<!-- shared arrowheads -->
-
-
 <div class="wrap">
   
 
@@ -95,11 +91,9 @@
       <li>Why is "the model remembers us" wrong? <span class="ans">&#8594; the model is stateless; the runtime reloads stored facts each call, the model itself keeps nothing</span></li>
     </ul></div>
 
-    <div class="iq"><p class="qs"><b>A teammate stores a user's preferences in the knowledge base index alongside the docs. Why is that a design smell?</b></p>
-      <div class="a">
+    <div class="iq"><p class="qs"><b>A teammate stores a user's preferences in the knowledge base index alongside the docs. Why is that a design smell?</b></p><div class="a">
         <b>Hit these points:</b> the KB is shared, read-only reference truth; per-user preferences are mutable, user-scoped memory &#8594; mixing them pollutes everyone's retrieval (one user's facts can surface for another) and breaks isolation/privacy &#8594; lifecycles differ: KB is versioned by authors, memory is written constantly by the agent &#8594; keep them separate stores, retrieve from both into context, and tag provenance so you know which is which.
-      </div>
-    </div>
+      </div></div>
   </section>
 
   <!-- ============ MODULE 2 ============ -->
@@ -148,11 +142,9 @@
       <li>When should you compress? <span class="ans">&#8594; as you approach the budget — not pre-emptively; keep recent + decisions/IDs verbatim</span></li>
     </ul></div>
 
-    <div class="iq"><p class="qs"><b>Your agent loses track of a database ID it was told 20 turns ago, after the history was summarized. What went wrong and how do you fix it?</b></p>
-      <div class="a">
+    <div class="iq"><p class="qs"><b>Your agent loses track of a database ID it was told 20 turns ago, after the history was summarized. What went wrong and how do you fix it?</b></p><div class="a">
         <b>Hit these points:</b> root cause is lossy summarization — the ID lived in an old turn that got condensed into prose and dropped &#8594; fix the policy, not just this case: distill <em>structured</em> state (IDs, decisions, constraints) into a durable key-value scratchpad that's always kept verbatim, separate from the narrative summary &#8594; keep recent turns verbatim so freshly-mentioned facts survive &#8594; and store the full transcript so you can retrieve the original turn on demand rather than relying on the summary to be complete.
-      </div>
-    </div>
+      </div></div>
   </section>
 
   <!-- ============ MODULE 3 ============ -->
@@ -201,76 +193,89 @@
       <li>Why is "dump everything" a failure mode, not a safe default? <span class="ans">&#8594; excessive context: slower, costlier, and the key fact gets lost in the middle (position bias)</span></li>
     </ul></div>
 
-    <div class="iq"><p class="qs"><b>Your assistant quotes last quarter's pricing. Walk through diagnosing it with the failure-mode framework.</b></p>
-      <div class="a">
+    <div class="iq"><p class="qs"><b>Your assistant quotes last quarter's pricing. Walk through diagnosing it with the failure-mode framework.</b></p><div class="a">
         <b>Hit these points:</b> classify the symptom — it answered from old data, so this is <em>outdated</em> context, not a model defect &#8594; verify by inspecting what was retrieved: a stale index entry or cached doc with last quarter's price &#8594; root cause is freshness — the index wasn't re-indexed after the price changed &#8594; fixes: invalidate/re-index on source change, add a freshness/TTL signal, and for volatile fields like price prefer a live structured fetch over an embedded snapshot &#8594; prevention: monitor index staleness and treat volatile data differently from static docs.
-      </div>
-    </div>
+      </div></div>
 
-    <div class="iq"><p class="qs"><b>Two retrieved docs give different answers to the same question. Why does this happen and how do you make the system deterministic?</b></p>
-      <div class="a">
+    <div class="iq"><p class="qs"><b>Two retrieved docs give different answers to the same question. Why does this happen and how do you make the system deterministic?</b></p><div class="a">
         <b>Hit these points:</b> this is <em>conflicting</em> context — duplicates or multiple versions both got retrieved, with no precedence &#8594; the model picks arbitrarily, so the same query can flip answers &#8594; fixes: dedupe near-identical chunks, establish a source-of-truth ranking (authority + recency), and drop or down-rank the loser &#8594; pass provenance into the window so the model (and your logs) can see which source won &#8594; prevention: version your KB and avoid indexing the same fact from multiple uncontrolled sources.
-      </div>
-    </div>
+      </div></div>
   </section>
 
   <!-- ============ QUIZ ============ -->
   <h2 class="sec" id="quiz">Retrieval practice — test the three modules</h2>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q1.</span> The clearest line between memory and a knowledge base is…</p><ol class="opts"><li class="opt">Memory lives on disk while the knowledge base is always held in fast volatile RAM</li><li class="opt">Memory is queried with embeddings while the knowledge base uses only keyword lookup</li><li class="opt">Memory is large and the knowledge base is small, so they need different index types</li><li class="opt"><b>&#10003; The system writes memory from interactions; the KB is external, read-only reference truth</b></li></ol></div>
-  
+  </div>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q2.</span> Both memory and the knowledge base reach the model by…</p><ol class="opts"><li class="opt">Being permanently fine-tuned into the model's frozen weights ahead of any request</li><li class="opt"><b>&#10003; Being retrieved into the context window — the model has no direct access to either store</b></li><li class="opt">Opening a live database connection the stateless model keeps open across its calls</li><li class="opt">Staying resident in the model's own long-term memory between separate user sessions</li></ol></div>
-  
+  </div>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q3.</span> A sliding window for a long-running agent keeps…</p><ol class="opts"><li class="opt"><b>&#10003; The last N turns verbatim plus a rolling summary of everything older than that</b></li><li class="opt">Only the very first system prompt and discards every turn after it to save tokens</li><li class="opt">A summary of the recent turns while keeping the oldest history fully verbatim instead</li><li class="opt">Every turn at full detail forever by automatically buying a larger context window</li></ol></div>
-  
+  </div>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q4.</span> The model answers confidently but completely off-topic. The most likely failure mode is…</p><ol class="opts"><li class="opt">Missing context — the relevant document was simply never retrieved into the window</li><li class="opt">Outdated context — a stale index served last month's version of the right document</li><li class="opt"><b>&#10003; Wrong context — topically-similar-but-incorrect content was retrieved without a rerank</b></li><li class="opt">Excessive context — so much was packed in that the right fact got lost in the middle</li></ol></div>
-  
+  </div>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q5.</span> Packing far more context than needed mainly hurts because…</p><ol class="opts"><li class="opt">The model refuses to answer once the window exceeds a fixed safety token threshold</li><li class="opt"><b>&#10003; It's slower and costlier, and the key fact gets lost in the middle of the long window</b></li><li class="opt">Extra tokens permanently overwrite the model's weights and corrupt later responses</li><li class="opt">The retrieval index rejects large batches and silently returns an empty result set</li></ol></div>
-  
+  </div>
 
   <!-- ============ INTERVIEW QUESTIONS ============ -->
-  <h2 class="sec" id="interview">Interview questions — Modules 1–3</h2>
-
-  <div class="iq"><p class="qs"><b>M1 — Distinguish memory, knowledge base, retrieval, and context. Use a human analogy.</b></p>
-    <div class="a">
-      <b>Hit these points:</b> <b>memory</b> = what the system learned from us (interaction-derived facts/decisions, system-written, updatable) — like your recollection of a friend &#8594; <b>knowledge base</b> = external read-only reference truth — like the library/encyclopedia &#8594; <b>retrieval</b> = the mechanism that looks things up and pulls them into the window &#8594; <b>context</b> = what's in the model's head for one call &#8594; key point: the model is stateless, so both stores reach it only via retrieval into context; "memory" never means the model itself remembers.
-    </div>
-  </div>
-
-  <div class="iq"><p class="qs"><b>M2 — Design context management for an agent that runs for hundreds of turns on a fixed budget.</b></p>
-    <div class="a">
-      <b>Hit these points:</b> store the full transcript externally (memory) — never rely on the window to hold it all &#8594; assemble each window from system prompt + rolling summary of old turns + last N turns verbatim + retrieved facts &#8594; keep decisions, IDs, and constraints in a structured scratchpad that's always verbatim, since summarization is lossy &#8594; compress as you approach the budget, not pre-emptively, and weigh the extra LLM calls summarizing costs &#8594; retrieve old detail on demand from storage rather than carrying it.
-    </div>
-  </div>
-
-  <div class="iq"><p class="qs"><b>M2 — When is compression the wrong call, and what do you do instead?</b></p>
-    <div class="a">
-      <b>Hit these points:</b> compression is lossy and costs extra calls, so it's wrong when fidelity is cheap to keep or the content is small &#8594; never summarize recent turns or load-bearing facts (IDs, decisions, constraints) — keep those verbatim &#8594; if redundancy is the problem, prefer near-lossless dedupe/pruning over summarization &#8594; if the issue is "we might need an old detail later," the answer is store-and-retrieve-on-demand, not summarize-and-hope &#8594; only summarize the genuinely old, low-value narrative when you're actually near the budget ceiling.
-    </div>
-  </div>
-
-  <div class="iq"><p class="qs"><b>M3 — Give the five failure modes with one symptom and one fix each.</b></p>
-    <div class="a">
-      <b>Hit these points:</b> <b>missing</b> — "I don't know"/hallucination, fix recall &amp; chunking &#8594; <b>wrong</b> — confident but off-topic, fix with rerank/filters/hybrid &#8594; <b>outdated</b> — old price/API, fix freshness/re-index/live fetch &#8594; <b>conflicting</b> — contradictory answers, fix dedupe + authority/recency precedence + provenance &#8594; <b>excessive</b> — slow/costly/key fact ignored, fix by selecting less but right (position bias). Close with: most AI bugs are context bugs — classify first, then the fix is obvious.
-    </div>
-  </div>
-
-  <div class="iq"><p class="qs"><b>M3 — A retrieved doc is poisoned with injected instructions and the model follows them. Which failure mode, and how do you defend?</b></p>
-    <div class="a">
-      <b>Hit these points:</b> this is a <em>wrong/conflicting</em> context defect with a security edge — untrusted retrieved content treated as instructions (prompt injection) &#8594; defenses: treat retrieved text as data, not commands; isolate it with clear delimiters and provenance; rank trusted sources above open ones &#8594; filter/sanitize sources, and prefer authoritative KBs over arbitrary scraped content &#8594; this maps to OWASP's LLM risks — poisoned/conflicting retrieved context is a named threat, not a model bug.<sup><a href="#s5" id="r5">5</a></sup>
-    </div>
-  </div>
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&#160;Design</b> = open design round (a different axis, not a harder level).</p>
 
   
+
+    <!-- ===== CORE ===== -->
+    <div class="iq"><p class="qlevel"><b>Core</b></p><p class="qs"><b>Distinguish memory, knowledge base, retrieval, and context. Use a human analogy.</b></p><div class="a"><b>Hit these points:</b> <b>memory</b> = persisted state the system writes about us (interaction-derived facts, preferences, decisions; updatable) — like your recollection of a friend &#8594; <b>knowledge base</b> = external, read-only reference truth, the same for everyone — like the library/encyclopedia &#8594; <b>retrieval</b> = the mechanism that looks things up and pulls them into the window; it stores nothing itself &#8594; <b>context</b> = the window assembled for ONE call &#8594; the model holds none of them — it's stateless, so both stores reach it only by being retrieved into context.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Core</b></p><p class="qs"><b>Who writes memory vs the knowledge base, and how does each one actually reach the model?</b></p><div class="a"><b>Hit these points:</b> the system/agent writes memory over time — append &amp; update, user-scoped &#8594; the KB is authored externally and read-only to the agent, shared across users &#8594; neither has a direct line to the model: both reach it only via retrieval into the context window &#8594; the slogan: KB = what's true in general, memory = what I learned from us &#8594; different owners, different lifecycle, different mutability.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Core</b></p><p class="qs"><b>Name the four compression moves and which ones are lossy.</b></p><div class="a"><b>Hit these points:</b> <b>summarization</b> — condense old history into prose (lossy) &#8594; <b>distillation</b> — extract the salient facts/decisions/state, drop the narrative (lossy) &#8594; <b>compression/pruning</b> — dedupe and strip redundancy/boilerplate (near-lossless) &#8594; <b>sliding window</b> — keep the last N turns verbatim plus a rolling summary of everything older (mixed) &#8594; the rule: summarize the OLD, keep the RECENT and the decisions/IDs verbatim.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Core</b></p><p class="qs"><b>List the five failure modes with one symptom each.</b></p><div class="a"><b>Hit these points:</b> <b>missing</b> — "I don't know" or hallucinated filler &#8594; <b>wrong</b> — confident but off-topic/incorrect &#8594; <b>outdated</b> — answers from old data (old price/API) &#8594; <b>conflicting</b> — contradictory or arbitrary answer that flips between runs &#8594; <b>excessive</b> — slower, costlier, and the key fact gets ignored ("lost in the middle") &#8594; the framing: most AI bugs are context bugs, not model bugs.</div></div>
+
+    <!-- ===== SENIOR ===== -->
+    <div class="iq"><p class="qlevel"><b>Senior</b></p><p class="qs"><b>A teammate stores a user's preferences in the knowledge base index alongside the docs. Why is that a design smell?</b></p><div class="a"><b>Hit these points:</b> the KB is shared, read-only reference truth; per-user preferences are mutable, user-scoped memory &#8594; mixing them pollutes everyone's retrieval — one user's facts can surface for another — and breaks isolation/privacy &#8594; lifecycles differ: the KB is versioned by authors, memory is written constantly by the agent &#8594; keep them as separate stores, retrieve from both into context, and tag provenance so you know which is which.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Senior</b></p><p class="qs"><b>"Summarize aggressively to save money." Where does that reasoning break down?</b></p><div class="a"><b>Hit these points:</b> summarizing isn't free — each summary is an extra LLM call, so aggressive summarization can cost more, not less &#8594; it's lossy: a detail dropped now (an ID, a constraint) can be the exact one that matters three turns later &#8594; compress the OLD, keep the RECENT and load-bearing facts verbatim &#8594; compress as you approach the budget, not pre-emptively &#8594; if the issue is redundancy, prefer near-lossless dedupe/pruning; if it's "we might need it later," store-and-retrieve-on-demand beats summarize-and-hope.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Senior</b></p><p class="qs"><b>Your agent loses track of a database ID it was told 20 turns ago, after the history was summarized. Diagnose and fix.</b></p><div class="a"><b>Hit these points:</b> root cause is lossy summarization — the ID lived in an old turn that got condensed into prose and dropped &#8594; fix the policy, not just this case: distill <em>structured</em> state (IDs, decisions, constraints) into a durable key-value scratchpad that's always kept verbatim, separate from the narrative summary &#8594; keep recent turns verbatim so freshly-mentioned facts survive &#8594; store the full transcript so you can retrieve the original turn on demand rather than trusting the summary to be complete.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Senior</b></p><p class="qs"><b>An assistant quotes last quarter's pricing. Walk the failure-mode framework to the fix.</b></p><div class="a"><b>Hit these points:</b> classify the symptom — it answered from old data, so this is <em>outdated</em> context, not a model defect &#8594; verify by inspecting what was retrieved: a stale index entry or cached doc with last quarter's price &#8594; root cause is freshness — the index wasn't re-indexed after the price changed &#8594; fixes: invalidate/re-index on source change, add a freshness/TTL signal, and for volatile fields like price prefer a live structured fetch over an embedded snapshot &#8594; prevention: monitor index staleness and treat volatile data differently from static docs.</div></div>
+
+    <!-- ===== STAFF ===== -->
+    <div class="iq"><p class="qlevel"><b>Staff</b></p><p class="qs"><b>Design the memory + context strategy for an agent that runs for hundreds of turns on a fixed budget.</b></p><div class="a"><b>Hit these points:</b> store the full transcript externally (memory) — never rely on the window to hold it all &#8594; assemble each window from system prompt + rolling summary of old turns + last N turns verbatim + facts retrieved for THIS question &#8594; keep decisions, IDs, and constraints in a structured scratchpad that's always verbatim, since summarization is lossy &#8594; compress only as you approach the budget, and budget for the extra LLM calls summarizing costs &#8594; retrieve old detail on demand from storage rather than carrying it; name the trade-off you're making — fidelity for room — out loud.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Staff</b></p><p class="qs"><b>Two retrieved docs answer the same question differently and the answer flips between runs. Classify it and make the system deterministic.</b></p><div class="a"><b>Hit these points:</b> this is <em>conflicting</em> context — duplicates or multiple versions both got retrieved with no precedence, so the model picks arbitrarily &#8594; fixes: dedupe near-identical chunks; establish a source-of-truth ranking (authority + recency) and drop or down-rank the loser &#8594; pass provenance into the window so the model — and your logs — can see which source won &#8594; prevention: version the KB and stop indexing the same fact from multiple uncontrolled sources &#8594; note the security edge: if the "loser" is untrusted, treat retrieved text as data, not instructions (prompt injection).<sup><a href="#s5" id="r5">5</a></sup></div></div>
+
+    <div class="iq"><p class="qlevel"><b>Staff</b></p><p class="qs"><b>Production incident: the model is fluent and confident but the answer is just wrong. Walk through classifying it before touching the model.</b></p><div class="a"><b>Hit these points:</b> resist "we need a smarter model" — most wrong answers are a context defect, and a bigger model just reasons better over bad input &#8594; pull the actual retrieved window and ask which of the five shapes it is: was the right source never retrieved (missing)? topically-similar-but-wrong with no rerank (wrong)? stale (outdated)? contradicted by a duplicate (conflicting)? buried in a huge dump (excessive)? &#8594; each shape has its own cheap fix — recall/chunking, rerank/filters, freshness, dedupe/precedence, select-less-but-right &#8594; the discipline is classify first; the fix follows from the shape, and it's almost always cheaper than swapping the model.</div></div>
+
+    <!-- ===== SYSTEM DESIGN ===== -->
+    <div class="designrubric" data-level="design"><b>Design-round framework</b> — there's no single right answer; a strong candidate narrates these steps out loud:
+      <ol>
+        <li><b>Clarify</b> the run shape — multi-session over days vs one long run for hours, number of users, latency/cost budget, what "remembering" must mean.</li>
+        <li><b>Separate the stores</b> — user-scoped memory (writable) vs shared read-only KB; decide what's worth persisting vs derivable.</li>
+        <li><b>Define the window recipe</b> — system prompt + rolling summary + last N verbatim + retrieved facts, and the fixed token budget it must fit.</li>
+        <li><b>Compression policy</b> — what's summarized vs kept verbatim (decisions/IDs/constraints), and <em>when</em> compression triggers (near budget, not pre-emptively).</li>
+        <li><b>Retrieval &amp; freshness</b> — how memory and KB get queried per call, plus invalidation/TTL for volatile facts.</li>
+        <li><b>Failure-mode guardrails</b> — provenance, dedupe/precedence, recall monitoring, and treating retrieved text as data.</li>
+        <li><b>Cost, eval &amp; observability</b> — the extra LLM calls compression adds, how you'd test recall, and what you log to diagnose the five modes.</li>
+      </ol>
+    </div>
+
+    <div class="iq"><p class="qlevel"><b>System Design</b></p><p class="qs"><b>Design the memory and compression strategy for a multi-session customer-support agent that talks to the same users for months.</b></p><div class="a"><b>A strong answer covers:</b> two distinct stores — user-scoped <em>memory</em> (their account facts, past tickets, derived preferences, open issues; writable, private per user) and a shared read-only <em>KB</em> (product docs, policies) — never co-mingled in one index &#8594; per session, assemble the window from system prompt + a rolling summary of this user's history + the last N turns verbatim + KB facts retrieved for the current question &#8594; persist structured state (decisions, IDs, entitlements) verbatim in a scratchpad, since summarization is lossy and a dropped account ID is a real bug &#8594; freshness matters: invalidate cached account state on change and prefer a live fetch for volatile fields (balance, plan) over an embedded snapshot &#8594; guard the five modes — provenance + authority/recency precedence for conflicting policy versions, recall checks for missing answers, and select-less-but-right to avoid burying the key fact &#8594; call the cost and privacy trade-offs: per-user memory is storage + retrieval cost and a data-retention/PII surface, so scope, encrypt, and expire it.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>System Design</b></p><p class="qs"><b>Design the context strategy for an autonomous agent that runs for hours on a single task (e.g. a long research or migration job).</b></p><div class="a"><b>A strong answer covers:</b> the history is unbounded but the budget is fixed, so the full transcript lives in external storage and the window is assembled fresh each call — store it all, retrieve on demand &#8594; window recipe: system prompt + objective/plan + a rolling summary of completed work + the last N turns verbatim + facts retrieved for the current step &#8594; keep a durable, always-verbatim scratchpad of decisions, IDs, intermediate results, and constraints so a lossy summary can never drop a load-bearing fact &#8594; trigger compression only as you approach the budget, and account for the extra LLM calls each summary costs over a multi-hour run &#8594; checkpoint state so the run is resumable, and detect drift — if the summary diverges from the goal, re-retrieve the original turns &#8594; close on failure modes: excessive context is the silent killer over long runs (lost-in-the-middle), so curate aggressively rather than dumping the whole history forward.</div></div>
+
+  
+
+  <!-- ============ NAV ============ -->
   
 
   <footer>
@@ -285,8 +290,5 @@
   </footer>
 
 </div><!-- /wrap -->
-
-
-
 </body>
 </html>

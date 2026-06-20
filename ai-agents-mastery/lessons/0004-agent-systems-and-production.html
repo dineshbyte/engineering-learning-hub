@@ -9,24 +9,25 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lesson 4 · Multi-agent Systems &amp; Production</title>
+<title>Multi-Agent Systems &amp; Production AI Agents · StackDepth</title>
 <meta name="description" content="Your bar: decide when multi-agent is justified vs unnecessary; name five ways production agents fail and how to prevent them; design a business agent…">
 <meta name="author" content="dineshbyte">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/ai-agents-mastery/lessons/0004-agent-systems-and-production.html">
 <meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Learning Hub">
-<meta property="og:title" content="Lesson 4 · Multi-agent Systems &amp; Production · Engineering Learning Hub">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="Multi-Agent Systems &amp; Production AI Agents · StackDepth">
 <meta property="og:description" content="Your bar: decide when multi-agent is justified vs unnecessary; name five ways production agents fail and how to prevent them; design a business agent…">
 <meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/ai-agents-mastery/lessons/0004-agent-systems-and-production.html">
 <meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Lesson 4 · Multi-agent Systems &amp; Production · Engineering Learning Hub">
+<meta name="twitter:title" content="Multi-Agent Systems &amp; Production AI Agents · StackDepth">
 <meta name="twitter:description" content="Your bar: decide when multi-agent is justified vs unnecessary; name five ways production agents fail and how to prevent them; design a business agent…">
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../../assets/tokens.css">
 <link rel="stylesheet" href="../../assets/lesson.css">
+<link rel="stylesheet" href="../../assets/interview.css">
 <style>
   :root{--accent:var(--track-agents)}
 
@@ -89,6 +90,166 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "When would you choose multi-agent over a single agent for a coding task?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When the task is genuinely decomposable into independent parallel subtasks (e.g. analyze 20 files simultaneously); when subtasks need different toolsets (research agent uses web search, writer agent uses file system); when a single context window is too small for all the information needed. Not justified: sequential steps, tasks that fit in one context, or \"we want it smarter\" — that's a model choice, not an architecture choice."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the main failure modes unique to multi-agent systems vs single-agent?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "(1) Coordinator failure — misinterprets worker output, sends wrong context to next worker. (2) Worker isolation — worker doesn't have enough context to do its job because the coordinator under-specified. (3) Compounded errors — one worker's bad output propagates to downstream workers without correction. (4) Debugging difficulty — which agent made the mistake? (5) Cost amplification — N agents × M iterations = N×M LLM calls, all billed. (6) No shared state — workers can't see each other's work unless the coordinator explicitly passes it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "You're launching a SaaS billing agent that can apply credits, retry charges, and update subscription tiers. What production controls do you put in place before launch?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "(1) Least privilege — read-only by default; write operations require explicit capability grant per session. (2) Dry-run mode — all write operations execute a dry run first and show proposed changes before confirming. (3) Loop cap — max 15 iterations per task; halt and notify if exceeded. (4) Cost cap — max $2 in LLM tokens per billing task; alert at 50% of budget. (5) Structured audit log — every tool call logged with inputs, outputs, user ID, session ID, timestamp — immutable, append-only. (6) Idempotency keys on all write tools: retried calls are no-ops. (7) Human approval gate for changes above a threshold (e.g. credits > $100 require human confirmation). (8) Prompt injection defense — tool outputs are tagged as [TOOL RESULT] and the system prompt instructs the model to treat them as data, not instructions."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you detect and prevent an infinite loop in a production agent?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "(1) Hard iteration cap (e.g. 20 steps) — the runtime counts and halts. (2) Semantic repetition detector : if the last N tool calls are identical (same tool, same args), the agent is looping — halt with an error. (3) Wall-clock timeout : even slow legitimate steps shouldn't take more than X minutes — hard cap independent of iteration count. (4) Progress check : every K steps, the agent summarizes what it has accomplished; if no progress detected, escalate to human. (5) Dead-man switch : a background timer that triggers a halt if the agent doesn't emit a \"still working\" heartbeat within Y seconds."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your company wants an autonomous SRE agent that can respond to incidents without human approval. What are your concerns and what controls would you require?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Concerns: destructive actions (delete pods, scale to 0, drain nodes) on wrong targets; misdiagnosis of root cause leading to wrong remediation; cascading failures from bad automation. Required controls: (1) Read-only phase first — gather all context before any writes. (2) Dry-run mode for all proposed remediations — show the exact commands before execution. (3) Blast-radius estimation : if the proposed action affects >N% of capacity, require human approval. (4) Rollback capability : every write action must have a defined undo. (5) Auditability : every action logged to an immutable incident timeline. (6) Human-in-the-loop for anything P1/P0. Start with supervised; earn full autonomy over time on a limited action set."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you calculate the ROI of a business agent and what are the most common ways agent ROI is overstated?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Real ROI = (time saved × hourly rate) + (error reduction × cost per error) - (agent cost + build cost + ops cost). Commonly overstated because: (1) Build cost is underestimated — prompting, testing, safety controls, and ops tooling are all non-trivial. (2) Human oversight cost is forgotten — supervised agents still need a human in the loop, just a less skilled one. (3) Error rates in production are higher than in demos — each LLM error has a cost. (4) Model costs at scale are not linear — token usage grows with context and multi-agent amplification. Honest ROI requires measuring production error rate, oversight cost, and total LLM spend — not just demo throughput."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Define a single-agent system versus a multi-agent system, and name the two roles in the multi-agent pattern.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: an agent = an LLM that uses tools in a loop, driven by an agent runtime (the orchestration layer — loop, state, tool-exec, retries, limits) -> a single-agent system is one agent, one context window, one loop -> a multi-agent system decomposes the task across several agents, each with its own context and toolset -> the standard shape is orchestrator (lead agent) + subagent (worker) : the orchestrator breaks the task down, hands separable subtasks to subagents, then synthesizes their structured outputs -> subagents don't share memory — they communicate only through what the orchestrator passes."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does the orchestrator (lead agent) do, and what does a subagent (worker) do?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the orchestrator owns decomposition and delegation — it reads the goal, splits it into subtasks, assembles the context each subagent needs, dispatches them, and synthesizes the results into a final answer -> a subagent executes one focused subtask with its own isolated context window and a narrow toolset, then returns a structured output -> the analogy is a project manager directing specialist consultants, or in code an API gateway fronting microservices -> the orchestrator never relies on shared state — it must explicitly pass anything a subagent needs to know."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Distinguish a workflow from an agent, and say where memory fits in an agent system.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a workflow is a developer-defined path — the sequence of steps is fixed in code -> an agent is a model-influenced path — the LLM decides which tool to call next and when to stop, inside limits the runtime enforces -> so \"more autonomy\" means handing more of the control flow to the model -> memory = persisted state reachable only via retrieval; it is not in the context window by default -> the runtime injects retrieved memory into the context for a call, the same way it injects retrieved documents — nothing the agent \"remembers\" exists to the model unless it's packed into this call's window."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name three production controls every agent needs before launch, and what each one prevents.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: loop / step cap (e.g. 20 steps) — stops an agent that retries forever without making progress -> token / spend ceiling per session — caps cost so a stuck agent can't run up a $500 bill, ideally with an anomaly alert at ~3x baseline -> least privilege — the agent gets only the permissions the current task needs, limiting blast radius if it's manipulated or misfires -> honorable mentions: structured per-step tracing for observability, idempotency on write tools, and a human-in-the-loop gate for high-risk actions -> all of these live in the runtime, not the prompt."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When does multi-agent genuinely help, and when is it just \"more microservices\" cargo-culting?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: it helps when subtasks are genuinely independent and parallel (fan out over 20 files at once to cut wall-clock time) or when context is separable and exceeds one window, so isolating each subagent's context keeps it clean -> it hurts when the work is sequential and shares state — a single agent loop handles that more cheaply and is far easier to debug -> the cargo-cult tell is \"let's add more agents to make it smarter\": that's a model-quality lever, not an architecture lever -> every split you add buys you coordination overhead, harder debugging (\"which agent broke?\"), and compounded failure modes -> the senior framing: justify a new agent exactly like you'd justify splitting a microservice — only when a real boundary (independent work, separable context, distinct toolset) demands it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is cost the hidden killer of multi-agent systems, and how do you reason about it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: token cost compounds — every step re-sends the growing context, so cost rises super-linearly with steps, and multi-agent multiplies that by the number of agents (N agents x M iterations NxM LLM calls, numbers illustrative) -> a single orchestrator turn can fan out into dozens of subagent calls, each carrying its own assembled context -> so the unit to track is cost per completed task , attributed per agent and per tenant, not just per call -> controls: per-agent spend ceilings (not only a session budget), model tiering (cheap model for routing/navigation, the strong model only for the hard step), prompt caching on the stable prefix, and history compaction so re-sent context doesn't grow unbounded -> close the loop with an anomaly alert at ~3x baseline so a runaway fan-out trips an incident before the invoice does."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you keep an agent from running forever or overspending in production?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the runtime — not the prompt — enforces the limits -> hard step cap plus a wall-clock timeout independent of step count, since some legitimate steps are slow -> semantic repetition detector : if the last N tool calls are the same tool with the same args, the agent is stuck — halt -> token / spend ceiling per session with a hard kill switch, plus an anomaly alert at ~3x baseline so spend trips an incident early -> progress check : every K steps require the agent to summarize what it accomplished; no progress -> escalate to a human -> root causes to design against: context saturation (tool output crowds out the goal — fix with compression / goal re-injection) and tool-error spirals (retrying the same failing call — fix with bounded retries and a different strategy on retry)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A wrong or stuck multi-agent run lands on you. Why is it harder to debug than a single agent, and what makes it tractable?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the failure could be in any agent and the obvious symptom is downstream of the real cause — a subagent under-specified by the orchestrator, an orchestrator that misread a worker's output, or one worker's bad output propagating uncorrected to the next -> there's no shared state to inspect, so you can't just read one log -> what makes it tractable is per-step tracing: capture the assembled context , the output, the tool calls, and the cost for every agent at every step, tagged with agent ID and session ID -> then you can replay the exact inputs each subagent saw and locate which boundary handed off wrong context -> the prevention is designing for it up front — structured, immutable per-step logs are the multi-agent equivalent of a stack trace, which the architecture doesn't give you for free."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a production multi-agent system with guardrails, observability, and cost controls. What's the skeleton?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: start from the boundary — only go multi-agent if the work is genuinely parallel or context is separable; otherwise a single agent is the right default -> topology: one orchestrator (lead agent) that decomposes and synthesizes, plus narrow subagents (workers) each with an isolated context and a least-privilege toolset -> guardrails (in the runtime): per-agent step caps + wall-clock timeouts, idempotency keys on every write tool, least-privilege credentials per agent, HITL approval gates on high-risk / irreversible actions, prompt-injection defense (tool outputs tagged as data, never instructions) -> cost controls: per-agent and session token ceilings with a kill switch, model tiering, prompt caching on stable prefixes, history compaction, cost attributed per task and per tenant with an anomaly alert -> observability: full per-step traces (assembled context + output + tool calls + cost) keyed by agent and session, immutable audit log for every mutation -> reliability: bounded retries with backoff + jitter, circuit breakers per tool and per provider, a defined degradation path (drop to single agent / cache / escalate to human) -> name the through-line: an agent request is a long-lived, stateful, non-deterministic session over privileged tools, and almost every control follows from that."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "An engineer proposes \"let's add more agents\" to fix quality. Challenge it the way you'd challenge \"let's add more microservices.\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: first separate the symptom from the cause — \"quality is bad\" is usually a context or model-capability problem, and splitting into more agents fixes neither; it just distributes the same defect across more moving parts -> make the cost of the split explicit: each new agent adds coordination overhead, a new context-handoff that can drop information, harder debugging, and compounded failure modes — exactly the bill you pay for premature microservices -> ask the microservices questions: what's the real boundary here? is this work genuinely independent and parallel, or is it sequential with shared state (where one agent loop is simpler and cheaper)? -> point at the cost math: N agents x M iterations multiplies token spend, and re-sent context compounds per step -> the staff move is to redirect to evidence: instrument the failing cases and attribute them (wrong context retrieved vs. weak reasoning) before changing the architecture -> default to the monolith (single agent) and earn each split with a concrete boundary, the same discipline you'd demand before carving out a service."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Autonomous agents will replace the team — ship it fully auto.\" Make the principal-level call on autonomy.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: reframe autonomy as earned, not assumed — it's a dial set per action by blast radius, not a property of the whole system -> reads and analysis can run auto; irreversible or high-impact writes sit behind a human-in-the-loop gate until the data justifies loosening it -> do the compounding-reliability math out loud: even 99% per-step success over 40 steps is ~0.99^40 67% end-to-end, so \"fully autonomous\" over a long task is quietly unreliable (numbers illustrative) -> price in the costs the hype hides: supervised agents still need a human (just a less-skilled one), production error rates beat demo rates, and token cost at scale isn't linear -> the principal position: start supervised on a limited action set, instrument success rate and cost per task, and widen autonomy only where measured reliability and a bounded blast radius support it — with an audit trail and a kill switch the whole time -> that's the difference between a demo that impressed a VP and a system you can put your name on."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a production SRE incident-response agent — tools, guardrails, and observability — for a team that wants it to triage and remediate alerts.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: scope the job first — triage and remediate a bounded set of alert types, with a clear success metric (MTTR reduction without new incidents caused) -> single agent is the right default : incident response is largely sequential with shared state; only fan out to subagents for genuinely parallel evidence-gathering (logs, metrics, traces in parallel), then synthesize -> tools, split by risk: read-only first (logs, dashboards, deploy history, kubectl get) with broad access; write tools (restart, scale, rollback, page) behind least-privilege credentials and never auto on day one -> guardrails: read-only diagnosis phase before any write; dry-run every proposed remediation showing exact commands; blast-radius estimation — if an action touches >N% of capacity or any P0/P1 system, require human approval; every write has a defined rollback; step cap + wall-clock timeout so a confused agent can't thrash production -> cost controls: spend ceiling per incident with a kill switch, model tiering (cheap model to classify the alert, strong model only for root-cause reasoning), anomaly alert if an incident's token spend spikes -> observability: every action streamed to an immutable incident timeline — timestamp, tool, inputs, outputs, agent/session ID, cost — which doubles as the audit trail and the post-mortem record -> autonomy ramp: start fully supervised, measure suggestion-accuracy and false-remediation rate, and only widen auto-remediation on the specific low-blast-radius actions the data proves safe -> name the trade-off: full autonomy cuts MTTR but risks a wrong action amplifying an outage, so reads earn autonomy fast and destructive writes earn it slowly."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a customer-support agent fleet for a SaaS product — multiple agents, guardrails, and cost controls under real traffic.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: justify the fleet before building it — a single support agent handles most tickets; go multi-agent only where boundaries are real (a triage/orchestrator agent routes, specialist subagents handle billing, technical, and account questions with distinct toolsets and permissions) -> orchestrator (lead) + subagents (workers): the router classifies intent and dispatches; each specialist runs an isolated context with a least-privilege toolset (KB search read-only; refund tool capped, e.g. <=$25 auto; account writes gated) -> guardrails: refunds/credits above a threshold require a human approval gate; idempotency keys on every write so a retried refund isn't issued twice; prompt-injection defense since ticket text and fetched pages are adversarial input — tag tool outputs as data, not instructions; per-customer scoping on every retrieval so one account's data never leaks into another's context -> cost controls: token ceiling per ticket and per tenant with a kill switch, model tiering (cheap model for routing and FAQ, strong model for ambiguous cases), prompt caching on the stable policy/system prefix, history compaction so long threads don't re-send unbounded context, cost attributed per tenant with an anomaly alert -> observability: per-step traces (assembled context + output + tool calls + cost) keyed by agent/session/customer; immutable audit log for every refund or account change -> failure handling: low confidence or outside-KB -> escalate to a human queue rather than hallucinate; a dead-letter path for tickets the fleet can't resolve -> name the trade-off: a fleet of specialists is safer to audit and cheaper per ticket than one omnipotent agent, but the orchestrator's routing and context-handoff become the new failure surface to trace and test."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->
@@ -101,7 +262,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
 <div class="wrap">
   <nav id="hubbar">
-    <a href="../../index.html">&#8592; Learning Hub</a>
+    <a href="../../index.html">&#8592; StackDepth</a>
     <span class="pn"><a href="0003-how-coding-agents-work.html" title="How Coding Agents Work">&#8249; Prev</a><span style="color:var(--muted);opacity:.55">Next &#8250;</span></span>
     <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">AI Agents</span></span>
   </nav>
@@ -643,77 +804,105 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     </div>
   </div>
 
-  <!-- ============ INTERVIEW QUESTIONS ============ -->
-  <h2 class="sec" id="interview">Interview questions — Modules 7–9</h2>
+  <!-- ============ INTERVIEW PANEL — level tabs ============ -->
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
 
-  <details class="iq">
-    <summary>When would you choose multi-agent over a single agent for a coding task?</summary>
-    <div class="a">When the task is genuinely decomposable into <b>independent parallel subtasks</b> (e.g. analyze 20 files simultaneously); when subtasks need <b>different toolsets</b> (research agent uses web search, writer agent uses file system); when a single context window is <b>too small</b> for all the information needed. Not justified: sequential steps, tasks that fit in one context, or "we want it smarter" — that's a model choice, not an architecture choice.</div>
-  </details>
+  <div data-interview>
+    <details class="iq" data-level="core">
+      <summary>Define a single-agent system versus a multi-agent system, and name the two roles in the multi-agent pattern.</summary>
+      <div class="a">
+        <b>Hit these points:</b> an <b>agent</b> = an LLM that uses tools in a loop, driven by an <b>agent runtime</b> (the orchestration layer — loop, state, tool-exec, retries, limits) &rarr; a <b>single-agent system</b> is one agent, one context window, one loop &rarr; a <b>multi-agent system</b> decomposes the task across several agents, each with its own context and toolset &rarr; the standard shape is <b>orchestrator (lead agent)</b> + <b>subagent (worker)</b>: the orchestrator breaks the task down, hands separable subtasks to subagents, then synthesizes their structured outputs &rarr; subagents don't share memory — they communicate only through what the orchestrator passes.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What does the orchestrator (lead agent) do, and what does a subagent (worker) do?</summary>
+      <div class="a">
+        <b>Hit these points:</b> the <b>orchestrator</b> owns decomposition and delegation — it reads the goal, splits it into subtasks, assembles the context each subagent needs, dispatches them, and synthesizes the results into a final answer &rarr; a <b>subagent</b> executes one focused subtask with its own isolated context window and a narrow toolset, then returns a structured output &rarr; the analogy is a project manager directing specialist consultants, or in code an API gateway fronting microservices &rarr; the orchestrator never relies on shared state — it must explicitly pass anything a subagent needs to know.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Distinguish a workflow from an agent, and say where memory fits in an agent system.</summary>
+      <div class="a">
+        <b>Hit these points:</b> a <b>workflow</b> is a developer-defined path — the sequence of steps is fixed in code &rarr; an <b>agent</b> is a model-influenced path — the LLM decides which tool to call next and when to stop, inside limits the runtime enforces &rarr; so "more autonomy" means handing more of the control flow to the model &rarr; <b>memory</b> = persisted state reachable only via retrieval; it is not in the context window by default &rarr; the runtime injects retrieved memory into the context for a call, the same way it injects retrieved documents — nothing the agent "remembers" exists to the model unless it's packed into this call's window.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Name three production controls every agent needs before launch, and what each one prevents.</summary>
+      <div class="a">
+        <b>Hit these points:</b> <b>loop / step cap</b> (e.g. 20 steps) — stops an agent that retries forever without making progress &rarr; <b>token / spend ceiling per session</b> — caps cost so a stuck agent can't run up a $500 bill, ideally with an anomaly alert at ~3&times; baseline &rarr; <b>least privilege</b> — the agent gets only the permissions the current task needs, limiting blast radius if it's manipulated or misfires &rarr; honorable mentions: structured per-step tracing for observability, idempotency on write tools, and a human-in-the-loop gate for high-risk actions &rarr; all of these live in the runtime, not the prompt.
+      </div>
+    </details>
 
-  <details class="iq">
-    <summary>What are the main failure modes unique to multi-agent systems vs single-agent?</summary>
-    <div class="a">
-      (1) <b>Coordinator failure</b> — misinterprets worker output, sends wrong context to next worker.<br>
-      (2) <b>Worker isolation</b> — worker doesn't have enough context because the coordinator under-specified.<br>
-      (3) <b>Compounded errors</b> — one worker's bad output propagates to downstream workers without correction.<br>
-      (4) <b>Debugging difficulty</b> — which agent made the mistake?<br>
-      (5) <b>Cost amplification</b> — N agents × M iterations = N×M LLM calls, all billed.<br>
-      (6) <b>No shared state</b> — workers can't see each other's work unless the coordinator explicitly passes it.
+    <details class="iq" data-level="senior">
+      <summary>When does multi-agent genuinely help, and when is it just "more microservices" cargo-culting?</summary>
+      <div class="a">
+        <b>Hit these points:</b> it <b>helps</b> when subtasks are genuinely independent and parallel (fan out over 20 files at once to cut wall-clock time) or when context is separable and exceeds one window, so isolating each subagent's context keeps it clean &rarr; it <b>hurts</b> when the work is sequential and shares state — a single agent loop handles that more cheaply and is far easier to debug &rarr; the cargo-cult tell is "let's add more agents to make it smarter": that's a model-quality lever, not an architecture lever &rarr; every split you add buys you coordination overhead, harder debugging ("which agent broke?"), and compounded failure modes &rarr; the senior framing: justify a new agent exactly like you'd justify splitting a microservice — only when a real boundary (independent work, separable context, distinct toolset) demands it.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Why is cost the hidden killer of multi-agent systems, and how do you reason about it?</summary>
+      <div class="a">
+        <b>Hit these points:</b> token cost compounds — every step re-sends the growing context, so cost rises super-linearly with steps, and multi-agent multiplies that by the number of agents (N agents &times; M iterations &asymp; N&times;M LLM calls, numbers illustrative) &rarr; a single orchestrator turn can fan out into dozens of subagent calls, each carrying its own assembled context &rarr; so the unit to track is <b>cost per completed task</b>, attributed per agent and per tenant, not just per call &rarr; controls: per-agent spend ceilings (not only a session budget), model tiering (cheap model for routing/navigation, the strong model only for the hard step), prompt caching on the stable prefix, and history compaction so re-sent context doesn't grow unbounded &rarr; close the loop with an anomaly alert at ~3&times; baseline so a runaway fan-out trips an incident before the invoice does.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>How do you keep an agent from running forever or overspending in production?</summary>
+      <div class="a">
+        <b>Hit these points:</b> the runtime — not the prompt — enforces the limits &rarr; <b>hard step cap</b> plus a <b>wall-clock timeout</b> independent of step count, since some legitimate steps are slow &rarr; <b>semantic repetition detector</b>: if the last N tool calls are the same tool with the same args, the agent is stuck — halt &rarr; <b>token / spend ceiling</b> per session with a hard kill switch, plus an anomaly alert at ~3&times; baseline so spend trips an incident early &rarr; <b>progress check</b>: every K steps require the agent to summarize what it accomplished; no progress &rarr; escalate to a human &rarr; root causes to design against: context saturation (tool output crowds out the goal — fix with compression / goal re-injection) and tool-error spirals (retrying the same failing call — fix with bounded retries and a different strategy on retry).
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>A wrong or stuck multi-agent run lands on you. Why is it harder to debug than a single agent, and what makes it tractable?</summary>
+      <div class="a">
+        <b>Hit these points:</b> the failure could be in any agent and the obvious symptom is downstream of the real cause — a subagent under-specified by the orchestrator, an orchestrator that misread a worker's output, or one worker's bad output propagating uncorrected to the next &rarr; there's no shared state to inspect, so you can't just read one log &rarr; what makes it tractable is per-step tracing: capture the <em>assembled context</em>, the output, the tool calls, and the cost for every agent at every step, tagged with agent ID and session ID &rarr; then you can replay the exact inputs each subagent saw and locate which boundary handed off wrong context &rarr; the prevention is designing for it up front — structured, immutable per-step logs are the multi-agent equivalent of a stack trace, which the architecture doesn't give you for free.
+      </div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>Design a production multi-agent system with guardrails, observability, and cost controls. What's the skeleton?</summary>
+      <div class="a">
+        <b>Hit these points:</b> start from the boundary — only go multi-agent if the work is genuinely parallel or context is separable; otherwise a single agent is the right default &rarr; <b>topology:</b> one orchestrator (lead agent) that decomposes and synthesizes, plus narrow subagents (workers) each with an isolated context and a least-privilege toolset &rarr; <b>guardrails (in the runtime):</b> per-agent step caps + wall-clock timeouts, idempotency keys on every write tool, least-privilege credentials per agent, HITL approval gates on high-risk / irreversible actions, prompt-injection defense (tool outputs tagged as data, never instructions) &rarr; <b>cost controls:</b> per-agent <em>and</em> session token ceilings with a kill switch, model tiering, prompt caching on stable prefixes, history compaction, cost attributed per task and per tenant with an anomaly alert &rarr; <b>observability:</b> full per-step traces (assembled context + output + tool calls + cost) keyed by agent and session, immutable audit log for every mutation &rarr; <b>reliability:</b> bounded retries with backoff + jitter, circuit breakers per tool and per provider, a defined degradation path (drop to single agent / cache / escalate to human) &rarr; name the through-line: an agent request is a long-lived, stateful, non-deterministic session over privileged tools, and almost every control follows from that.
+      </div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>An engineer proposes "let's add more agents" to fix quality. Challenge it the way you'd challenge "let's add more microservices."</summary>
+      <div class="a">
+        <b>Hit these points:</b> first separate the symptom from the cause — "quality is bad" is usually a context or model-capability problem, and splitting into more agents fixes neither; it just distributes the same defect across more moving parts &rarr; make the cost of the split explicit: each new agent adds coordination overhead, a new context-handoff that can drop information, harder debugging, and compounded failure modes — exactly the bill you pay for premature microservices &rarr; ask the microservices questions: what's the real boundary here? is this work genuinely independent and parallel, or is it sequential with shared state (where one agent loop is simpler and cheaper)? &rarr; point at the cost math: N agents &times; M iterations multiplies token spend, and re-sent context compounds per step &rarr; the staff move is to redirect to evidence: instrument the failing cases and attribute them (wrong context retrieved vs. weak reasoning) before changing the architecture &rarr; default to the monolith (single agent) and earn each split with a concrete boundary, the same discipline you'd demand before carving out a service.
+      </div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>"Autonomous agents will replace the team — ship it fully auto." Make the principal-level call on autonomy.</summary>
+      <div class="a">
+        <b>Hit these points:</b> reframe autonomy as <em>earned, not assumed</em> — it's a dial set per action by blast radius, not a property of the whole system &rarr; reads and analysis can run auto; irreversible or high-impact writes sit behind a human-in-the-loop gate until the data justifies loosening it &rarr; do the compounding-reliability math out loud: even 99% per-step success over 40 steps is ~0.99^40 &asymp; 67% end-to-end, so "fully autonomous" over a long task is quietly unreliable (numbers illustrative) &rarr; price in the costs the hype hides: supervised agents still need a human (just a less-skilled one), production error rates beat demo rates, and token cost at scale isn't linear &rarr; the principal position: start supervised on a limited action set, instrument success rate and cost per task, and widen autonomy only where measured reliability and a bounded blast radius support it — with an audit trail and a kill switch the whole time &rarr; that's the difference between a demo that impressed a VP and a system you can put your name on.
+      </div>
+    </details>
+
+    <div class="designrubric" data-level="design">
+      <b>Design-round framework</b> — drive any production agent design through these, out loud:
+      <ol>
+        <li>Clarify the job: the agent's responsibilities, the success metric, and the risk profile of its actions.</li>
+        <li>Single vs multi-agent: is the work sequential (one agent) or genuinely parallel / separable-context (orchestrator + subagents)? Justify any split.</li>
+        <li>Tools &amp; permissions: smallest viable toolset, least privilege, read and write agents separated, typed schemas with argument validation.</li>
+        <li>Guardrails: step cap + wall-clock timeout, idempotency on writes, HITL gates on high-risk actions, prompt-injection defense (tool outputs as data).</li>
+        <li>Cost controls: per-agent + session token ceilings with a kill switch, model tiering, prompt caching, history compaction, anomaly alerts on spend.</li>
+        <li>Observability: full per-step traces (assembled context + output + tool calls + cost), keyed by agent/session; immutable audit log for every mutation.</li>
+        <li>Failure modes &amp; degradation: loops, tool-error spirals, context saturation, compounded multi-agent errors — and the fallback path (cache / smaller model / escalate to human).</li>
+      </ol>
     </div>
-  </details>
-
-  <details class="iq">
-    <summary>You're launching a SaaS billing agent that can apply credits, retry charges, and update subscription tiers. What production controls do you put in place before launch?</summary>
-    <div class="a">
-      (1) <b>Least privilege</b> — read-only by default; write operations require explicit capability grant per session.<br>
-      (2) <b>Dry-run mode</b> — all write operations execute a dry run first and show proposed changes before confirming.<br>
-      (3) <b>Loop cap</b> — max 15 iterations per task; halt and notify if exceeded.<br>
-      (4) <b>Cost cap</b> — max $2 in LLM tokens per billing task; alert at 50% of budget.<br>
-      (5) <b>Structured audit log</b> — every tool call logged with inputs, outputs, user ID, session ID, timestamp — immutable, append-only.<br>
-      (6) <b>Idempotency keys</b> on all write tools: retried calls are no-ops.<br>
-      (7) <b>Human approval gate</b> for changes above a threshold (e.g. credits &gt; $100 require human confirmation).<br>
-      (8) <b>Prompt injection defense</b> — tool outputs tagged as [TOOL RESULT]; system prompt instructs the model to treat them as data, not instructions.
-    </div>
-  </details>
-
-  <details class="iq">
-    <summary>How do you detect and prevent an infinite loop in a production agent?</summary>
-    <div class="a">
-      (1) <b>Hard iteration cap</b> (e.g. 20 steps) — the runtime counts and halts.<br>
-      (2) <b>Semantic repetition detector</b>: if the last N tool calls are identical (same tool, same args), halt with an error.<br>
-      (3) <b>Wall-clock timeout</b>: hard cap independent of iteration count.<br>
-      (4) <b>Progress check</b>: every K steps, the agent summarizes progress; if none detected, escalate to human.<br>
-      (5) <b>Dead-man switch</b>: a background timer halts execution if the agent doesn't emit a heartbeat within Y seconds.
-    </div>
-  </details>
-
-  <details class="iq">
-    <summary>Your company wants an autonomous SRE agent that can respond to incidents without human approval. What are your concerns and what controls would you require?</summary>
-    <div class="a">
-      <b>Concerns:</b> destructive actions (delete pods, scale to 0, drain nodes) on wrong targets; misdiagnosis leading to wrong remediation; cascading failures from bad automation.<br><br>
-      <b>Required controls:</b><br>
-      (1) <b>Read-only phase first</b> — gather all context before any writes.<br>
-      (2) <b>Dry-run mode</b> for all proposed remediations — show exact commands before execution.<br>
-      (3) <b>Blast-radius estimation</b>: if action affects &gt;N% of capacity, require human approval.<br>
-      (4) <b>Rollback capability</b>: every write action must have a defined undo.<br>
-      (5) <b>Auditability</b>: every action logged to an immutable incident timeline.<br>
-      (6) <b>Human-in-the-loop for P1/P0.</b> Start supervised; earn full autonomy on a limited action set over time.
-    </div>
-  </details>
-
-  <details class="iq">
-    <summary>How do you calculate the ROI of a business agent and what are the most common ways agent ROI is overstated?</summary>
-    <div class="a">
-      <b>Real ROI</b> = (time saved × hourly rate) + (error reduction × cost per error) - (agent cost + build cost + ops cost).<br><br>
-      <b>Commonly overstated because:</b><br>
-      (1) <b>Build cost underestimated</b> — prompting, testing, safety controls, ops tooling all add up.<br>
-      (2) <b>Human oversight cost forgotten</b> — supervised agents still need a human, just less skilled.<br>
-      (3) <b>Error rates in production higher than in demos</b> — each LLM error has a cost.<br>
-      (4) <b>Model costs at scale not linear</b> — token usage grows with context and multi-agent amplification.<br><br>
-      Honest ROI requires measuring production error rate, oversight cost, and total LLM spend — not just demo throughput.
-    </div>
-  </details>
+    <details class="iq" data-level="design">
+      <summary>Design a production SRE incident-response agent — tools, guardrails, and observability — for a team that wants it to triage and remediate alerts.</summary>
+      <div class="a">
+        <b>A strong answer covers:</b> scope the job first — triage and remediate a bounded set of alert types, with a clear success metric (MTTR reduction without new incidents caused) &rarr; <b>single agent is the right default</b>: incident response is largely sequential with shared state; only fan out to subagents for genuinely parallel evidence-gathering (logs, metrics, traces in parallel), then synthesize &rarr; <b>tools, split by risk:</b> read-only first (logs, dashboards, deploy history, kubectl get) with broad access; write tools (restart, scale, rollback, page) behind least-privilege credentials and never auto on day one &rarr; <b>guardrails:</b> read-only diagnosis phase before any write; dry-run every proposed remediation showing exact commands; blast-radius estimation — if an action touches &gt;N% of capacity or any P0/P1 system, require human approval; every write has a defined rollback; step cap + wall-clock timeout so a confused agent can't thrash production &rarr; <b>cost controls:</b> spend ceiling per incident with a kill switch, model tiering (cheap model to classify the alert, strong model only for root-cause reasoning), anomaly alert if an incident's token spend spikes &rarr; <b>observability:</b> every action streamed to an immutable incident timeline — timestamp, tool, inputs, outputs, agent/session ID, cost — which doubles as the audit trail and the post-mortem record &rarr; <b>autonomy ramp:</b> start fully supervised, measure suggestion-accuracy and false-remediation rate, and only widen auto-remediation on the specific low-blast-radius actions the data proves safe &rarr; name the trade-off: full autonomy cuts MTTR but risks a wrong action amplifying an outage, so reads earn autonomy fast and destructive writes earn it slowly.
+      </div>
+    </details>
+    <details class="iq" data-level="design">
+      <summary>Design a customer-support agent fleet for a SaaS product — multiple agents, guardrails, and cost controls under real traffic.</summary>
+      <div class="a">
+        <b>A strong answer covers:</b> justify the fleet before building it — a single support agent handles most tickets; go multi-agent only where boundaries are real (a triage/orchestrator agent routes, specialist subagents handle billing, technical, and account questions with distinct toolsets and permissions) &rarr; <b>orchestrator (lead) + subagents (workers):</b> the router classifies intent and dispatches; each specialist runs an isolated context with a least-privilege toolset (KB search read-only; refund tool capped, e.g. &le;$25 auto; account writes gated) &rarr; <b>guardrails:</b> refunds/credits above a threshold require a human approval gate; idempotency keys on every write so a retried refund isn't issued twice; prompt-injection defense since ticket text and fetched pages are adversarial input — tag tool outputs as data, not instructions; per-customer scoping on every retrieval so one account's data never leaks into another's context &rarr; <b>cost controls:</b> token ceiling per ticket and per tenant with a kill switch, model tiering (cheap model for routing and FAQ, strong model for ambiguous cases), prompt caching on the stable policy/system prefix, history compaction so long threads don't re-send unbounded context, cost attributed per tenant with an anomaly alert &rarr; <b>observability:</b> per-step traces (assembled context + output + tool calls + cost) keyed by agent/session/customer; immutable audit log for every refund or account change &rarr; <b>failure handling:</b> low confidence or outside-KB &rarr; escalate to a human queue rather than hallucinate; a dead-letter path for tickets the fleet can't resolve &rarr; name the trade-off: a fleet of specialists is safer to audit and cheaper per ticket than one omnipotent agent, but the orchestrator's routing and context-handoff become the new failure surface to trace and test.
+      </div>
+    </details>
+  </div>
 
   <!-- ============ ARCHITECTURE CHEAT SHEET ============ -->
   <h2 class="sec" id="cheat">★ Stage 2 architecture cheat sheet</h2>
@@ -892,5 +1081,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     });
   });
 </script>
+<script src="../../assets/interview.js" defer></script>
 </body>
 </html>

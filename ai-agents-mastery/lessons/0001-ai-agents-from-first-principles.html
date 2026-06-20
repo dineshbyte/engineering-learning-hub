@@ -9,24 +9,25 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lesson 1 · AI Agents from first principles</title>
-<meta name="description" content="Your bar: reconstruct the entire stack on a whiteboard from memory — to tell real capability from hype in pitches and reviews. So every level is built to be…">
+<title>AI Agents Explained: LLMs, Tools, Loops &amp; MCP · StackDepth</title>
+<meta name="description" content="AI agents from first principles: how LLMs, tools, the agent loop, planning, and MCP fit together — build the full stack from memory and tell real capability from hype.">
 <meta name="author" content="dineshbyte">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/ai-agents-mastery/lessons/0001-ai-agents-from-first-principles.html">
 <meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Learning Hub">
-<meta property="og:title" content="Lesson 1 · AI Agents from first principles · Engineering Learning Hub">
-<meta property="og:description" content="Your bar: reconstruct the entire stack on a whiteboard from memory — to tell real capability from hype in pitches and reviews. So every level is built to be…">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="AI Agents Explained: LLMs, Tools, Loops &amp; MCP · StackDepth">
+<meta property="og:description" content="AI agents from first principles: how LLMs, tools, the agent loop, planning, and MCP fit together — build the full stack from memory and tell real capability from hype.">
 <meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/ai-agents-mastery/lessons/0001-ai-agents-from-first-principles.html">
 <meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Lesson 1 · AI Agents from first principles · Engineering Learning Hub">
-<meta name="twitter:description" content="Your bar: reconstruct the entire stack on a whiteboard from memory — to tell real capability from hype in pitches and reviews. So every level is built to be…">
+<meta name="twitter:title" content="AI Agents Explained: LLMs, Tools, Loops &amp; MCP · StackDepth">
+<meta name="twitter:description" content="AI agents from first principles: how LLMs, tools, the agent loop, planning, and MCP fit together — build the full stack from memory and tell real capability from hype.">
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../../assets/tokens.css">
 <link rel="stylesheet" href="../../assets/lesson.css">
+<link rel="stylesheet" href="../../assets/interview.css">
 <style>
   :root{--accent:var(--track-agents)}
 
@@ -89,6 +90,118 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What is an LLM, and what are the three things it can't do on its own?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: an LLM is a stateless text-prediction function - f(text) -> text , the reasoning model, the brain -> it can't remember between calls, can't act on the world, and holds no state -> a chatbot only \"remembers\" because the runtime re-sends the transcript every call."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk me through exactly what happens when an agent \"uses a tool\".",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a tool is a callable capability - a typed function (name + param schema) wrapping an API or function -> the model only emits a request (tool name + args), it never executes anything -> the runtime runs the real function and feeds the result back into the next call -> red flag: \"the LLM ran the SQL\" - it only asked."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Define an agent and its agent loop.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: an agent is an LLM using tools to accomplish a goal - LLM + tools + loop + goal -> the loop is observe (last result) -> decide (LLM picks next step) -> act (run a tool) -> observe, repeating until the goal is met or a cap is hit -> same model as a bare LLM; what's added is structural, not IQ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is the agent runtime, and what is memory in this stack?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the runtime is the orchestration layer - ordinary code that hosts the loop, holds state, calls the LLM, dispatches tools, enforces retries/timeouts/max-steps/permissions -> memory is persisted state the model can't see until the runtime retrieves it back into the context window -> short-term = the window (RAM, re-sent each call); long-term = an external store, pulled in via RAG."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When would you NOT build an agent, and ship a workflow instead? Name the trade-off.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a workflow is a developer-defined path; an agent is a model-influenced path -> if the steps are known and repeatable, write the workflow - you buy predictability, lower cost, lower latency, easier debugging -> reach for an agent only when the path can't be predetermined and that flexibility is worth the autonomy tax -> the named trade-off: predictability/cost vs flexibility/autonomy -> the middle ground is an agentic workflow - a fixed path with a few model-chosen branches."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your agent occasionally loops forever and burns huge cost. Where do you fix it, and why is it not \"the model\"?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the fix lives in the runtime, not the model - max-steps, timeouts, token budgets, and guardrails are the runtime's job -> the stateless LLM can't stop itself or host a loop; the layer that owns the loop owns the limits -> blaming \"the model\" misreads the architecture -> add observability per turn so a runaway run is a traced, capped event, not a surprise invoice."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A team wants to add a second agent to \"go faster.\" Talk them into it - or out of it.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: same call as premature microservices -> multi-agent costs coordination, latency, partial-failure handling, and roughly 15x the tokens (illustrative) -> it only pays when the work is genuinely parallel and independent, or one context/role can't cope -> start single-agent (the monolith); split with evidence, not vibes -> \"more agents\" is not a capability, it's a bill."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Explain MCP to a skeptical exec in one analogy, and name the problem it solves.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: MCP is a protocol for exposing tools, resources, and prompts to AI clients - \"USB-C / JDBC for tools\" -> without it, every agent-to-tool pair is bespoke glue: NxM integrations -> expose a server once and any MCP client uses it -> N+M -> a server exposes the capability, a client connects from the host app -> it is an open multi-vendor standard, not a Claude feature, and not the tool itself - it's the way to reach tools."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A vendor pitches \"fully autonomous agentic AI.\" Place it on the workflow<->agent spectrum and name the trade-off the pitch bought.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: strip the buzzword to the engine - what tools, what loop, what guardrails? -> \"fully autonomous\" sits at the far agent end: the model writes the path, so they bought flexibility and paid in predictability, cost, latency, and debuggability -> ask what they gave up: can you reproduce a run, cap its spend, audit its actions? -> for most real tasks the right answer is further left - an agentic workflow with autonomy only where the path truly can't be scripted -> the senior read: autonomy is a cost you justify per use case, not a feature you brag about."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does a \"coding agent\" differ from a \"support agent\" architecturally - and what does that tell you about every agent product?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: architecturally they barely differ - same engine: LLM + loop + runtime + memory -> what changes is the tool registry, the system prompt, and the guardrails - same employee, different job description -> so \"AI agent product\" is rarely a moat in the engine; the moat is the tools you wired, the data you retrieve, and the guardrails you can stand behind -> evaluate any pitch on those three, not on the model name."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Build vs buy: a team wants to adopt an off-the-shelf agent runtime/SDK instead of writing their own loop. How do you reason about it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the loop itself is cheap to write; the hard, ongoing parts are state handling, retries, tool dispatch, permissions, observability, and evals - that's what a mature runtime buys you -> buy when those are commodity and you want to spend your effort on tools, prompts, and domain guardrails -> build when your control, latency, security, or audit requirements outgrow the SDK's seams -> name the lock-in: how tools are defined, how memory is wired, how you trace a run -> the reversible move is to keep your tools and guardrails portable and treat the runtime as swappable plumbing."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a support agent that's safe to ship for a SaaS billing product.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: goal - resolve common billing questions and disputes, escalate the rest -> tools: look up invoice/payments (read), issue refund and adjust subscription (write), notify customer, open a ticket -> bounded loop in the runtime with max-steps and timeouts -> guardrails: refund caps, human approval above a threshold, idempotent refunds so a retry never double-pays, full audit log, scoped permissions per tool -> per-case memory plus retrieval of the customer's history -> a workflow for the happy path with an agent escape-hatch for ambiguous disputes -> eval on resolution rate and a hard zero-tolerance metric for wrong-amount refunds. Want to run this live? Ask me to grade your whiteboard answer."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design an SRE incident-triage agent. What can it touch, and where does it stop?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: goal - triage an alert, gather signal, propose (not silently execute) remediation -> tools: read metrics/logs/traces and recent deploys (read-heavy), with write actions like rollback or scale gated behind explicit approval -> observe->decide->act loop - an intent-level reconciliation loop - capped by max-steps so it can't thrash -> guardrails: read-only by default, human-in-the-loop for any production-mutating action, blast-radius limits, idempotent and reversible operations, a full audit trail -> memory of the current incident plus retrieval of similar past incidents/runbooks -> workflow for the known runbook steps, agent autonomy only for the open-ended investigation -> eval on time-to-diagnosis and false-action rate, and design so the worst failure is a no-op, never an outage."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->
@@ -100,7 +213,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
 <div class="wrap">
   <nav id="hubbar">
-    <a href="../../index.html">&#8592; Learning Hub</a>
+    <a href="../../index.html">&#8592; StackDepth</a>
     <span class="pn"><span style="color:var(--muted);opacity:.55">&#8249; Prev</span><a href="0002-agent-runtime-and-context.html" title="Agent Runtime, Context &amp; Memory">Next &#8250;</a></span>
     <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">AI Agents</span></span>
   </nav>
@@ -697,33 +810,67 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     spectrums with you. Want the next lesson — spaced, interleaved drills? Just ask.
   </div>
 
-  <!-- ================= INTERVIEW QUESTIONS ================= -->
-  <h2 class="sec" id="interview">Interview questions on these concepts</h2>
-  <p>Use each one <strong>twice</strong>: answer it yourself from memory (recall), and ask it of a candidate or vendor to test depth. Reveal shows what a strong answer <em>hits</em> — a checklist, not a script.</p>
+  <!-- ================= INTERVIEW PANEL ================= -->
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
+  <div data-interview>
 
-  <details class="iq"><summary>1 · Walk me through exactly what happens when an agent "uses a tool".</summary>
-    <div class="a"><b>Hits:</b> the model emits a <em>structured request</em> (tool name + args); the <em>runtime</em> executes the real function; the result is fed back into the next call; the model never runs anything itself. Bonus: a tool's scope is a security boundary, like an API key.</div></details>
+    <!-- CORE -->
+    <details class="iq" data-level="core"><summary>What is an LLM, and what are the three things it can't do on its own?</summary>
+      <div class="a"><b>Hit these points:</b> an LLM is a stateless text-prediction function &mdash; <code>f(text) &rarr; text</code>, the reasoning model, the brain &rarr; it can't remember between calls, can't act on the world, and holds no state &rarr; a chatbot only "remembers" because the runtime re-sends the transcript every call.</div></details>
 
-  <details class="iq"><summary>2 · An LLM is stateless — so how does a chat assistant "remember" 20 turns of context?</summary>
-    <div class="a"><b>Hits:</b> the runtime re-sends the history every call; the context window is bounded RAM; durable memory is an external store (RAG); as the window fills you trim or summarise. Red flag answer: "the model remembers."</div></details>
+    <details class="iq" data-level="core"><summary>Walk me through exactly what happens when an agent "uses a tool".</summary>
+      <div class="a"><b>Hit these points:</b> a tool is a callable capability &mdash; a typed function (name + param schema) wrapping an API or function &rarr; the model only <em>emits a request</em> (tool name + args), it never executes anything &rarr; the runtime runs the real function and feeds the result back into the next call &rarr; red flag: "the LLM ran the SQL" &mdash; it only asked.</div></details>
 
-  <details class="iq"><summary>3 · When would you NOT build an agent, and ship a workflow instead?</summary>
-    <div class="a"><b>Hits:</b> when the path is known and repeatable — you buy predictability, lower cost, lower latency, and easier debugging. Default to workflows; reach for agents only when the steps can't be predetermined.</div></details>
+    <details class="iq" data-level="core"><summary>Define an agent and its agent loop.</summary>
+      <div class="a"><b>Hit these points:</b> an agent is an LLM using tools to accomplish a goal &mdash; LLM + tools + loop + goal &rarr; the loop is observe (last result) &rarr; decide (LLM picks next step) &rarr; act (run a tool) &rarr; observe, repeating until the goal is met or a cap is hit &rarr; same model as a bare LLM; what's added is structural, not IQ.</div></details>
 
-  <details class="iq"><summary>4 · Your agent occasionally loops forever and burns huge cost. Where do you fix it?</summary>
-    <div class="a"><b>Hits:</b> the <em>runtime</em>, not the model — max-steps, timeouts, token budgets, and guardrails are the runtime's job. Anyone who blames "the model" missed Level 5.</div></details>
+    <details class="iq" data-level="core"><summary>What is the agent runtime, and what is memory in this stack?</summary>
+      <div class="a"><b>Hit these points:</b> the runtime is the orchestration layer &mdash; ordinary code that hosts the loop, holds state, calls the LLM, dispatches tools, enforces retries/timeouts/max-steps/permissions &rarr; memory is persisted state the model can't see until the runtime retrieves it back into the context window &rarr; short-term = the window (RAM, re-sent each call); long-term = an external store, pulled in via RAG.</div></details>
 
-  <details class="iq"><summary>5 · Explain MCP to a skeptical exec in one analogy, and name the problem it solves.</summary>
-    <div class="a"><b>Hits:</b> "USB-C / JDBC for tools" — an open standard so any agent can reach any tool. It turns N×M bespoke integrations into N+M; a server exposes tools, a client connects. Not a Claude-only feature.</div></details>
+    <!-- SENIOR -->
+    <details class="iq" data-level="senior"><summary>When would you NOT build an agent, and ship a workflow instead? Name the trade-off.</summary>
+      <div class="a"><b>Hit these points:</b> a workflow is a developer-defined path; an agent is a model-influenced path &rarr; if the steps are known and repeatable, write the workflow &mdash; you buy predictability, lower cost, lower latency, easier debugging &rarr; reach for an agent only when the path can't be predetermined and that flexibility is worth the autonomy tax &rarr; the named trade-off: predictability/cost vs flexibility/autonomy &rarr; the middle ground is an agentic workflow &mdash; a fixed path with a few model-chosen branches.</div></details>
 
-  <details class="iq"><summary>6 · A team wants to add a second agent to "go faster." Talk them into it — or out of it.</summary>
-    <div class="a"><b>Hits:</b> same trade-off as premature microservices. Multi-agent costs coordination, latency, and ~15× tokens; it only helps when work is context-bound or genuinely parallel and independent. Start single-agent; split with evidence.</div></details>
+    <details class="iq" data-level="senior"><summary>Your agent occasionally loops forever and burns huge cost. Where do you fix it, and why is it not "the model"?</summary>
+      <div class="a"><b>Hit these points:</b> the fix lives in the runtime, not the model &mdash; max-steps, timeouts, token budgets, and guardrails are the runtime's job &rarr; the stateless LLM can't stop itself or host a loop; the layer that owns the loop owns the limits &rarr; blaming "the model" misreads the architecture &rarr; add observability per turn so a runaway run is a traced, capped event, not a surprise invoice.</div></details>
 
-  <details class="iq"><summary>7 · How does a "coding agent" differ from a "support agent" architecturally?</summary>
-    <div class="a"><b>Hits:</b> it barely does — same engine (LLM + loop + runtime + memory). What differs is the tool registry, the system prompt, and the guardrails. Same employee, different job description.</div></details>
+    <details class="iq" data-level="senior"><summary>A team wants to add a second agent to "go faster." Talk them into it &mdash; or out of it.</summary>
+      <div class="a"><b>Hit these points:</b> same call as premature microservices &rarr; multi-agent costs coordination, latency, partial-failure handling, and roughly 15&times; the tokens (illustrative) &rarr; it only pays when the work is genuinely parallel and independent, or one context/role can't cope &rarr; start single-agent (the monolith); split with evidence, not vibes &rarr; "more agents" is not a capability, it's a bill.</div></details>
 
-  <details class="iq"><summary>8 · Whiteboard: design a billing-dispute agent that's safe to ship. (rehearse this one with me)</summary>
-    <div class="a"><b>Hits:</b> tools (look up invoice/payments, issue refund, notify); a bounded loop; guardrails — refund caps, human approval over a threshold, idempotent refunds, a full audit log, scoped permissions; per-case memory; a workflow for the common path with an agent escape-hatch for the messy ones. <em>Want to run this live? Ask me to grade your whiteboard answer.</em></div></details>
+    <details class="iq" data-level="senior"><summary>Explain MCP to a skeptical exec in one analogy, and name the problem it solves.</summary>
+      <div class="a"><b>Hit these points:</b> MCP is a protocol for exposing tools, resources, and prompts to AI clients &mdash; "USB-C / JDBC for tools" &rarr; without it, every agent-to-tool pair is bespoke glue: N&times;M integrations &rarr; expose a server once and any MCP client uses it &rarr; N+M &rarr; a server exposes the capability, a client connects from the host app &rarr; it is an open multi-vendor standard, not a Claude feature, and not the tool itself &mdash; it's the way to reach tools.</div></details>
+
+    <!-- STAFF -->
+    <details class="iq" data-level="staff"><summary>A vendor pitches "fully autonomous agentic AI." Place it on the workflow&harr;agent spectrum and name the trade-off the pitch bought.</summary>
+      <div class="a"><b>Hit these points:</b> strip the buzzword to the engine &mdash; what tools, what loop, what guardrails? &rarr; "fully autonomous" sits at the far agent end: the model writes the path, so they bought flexibility and paid in predictability, cost, latency, and debuggability &rarr; ask what they gave up: can you reproduce a run, cap its spend, audit its actions? &rarr; for most real tasks the right answer is further left &mdash; an agentic workflow with autonomy only where the path truly can't be scripted &rarr; the senior read: autonomy is a cost you justify per use case, not a feature you brag about.</div></details>
+
+    <details class="iq" data-level="staff"><summary>How does a "coding agent" differ from a "support agent" architecturally &mdash; and what does that tell you about every agent product?</summary>
+      <div class="a"><b>Hit these points:</b> architecturally they barely differ &mdash; same engine: LLM + loop + runtime + memory &rarr; what changes is the tool registry, the system prompt, and the guardrails &mdash; same employee, different job description &rarr; so "AI agent product" is rarely a moat in the engine; the moat is the tools you wired, the data you retrieve, and the guardrails you can stand behind &rarr; evaluate any pitch on those three, not on the model name.</div></details>
+
+    <details class="iq" data-level="staff"><summary>Build vs buy: a team wants to adopt an off-the-shelf agent runtime/SDK instead of writing their own loop. How do you reason about it?</summary>
+      <div class="a"><b>Hit these points:</b> the loop itself is cheap to write; the hard, ongoing parts are state handling, retries, tool dispatch, permissions, observability, and evals &mdash; that's what a mature runtime buys you &rarr; buy when those are commodity and you want to spend your effort on tools, prompts, and domain guardrails &rarr; build when your control, latency, security, or audit requirements outgrow the SDK's seams &rarr; name the lock-in: how tools are defined, how memory is wired, how you trace a run &rarr; the reversible move is to keep your tools and guardrails portable and treat the runtime as swappable plumbing.</div></details>
+
+    <!-- DESIGN -->
+    <div class="designrubric" data-level="design"><b>Design-round framework</b> &mdash; for any "design an agent for role X," structure the answer like this:
+      <ol>
+        <li><b>Goal &amp; scope</b> &mdash; what the agent is responsible for, and the explicit line where it must escalate to a human.</li>
+        <li><b>Tools</b> &mdash; the callable capabilities it needs (read vs write), each with a scoped permission boundary.</li>
+        <li><b>Loop &amp; runtime</b> &mdash; observe&rarr;decide&rarr;act, with max-steps, timeouts, and token budgets in the runtime.</li>
+        <li><b>Guardrails</b> &mdash; approval thresholds, idempotency on writes, dry-run/rollback, and hard limits on destructive actions.</li>
+        <li><b>Memory</b> &mdash; per-task short-term context plus what's persisted to an external store and retrieved back.</li>
+        <li><b>Workflow vs agent</b> &mdash; script the common path, keep an agent escape-hatch only for the messy cases.</li>
+        <li><b>Observability &amp; eval</b> &mdash; per-run traces, an audit log of every action, and how you'd measure success/regressions.</li>
+      </ol>
+    </div>
+
+    <details class="iq" data-level="design"><summary>Design a support agent that's safe to ship for a SaaS billing product.</summary>
+      <div class="a"><b>A strong answer covers:</b> goal &mdash; resolve common billing questions and disputes, escalate the rest &rarr; tools: look up invoice/payments (read), issue refund and adjust subscription (write), notify customer, open a ticket &rarr; bounded loop in the runtime with max-steps and timeouts &rarr; guardrails: refund caps, human approval above a threshold, idempotent refunds so a retry never double-pays, full audit log, scoped permissions per tool &rarr; per-case memory plus retrieval of the customer's history &rarr; a workflow for the happy path with an agent escape-hatch for ambiguous disputes &rarr; eval on resolution rate and a hard zero-tolerance metric for wrong-amount refunds. <em>Want to run this live? Ask me to grade your whiteboard answer.</em></div></details>
+
+    <details class="iq" data-level="design"><summary>Design an SRE incident-triage agent. What can it touch, and where does it stop?</summary>
+      <div class="a"><b>A strong answer covers:</b> goal &mdash; triage an alert, gather signal, propose (not silently execute) remediation &rarr; tools: read metrics/logs/traces and recent deploys (read-heavy), with write actions like rollback or scale gated behind explicit approval &rarr; observe&rarr;decide&rarr;act loop &mdash; an intent-level reconciliation loop &mdash; capped by max-steps so it can't thrash &rarr; guardrails: read-only by default, human-in-the-loop for any production-mutating action, blast-radius limits, idempotent and reversible operations, a full audit trail &rarr; memory of the current incident plus retrieval of similar past incidents/runbooks &rarr; workflow for the known runbook steps, agent autonomy only for the open-ended investigation &rarr; eval on time-to-diagnosis and false-action rate, and design so the worst failure is a no-op, never an outage.</div></details>
+
+  </div>
 
   <!-- ================= CHEAT SHEET (compact) ================= -->
   <h2 class="sec" id="cheat">★ Cheat sheet — buzzword → engineering</h2>
@@ -790,5 +937,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     });
   });
 </script>
+<script src="../../assets/interview.js" defer></script>
 </body>
 </html>

@@ -9,24 +9,25 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lesson 4 · Resource modeling &amp; URI design (visual)</title>
-<meta name="description" content="In a whiteboard interview the first artifact you produce is the resource model and its URIs — before status codes, before auth, before pagination. Clean…">
+<title>REST Resource Modeling &amp; URI Design · StackDepth</title>
+<meta name="description" content="REST resource modeling and URI design: nouns over verbs, collections vs sub-resources, nesting depth, naming conventions, and clean URL patterns for scalable APIs.">
 <meta name="author" content="dineshbyte">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/rest-api-matery/lessons/0004-resource-modeling-and-uri-design.html">
 <meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Learning Hub">
-<meta property="og:title" content="Lesson 4 · Resource modeling &amp; URI design (visual) · Engineering Learning Hub">
-<meta property="og:description" content="In a whiteboard interview the first artifact you produce is the resource model and its URIs — before status codes, before auth, before pagination. Clean…">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="REST Resource Modeling &amp; URI Design · StackDepth">
+<meta property="og:description" content="REST resource modeling and URI design: nouns over verbs, collections vs sub-resources, nesting depth, naming conventions, and clean URL patterns for scalable APIs.">
 <meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/rest-api-matery/lessons/0004-resource-modeling-and-uri-design.html">
 <meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Lesson 4 · Resource modeling &amp; URI design (visual) · Engineering Learning Hub">
-<meta name="twitter:description" content="In a whiteboard interview the first artifact you produce is the resource model and its URIs — before status codes, before auth, before pagination. Clean…">
+<meta name="twitter:title" content="REST Resource Modeling &amp; URI Design · StackDepth">
+<meta name="twitter:description" content="REST resource modeling and URI design: nouns over verbs, collections vs sub-resources, nesting depth, naming conventions, and clean URL patterns for scalable APIs.">
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../../assets/tokens.css">
 <link rel="stylesheet" href="../../assets/lesson.css">
+<link rel="stylesheet" href="../../assets/interview.css">
 <style>
   :root{--accent:var(--track-rest)}
   /* chips — pill row (not in lesson.css) */
@@ -44,6 +45,118 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.85rem}
   @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Why is POST /getOrder an anti-pattern?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It encodes the verb in the path , which is RPC wearing a REST costume. In resource-oriented design the URI names a noun — the thing — and the HTTP method is the verb. The read should be GET /orders/42 : the resource is /orders/42 , the action is GET ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is the difference between a collection URI and an item URI?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A collection URI ( /orders ) addresses the set: GET lists it, POST adds to it (server assigns the id). An item URI ( /orders/42 ) addresses one member: GET reads it, PUT / PATCH updates it, DELETE removes it. The method's meaning shifts with which level you're at."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does nesting like /customers/1/orders communicate?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Containment — \"the orders belonging to customer 1.\" That's a legitimate, readable use of nesting for a real ownership relationship. The mistake isn't nesting one level; it's going deep."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why prefer opaque identifiers over sequential integers in URIs?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Sequential ints leak business volume (reading order #100002 tells an attacker your throughput) and invite enumeration — walking /orders/1 , /orders/2 … UUIDs/ULIDs are opaque and non-guessable, so neither attack works from the id alone."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why does the noun/verb discipline matter beyond aesthetics?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Because it's what keeps the contract uniform and cacheable . Once verbs leak into paths, every endpoint becomes a bespoke procedure and the HTTP machinery — caching, idempotency, conditional requests, status semantics — stops applying. GET /orders/42 is cacheable and safe by definition; POST /getOrder tells intermediaries nothing. Naming the resource correctly is the load-bearing decision the rest of the design hangs off."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the three principled ways to model a non-CRUD action?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Sub-resource / state collection: treat the outcome as a thing — POST /orders/42/cancellations , or a status you read back. Custom method (Google AIP): colon-suffixed verb on the resource — POST /orders/42:cancel . Reify the action as its own resource: promote the verb to a noun — POST /refunds with {order_id} . The senior signal is naming the trade-off, not just picking one."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is deep nesting like /customers/1/orders/42/items/9 fragile?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It hard-codes the entire hierarchy into the URL. The day a relationship changes — items move under a fulfillment, an order spans customers, you add line-item history — every client URL breaks. Deep paths couple your contract to today's org chart. They also bloat with redundant ids you don't need to locate the leaf."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a BOLA / IDOR vulnerability and how does id choice relate to it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Broken Object-Level Authorization (a.k.a. IDOR): a user swaps the id in /orders/42 for /orders/43 and reads someone else's data because the server checks authentication but not ownership . Opaque ids make resources harder to guess , but they are not the fix — they're defense in depth. The real fix is an authorization check on every object access (\"does this caller own this order?\"). Calling opaque ids a substitute for authz is a junior mistake."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Articulate the pure-REST vs pragmatist tension on custom methods.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Purists argue everything should be a resource: a custom method like :cancel smuggles a verb back into the URI and breaks the uniform interface, so they'd reify state into resources (a cancellation record, a status sub-resource). Pragmatists accept a colon-method for a genuinely non-CRUD verb because inventing nouns nobody queries is its own cost. The staff answer doesn't pick a religion — it picks by lifecycle: durable state and history → reify; momentary transition → sub-resource or custom method. Say the trade-off out loud; that's the signal."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the downsides of a flexible ?expand= / field-selection mechanism?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It pushes you toward GraphQL-shaped problems without GraphQL's tooling: every expansion combination is a distinct query and cache key, so caching fragments ; arbitrary expansion enables expensive N+1 / fan-out queries you must bound; authorization must be enforced per expanded field , not just on the root; and response shape becomes dynamic, complicating client typing and contract tests. Mitigate with an allowlist of expandable relations, depth/complexity limits, and per-field authz. At some point if clients need fully arbitrary shapes, that's the signal to consider GraphQL."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does URI shape interact with object-level authorization?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Identity-in-path makes the authorization target explicit: every /orders/{id} access needs an ownership check (BOLA defense), and consistent URI structure lets you enforce that with uniform middleware rather than ad-hoc checks. Aliases like /users/me remove a whole class of IDOR by not letting clients name other principals. Nesting can imply scope ( /customers/1/orders ) but you must still verify the caller may act as customer 1 — the path is a claim, not proof. Flat URIs + per-object authz is usually cleaner than relying on nesting for security."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Model an e-commerce checkout (cart, place order, cancel, refund) on a whiteboard.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: Cart is /carts/{id} with line items at /carts/{id}/items/{id} — one level, real containment. Place order: POST /orders , server assigns id, returns 201 + Location , built from the cart; require an Idempotency-Key so a retry doesn't double-charge. Cancel is a transition on an existing order, so POST /orders/{id}/cancellations or AIP-style POST /orders/{id}:cancel — no top-level noun. Refund has its own lifecycle (processed/settled/reversible) so reify it: POST /refunds with {order_id} , beside /payments . Ids opaque (UUID/ULID); list a customer's orders via /orders?customer_id= rather than deep nesting. That hits nouns-not-verbs, principled action modeling with a stated trade-off, shallow nesting + filtering, and security-aware ids."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the resource model for a multi-tenant project-management API with users, projects, tasks, comments, and memberships.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: Top-level collections by identity: /projects , /tasks , /users — each has its own life. Scope tenancy implicitly from the authenticated principal (resolve the tenant from the token), not via a /tenants/{id}/… prefix clients can tamper with. Tasks belong to a project, but keep nesting shallow: /projects/{id}/tasks for the owned list, and address a single task flatly by identity as /tasks/{id} so it doesn't break if it's re-homed; filter cross-cuts with /tasks?assignee=…&status=open . Comments are owned by their parent and have no independent life, so /tasks/{id}/comments (one level). Membership is a many-to-many between users and projects that carries data (role, joined-at), so reify the join : /memberships (or /projects/{id}/members as a filtered view) rather than deep-nesting under one side. Ids opaque (UUID/ULID); enforce per-object authorization on every access (BOLA) and tenant isolation so user A can't read project B in another tenant — the path is a claim, not proof. Use /users/me for the caller. Conventions consistent throughout; ?expand= bounded by an allowlist if clients need related data inline."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -55,7 +168,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
 <div class="wrap">
   <nav id="hubbar">
-    <a href="../../index.html">&#8592; Learning Hub</a>
+    <a href="../../index.html">&#8592; StackDepth</a>
     <span class="pn"><a href="0003-idempotency-in-practice.html" title="Idempotency in practice (visual)">&#8249; Prev</a><a href="0005-api-versioning-strategies.html" title="Versioning &amp;amp; API evolution (visual)">Next &#8250;</a></span>
     <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">REST API</span></span>
   </nav>
@@ -255,6 +368,54 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Primary source (read this next)</h3>
   <p>📖 <a href="https://google.aip.dev/121"><strong>"Resource-oriented design" — Google AIP-121</strong></a>: the clearest high-trust treatment of nouns, collections, and custom methods. Pair it with <a href="https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design">Microsoft's API design best practices</a> for conventions and nesting guidance.</p>
 
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
+  <div data-interview>
+
+   <details class="iq" data-level="core"><summary>Why is <code>POST /getOrder</code> an anti-pattern?</summary><div class="a"><p>It encodes the <em>verb in the path</em>, which is RPC wearing a REST costume. In resource-oriented design the URI names a <strong>noun</strong> — the thing — and the HTTP method <em>is</em> the verb. The read should be <code>GET /orders/42</code>: the resource is <code>/orders/42</code>, the action is <code>GET</code>.</p></div></details>
+
+   <details class="iq" data-level="core"><summary>What is the difference between a collection URI and an item URI?</summary><div class="a"><p>A <strong>collection URI</strong> (<code>/orders</code>) addresses the set: <code>GET</code> lists it, <code>POST</code> adds to it (server assigns the id). An <strong>item URI</strong> (<code>/orders/42</code>) addresses one member: <code>GET</code> reads it, <code>PUT</code>/<code>PATCH</code> updates it, <code>DELETE</code> removes it. The method's meaning shifts with which level you're at.</p></div></details>
+
+   <details class="iq" data-level="core"><summary>What does nesting like <code>/customers/1/orders</code> communicate?</summary><div class="a"><p>Containment — "the orders belonging to customer 1." That's a legitimate, readable use of nesting for a real ownership relationship. The mistake isn't nesting one level; it's going deep.</p></div></details>
+
+   <details class="iq" data-level="core"><summary>Why prefer opaque identifiers over sequential integers in URIs?</summary><div class="a"><p>Sequential ints <strong>leak business volume</strong> (reading order <code>#100002</code> tells an attacker your throughput) and invite <strong>enumeration</strong> — walking <code>/orders/1</code>, <code>/orders/2</code>… UUIDs/ULIDs are opaque and non-guessable, so neither attack works from the id alone.</p></div></details>
+
+   <details class="iq" data-level="senior"><summary>Why does the noun/verb discipline matter beyond aesthetics?</summary><div class="a"><p>Because it's what keeps the contract <strong>uniform and cacheable</strong>. Once verbs leak into paths, every endpoint becomes a bespoke procedure and the HTTP machinery — caching, idempotency, conditional requests, status semantics — stops applying. <code>GET /orders/42</code> is cacheable and safe by definition; <code>POST /getOrder</code> tells intermediaries nothing. Naming the resource correctly is the load-bearing decision the rest of the design hangs off.</p></div></details>
+
+   <details class="iq" data-level="senior"><summary>What are the three principled ways to model a non-CRUD action?</summary><div class="a"><ul>
+      <li><strong>Sub-resource / state collection:</strong> treat the outcome as a thing — <code>POST /orders/42/cancellations</code>, or a status you read back.</li>
+      <li><strong>Custom method (Google AIP):</strong> colon-suffixed verb on the resource — <code>POST /orders/42:cancel</code>.</li>
+      <li><strong>Reify the action as its own resource:</strong> promote the verb to a noun — <code>POST /refunds</code> with <code>{order_id}</code>.</li>
+    </ul><p>The senior signal is naming the trade-off, not just picking one.</p></div></details>
+
+   <details class="iq" data-level="senior"><summary>Why is deep nesting like <code>/customers/1/orders/42/items/9</code> fragile?</summary><div class="a"><p>It hard-codes the entire hierarchy into the URL. The day a relationship changes — items move under a fulfillment, an order spans customers, you add line-item history — every client URL breaks. Deep paths couple your contract to today's org chart. They also bloat with redundant ids you don't need to locate the leaf.</p></div></details>
+
+   <details class="iq" data-level="senior"><summary>What is a BOLA / IDOR vulnerability and how does id choice relate to it?</summary><div class="a"><p>Broken Object-Level Authorization (a.k.a. IDOR): a user swaps the id in <code>/orders/42</code> for <code>/orders/43</code> and reads someone else's data because the server checks <em>authentication</em> but not <em>ownership</em>. Opaque ids make resources <em>harder to guess</em>, but they are <strong>not the fix</strong> — they're defense in depth. The real fix is an authorization check on every object access ("does this caller own this order?"). Calling opaque ids a substitute for authz is a junior mistake.</p></div></details>
+
+   <details class="iq" data-level="staff"><summary>Articulate the pure-REST vs pragmatist tension on custom methods.</summary><div class="a"><p>Purists argue <em>everything</em> should be a resource: a custom method like <code>:cancel</code> smuggles a verb back into the URI and breaks the uniform interface, so they'd reify state into resources (a cancellation record, a status sub-resource). Pragmatists accept a colon-method for a genuinely non-CRUD verb because inventing nouns nobody queries is its own cost. The staff answer doesn't pick a religion — it picks by lifecycle: durable state and history → reify; momentary transition → sub-resource or custom method. Say the trade-off out loud; that's the signal.</p></div></details>
+
+   <details class="iq" data-level="staff"><summary>What are the downsides of a flexible <code>?expand=</code> / field-selection mechanism?</summary><div class="a"><p>It pushes you toward GraphQL-shaped problems without GraphQL's tooling: every expansion combination is a distinct query and cache key, so <strong>caching fragments</strong>; arbitrary expansion enables expensive N+1 / fan-out queries you must bound; authorization must be enforced <em>per expanded field</em>, not just on the root; and response shape becomes dynamic, complicating client typing and contract tests. Mitigate with an allowlist of expandable relations, depth/complexity limits, and per-field authz. At some point if clients need fully arbitrary shapes, that's the signal to consider GraphQL.</p></div></details>
+
+   <details class="iq" data-level="staff"><summary>How does URI shape interact with object-level authorization?</summary><div class="a"><p>Identity-in-path makes the authorization target explicit: every <code>/orders/{id}</code> access needs an ownership check (BOLA defense), and consistent URI structure lets you enforce that with uniform middleware rather than ad-hoc checks. Aliases like <code>/users/me</code> remove a whole class of IDOR by not letting clients name other principals. Nesting can <em>imply</em> scope (<code>/customers/1/orders</code>) but you must still verify the caller may act as customer 1 — the path is a claim, not proof. Flat URIs + per-object authz is usually cleaner than relying on nesting for security.</p></div></details>
+
+   <div class="designrubric" data-level="design"><b>A framework for whiteboarding a REST resource model — narrate each step out loud:</b>
+    <ol>
+      <li><strong>Clarify the domain &amp; list candidate nouns.</strong> Name the things the domain holds (order, cart, customer, payment, refund). Those are your candidate resources before any URL is drawn.</li>
+      <li><strong>Top-level collections vs owned sub-resources, by identity.</strong> Ask "does this have identity on its own?" If yes it's a top-level collection; if it only exists inside a parent, it's an owned sub-resource (one level).</li>
+      <li><strong>Map verbs to HTTP methods; place non-CRUD verbs deliberately.</strong> CRUD → standard methods. For genuine verbs (cancel, publish, refund) choose sub-resource, custom method (<code>:verb</code>), or reify-as-resource — driven by lifecycle, not grammar.</li>
+      <li><strong>Relationships: one-level nesting for ownership, filtering otherwise.</strong> Nest <code>/customers/1/orders</code> only for true containment; express the rest with <code>/orders?customer_id=1</code>. Reify many-to-many joins that carry data.</li>
+      <li><strong>Identifiers: opaque external ids + per-object authz.</strong> Use UUID/ULID, never the raw DB key. Opaque ids are defense in depth, not the authz fix — every object access still needs an ownership (BOLA) check.</li>
+      <li><strong>Conventions &amp; consistency.</strong> Lowercase, hyphenated, plural collections, no extensions; query carries filter/sort/page, never identity. Predictability across the surface beats local cleverness.</li>
+      <li><strong>Evolvability / versioning cost.</strong> Stable nouns, identity-in-path, and external ids let you add fields and expansions without breaking clients — name where each choice would force a version bump later.</li>
+    </ol>
+   </div>
+
+   <details class="iq" data-level="design"><summary>Model an e-commerce checkout (cart, place order, cancel, refund) on a whiteboard.</summary><div class="a"><p><b>A strong answer covers:</b> Cart is <code>/carts/{id}</code> with line items at <code>/carts/{id}/items/{id}</code> — one level, real containment. Place order: <code>POST /orders</code>, server assigns id, returns <code>201</code> + <code>Location</code>, built from the cart; require an <code>Idempotency-Key</code> so a retry doesn't double-charge. Cancel is a transition on an existing order, so <code>POST /orders/{id}/cancellations</code> or AIP-style <code>POST /orders/{id}:cancel</code> — no top-level noun. Refund has its own lifecycle (processed/settled/reversible) so <strong>reify</strong> it: <code>POST /refunds</code> with <code>{order_id}</code>, beside <code>/payments</code>. Ids opaque (UUID/ULID); list a customer's orders via <code>/orders?customer_id=</code> rather than deep nesting. That hits nouns-not-verbs, principled action modeling with a stated trade-off, shallow nesting + filtering, and security-aware ids.</p></div></details>
+
+   <details class="iq" data-level="design"><summary>Design the resource model for a multi-tenant project-management API with users, projects, tasks, comments, and memberships.</summary><div class="a"><p><b>A strong answer covers:</b> Top-level collections by identity: <code>/projects</code>, <code>/tasks</code>, <code>/users</code> — each has its own life. Scope tenancy implicitly from the authenticated principal (resolve the tenant from the token), not via a <code>/tenants/{id}/…</code> prefix clients can tamper with. Tasks belong to a project, but keep nesting shallow: <code>/projects/{id}/tasks</code> for the owned list, and address a single task flatly by identity as <code>/tasks/{id}</code> so it doesn't break if it's re-homed; filter cross-cuts with <code>/tasks?assignee=…&amp;status=open</code>. Comments are owned by their parent and have no independent life, so <code>/tasks/{id}/comments</code> (one level). Membership is a many-to-many between users and projects that <em>carries data</em> (role, joined-at), so <strong>reify the join</strong>: <code>/memberships</code> (or <code>/projects/{id}/members</code> as a filtered view) rather than deep-nesting under one side. Ids opaque (UUID/ULID); enforce per-object authorization on every access (BOLA) <em>and</em> tenant isolation so user A can't read project B in another tenant — the path is a claim, not proof. Use <code>/users/me</code> for the caller. Conventions consistent throughout; <code>?expand=</code> bounded by an allowlist if clients need related data inline.</p></div></details>
+
+  </div>
+
   <div class="nav">
     <span>📄 Keep handy: <a href="../reference/rest-constraints-and-maturity.html">REST design reference</a></span>
     <span><a href="../lessons/0003-idempotency-in-practice.html">◂ Prev</a> · <a href="../lessons/0005-api-versioning-strategies.html"><em>Next ▸ Lesson 5</em></a></span>
@@ -282,5 +443,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     });
   });
 </script>
+<script src="../../assets/interview.js" defer></script>
 </body>
 </html>
