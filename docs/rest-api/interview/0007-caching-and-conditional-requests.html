@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HTTP Caching &amp; Conditional Requests Interview Questions · StackDepth</title>
+<meta name="description" content="Practice HTTP caching with 36 senior and staff REST API interview questions on Cache-Control, ETags, conditional requests, validation, and revalidation.">
+<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/interview/0007-caching-and-conditional-requests.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="HTTP Caching &amp; Conditional Requests Interview Questions · StackDepth">
+<meta property="og:description" content="Practice HTTP caching with 36 senior and staff REST API interview questions on Cache-Control, ETags, conditional requests, validation, and revalidation.">
+<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/interview/0007-caching-and-conditional-requests.html">
+<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@dineshxbyte">
+<meta name="twitter:title" content="HTTP Caching &amp; Conditional Requests Interview Questions · StackDepth">
+<meta name="twitter:description" content="Practice HTTP caching with 36 senior and staff REST API interview questions on Cache-Control, ETags, conditional requests, validation, and revalidation.">
+<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/interview.css">
+<style>
+  :root{
+    --ink:#111110; --paper:#fffff8; --muted:#6b675f; --rule:#d8d4c8;
+    --accent:#7a1f12; --chip:#f1eee2; --good:#2f5d3a; --staff:#3a4a7a;
+  }
+  *{box-sizing:border-box}
+  html{font-size:18px}
+  body{margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Palatino Linotype",Palatino,"Iowan Old Style",Georgia,serif; line-height:1.5}
+  .wrap{max-width:43rem; margin:0 auto; padding:3rem 1.4rem 6rem}
+  .kicker{font-size:.72rem; letter-spacing:.18em; text-transform:uppercase; color:var(--muted);
+    font-family:ui-sans-serif,system-ui,sans-serif}
+  h1{font-size:2rem; line-height:1.08; margin:.25rem 0 .4rem; font-weight:600; letter-spacing:-.01em}
+  h2{font-size:.82rem; margin:2.4rem 0 .6rem; font-family:ui-sans-serif,system-ui,sans-serif;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+  a{color:var(--accent)}
+  .how{background:var(--chip); border-left:3px solid var(--accent); padding:.7rem 1rem; font-size:.9rem; margin:1.1rem 0 1.4rem}
+  .meta{font-family:ui-sans-serif,system-ui,sans-serif; font-size:.78rem; color:var(--muted)}
+  .controls{position:sticky; top:0; background:var(--paper); padding:.6rem 0; margin-bottom:.4rem;
+    border-bottom:1px solid var(--rule); display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; z-index:5}
+  .chip{font:inherit; font-family:ui-sans-serif,system-ui,sans-serif; font-size:.76rem; cursor:pointer;
+    background:#fff; border:1px solid var(--rule); border-radius:999px; padding:.25rem .7rem; color:var(--muted)}
+  .chip.active{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .controls .sp{flex:1}
+  .lnk{font:inherit; font-family:ui-sans-serif,system-ui,sans-serif; font-size:.76rem; cursor:pointer;
+    background:none; border:0; color:var(--accent); text-decoration:underline; padding:.2rem .3rem}
+  .card{counter-increment:c; border:1px solid var(--rule); border-radius:8px; padding:.85rem 1rem; margin:.6rem 0; background:#fcfbf2}
+  .q{font-weight:600; margin:0; display:flex; gap:.55rem; align-items:baseline}
+  .q::before{content:counter(c,decimal-leading-zero); font-family:ui-sans-serif,system-ui,sans-serif;
+    color:var(--muted); font-weight:700; font-size:.8rem; flex:0 0 1.6rem}
+  .tag{font-family:ui-sans-serif,system-ui,sans-serif; font-size:.62rem; font-weight:700; letter-spacing:.06em;
+    text-transform:uppercase; padding:.12rem .4rem; border-radius:4px; white-space:nowrap; align-self:center}
+  .t-core{background:#e7f0e9; color:var(--good)} .t-senior{background:#f6e9e7; color:var(--accent)} .t-staff{background:#e8ebf5; color:var(--staff)}
+  .reveal{font:inherit; font-family:ui-sans-serif,system-ui,sans-serif; font-size:.78rem; cursor:pointer;
+    margin-top:.6rem; background:transparent; color:var(--accent); border:1px solid var(--accent); border-radius:6px; padding:.32rem .8rem}
+  .a{display:none; margin-top:.7rem; padding-top:.7rem; border-top:1px dashed var(--rule); font-size:.94rem}
+  .a.show{display:block}
+  .a p{margin:.4rem 0} .a ul{margin:.4rem 0 .4rem 1.1rem; padding:0} .a li{margin:.2rem 0}
+  .a code{background:var(--chip); padding:.04rem .3rem; border-radius:3px; font-size:.86em}
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2.6rem; padding-top:1rem; border-top:1px solid var(--rule); font-size:.85rem}
+  footer{margin-top:2.4rem; font-size:.78rem; color:var(--muted)}
+  @media print{ .controls{position:static} .a{display:block} .reveal{display:none} a{color:var(--ink)} }
+</style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What are the two distinct halves of HTTP caching?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Freshness lets a cache reuse a stored response with no network call at all . Validation lets a cache cheaply confirm a stored response is still good via a round-trip that carries no body. Conflating the two is the tell of a shallow answer — you design with both: aggressive freshness for the common case, validation as the cheap fallback when freshness lapses."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does Cache-Control: max-age=N mean, and what happens while a response is fresh?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The response is fresh for N seconds. While it's fresh, a cache serves it directly from storage with zero contact with the origin — no revalidation, no round-trip. That's the whole win of freshness."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the difference between public and private ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "public may be stored by any cache, including shared ones (CDN/proxy). private restricts storage to the end user's own browser — never a shared cache. private is the guard for per-user payloads."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do s-maxage and max-age differ, and why have both?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Both set a freshness lifetime in seconds, but s-maxage applies only to shared caches and overrides max-age there. Having both lets you tune the CDN/proxy lifetime independently of the browser's — e.g. a long s-maxage at the edge with a short max-age in the browser, so you can purge the edge but clients still come back soon."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "no-store vs no-cache — what's the difference? (Most candidates trip here.)",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "no-store means never write it to any cache — the directive for genuinely sensitive data. no-cache is confusingly named: it does store the response, but must revalidate with the origin before every reuse (expecting a 304 ). So no-cache still saves bandwidth on unchanged bodies; no-store saves nothing because nothing is kept."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does must-revalidate add on top of normal freshness?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Once a response goes stale , a cache may not serve it without first revalidating with the origin — it forbids serving stale on error (e.g. when the origin is unreachable). Without it, some caches are permitted to serve stale content as a fallback; must-revalidate says \"correctness over availability for this resource.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does stale-while-revalidate=N buy you?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When a response goes stale, the cache may serve the stale copy instantly while it refreshes in the background (for up to N seconds past expiry). It hides revalidation latency from the user entirely — the user never waits on the origin — at the cost of occasionally seeing slightly stale data. Great for read-heavy content where a few seconds of staleness is harmless."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does Expires relate to Cache-Control: max-age ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Expires is the legacy form: an absolute timestamp at which the response goes stale. Cache-Control: max-age supersedes it (and wins where both appear) because a relative lifetime avoids clock-skew bugs between client and server. Treat Expires as a backward-compat fallback only."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When does a response become \"stale,\" and what happens next?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A response is fresh until its computed lifetime ( max-age / s-maxage / Expires ) elapses; after that it's stale . Stale doesn't mean discarded — a cache typically revalidates it (a conditional request) rather than re-downloading, and may serve it via stale-while-revalidate , or must refresh first if must-revalidate is set."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is an ETag ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "An opaque version tag for a representation — the server's fingerprint of that exact revision. The client doesn't parse it; it just stores it and echoes it back. It's the basis for both cache validation and conditional writes."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk through a conditional GET with If-None-Match . What status comes back if nothing changed?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The client sends the stored ETag in If-None-Match . If the representation still matches, the server returns 304 Not Modified with no body — the client reuses its cached copy. Only if it changed does the server return 200 with the full body."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the bandwidth win of a conditional GET ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "On the common \"still good\" case you pay only for a small request plus a tiny 304 header response — no entity body crosses the wire . You still make a round-trip (so you don't save latency), but you skip re-transferring a potentially large payload. It's the cheap fallback when freshness has lapsed."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does Last-Modified / If-Modified-Since work?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The server sends a Last-Modified timestamp; the client echoes it as If-Modified-Since on the next request. If the resource hasn't changed since that time, the server returns 304 . It's the timestamp-based validator — the fallback when you can't compute an ETag cheaply."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is ETag generally preferred over Last-Modified ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Last-Modified is weaker: it has one-second granularity (sub-second changes are invisible), depends on clocks, and can't distinguish a touch-without-change from a real edit. An ETag is content-derived and exact. Use Last-Modified only when computing an ETag is too costly, and you can serve both — clients then prefer the ETag."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Strong vs weak ETags ( \"abc\" vs W/\"abc\" ) — what's the distinction and when do you use each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong validator means byte-for-byte identical . A weak one ( W/ prefix) means semantically equivalent — the payload may differ cosmetically (whitespace, a regenerated timestamp) but is \"the same\" for the user. Strong is required for Range requests and is what you want for concurrency control; weak is fine for cache revalidation of responses that vary only cosmetically."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Does receiving a 304 let the cache extend the freshness lifetime?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Yes. A 304 isn't just \"still valid\" — it can carry updated headers (e.g. a fresh Cache-Control / Expires ) that reset the freshness window . So a revalidated entry becomes fresh again and can be served without further origin calls until it next lapses."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How would you generate ETags, and what's the cost trade-off?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Two families: content hashes (hash the serialized body) — exact but you pay CPU to render and hash on every request, even ones that end in a 304 ; or version metadata (a row's updated_at or a monotonic version column) — cheap to read, strong if the version is reliable, and computable without rendering the full body. At scale, prefer a stored version/sequence number so you can answer a conditional request without materializing the representation. Watch out for hashing that differs across nodes (key ordering, serializer version) — it'll break revalidation and tank your hit rate."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is the lost-update problem?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Two clients GET the same resource, both edit their copy, both PUT — and the second write silently overwrites the first , losing it without anyone noticing. It's the canonical concurrency hazard for read-modify-write over a stateless protocol."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does If-Match prevent lost updates, end to end?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The client GET s the resource and its ETag , then sends If-Match: \"<etag>\" on the PUT / PATCH . The server applies the write only if the current ETag still matches. If the resource changed underneath, the ETag no longer matches and the server returns 412 Precondition Failed — the write is rejected and the client must re-fetch and reconcile rather than clobber. This is optimistic concurrency control ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What status code signals a failed precondition, and what does the client do?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "412 Precondition Failed . The client should re- GET the resource (and its new ETag), merge or re-apply its change against the current state, and retry the write with the updated If-Match ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you get a race-free \"create only if it doesn't exist\"?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Send If-None-Match: * on the create (e.g. a PUT to the target URI). It tells the server \"succeed only if no representation currently exists.\" If another request already created it, the precondition fails ( 412 ), so two concurrent creators can't both win — a clean create-only without a separate lock."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is optimistic concurrency a better fit for a web API than pessimistic locking?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Holding a lock across stateless requests violates statelessness , ties up resources, and breaks badly when a client vanishes mid-edit (who releases the lock?). Optimistic control assumes conflicts are rare, costs nothing on the happy path , and detects conflicts only at write time. You trade \"guaranteed no conflict\" for \"cheap, lock-free, and naturally fits HTTP.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When would you reach for pessimistic locking despite all that?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When conflicts are frequent (so optimistic retries thrash), when the edit is long and expensive and you don't want users to lose work at save time, or when external/irreversible side effects make late conflict detection unacceptable. Then a scoped lock — short-lived, with a lease/TTL so a vanished client auto-releases — can beat retry storms. The senior framing: optimistic by default, pessimistic only where conflict probability or cost-of-rework justifies the statefulness."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is the ETag-on-write check itself atomic, or do you still need DB-level guarantees?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The HTTP layer only communicates the precondition; you still need atomicity at the store. The compare-and-write must be a single atomic step — e.g. UPDATE … WHERE id=? AND version=? and check rows-affected, or a transaction — otherwise two requests can both pass an ETag check and then race on the actual write. If-Match is the protocol; the version-guarded conditional update is the enforcement."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Same ETag drives caching and concurrency — articulate why that's elegant, and any tension.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "One value, two jobs: read it back as If-None-Match and you get a 304 cache validation; send it back as If-Match on a write and you get optimistic locking. Elegant because the server maintains a single version notion. The tension: concurrency wants a strong, exact validator (any change must fail the write), while cache revalidation tolerates a weak one — so if you serve weak ETags for cosmetic-variance caching, don't reuse them for If-Match , or you'll accept writes against a \"semantically equal\" but actually-different revision."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Private vs shared caches — name where each lives.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Private caches are per-user — the browser's own cache. Shared caches are one node many users hit — CDNs, reverse proxies, API gateways. A shared cache amplifies hit rate across all clients, which is exactly why getting its keying and scoping right matters so much."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do caching layers map onto REST's constraints?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "They sit at the intersection of two constraints: cacheable (responses label their own reusability so intermediaries can store them) and layered system (a client can't tell whether it's talking to the origin or an intermediary, so caches/proxies can be inserted transparently). Cache headers are the contract that makes those layers safe."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is the cache key by default, and what does Vary change?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "By default a cache keys on the request URL (plus method). Vary adds named request headers to that key so different header values get different cache entries — e.g. Vary: Accept partitions JSON from XML, Vary: Accept-Encoding separates gzip from brotli. Get it wrong and the cache serves the wrong representation — or worse, the wrong user's data."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is Vary: Authorization a cache-efficiency trap on a shared cache?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It's safe — each token gets its own entry, so no cross-user leak — but it shreds your hit rate to near zero on a shared cache, because every distinct token (effectively every user, and every token rotation) is a separate cache entry that almost never gets a second hit. For per-user data, private / no-store is usually the honest choice; reserve shared caching for responses that are genuinely the same across users, and key them on something coarser than the raw token (e.g. a normalized scope/role) when you can."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What cache-invalidation strategies do you have, and their trade-offs?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Roughly four: (1) TTL expiry — simplest, but you serve stale until it lapses; (2) active purge/ban on write — fresh immediately but needs a control path to every cache node and is hard to make exactly-once; (3) versioned/fingerprinted URLs (cache-busting) — bulletproof for immutable assets, awkward for mutable API resources; (4) validation (ETags + revalidation) — never serves wrong data, but pays a round-trip. Most real systems combine short TTL + revalidation, with targeted purge for the few resources that must update instantly. \"Cache invalidation is one of the two hard problems\" — name that you're choosing a point on the staleness-vs-cost curve, not eliminating it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A write happens at the origin but a CDN still serves the old copy. What's going on and how do you fix it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The edge entry is still within its s-maxage freshness window, so the CDN serves it without asking the origin — by design. Fixes: shorten s-maxage and lean on revalidation; issue an explicit purge/ban to the CDN on write (eventual, per-POP propagation, so allow a moment); or use stale-while-revalidate so the next request triggers a background refresh. Pick based on how tight your staleness SLA is — instant correctness means active purge plus a short TTL as a safety net."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the classic auth + caching pitfall?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "An authenticated, user-specific response that a shared cache stores can be served to the next user — leaking one person's data to another. It happens whenever such a response lacks private / no-store and doesn't Vary on the credential."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the safe baseline for caching authenticated responses?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Default per-user responses to Cache-Control: private, no-store . If you genuinely want a shared cache to hold them, you must Vary: Authorization so each token gets its own entry — but accept that this usually kills shared-cache benefit, so reserve it for cases that measurably pay off. When in doubt, private, no-store is the conservative, leak-proof choice."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Can you cache POST responses? Should you?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "By spec a POST response is cacheable only if it carries explicit freshness and a Content-Location , and in practice almost no cache does it — POST isn't safe or idempotent, so caching it is dangerous. The right move for a cacheable read is to model it as a GET (e.g. push complex query params into a GET with a sane URL) rather than fighting to cache a POST . If a \"search\" must be a POST for body-size reasons, accept it won't be HTTP-cached and cache at the application layer instead."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the real costs/risks of serving stale data?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Caching trades freshness for speed and load. The risk is context-dependent: stale a product description is harmless; stale a price, an inventory count, a permission, or an account balance can be wrong, costly, or a security issue. The senior move is to set TTLs per resource by tolerance for staleness , not one blanket policy — short or validation-only for sensitive/volatile data, long for stable content."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A developer sets no-cache intending \"don't cache this.\" What actually happens?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The opposite of their intent: the response is stored, it just gets revalidated before each reuse. If they truly want nothing stored, they need no-store . This naming confusion is one of the most common caching bugs — worth flagging explicitly."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What goes wrong if you forget Vary on a content-negotiated endpoint?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The cache keys on URL alone, so the first representation it stores for that URL gets served to everyone regardless of their Accept / Accept-Encoding — a JSON client gets XML, a brotli-less client gets brotli, etc. The fix is correct Vary ; the second-order trap is over-varying (e.g. on a high-cardinality header) which fragments the cache and destroys hit rate. Vary is a balance: enough to be correct, no more."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Two users open the same document and both hit Save. How do you stop the second save from clobbering the first?\" (~60s.)",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "That's the lost-update problem; I solve it with optimistic concurrency via ETags. The GET returns the document plus a strong ETag for that revision. Any update must send it as If-Match: <etag> . If the doc changed since the client read it, the ETag won't match and the server returns 412 Precondition Failed , so the second save is rejected and that client must re-fetch and merge instead of overwriting. I prefer this to pessimistic locking, which fits a stateless API poorly — it strands a lock across requests if a client walks away. And it's the same ETag that drives 304 conditional GETs for caching: one value, two jobs."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a caching strategy for a read-heavy public API.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Layer it. (1) Classify endpoints by volatility and audience — public-and-stable, public-and-volatile, per-user. (2) For public-stable: public , generous s-maxage at the CDN, shorter max-age in the browser, plus ETags so lapsed entries revalidate cheaply, and stale-while-revalidate to hide refresh latency. (3) For public-volatile: short TTL or validation-only, with active purge on write where instant correctness matters. (4) For per-user: private / no-store , served close to origin. (5) Set Vary precisely ( Accept , Accept-Encoding ) and never over-vary. (6) Measure cache hit rate and origin offload as the success metric. The framing: aggressive freshness for the common case, validation as the cheap fallback, purge only where staleness is unacceptable."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do a CDN and an API tier divide caching responsibilities?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The CDN/edge handles shared, anonymous, high-fanout reads — tuned via s-maxage , purge, and stale-while-revalidate — offloading the origin and cutting latency geographically. The API tier owns correctness: it emits the cache headers, computes ETags, enforces conditional writes ( If-Match → 412 ), and decides what is cacheable at all. Per-user/authenticated traffic largely bypasses the CDN ( private ) and may be cached internally (e.g. an app/Redis layer keyed by user+resource) where you control invalidation."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When should you deliberately NOT cache?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When staleness is unacceptable or unsafe: real-time/volatile values (live prices, balances, inventory at checkout), per-user sensitive data on shared caches, anything behind authorization where a stale permission is a security risk, and one-shot/side-effecting responses. Also skip it when hit rates would be near zero (highly personalized or rarely-repeated requests) — the cache then adds complexity and invalidation risk for no benefit. \"Don't cache\" is a legitimate, deliberate design choice, not a failure."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you decide a TTL for a given endpoint?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Work backwards from tolerable staleness , not from a default. Ask: how wrong can this be, for how long, before it harms a user or the business? That sets the ceiling. Then weigh write frequency (frequent writes + long TTL = lots of stale serves unless you purge), traffic shape (high fanout makes even a short TTL pay off), and your invalidation capability (if you can purge on write, you can run a longer TTL safely). Express it per resource class, validate with real hit-rate/staleness metrics, and revisit — TTLs are a tuning knob, not a constant."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the caching & conditional-request strategy for a read-heavy public product catalog API fronted by a CDN.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: classify resources first — catalog/product pages are public-stable, price/inventory are public-volatile, the cart/account is per-user -> for public-stable, set public with a generous s-maxage at the CDN and a shorter max-age in the browser so you can purge the edge while clients return soon, and emit strong ETags so lapsed entries revalidate with a cheap 304 rather than re-shipping the body -> add stale-while-revalidate so users never wait on origin during a refresh -> for volatile price/inventory, short TTL or validation-only plus an active purge on write where instant correctness matters -> per-user data: private, no-store , kept off the shared cache -> set Vary: Accept, Accept-Encoding precisely and never over-vary (high-cardinality headers shred hit rate) -> name the trade-off: long edge TTL maximizes offload but risks stale-after-write unless you can purge; ETag validation never serves wrong data but costs a round-trip -> measure cache hit rate and origin offload as the success metric, and guard against a thundering herd on simultaneous expiry with jittered TTLs or stale-while-revalidate ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design optimistic-concurrency control for a collaborative document API where many clients edit the same resources.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: the hazard is the lost update — concurrent read-modify-write over a stateless protocol -> on GET , return the document with a strong, exact ETag for that revision (a stored version/sequence column, not a body hash, so you can answer without materializing the representation) -> require every PUT / PATCH to carry If-Match: <etag> ; if the current version no longer matches, reject with 412 Precondition Failed so the client must re-fetch and reconcile rather than clobber -> enforce the check atomically at the store — UPDATE … WHERE id=? AND version=? and check rows-affected, or a transaction — because the HTTP layer only communicates the precondition, it doesn't enforce it -> offer race-free create via If-None-Match: * -> reuse the same version as an If-None-Match validator for 304 caching (one value, two jobs), but do not reuse a weak ETag for If-Match or you'll accept a write against a merely \"semantically equal\" revision -> name the trade-off: optimistic is lock-free and cheap on the happy path but thrashes under frequent conflicts, where a short-lived scoped lock with a lease/TTL is the fallback -> surface conflicts to the UI for merge, and log 412 rates as a signal that contention is too high."
+   }
+  }
+ ]
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">Interview Bank · Lesson 7</div>
+  <h1>Caching &amp; conditional requests — interview questions</h1>
+  <p class="meta">36 questions · Core / Senior / Staff · pairs with <a href="../lessons/0007-caching-and-conditional-requests.html">Lesson 7</a></p>
+
+  <div class="how">
+    <strong>Use these as active recall, not reading.</strong> Read the question, answer it <em>out loud or in writing from memory first</em>, and only then reveal the model answer to grade yourself. Recognizing an answer ≠ being able to produce it under pressure. Filter by difficulty; reveal-all only for a final review pass.
+  </div>
+
+  <div data-interview>
+    <details class="iq" data-level="core">
+      <summary>What are the two distinct halves of HTTP caching?</summary>
+      <div class="a"><p><strong>Freshness</strong> lets a cache reuse a stored response with <em>no network call at all</em>. <strong>Validation</strong> lets a cache cheaply confirm a stored response is still good via a round-trip that carries no body. Conflating the two is the tell of a shallow answer — you design with both: aggressive freshness for the common case, validation as the cheap fallback when freshness lapses.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What does <code>Cache-Control: max-age=N</code> mean, and what happens while a response is fresh?</summary>
+      <div class="a"><p>The response is fresh for <code>N</code> seconds. While it's fresh, a cache serves it <strong>directly from storage with zero contact with the origin</strong> — no revalidation, no round-trip. That's the whole win of freshness.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What's the difference between <code>public</code> and <code>private</code>?</summary>
+      <div class="a"><p><code>public</code> may be stored by <em>any</em> cache, including shared ones (CDN/proxy). <code>private</code> restricts storage to the end user's own browser — never a shared cache. <code>private</code> is the guard for per-user payloads.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>How do <code>s-maxage</code> and <code>max-age</code> differ, and why have both?</summary>
+      <div class="a"><p>Both set a freshness lifetime in seconds, but <code>s-maxage</code> applies only to <strong>shared</strong> caches and overrides <code>max-age</code> there. Having both lets you tune the CDN/proxy lifetime independently of the browser's — e.g. a long <code>s-maxage</code> at the edge with a short <code>max-age</code> in the browser, so you can purge the edge but clients still come back soon.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary><code>no-store</code> vs <code>no-cache</code> — what's the difference? (Most candidates trip here.)</summary>
+      <div class="a"><p><code>no-store</code> means <strong>never write it to any cache</strong> — the directive for genuinely sensitive data. <code>no-cache</code> is confusingly named: it <em>does</em> store the response, but must <strong>revalidate with the origin before every reuse</strong> (expecting a <code>304</code>). So <code>no-cache</code> still saves bandwidth on unchanged bodies; <code>no-store</code> saves nothing because nothing is kept.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>What does <code>must-revalidate</code> add on top of normal freshness?</summary>
+      <div class="a"><p>Once a response goes <em>stale</em>, a cache may not serve it without first revalidating with the origin — it <strong>forbids serving stale on error</strong> (e.g. when the origin is unreachable). Without it, some caches are permitted to serve stale content as a fallback; <code>must-revalidate</code> says "correctness over availability for this resource."</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>What does <code>stale-while-revalidate=N</code> buy you?</summary>
+      <div class="a"><p>When a response goes stale, the cache may <strong>serve the stale copy instantly</strong> while it refreshes in the background (for up to <code>N</code> seconds past expiry). It hides revalidation latency from the user entirely — the user never waits on the origin — at the cost of occasionally seeing slightly stale data. Great for read-heavy content where a few seconds of staleness is harmless.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>How does <code>Expires</code> relate to <code>Cache-Control: max-age</code>?</summary>
+      <div class="a"><p><code>Expires</code> is the legacy form: an absolute timestamp at which the response goes stale. <code>Cache-Control: max-age</code> supersedes it (and wins where both appear) because a relative lifetime <strong>avoids clock-skew bugs</strong> between client and server. Treat <code>Expires</code> as a backward-compat fallback only.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>When does a response become "stale," and what happens next?</summary>
+      <div class="a"><p>A response is fresh until its computed lifetime (<code>max-age</code>/<code>s-maxage</code>/<code>Expires</code>) elapses; after that it's <strong>stale</strong>. Stale doesn't mean discarded — a cache typically <em>revalidates</em> it (a conditional request) rather than re-downloading, and may serve it via <code>stale-while-revalidate</code>, or must refresh first if <code>must-revalidate</code> is set.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What is an <code>ETag</code>?</summary>
+      <div class="a"><p>An <strong>opaque version tag for a representation</strong> — the server's fingerprint of that exact revision. The client doesn't parse it; it just stores it and echoes it back. It's the basis for both cache validation and conditional writes.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Walk through a conditional <code>GET</code> with <code>If-None-Match</code>. What status comes back if nothing changed?</summary>
+      <div class="a"><p>The client sends the stored <code>ETag</code> in <code>If-None-Match</code>. If the representation still matches, the server returns <code>304 Not Modified</code> <strong>with no body</strong> — the client reuses its cached copy. Only if it changed does the server return <code>200</code> with the full body.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What's the bandwidth win of a conditional <code>GET</code>?</summary>
+      <div class="a"><p>On the common "still good" case you pay only for a small request plus a tiny <code>304</code> header response — <strong>no entity body crosses the wire</strong>. You still make a round-trip (so you don't save latency), but you skip re-transferring a potentially large payload. It's the cheap fallback when freshness has lapsed.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>How does <code>Last-Modified</code> / <code>If-Modified-Since</code> work?</summary>
+      <div class="a"><p>The server sends a <code>Last-Modified</code> timestamp; the client echoes it as <code>If-Modified-Since</code> on the next request. If the resource hasn't changed since that time, the server returns <code>304</code>. It's the timestamp-based validator — the fallback when you can't compute an <code>ETag</code> cheaply.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Why is <code>ETag</code> generally preferred over <code>Last-Modified</code>?</summary>
+      <div class="a"><p><code>Last-Modified</code> is weaker: it has <strong>one-second granularity</strong> (sub-second changes are invisible), depends on clocks, and can't distinguish a touch-without-change from a real edit. An <code>ETag</code> is content-derived and exact. Use <code>Last-Modified</code> only when computing an ETag is too costly, and you can serve both — clients then prefer the ETag.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Strong vs weak ETags (<code>"abc"</code> vs <code>W/"abc"</code>) — what's the distinction and when do you use each?</summary>
+      <div class="a"><p>A <strong>strong</strong> validator means <em>byte-for-byte identical</em>. A <strong>weak</strong> one (<code>W/</code> prefix) means <em>semantically equivalent</em> — the payload may differ cosmetically (whitespace, a regenerated timestamp) but is "the same" for the user. Strong is required for <code>Range</code> requests and is what you want for concurrency control; weak is fine for cache revalidation of responses that vary only cosmetically.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Does receiving a <code>304</code> let the cache extend the freshness lifetime?</summary>
+      <div class="a"><p>Yes. A <code>304</code> isn't just "still valid" — it can carry updated headers (e.g. a fresh <code>Cache-Control</code>/<code>Expires</code>) that <strong>reset the freshness window</strong>. So a revalidated entry becomes fresh again and can be served without further origin calls until it next lapses.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>How would you generate ETags, and what's the cost trade-off?</summary>
+      <div class="a"><p>Two families: <strong>content hashes</strong> (hash the serialized body) — exact but you pay CPU to render and hash on every request, even ones that end in a <code>304</code>; or <strong>version metadata</strong> (a row's <code>updated_at</code> or a monotonic version column) — cheap to read, strong if the version is reliable, and computable without rendering the full body. At scale, prefer a stored version/sequence number so you can answer a conditional request without materializing the representation. Watch out for hashing that differs across nodes (key ordering, serializer version) — it'll break revalidation and tank your hit rate.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What is the lost-update problem?</summary>
+      <div class="a"><p>Two clients <code>GET</code> the same resource, both edit their copy, both <code>PUT</code> — and the second write <strong>silently overwrites the first</strong>, losing it without anyone noticing. It's the canonical concurrency hazard for read-modify-write over a stateless protocol.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>How does <code>If-Match</code> prevent lost updates, end to end?</summary>
+      <div class="a"><p>The client <code>GET</code>s the resource and its <code>ETag</code>, then sends <code>If-Match: "&lt;etag&gt;"</code> on the <code>PUT</code>/<code>PATCH</code>. The server applies the write only if the current ETag still matches. If the resource changed underneath, the ETag no longer matches and the server returns <code>412 Precondition Failed</code> — the write is rejected and the client must <strong>re-fetch and reconcile</strong> rather than clobber. This is <strong>optimistic concurrency control</strong>.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What status code signals a failed precondition, and what does the client do?</summary>
+      <div class="a"><p><code>412 Precondition Failed</code>. The client should re-<code>GET</code> the resource (and its new ETag), merge or re-apply its change against the current state, and retry the write with the updated <code>If-Match</code>.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>How do you get a race-free "create only if it doesn't exist"?</summary>
+      <div class="a"><p>Send <code>If-None-Match: *</code> on the create (e.g. a <code>PUT</code> to the target URI). It tells the server "succeed only if no representation currently exists." If another request already created it, the precondition fails (<code>412</code>), so two concurrent creators can't both win — a clean create-only without a separate lock.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Why is optimistic concurrency a better fit for a web API than pessimistic locking?</summary>
+      <div class="a"><p>Holding a lock <strong>across stateless requests violates statelessness</strong>, ties up resources, and breaks badly when a client vanishes mid-edit (who releases the lock?). Optimistic control assumes conflicts are rare, <strong>costs nothing on the happy path</strong>, and detects conflicts only at write time. You trade "guaranteed no conflict" for "cheap, lock-free, and naturally fits HTTP."</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>When <em>would</em> you reach for pessimistic locking despite all that?</summary>
+      <div class="a"><p>When conflicts are <strong>frequent</strong> (so optimistic retries thrash), when the edit is long and expensive and you don't want users to lose work at save time, or when external/irreversible side effects make late conflict detection unacceptable. Then a <em>scoped</em> lock — short-lived, with a lease/TTL so a vanished client auto-releases — can beat retry storms. The senior framing: optimistic by default, pessimistic only where conflict probability or cost-of-rework justifies the statefulness.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Is the ETag-on-write check itself atomic, or do you still need DB-level guarantees?</summary>
+      <div class="a"><p>The HTTP layer only <em>communicates</em> the precondition; you still need atomicity at the store. The compare-and-write must be a single atomic step — e.g. <code>UPDATE … WHERE id=? AND version=?</code> and check rows-affected, or a transaction — otherwise two requests can both pass an ETag check and then race on the actual write. <code>If-Match</code> is the protocol; the version-guarded conditional update is the enforcement.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>Same ETag drives caching and concurrency — articulate why that's elegant, and any tension.</summary>
+      <div class="a"><p>One value, two jobs: <em>read</em> it back as <code>If-None-Match</code> and you get a <code>304</code> cache validation; <em>send</em> it back as <code>If-Match</code> on a write and you get optimistic locking. Elegant because the server maintains a single version notion. The tension: concurrency wants a <strong>strong, exact</strong> validator (any change must fail the write), while cache revalidation tolerates a <strong>weak</strong> one — so if you serve weak ETags for cosmetic-variance caching, don't reuse them for <code>If-Match</code>, or you'll accept writes against a "semantically equal" but actually-different revision.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Private vs shared caches — name where each lives.</summary>
+      <div class="a"><p><strong>Private</strong> caches are per-user — the browser's own cache. <strong>Shared</strong> caches are one node many users hit — CDNs, reverse proxies, API gateways. A shared cache amplifies hit rate across all clients, which is exactly why getting its keying and scoping right matters so much.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>How do caching layers map onto REST's constraints?</summary>
+      <div class="a"><p>They sit at the intersection of two constraints: <strong>cacheable</strong> (responses label their own reusability so intermediaries can store them) and <strong>layered system</strong> (a client can't tell whether it's talking to the origin or an intermediary, so caches/proxies can be inserted transparently). Cache headers are the contract that makes those layers safe.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>What is the cache key by default, and what does <code>Vary</code> change?</summary>
+      <div class="a"><p>By default a cache keys on the <strong>request URL</strong> (plus method). <code>Vary</code> adds named request headers to that key so different header values get different cache entries — e.g. <code>Vary: Accept</code> partitions JSON from XML, <code>Vary: Accept-Encoding</code> separates gzip from brotli. Get it wrong and the cache serves the wrong representation — or worse, the wrong user's data.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>Why is <code>Vary: Authorization</code> a cache-efficiency trap on a shared cache?</summary>
+      <div class="a"><p>It's <em>safe</em> — each token gets its own entry, so no cross-user leak — but it shreds your hit rate to near zero on a shared cache, because every distinct token (effectively every user, and every token rotation) is a separate cache entry that almost never gets a second hit. For per-user data, <code>private</code>/<code>no-store</code> is usually the honest choice; reserve shared caching for responses that are genuinely the same across users, and key them on something coarser than the raw token (e.g. a normalized scope/role) when you can.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>What cache-invalidation strategies do you have, and their trade-offs?</summary>
+      <div class="a"><p>Roughly four: (1) <strong>TTL expiry</strong> — simplest, but you serve stale until it lapses; (2) <strong>active purge/ban</strong> on write — fresh immediately but needs a control path to every cache node and is hard to make exactly-once; (3) <strong>versioned/fingerprinted URLs</strong> (cache-busting) — bulletproof for immutable assets, awkward for mutable API resources; (4) <strong>validation</strong> (ETags + revalidation) — never serves wrong data, but pays a round-trip. Most real systems combine short TTL + revalidation, with targeted purge for the few resources that must update instantly. "Cache invalidation is one of the two hard problems" — name that you're choosing a point on the staleness-vs-cost curve, not eliminating it.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>A write happens at the origin but a CDN still serves the old copy. What's going on and how do you fix it?</summary>
+      <div class="a"><p>The edge entry is still within its <code>s-maxage</code> freshness window, so the CDN serves it without asking the origin — by design. Fixes: shorten <code>s-maxage</code> and lean on revalidation; issue an explicit <strong>purge/ban</strong> to the CDN on write (eventual, per-POP propagation, so allow a moment); or use <code>stale-while-revalidate</code> so the next request triggers a background refresh. Pick based on how tight your staleness SLA is — instant correctness means active purge plus a short TTL as a safety net.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What's the classic auth + caching pitfall?</summary>
+      <div class="a"><p>An authenticated, user-specific response that a <strong>shared</strong> cache stores can be <strong>served to the next user</strong> — leaking one person's data to another. It happens whenever such a response lacks <code>private</code>/<code>no-store</code> and doesn't <code>Vary</code> on the credential.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>What's the safe baseline for caching authenticated responses?</summary>
+      <div class="a"><p>Default per-user responses to <code>Cache-Control: private, no-store</code>. If you genuinely want a shared cache to hold them, you must <code>Vary: Authorization</code> so each token gets its own entry — but accept that this usually kills shared-cache benefit, so reserve it for cases that measurably pay off. When in doubt, <code>private, no-store</code> is the conservative, leak-proof choice.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Can you cache <code>POST</code> responses? Should you?</summary>
+      <div class="a"><p>By spec a <code>POST</code> response is cacheable only if it carries explicit freshness <em>and</em> a <code>Content-Location</code>, and in practice almost no cache does it — <code>POST</code> isn't safe or idempotent, so caching it is dangerous. The right move for a cacheable read is to model it as a <code>GET</code> (e.g. push complex query params into a <code>GET</code> with a sane URL) rather than fighting to cache a <code>POST</code>. If a "search" must be a <code>POST</code> for body-size reasons, accept it won't be HTTP-cached and cache at the application layer instead.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>What are the real costs/risks of serving stale data?</summary>
+      <div class="a"><p>Caching trades freshness for speed and load. The risk is context-dependent: stale a product description is harmless; stale a price, an inventory count, a permission, or an account balance can be wrong, costly, or a security issue. The senior move is to <strong>set TTLs per resource by tolerance for staleness</strong>, not one blanket policy — short or validation-only for sensitive/volatile data, long for stable content.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>A developer sets <code>no-cache</code> intending "don't cache this." What actually happens?</summary>
+      <div class="a"><p>The opposite of their intent: the response <em>is</em> stored, it just gets revalidated before each reuse. If they truly want nothing stored, they need <code>no-store</code>. This naming confusion is one of the most common caching bugs — worth flagging explicitly.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>What goes wrong if you forget <code>Vary</code> on a content-negotiated endpoint?</summary>
+      <div class="a"><p>The cache keys on URL alone, so the first representation it stores for that URL gets served to <em>everyone</em> regardless of their <code>Accept</code>/<code>Accept-Encoding</code> — a JSON client gets XML, a brotli-less client gets brotli, etc. The fix is correct <code>Vary</code>; the second-order trap is over-varying (e.g. on a high-cardinality header) which fragments the cache and destroys hit rate. <code>Vary</code> is a balance: enough to be correct, no more.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>"Two users open the same document and both hit Save. How do you stop the second save from clobbering the first?" (~60s.)</summary>
+      <div class="a"><p>That's the lost-update problem; I solve it with optimistic concurrency via ETags. The <code>GET</code> returns the document plus a strong <code>ETag</code> for that revision. Any update must send it as <code>If-Match: &lt;etag&gt;</code>. If the doc changed since the client read it, the ETag won't match and the server returns <code>412 Precondition Failed</code>, so the second save is rejected and that client must re-fetch and merge instead of overwriting. I prefer this to pessimistic locking, which fits a stateless API poorly — it strands a lock across requests if a client walks away. And it's the same <code>ETag</code> that drives <code>304</code> conditional GETs for caching: one value, two jobs.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>Design a caching strategy for a read-heavy public API.</summary>
+      <div class="a"><p>Layer it. (1) Classify endpoints by volatility and audience — public-and-stable, public-and-volatile, per-user. (2) For public-stable: <code>public</code>, generous <code>s-maxage</code> at the CDN, shorter <code>max-age</code> in the browser, plus ETags so lapsed entries revalidate cheaply, and <code>stale-while-revalidate</code> to hide refresh latency. (3) For public-volatile: short TTL or validation-only, with active purge on write where instant correctness matters. (4) For per-user: <code>private</code>/<code>no-store</code>, served close to origin. (5) Set <code>Vary</code> precisely (<code>Accept</code>, <code>Accept-Encoding</code>) and never over-vary. (6) Measure cache hit rate and origin offload as the success metric. The framing: aggressive freshness for the common case, validation as the cheap fallback, purge only where staleness is unacceptable.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>How do a CDN and an API tier divide caching responsibilities?</summary>
+      <div class="a"><p>The <strong>CDN/edge</strong> handles shared, anonymous, high-fanout reads — tuned via <code>s-maxage</code>, purge, and <code>stale-while-revalidate</code> — offloading the origin and cutting latency geographically. The <strong>API tier</strong> owns correctness: it emits the cache headers, computes ETags, enforces conditional writes (<code>If-Match</code> → <code>412</code>), and decides what is cacheable at all. Per-user/authenticated traffic largely bypasses the CDN (<code>private</code>) and may be cached internally (e.g. an app/Redis layer keyed by user+resource) where you control invalidation.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>When should you deliberately NOT cache?</summary>
+      <div class="a"><p>When staleness is unacceptable or unsafe: real-time/volatile values (live prices, balances, inventory at checkout), per-user sensitive data on shared caches, anything behind authorization where a stale permission is a security risk, and one-shot/side-effecting responses. Also skip it when hit rates would be near zero (highly personalized or rarely-repeated requests) — the cache then adds complexity and invalidation risk for no benefit. "Don't cache" is a legitimate, deliberate design choice, not a failure.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>How do you decide a TTL for a given endpoint?</summary>
+      <div class="a"><p>Work backwards from <strong>tolerable staleness</strong>, not from a default. Ask: how wrong can this be, for how long, before it harms a user or the business? That sets the ceiling. Then weigh write frequency (frequent writes + long TTL = lots of stale serves unless you purge), traffic shape (high fanout makes even a short TTL pay off), and your invalidation capability (if you can purge on write, you can run a longer TTL safely). Express it per resource class, validate with real hit-rate/staleness metrics, and revisit — TTLs are a tuning knob, not a constant.</p></div>
+    </details>
+
+    <div class="designrubric" data-level="design">
+      <b>Design-round framework</b> — drive any caching/conditional-request prompt through these, out loud:
+      <ol>
+        <li>Clarify scale &amp; audience: read/write ratio, public vs per-user, tolerable staleness, latency &amp; cost budget.</li>
+        <li>Classify each resource — public-stable, public-volatile, per-user/authenticated — and pick a policy per class.</li>
+        <li>Freshness layer: <code>s-maxage</code> at the edge vs <code>max-age</code> in the browser; <code>stale-while-revalidate</code> to hide refresh latency.</li>
+        <li>Validation layer: emit <code>ETag</code>/<code>Last-Modified</code> so lapsed entries revalidate with a cheap <code>304</code>, never a full re-transfer.</li>
+        <li>Correctness &amp; safety: set <code>Vary</code> precisely (never over-vary); default per-user payloads to <code>private</code>/<code>no-store</code> so a shared cache can't leak one user's data to another.</li>
+        <li>Invalidation: choose TTL-expiry vs active purge/ban vs versioned URLs by how tight the staleness SLA is; reuse the <code>ETag</code> for <code>If-Match</code> optimistic concurrency on writes.</li>
+        <li>Observability &amp; failure modes: measure hit rate / origin offload; name the risks — stale-after-write, wrong-representation from a missing <code>Vary</code>, cross-user leak, thundering-herd revalidation.</li>
+      </ol>
+    </div>
+    <details class="iq" data-level="design">
+      <summary>Design the caching &amp; conditional-request strategy for a read-heavy public product catalog API fronted by a CDN.</summary>
+      <div class="a"><p><b>A strong answer covers:</b> classify resources first — catalog/product pages are public-stable, price/inventory are public-volatile, the cart/account is per-user &rarr; for public-stable, set <code>public</code> with a generous <code>s-maxage</code> at the CDN and a shorter <code>max-age</code> in the browser so you can purge the edge while clients return soon, and emit <strong>strong ETags</strong> so lapsed entries revalidate with a cheap <code>304</code> rather than re-shipping the body &rarr; add <code>stale-while-revalidate</code> so users never wait on origin during a refresh &rarr; for volatile price/inventory, short TTL or validation-only plus an <strong>active purge on write</strong> where instant correctness matters &rarr; per-user data: <code>private, no-store</code>, kept off the shared cache &rarr; set <code>Vary: Accept, Accept-Encoding</code> precisely and never over-vary (high-cardinality headers shred hit rate) &rarr; name the trade-off: long edge TTL maximizes offload but risks stale-after-write unless you can purge; ETag validation never serves wrong data but costs a round-trip &rarr; measure cache hit rate and origin offload as the success metric, and guard against a thundering herd on simultaneous expiry with jittered TTLs or <code>stale-while-revalidate</code>.</p></div>
+    </details>
+    <details class="iq" data-level="design">
+      <summary>Design optimistic-concurrency control for a collaborative document API where many clients edit the same resources.</summary>
+      <div class="a"><p><b>A strong answer covers:</b> the hazard is the <strong>lost update</strong> — concurrent read-modify-write over a stateless protocol &rarr; on <code>GET</code>, return the document with a <strong>strong, exact ETag</strong> for that revision (a stored version/sequence column, not a body hash, so you can answer without materializing the representation) &rarr; require every <code>PUT</code>/<code>PATCH</code> to carry <code>If-Match: &lt;etag&gt;</code>; if the current version no longer matches, reject with <code>412 Precondition Failed</code> so the client must re-fetch and reconcile rather than clobber &rarr; enforce the check <strong>atomically at the store</strong> — <code>UPDATE … WHERE id=? AND version=?</code> and check rows-affected, or a transaction — because the HTTP layer only communicates the precondition, it doesn't enforce it &rarr; offer race-free create via <code>If-None-Match: *</code> &rarr; reuse the same version as an <code>If-None-Match</code> validator for <code>304</code> caching (one value, two jobs), but do <strong>not</strong> reuse a <em>weak</em> ETag for <code>If-Match</code> or you'll accept a write against a merely "semantically equal" revision &rarr; name the trade-off: optimistic is lock-free and cheap on the happy path but thrashes under frequent conflicts, where a short-lived <em>scoped</em> lock with a lease/TTL is the fallback &rarr; surface conflicts to the UI for merge, and log <code>412</code> rates as a signal that contention is too high.</p></div>
+    </details>
+  </div>
+
+  <div class="nav">
+    <span>📄 <a href="../reference/caching-pagination-versioning.html">Caching, Pagination &amp; Versioning reference</a></span>
+    <span><a href="0008-authentication-and-authorization.html">Next bank: Authentication &amp; authorization ▸</a></span>
+  </div>
+
+  <footer>Interview bank · Lesson 7 · answer from memory first, then reveal · <a href="0006-pagination-at-scale.html">◂ Prev bank</a> · <a href="../../index.html">all lessons &amp; banks</a></footer>
+</div>
+
+<script src="../../assets/interview.js" defer></script>
+</body>
+</html>

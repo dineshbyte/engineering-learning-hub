@@ -45,9 +45,9 @@ Each track ships **lessons** (infographic-first HTML with an interactive quiz + 
 
 ## 🚀 Quick start
 
-The lessons are plain HTML with no build step — **open `index.html` in any browser** and click into a track.
+The lessons are plain HTML with no build step — **open `docs/index.html` in any browser** and click into a track.
 
-> 💡 **Go live:** enable **GitHub Pages** (Settings → Pages → branch `main` / root) to publish the hub at
+> 💡 **Go live:** enable **GitHub Pages** (Settings → Pages → branch `main` / `/docs`) to publish the hub at
 `https://dineshbyte.github.io/engineering-learning-hub/`.
 
 ## 🎨 Design
@@ -64,9 +64,11 @@ Every page shares one design system, so the look stays consistent and re-themeab
 ## 🗂️ Repo layout
 
 ```
-index.html            # the hub (dashboard of all tracks)
-assets/               # shared design system: tokens.css, lesson.css, interview.css/js, favicon.svg
-<track>/              # one folder per track: lessons/, reference/, GLOSSARY.md, RESOURCES.md
+docs/                 # the published site (GitHub Pages serves this folder as the root)
+  index.html          # the hub (dashboard of all tracks)
+  assets/             # shared design system: tokens.css, lesson.css, interview.css/js, favicon.svg
+  <track>/            # one folder per track: lessons/, reference/, GLOSSARY.md, RESOURCES.md
+  sitemap.xml         # SEO sitemap · robots.txt · .nojekyll
 ```
 
 ## 🤝 Contributing

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StackDepth — Visual System Design &amp; AI Engineering, from First Principles</title>
+<meta name="description" content="StackDepth: free, visual-first engineering lessons across 9 tracks — AI agents, context engineering, system design, distributed systems, storage engines, transactions, streaming &amp; REST APIs. Interactive quizzes, interview questions &amp; cheat sheets.">
+<meta name="author" content="dineshbyte">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#5b54e6">
+<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="StackDepth — Visual System Design &amp; AI Engineering, from First Principles">
+<meta property="og:description" content="9 tracks of visual-first lessons — AI agents, context engineering, system design, distributed systems, storage, transactions, streaming &amp; REST. Quizzes, interview questions, cheat sheets.">
+<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/">
+<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="StackDepth — visual system design &amp; AI engineering, 9 tracks">
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@dineshxbyte">
+<meta name="twitter:creator" content="@dineshxbyte">
+<meta name="twitter:title" content="StackDepth — Visual System Design &amp; AI Engineering, from First Principles">
+<meta name="twitter:description" content="Visual-first lessons across 9 engineering tracks — system design, AI agents, distributed systems &amp; more. Quizzes, interview questions, cheat sheets, EPUBs.">
+<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<!-- Structured data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "StackDepth",
+  "alternateName": "Engineering Learning Hub",
+  "url": "https://dineshbyte.github.io/engineering-learning-hub/",
+  "description": "StackDepth — visual-first engineering lessons across 9 tracks: AI agents, context engineering, system design, distributed systems, storage, transactions, streaming, and REST APIs.",
+  "author": { "@type": "Person", "name": "dineshbyte", "url": "https://github.com/dineshbyte" },
+  "license": "https://opensource.org/licenses/MIT"
+}
+</script>
+<link rel="stylesheet" href="assets/tokens.css">
+<style>
+  /* all colors come from assets/tokens.css — change them there, once */
+  *{box-sizing:border-box}
+  html{font-size:17px; scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5; -webkit-font-smoothing:antialiased}
+
+  /* top bar */
+  .topbar{position:sticky; top:0; z-index:50; display:flex; align-items:center; gap:1rem;
+    padding:.7rem clamp(1rem,4vw,2rem); background:rgba(245,245,242,.82);
+    -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); border-bottom:1px solid var(--line)}
+  .brand{display:flex; align-items:center; gap:.5rem; font-weight:800; font-size:1rem; letter-spacing:-.01em}
+  .brand .logo{display:grid; place-items:center; width:1.7rem; height:1.7rem; border-radius:7px;
+    background:linear-gradient(135deg,#5b54e6,#0f8a7e); color:#fff; font-size:.9rem}
+  .search{margin-left:auto; flex:1; max-width:24rem}
+  .search input{width:100%; font:inherit; font-size:.86rem; padding:.5rem .85rem; color:var(--ink);
+    border:1px solid var(--line); border-radius:10px; background:var(--card)}
+  .search input:focus{outline:2px solid #5b54e6; outline-offset:0}
+  .themebtn{cursor:pointer; background:var(--card); border:1px solid var(--line); border-radius:9px;
+    padding:.35rem .55rem; font-size:1rem; line-height:1; color:var(--ink)}
+  .themebtn:hover{background:var(--chip)}
+  .ghbtn{display:inline-flex; align-items:center; gap:.4rem; text-decoration:none; font-weight:700; font-size:.8rem;
+    color:#fff; background:#24292f; border:1px solid #24292f; border-radius:9px; padding:.42rem .72rem; white-space:nowrap}
+  .ghbtn:hover{background:#000}
+  html[data-theme="dark"] .ghbtn{background:var(--card); border-color:var(--line); color:var(--ink)}
+  html[data-theme="dark"] .ghbtn:hover{background:var(--chip)}
+  @media(max-width:640px){
+    .ghbtn .lbl{display:none}
+    /* topbar wraps; the search drops to its own full-width row so it stays usable */
+    .topbar{flex-wrap:wrap; row-gap:.55rem}
+    .search{order:5; flex-basis:100%; max-width:none; margin-left:0}
+  }
+
+  .wrap{max-width:84rem; margin:0 auto; padding:1.6rem clamp(1rem,4vw,2rem) 5rem}
+
+  /* hero */
+  .hero h1{font-size:clamp(1.6rem,3.4vw,2.3rem); line-height:1.08; margin:.2rem 0 .3rem; letter-spacing:-.02em}
+  .hero p{margin:.2rem 0; color:var(--muted); font-size:.95rem; max-width:46rem}
+  .hero a.inline{color:#5b54e6; text-decoration:none; font-weight:600}
+  .stats{display:flex; flex-wrap:wrap; gap:.5rem .55rem; margin:.9rem 0 .2rem}
+  .stat{font-size:.74rem; color:var(--muted); background:var(--card); border:1px solid var(--line);
+    border-radius:20px; padding:.3rem .7rem}
+  .stat b{color:var(--ink)}
+
+  /* tile grid — CSS multicolumn masonry: tiles pack tightly, no ragged gaps */
+  .grid{columns:23rem; column-gap:1rem; margin-top:1.3rem}
+  .tile{background:var(--card); border:1px solid var(--line); border-top:3px solid var(--tc);
+    border-radius:14px; padding:1rem 1.1rem 1.05rem; display:flex; flex-direction:column; gap:.7rem;
+    margin:0 0 1rem; break-inside:avoid; -webkit-column-break-inside:avoid; page-break-inside:avoid;
+    transition:box-shadow .15s, transform .15s}
+  .tile:hover{box-shadow:0 12px 34px rgba(0,0,0,.09); transform:translateY(-2px)}
+  .thead{display:flex; align-items:center; gap:.6rem}
+  .ico{flex:none; width:2.3rem; height:2.3rem; border-radius:10px; display:grid; place-items:center;
+    font-size:1.2rem; background:color-mix(in srgb, var(--tc) 16%, transparent)}
+  .tname{font-weight:700; font-size:1.06rem; letter-spacing:-.01em; line-height:1.1}
+  .ttag{font-size:.63rem; letter-spacing:.11em; text-transform:uppercase; color:var(--muted); margin-top:.12rem}
+  .cnt{margin-left:auto; align-self:flex-start; font-size:.7rem; color:var(--tc); font-weight:700;
+    background:color-mix(in srgb, var(--tc) 12%, transparent); padding:.22rem .55rem; border-radius:20px; white-space:nowrap}
+  .tdesc{margin:0; font-size:.85rem; color:var(--muted); line-height:1.45}
+  .lessons{display:flex; flex-direction:column; gap:.18rem}
+  a.lchip{display:flex; align-items:center; gap:.55rem; text-decoration:none; color:var(--ink);
+    font-size:.85rem; padding:.32rem .4rem; border-radius:8px; transition:background .12s}
+  a.lchip:hover{background:var(--chip)}
+  a.lchip i{flex:none; font-style:normal; min-width:1.5rem; height:1.5rem; padding:0 .35rem; border-radius:6px;
+    display:grid; place-items:center; font-size:.72rem; font-weight:700; color:#fff; background:var(--tc)}
+  a.lchip span{line-height:1.2}
+  .tfoot{margin-top:auto; display:flex; flex-wrap:wrap; gap:.4rem; padding-top:.7rem; border-top:1px solid var(--line)}
+  a.pill{font-size:.73rem; text-decoration:none; color:var(--ink); background:var(--chip);
+    border:1px solid transparent; border-radius:20px; padding:.3rem .62rem; transition:filter .12s, background .12s}
+  a.pill:hover{background:var(--line)}
+  a.pill.md{color:var(--muted)}
+  a.epub{font-size:.73rem; font-weight:700; text-decoration:none; color:#fff; background:var(--tc);
+    border-radius:20px; padding:.3rem .66rem; transition:opacity .12s}
+  a.epub:hover{opacity:.88}
+
+  .empty{display:none; text-align:center; color:var(--muted); padding:3rem 1rem; font-size:.95rem}
+
+  /* full-text search results (replaces the grid while searching) */
+  .results{display:none; margin-top:1.3rem}
+  .results .rhead{font-size:.78rem; color:var(--muted); margin:0 0 .7rem}
+  a.ritem{display:flex; align-items:center; gap:.7rem; text-decoration:none; color:var(--ink);
+    background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.6rem .8rem; margin:0 0 .5rem}
+  a.ritem:hover, a.ritem.sel{border-color:var(--rtc,var(--ink)); background:var(--chip)}
+  .ritem .rdot{flex:none; width:.62rem; height:.62rem; border-radius:50%; background:var(--rtc,#888)}
+  .ritem .rcol{display:flex; flex-direction:column; min-width:0}
+  .ritem .rt{font-weight:600; font-size:.92rem; line-height:1.25}
+  .ritem .rg{font-size:.7rem; color:var(--muted); margin-top:.08rem}
+  .ritem .rkind{margin-left:auto; flex:none; font-size:.62rem; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--muted); border:1px solid var(--line); border-radius:5px; padding:.12rem .4rem; white-space:nowrap}
+
+  footer{margin-top:2.6rem; font-size:.78rem; color:var(--muted); border-top:1px solid var(--line); padding-top:1rem}
+  footer em{color:var(--ink); font-style:normal; font-weight:600}
+  .fcta{display:flex; flex-wrap:wrap; align-items:center; gap:.6rem 1rem; background:var(--card);
+    border:1px solid var(--line); border-radius:14px;
+    padding:1rem 1.2rem; margin:0 0 1.1rem; font-size:.92rem; color:var(--ink)}
+  .fcta .msg{flex:1; min-width:14rem}
+  .fpill{display:inline-flex; align-items:center; gap:.35rem; text-decoration:none; font-size:.8rem;
+    font-weight:600; color:var(--ink); background:var(--chip); border:1px solid var(--line);
+    border-radius:9px; padding:.42rem .72rem; white-space:nowrap}
+  .fpill:hover{border-color:var(--accent)}
+  footer .soc a{color:var(--track-agents); text-decoration:none; font-weight:600}
+
+  /* header social cluster (reachable on load) */
+  .soc-hdr{display:inline-flex; gap:.3rem; align-items:center}
+  .soclink{display:grid; place-items:center; min-width:1.7rem; height:1.7rem; padding:0 .42rem;
+    border:1px solid var(--line); border-radius:7px; background:var(--card); color:var(--ink);
+    text-decoration:none; font-size:.74rem; font-weight:800; line-height:1}
+  .soclink:hover{background:var(--chip); border-color:var(--accent)}
+
+  /* systematic 3-column footer */
+  .fgrid{display:grid; grid-template-columns:1.6fr 1fr 1fr; gap:1.6rem; align-items:start}
+  .fcol h4{margin:0 0 .55rem; font-size:.64rem; letter-spacing:.11em; text-transform:uppercase;
+    color:var(--muted); font-weight:700}
+  .fcol a{display:block; color:var(--ink); text-decoration:none; font-weight:600; padding:.16rem 0; font-size:.82rem}
+  .fcol a:hover{color:var(--accent)}
+  .fbrand{display:flex; gap:.7rem; align-items:flex-start}
+  .fbrand img{border-radius:50%; border:1px solid var(--line); flex:none}
+  .fbrand .ftxt{font-size:.8rem; line-height:1.5}
+  .fbrand .ftxt b{color:var(--ink)}
+  @media(max-width:640px){.fgrid{grid-template-columns:1fr; gap:1.1rem} .soc-hdr{display:none}}
+
+  /* dark theme — color tokens live in tokens.css; only component overrides here */
+  html[data-theme="dark"] .topbar{background:rgba(19,18,16,.82)}
+  html[data-theme="dark"] a.epub{color:#15140f}
+  @media print{.topbar,.themebtn,.search{display:none!important}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo">▦</span> StackDepth</div>
+  <div class="search"><input id="q" type="search" placeholder="Search tracks &amp; lessons…" aria-label="Search tracks and lessons" autocomplete="off"></div>
+  <nav class="soc-hdr" aria-label="Social links">
+    <a class="soclink" href="https://twitter.com/dineshxbyte" target="_blank" rel="noopener" title="Twitter / X" aria-label="Twitter / X">𝕏</a>
+    <a class="soclink" href="https://medium.com/@dineshbyte" target="_blank" rel="noopener" title="Medium" aria-label="Medium">M</a>
+    <a class="soclink" href="https://www.linkedin.com/in/dineshbyte/" target="_blank" rel="noopener" title="LinkedIn" aria-label="LinkedIn">in</a>
+    <a class="soclink" href="https://github.com/dineshbyte/engineering-learning-hub/issues" target="_blank" rel="noopener" title="Issues &amp; ideas" aria-label="Issues and ideas">🐛</a>
+    <a class="soclink" href="https://github.com/dineshbyte/engineering-learning-hub/fork" target="_blank" rel="noopener" title="Fork the repo" aria-label="Fork the repository">🍴</a>
+  </nav>
+  <a class="ghbtn" href="https://github.com/dineshbyte/engineering-learning-hub" target="_blank" rel="noopener" title="Star this repository on GitHub">★ <span class="lbl">Star on GitHub</span></a>
+  <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">🌓</button>
+</header>
+
+<div class="wrap">
+  <section class="hero">
+    <h1>StackDepth</h1>
+    <p><strong>Visual system design &amp; AI engineering, from first principles.</strong> Nine tracks — AI agents, context engineering, distributed systems, storage engines, transactions, streaming, REST APIs &amp; system design — built in engineering analogies, infographic-first, with quizzes and interview questions tuned for senior/staff interviews.</p>
+    <div class="stats">
+      <span class="stat"><b>9</b> tracks</span>
+      <span class="stat"><b>41</b> lessons</span>
+      <span class="stat"><b>10</b> reference sheets</span>
+      <span class="stat">interactive quizzes</span>
+    </div>
+  </section>
+
+  <div class="results" id="results" role="listbox" aria-label="Search results"></div>
+
+  <main class="grid" id="grid">
+
+    <!-- AI AGENTS -->
+    <article class="tile" style="--tc:var(--track-agents)" data-name="ai agents llm tool agent loop runtime memory mcp multi-agent claude cursor production">
+      <div class="thead">
+        <span class="ico">🤖</span>
+        <div><div class="tname">AI Agents</div><div class="ttag">Strategy &amp; architecture</div></div>
+        <span class="cnt">4 lessons</span>
+      </div>
+      <p class="tdesc">The whole agent stack, bottom-up — tell real capability from hype in pitches and reviews.</p>
+      <div class="lessons">
+        <a class="lchip" href="ai-agents/lessons/0001-ai-agents-from-first-principles.html"><i>1</i><span>The ten-level stack — LLM → archetypes</span></a>
+        <a class="lchip" href="ai-agents/lessons/0002-agent-runtime-and-context.html"><i>2</i><span>Runtime, context &amp; memory</span></a>
+        <a class="lchip" href="ai-agents/lessons/0003-how-coding-agents-work.html"><i>3</i><span>How coding agents work (Claude Code · Cursor · MCP)</span></a>
+        <a class="lchip" href="ai-agents/lessons/0004-agent-systems-and-production.html"><i>4</i><span>Multi-agent systems &amp; production</span></a>
+      </div>
+      <div class="tfoot">
+        <a class="pill" href="ai-agents/reference/agents-cheat-sheet.html">★ Cheat sheet</a>
+        <a class="pill" href="ai-agents/reference/agent-architecture-review.html">☑ Review sheet</a>
+        <a class="pill md" href="ai-agents/GLOSSARY.md">Glossary</a>
+        <a class="pill md" href="ai-agents/RESOURCES.md">Resources</a>
+      </div>
+    </article>
+
+    <!-- CONTEXT ENGINEERING -->
+    <article class="tile" style="--tc:var(--track-context)" data-name="context engineering rag retrieval augmented generation embeddings semantic search hybrid bm25 rerank chunking context window tokens working memory compression cursor claude code prompt failure modes">
+      <div class="thead">
+        <span class="ico">🧩</span>
+        <div><div class="tname">Context Engineering</div><div class="ttag">Why same-LLM systems differ</div></div>
+        <span class="cnt">9 lessons</span>
+      </div>
+      <p class="tdesc">Why one AI system feels far smarter than another on the identical model — selection, retrieval &amp; assembly of context.</p>
+      <div class="lessons">
+        <a class="lchip" href="context-engineering/lessons/0001-what-is-context-and-context-as-query.html"><i>1</i><span>What is context — &amp; the new database query</span></a>
+        <a class="lchip" href="context-engineering/lessons/0002-context-selection-and-retrieval.html"><i>2</i><span>Context selection &amp; retrieval</span></a>
+        <a class="lchip" href="context-engineering/lessons/0003-codebase-context-chunking-and-rag.html"><i>3</i><span>Codebase context, chunking &amp; RAG</span></a>
+        <a class="lchip" href="context-engineering/lessons/0004-memory-compression-and-failure-modes.html"><i>4</i><span>Memory, compression &amp; failure modes</span></a>
+        <a class="lchip" href="context-engineering/lessons/0005-architecture-reviews-and-production-design.html"><i>5</i><span>Architecture reviews &amp; production design</span></a>
+        <a class="lchip" href="context-engineering/lessons/0006-retrieval-evaluation-and-observability.html"><i>6</i><span>Retrieval evaluation &amp; observability</span></a>
+        <a class="lchip" href="context-engineering/lessons/0007-pre-retrieval-and-advanced-rag.html"><i>7</i><span>Pre-retrieval &amp; advanced RAG</span></a>
+        <a class="lchip" href="context-engineering/lessons/0008-embeddings-indexing-and-cost.html"><i>8</i><span>Embeddings, indexing &amp; cost</span></a>
+        <a class="lchip" href="context-engineering/lessons/0009-context-caching-ordering-and-security.html"><i>9</i><span>Context caching, ordering &amp; security</span></a>
+      </div>
+      <div class="tfoot">
+        <a class="pill" href="context-engineering/reference/context-engineering-cheat-sheet.html">★ Cheat sheet</a>
+        <a class="pill" href="context-engineering/reference/context-architecture-review.html">☑ Review sheet</a>
+        <a class="pill md" href="context-engineering/GLOSSARY.md">Glossary</a>
+        <a class="pill md" href="context-engineering/RESOURCES.md">Resources</a>
+      </div>
+    </article>
+
+    <!-- REST API -->
+    <article class="tile" style="--tc:var(--track-rest)" data-name="rest api http methods status codes idempotency pagination caching auth oauth jwt versioning errors rate limiting async">
+      <div class="thead">
+        <span class="ico">🌐</span>
+        <div><div class="tname">REST API Mastery</div><div class="ttag">Senior interview companion</div></div>
+        <span class="cnt">11 lessons</span>
+      </div>
+      <p class="tdesc">The design decisions a senior interview probes — each infographic-first with a quiz and a rehearse-out-loud drill.</p>
+      <div class="lessons">
+        <a class="lchip" href="rest-api/lessons/0001-what-makes-an-api-restful.html"><i>1</i><span>What makes an API RESTful?</span></a>
+        <a class="lchip" href="rest-api/lessons/0002-http-methods-and-status-codes.html"><i>2</i><span>HTTP methods &amp; status codes</span></a>
+        <a class="lchip" href="rest-api/lessons/0003-idempotency-in-practice.html"><i>3</i><span>Idempotency in practice</span></a>
+        <a class="lchip" href="rest-api/lessons/0004-resource-modeling-and-uri-design.html"><i>4</i><span>Resource modeling &amp; URIs</span></a>
+        <a class="lchip" href="rest-api/lessons/0005-api-versioning-strategies.html"><i>5</i><span>Versioning &amp; evolution</span></a>
+        <a class="lchip" href="rest-api/lessons/0006-pagination-at-scale.html"><i>6</i><span>Pagination at scale</span></a>
+        <a class="lchip" href="rest-api/lessons/0007-caching-and-conditional-requests.html"><i>7</i><span>Caching &amp; conditional requests</span></a>
+        <a class="lchip" href="rest-api/lessons/0008-authentication-and-authorization.html"><i>8</i><span>Authentication &amp; authorization</span></a>
+        <a class="lchip" href="rest-api/lessons/0009-error-design-rate-limiting-observability.html"><i>9</i><span>Errors, limits &amp; observability</span></a>
+        <a class="lchip" href="rest-api/lessons/0010-async-and-long-running-operations.html"><i>10</i><span>Async &amp; long-running ops</span></a>
+        <a class="lchip" href="rest-api/lessons/0011-mock-interview-whiteboard-design.html"><i>11</i><span>Mock interview: design an API</span></a>
+      </div>
+      <div class="tfoot">
+        <a class="pill" href="rest-api/reference/rest-constraints-and-maturity.html">Constraints</a>
+        <a class="pill" href="rest-api/reference/idempotency-and-retries.html">Idempotency</a>
+        <a class="pill" href="rest-api/reference/caching-pagination-versioning.html">Caching</a>
+        <a class="pill" href="rest-api/reference/api-security-and-auth.html">Security</a>
+        <a class="pill" href="rest-api/reference/api-design-interview-framework.html">Design framework</a>
+        <a class="pill md" href="rest-api/GLOSSARY.md">Glossary</a>
+      </div>
+    </article>
+
+    <!-- BLOOM FILTERS -->
+    <article class="tile" style="--tc:var(--track-bloom)" data-name="bloom filters probabilistic data structures sizing false positive lsm cuckoo counting hash membership">
+      <div class="thead">
+        <span class="ico">🧮</span>
+        <div><div class="tname">Bloom Filters</div><div class="ttag">Probabilistic data structures</div></div>
+        <span class="cnt">4 lessons</span>
+      </div>
+      <p class="tdesc">Foundation → Staff: the membership-test asymmetry, sizing math, failure modes, and variants at scale.</p>
+      <div class="lessons">
+        <a class="lchip" href="bloom-filters/lessons/0001-what-is-a-bloom-filter.html"><i>1</i><span>What a Bloom filter is — the asymmetry</span></a>
+        <a class="lchip" href="bloom-filters/lessons/0002-sizing-a-bloom-filter.html"><i>2</i><span>Sizing — pick the error, derive the rest</span></a>
+        <a class="lchip" href="bloom-filters/lessons/0003-failure-modes-and-lsm-reads.html"><i>3</i><span>Failure modes &amp; the LSM read path</span></a>
+        <a class="lchip" href="bloom-filters/lessons/0004-variants-at-scale.html"><i>4</i><span>Variants at scale — counting · cuckoo · dedup</span></a>
+      </div>
+      <div class="tfoot">
+        <a class="pill" href="bloom-filters/reference/bloom-filters-cheat-sheet.html">★ Cheat sheet</a>
+        <a class="pill md" href="bloom-filters/GLOSSARY.md">Glossary</a>
+        <a class="pill md" href="bloom-filters/RESOURCES.md">Resources</a>
+      </div>
+    </article>
+
+    <!-- DISTRIBUTED SYSTEMS -->
+    <article class="tile" style="--tc:var(--track-distributed)" data-name="distributed systems failure time consensus raft paxos idempotency keys quorum replication">
+      <div class="thead">
+        <span class="ico">🛰️</span>
+        <div><div class="tname">Distributed Systems</div><div class="ttag">Failure · time · consensus</div></div>
+        <span class="cnt">3 lessons</span>
+      </div>
+      <p class="tdesc">Why distributed systems are hard, and the primitives that tame failure and time.</p>
+      <div class="lessons">
+        <a class="lchip" href="distributed-systems/distributed-systems-fundamentals.html"><i>★</i><span>Fundamentals — start here</span></a>
+        <a class="lchip" href="distributed-systems/consensus-deep-dive.html"><i>1</i><span>Consensus — deep dive</span></a>
+        <a class="lchip" href="distributed-systems/idempotency-keys-deep-dive.html"><i>2</i><span>Idempotency keys — deep dive</span></a>
+      </div>
+      <div class="tfoot">
+        <a class="pill md" href="distributed-systems/README.html">Roadmap</a>
+      </div>
+    </article>
+
+    <!-- STORAGE ENGINES -->
+    <article class="tile" style="--tc:var(--track-storage)" data-name="storage engines indexes b-tree lsm compaction write amplification sstable">
+      <div class="thead">
+        <span class="ico">🗄️</span>
+        <div><div class="tname">Storage Engines</div><div class="ttag">Indexes · B-tree · LSM</div></div>
+        <span class="cnt">2 lessons</span>
+      </div>
+      <p class="tdesc">How databases actually store and find data — and the read/write/space trade-offs underneath.</p>
+      <div class="lessons">
+        <a class="lchip" href="storage-engines/storage-engines-fundamentals.html"><i>★</i><span>Fundamentals — start here</span></a>
+        <a class="lchip" href="storage-engines/lsm-compaction-deep-dive.html"><i>1</i><span>LSM compaction — deep dive</span></a>
+      </div>
+      <div class="tfoot">
+        <a class="pill md" href="storage-engines/README.html">Roadmap</a>
+      </div>
+    </article>
+
+    <!-- TRANSACTIONS & ISOLATION -->
+    <article class="tile" style="--tc:var(--track-transactions)" data-name="transactions isolation acid mvcc snapshot serializable ssi locks anomalies">
+      <div class="thead">
+        <span class="ico">🔒</span>
+        <div><div class="tname">Transactions &amp; Isolation</div><div class="ttag">ACID · isolation · MVCC</div></div>
+        <span class="cnt">3 lessons</span>
+      </div>
+      <p class="tdesc">What isolation levels really promise, and how MVCC and SSI deliver them.</p>
+      <div class="lessons">
+        <a class="lchip" href="transactions-isolation/transactions-isolation-fundamentals.html"><i>★</i><span>Fundamentals — start here</span></a>
+        <a class="lchip" href="transactions-isolation/mvcc-internals-deep-dive.html"><i>1</i><span>MVCC internals — deep dive</span></a>
+        <a class="lchip" href="transactions-isolation/ssi-deep-dive.html"><i>2</i><span>SSI — deep dive</span></a>
+      </div>
+      <div class="tfoot">
+        <a class="pill md" href="transactions-isolation/README.html">Roadmap</a>
+      </div>
+    </article>
+
+    <!-- STREAMING & EVENT-DRIVEN -->
+    <article class="tile" style="--tc:var(--track-streaming)" data-name="streaming event driven logs kafka windows watermarks exactly once processing">
+      <div class="thead">
+        <span class="ico">🌊</span>
+        <div><div class="tname">Streaming &amp; Event-Driven</div><div class="ttag">Logs · Kafka · windows</div></div>
+        <span class="cnt">3 lessons</span>
+      </div>
+      <p class="tdesc">The log as a primitive, and how exactly-once and event-time processing are really achieved.</p>
+      <div class="lessons">
+        <a class="lchip" href="streaming-event-driven/streaming-event-driven-fundamentals.html"><i>★</i><span>Fundamentals — start here</span></a>
+        <a class="lchip" href="streaming-event-driven/exactly-once-kafka-deep-dive.html"><i>1</i><span>Exactly-once in Kafka — deep dive</span></a>
+        <a class="lchip" href="streaming-event-driven/watermarks-deep-dive.html"><i>2</i><span>Watermarks — deep dive</span></a>
+      </div>
+      <div class="tfoot">
+        <a class="pill md" href="streaming-event-driven/README.html">Roadmap</a>
+      </div>
+    </article>
+
+    <!-- APPLIED SYSTEMS DESIGN -->
+    <article class="tile" style="--tc:var(--track-applied)" data-name="applied systems design method estimation consistent hashing capacity back of envelope">
+      <div class="thead">
+        <span class="ico">📐</span>
+        <div><div class="tname">Applied Systems Design</div><div class="ttag">Method · estimation · designs</div></div>
+        <span class="cnt">2 lessons</span>
+      </div>
+      <p class="tdesc">A repeatable method for system-design rounds, plus the building blocks they lean on.</p>
+      <div class="lessons">
+        <a class="lchip" href="applied-systems-design/applied-systems-design-fundamentals.html"><i>★</i><span>Fundamentals — start here</span></a>
+        <a class="lchip" href="applied-systems-design/consistent-hashing-deep-dive.html"><i>1</i><span>Consistent hashing — deep dive</span></a>
+      </div>
+      <div class="tfoot">
+        <a class="pill md" href="applied-systems-design/README.html">Roadmap</a>
+      </div>
+    </article>
+
+  </main>
+
+  <p class="empty" id="empty">No tracks or lessons match that search.</p>
+
+  <footer>
+    <div class="fcta">
+      <span class="msg"><strong>Found this useful?</strong> A ⭐ on GitHub helps others find it — and issues / PRs are very welcome.</span>
+      <a class="ghbtn" href="https://github.com/dineshbyte/engineering-learning-hub" target="_blank" rel="noopener">★ <span class="lbl">Star on GitHub</span></a>
+      <a class="fpill" href="https://github.com/dineshbyte/engineering-learning-hub/issues" target="_blank" rel="noopener">🐛 Issues &amp; ideas</a>
+      <a class="fpill" href="https://github.com/dineshbyte/engineering-learning-hub/fork" target="_blank" rel="noopener">🍴 Fork</a>
+    </div>
+    <div class="fgrid">
+      <div class="fcol fbrand">
+        <img src="https://github.com/dineshbyte.png" alt="Dinesh" width="44" height="44" loading="lazy">
+        <div class="ftxt">Built by <b>Dinesh</b><br>A self-paced engineering learning hub — visual-first, citation-grounded, optimized for long-term recall.</div>
+      </div>
+      <div class="fcol">
+        <h4>Quick links</h4>
+        <a href="#grid">All tracks</a>
+        <a href="https://github.com/dineshbyte/engineering-learning-hub" target="_blank" rel="noopener">Browse on GitHub</a>
+      </div>
+      <div class="fcol">
+        <h4>Connect</h4>
+        <a href="https://twitter.com/dineshxbyte" target="_blank" rel="noopener">Twitter / X</a>
+        <a href="https://medium.com/@dineshbyte" target="_blank" rel="noopener">Medium</a>
+        <a href="https://www.linkedin.com/in/dineshbyte/" target="_blank" rel="noopener">LinkedIn</a>
+        <a href="https://github.com/dineshbyte/engineering-learning-hub" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script src="assets/search-index.js"></script>
+<script>
+  (function(){
+    var q=document.getElementById('q'), grid=document.getElementById('grid'),
+        results=document.getElementById('results'), idx=window.SEARCH_INDEX||[];
+    var TOK={'AI Agents':'--track-agents','Context Engineering':'--track-context','REST API':'--track-rest',
+      'Bloom Filters':'--track-bloom','Distributed Systems':'--track-distributed','Storage Engines':'--track-storage',
+      'Transactions & Isolation':'--track-transactions','Streaming & Event-Driven':'--track-streaming',
+      'Applied Systems Design':'--track-applied'};
+    function esc(s){return s.replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+    function run(){
+      var term=q.value.trim().toLowerCase();
+      if(!term){ results.style.display='none'; results.innerHTML=''; grid.style.display=''; return; }
+      var toks=term.split(/\s+/), hits=[];
+      idx.forEach(function(d){
+        var score=0, all=true, tl=d.t.toLowerCase();
+        for(var i=0;i<toks.length;i++){
+          var inT=tl.indexOf(toks[i])>=0, inX=d.x.indexOf(toks[i])>=0;
+          if(!inT&&!inX){all=false;break;}
+          score+=(inT?5:0)+(inX?1:0);
+        }
+        if(all) hits.push({d:d,s:score});
+      });
+      hits.sort(function(a,b){return b.s-a.s || a.d.t.length-b.d.t.length;});
+      grid.style.display='none';
+      if(!hits.length){ results.innerHTML='<p class="rhead">No results for “'+esc(q.value.trim())+'”.</p>'; results.style.display=''; return; }
+      var html='<p class="rhead">'+hits.length+' result'+(hits.length>1?'s':'')+'</p>';
+      hits.slice(0,25).forEach(function(h,i){
+        var d=h.d, tk=TOK[d.g]||'--accent';
+        html+='<a class="ritem'+(i===0?' sel':'')+'" href="'+d.u+'" style="--rtc:var('+tk+')">'+
+          '<span class="rdot"></span><span class="rcol"><span class="rt">'+esc(d.t)+'</span>'+
+          '<span class="rg">'+esc(d.g)+'</span></span><span class="rkind">'+d.k+'</span></a>';
+      });
+      results.innerHTML=html; results.style.display='';
+    }
+    function sel(items,n){ items.forEach(function(it){it.classList.remove('sel');}); if(items[n]){items[n].classList.add('sel'); items[n].scrollIntoView({block:'nearest'});} }
+    q.addEventListener('input', run);
+    q.addEventListener('keydown', function(e){
+      var items=results.querySelectorAll('.ritem'); if(!items.length) return;
+      var cur=-1; for(var i=0;i<items.length;i++){ if(items[i].classList.contains('sel')){cur=i;break;} }
+      if(e.key==='ArrowDown'){ e.preventDefault(); sel(items, Math.min(cur+1,items.length-1)); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); sel(items, Math.max(cur-1,0)); }
+      else if(e.key==='Enter'){ if(cur>=0){ e.preventDefault(); window.location=items[cur].getAttribute('href'); } }
+      else if(e.key==='Escape'){ q.value=''; run(); q.blur(); }
+    });
+  })();
+</script>
+</body>
+</html>
