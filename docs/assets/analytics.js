@@ -211,4 +211,46 @@
       }
     } catch (e) { /* storage blocked */ }
   }
+
+  /* --- 9. lesson read / completion (lesson pages only) --------------------
+     page_view = "opened". These approximate "actually read":
+       lesson_read     → scrolled past 75%, OR engaged ~30s (covers short pages)
+       lesson_complete → scrolled to ~90% (after real scrolling), OR clicked Next
+     Each fires at most once per page load. */
+  if (CTX.page_type === 'lesson') {
+    var readSent = false, doneSent = false, scrolled = false;
+
+    function scrollPct() {
+      var h = document.documentElement;
+      var docH = Math.max(h.scrollHeight, (document.body && document.body.scrollHeight) || 0);
+      var seen = (window.scrollY || h.scrollTop || 0) + window.innerHeight;
+      return docH > 0 ? seen / docH : 1;
+    }
+    function markRead(trigger) {
+      if (readSent) return; readSent = true;
+      ev('lesson_read', { lesson_number: CTX.lesson_number, trigger: trigger });
+    }
+    function markComplete(trigger) {
+      if (doneSent) return; doneSent = true;
+      markRead('via_complete');               // completion implies a read
+      ev('lesson_complete', { lesson_number: CTX.lesson_number, trigger: trigger });
+    }
+
+    window.addEventListener('scroll', function () {
+      scrolled = true;
+      var p = scrollPct();
+      if (p >= 0.75) markRead('scroll');
+      if (p >= 0.90 && scrolled) markComplete('scroll');
+    }, { passive: true });
+
+    // time-based read fallback (long dwell, or pages too short to scroll)
+    setTimeout(function () { markRead('time'); }, 30000);
+
+    // clicking the Next pager completes the lesson
+    document.addEventListener('click', function (e) {
+      if (!e.target || !e.target.closest) return;
+      var n = e.target.closest('#hubbar .pn a, .nav a');
+      if (n && /next|›|→|⟶/.test(((n.textContent) || '').toLowerCase())) markComplete('next_click');
+    });
+  }
 })();
