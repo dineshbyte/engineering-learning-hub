@@ -9,24 +9,25 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Exactly-Once in Kafka — Deep Dive · visual edition</title>
-<meta name="description" content="Your bar: on a whiteboard, derive why committing the consumer's input offset inside the producer's transaction makes a read-process-write loop exactly-once…">
+<title>Exactly-Once Semantics in Kafka · StackDepth</title>
+<meta name="description" content="Exactly-once semantics in Kafka explained: idempotent producers, transactions, and committing consumer offsets inside the producer transaction to make read-process-write loops exactly-once.">
 <meta name="author" content="dineshbyte">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/streaming-event-driven/exactly-once-kafka-deep-dive.html">
 <meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Learning Hub">
-<meta property="og:title" content="Exactly-Once in Kafka — Deep Dive · visual edition · Engineering Learning Hub">
-<meta property="og:description" content="Your bar: on a whiteboard, derive why committing the consumer's input offset inside the producer's transaction makes a read-process-write loop exactly-once…">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="Exactly-Once Semantics in Kafka · StackDepth">
+<meta property="og:description" content="Exactly-once semantics in Kafka explained: idempotent producers, transactions, and committing consumer offsets inside the producer transaction to make read-process-write loops exactly-once.">
 <meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/streaming-event-driven/exactly-once-kafka-deep-dive.html">
 <meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Exactly-Once in Kafka — Deep Dive · visual edition · Engineering Learning Hub">
-<meta name="twitter:description" content="Your bar: on a whiteboard, derive why committing the consumer's input offset inside the producer's transaction makes a read-process-write loop exactly-once…">
+<meta name="twitter:title" content="Exactly-Once Semantics in Kafka · StackDepth">
+<meta name="twitter:description" content="Exactly-once semantics in Kafka explained: idempotent producers, transactions, and committing consumer offsets inside the producer transaction to make read-process-write loops exactly-once.">
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../assets/tokens.css">
 <link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/interview.css">
 <style>:root{--accent:var(--track-streaming)}
 /* ---- slim rules for classes not in lesson.css ---- */
 figure{text-align:center}
@@ -62,6 +63,118 @@ details.iq .a b{color:var(--accent)}
 .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
 @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "\"Exactly-once in Kafka\" — exactly-once what ? Define the scope precisely.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: exactly-once processing/effects for the read-process-write pattern, entirely within Kafka . NOT exactly-once delivery (impossible), NOT across external systems, NOT \"charge the card once.\" Red flag: \"the message is delivered exactly once.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does the idempotent producer do, and what does it require?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: on by default for EOS; the broker assigns a PID and tracks the last accepted sequence per (PID, partition) so a retried produce is deduped at the broker. It requires acks=all and bounded in-flight requests to preserve ordering, and it is scoped to a single producer session — a restart re-PIDs, so the idempotent producer alone does not survive a crash."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is read_committed , and why must every consumer set it for EOS?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: read_committed makes the consumer skip aborted and still-open transactional records and stop at the Last Stable Offset, so it only sees committed output. The default is read_uncommitted , which returns aborted + in-flight records. EOS is a whole-pipeline property: a transactional producer with a default-isolation consumer is not exactly-once."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Where are consumer offsets stored, and why does that matter for transactions?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: offsets live in the internal __consumer_offsets topic, keyed by group/partition — a regular Kafka topic. Because the input offset is itself just another Kafka write, it can be enrolled in the same producer transaction via sendOffsetsToTransaction , which is exactly what lets \"we consumed these inputs\" commit atomically with the output."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk me through how a per-partition sequence number dedupes a producer retry.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: broker assigns a PID, tracks last accepted seq per (PID, partition) ; seq <= last -> ACK but discard (the dedup), = last+1 -> accept, > last+1 -> reject OutOfOrderSequence (a gap = lost data). Bonus: needs acks=all + bounded in-flight to keep ordering; scoped to one PID, so a restart re-PIDs and this alone doesn't survive it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why does committing the consumer's input offset inside the producer's transaction make the loop exactly-once?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: sendOffsetsToTransaction writes the offset to __consumer_offsets as part of the txn, so output and \"we consumed those inputs\" commit together or not at all. Crash before commit -> both abort -> restart reprocesses from the last committed offset, partial output is aborted/invisible. It's the dual-write problem solved only because both writes are in Kafka ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "I produce transactionally but downstream still sees duplicates. Diagnose it.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: the consumer is almost certainly default read_uncommitted , which returns aborted + in-flight records. EOS is a whole-pipeline property — txnal producer and read_committed consumer. The half-measure passes testing and duplicates in prod."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the LSO, and what does read_committed cost you?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: the Last Stable Offset is the offset just before the first still-open transaction; a read_committed consumer never reads past it and filters aborted records via markers. Cost: a long-running transaction stalls its consumers at the LSO — read latency bounded by how long transactions stay open."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a \"zombie\" producer, and how does Kafka stop it without solving failure detection?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: a slow/partitioned producer wrongly declared dead; a replacement starts on the same transactional.id . Fix: initTransactions() bumps the epoch and aborts the old open txn; the coordinator rejects the old epoch ( ProducerFenced / InvalidProducerEpoch ). It never detects death — only the latest epoch can act, dodging the FLP/\"slow vs dead\" impossibility."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your processing also writes to a SQL DB and charges a card. How far does Kafka EOS get you?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: not at all for those — they're outside the transaction, so a crash-and-retry repeats them. You owe an idempotency key on the external call or the outbox pattern (write DB + outbox in one local txn, relay to Kafka). Nothing spans Kafka and your DB in one transaction."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Distinguish the two failure modes — a duplicate and a gap — in the EOS machinery.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hits: a duplicate comes from at-least-once delivery (retry after an ACK was lost) and is killed by the idempotent producer's sequence dedup or, end-to-end, by idempotent effects. A gap is data loss: the broker sees seq > last+1 ( OutOfOrderSequence ) or an offset committed before its work ran (at-most-once). Duplicates are recoverable; gaps are not — which is why the safe default is at-least-once + idempotency, never commit-before-process."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design an exactly-once enrichment job (Kafka in, enrich, Kafka out).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: a transactional producer with a stable, instance-unique transactional.id ; the loop = consume -> process -> produce + sendOffsetsToTransaction -> commitTransaction ; downstream consumers set read_committed ; commit.interval.ms tuned for latency vs overhead; epoch fencing relied on for restarts; Kafka Streams exactly_once_v2 if state is involved; and any external side effect gated behind an idempotency key/outbox. The candidate should name the boundary explicitly: EOS stops at the first byte leaving Kafka."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design an exactly-once pipeline whose last step charges a payment provider.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: accept that Kafka EOS cannot enroll the payment call, so the network step is at-least-once by nature; assign a deterministic idempotency key per logical charge (derived from the event id, not generated per attempt) and pass it to the provider so retries are no-ops; or use the outbox — record \"charge requested\" in a local DB txn, relay to a worker that calls the provider idempotently and records the result; reconcile on startup; and surface the unavoidable truth — exactly-once delivery across the boundary is impossible, so you build exactly-once effects with dedup + reconciliation, plus a DLQ and alerting for charges that neither confirm nor fail."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->
@@ -73,9 +186,9 @@ details.iq .a b{color:var(--accent)}
 
 <div class="wrap">
   <nav id="hubbar">
-    <a href="../index.html">&#8592; Learning Hub</a>
+    <a href="../index.html">&#8592; StackDepth</a>
     <span class="pn"><a href="streaming-event-driven-fundamentals.html" title="Streaming &amp;amp; Event-Driven">&#8249; Prev</a><a href="watermarks-deep-dive.html" title="Watermarks — deep dive">Next &#8250;</a></span>
-    <span style="display:flex;align-items:center;gap:.6rem"><a href="exactly-once-kafka-deep-dive.epub">&#8595; EPUB</a><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Streaming &amp; Event-Driven</span></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Streaming &amp; Event-Driven</span></span>
   </nav>
   <div class="kicker">Book 4 · Lesson 3 supplement · visual edition</div>
   <h1>Exactly-Once in Kafka — Deep Dive</h1>
@@ -450,32 +563,64 @@ commitTransaction()                            // markers to every partition, vi
   </div>
 
   <!-- ================= INTERVIEW QUESTIONS ================= -->
-  <h2 class="sec" id="interview">Interview questions on these concepts</h2>
-  <p>Use each one <strong>twice</strong>: answer it from memory (recall), and ask it of a candidate to test depth. Reveal shows what a strong answer <em>hits</em> — a checklist, not a script.</p>
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p>Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
 
-  <details class="iq"><summary>1 · "Exactly-once in Kafka" — exactly-once <em>what</em>? Define the scope precisely.</summary>
-    <div class="a"><b>Hits:</b> exactly-once <em>processing/effects</em> for the read-process-write pattern, <em>entirely within Kafka</em>. NOT exactly-once delivery (impossible), NOT across external systems, NOT "charge the card once." Red flag: "the message is delivered exactly once."</div></details>
+  <div data-interview>
 
-  <details class="iq"><summary>2 · Walk me through how a per-partition sequence number dedupes a producer retry.</summary>
-    <div class="a"><b>Hits:</b> broker assigns a PID, tracks last accepted seq per <code>(PID, partition)</code>; <code>seq ≤ last</code> → ACK but discard (the dedup), <code>= last+1</code> → accept, <code>&gt; last+1</code> → reject <code>OutOfOrderSequence</code> (a gap = lost data). Bonus: needs <code>acks=all</code> + bounded in-flight to keep ordering; scoped to one PID, so a restart re-PIDs and this alone doesn't survive it.</div></details>
+    <details class="iq" data-level="core"><summary>"Exactly-once in Kafka" — exactly-once <em>what</em>? Define the scope precisely.</summary>
+      <div class="a"><b>Hits:</b> exactly-once <em>processing/effects</em> for the read-process-write pattern, <em>entirely within Kafka</em>. NOT exactly-once delivery (impossible), NOT across external systems, NOT "charge the card once." Red flag: "the message is delivered exactly once."</div></details>
 
-  <details class="iq"><summary>3 · Why does committing the consumer's <em>input offset</em> inside the producer's transaction make the loop exactly-once?</summary>
-    <div class="a"><b>Hits:</b> <code>sendOffsetsToTransaction</code> writes the offset to <code>__consumer_offsets</code> as part of the txn, so output and "we consumed those inputs" commit together or not at all. Crash before commit → both abort → restart reprocesses from the last committed offset, partial output is aborted/invisible. It's the dual-write problem solved <em>only because both writes are in Kafka</em>.</div></details>
+    <details class="iq" data-level="core"><summary>What does the idempotent producer do, and what does it require?</summary>
+      <div class="a"><b>Hits:</b> on by default for EOS; the broker assigns a PID and tracks the last accepted sequence per <code>(PID, partition)</code> so a retried produce is deduped at the broker. It requires <code>acks=all</code> and bounded in-flight requests to preserve ordering, and it is scoped to a single producer session — a restart re-PIDs, so the idempotent producer alone does not survive a crash.</div></details>
 
-  <details class="iq"><summary>4 · I produce transactionally but downstream still sees duplicates. Diagnose it.</summary>
-    <div class="a"><b>Hits:</b> the consumer is almost certainly default <code>read_uncommitted</code>, which returns aborted + in-flight records. EOS is a whole-pipeline property — txnal producer <em>and</em> <code>read_committed</code> consumer. The half-measure passes testing and duplicates in prod.</div></details>
+    <details class="iq" data-level="core"><summary>What is <code>read_committed</code>, and why must every consumer set it for EOS?</summary>
+      <div class="a"><b>Hits:</b> <code>read_committed</code> makes the consumer skip aborted and still-open transactional records and stop at the Last Stable Offset, so it only sees committed output. The default is <code>read_uncommitted</code>, which returns aborted + in-flight records. EOS is a whole-pipeline property: a transactional producer with a default-isolation consumer is <em>not</em> exactly-once.</div></details>
 
-  <details class="iq"><summary>5 · What is a "zombie" producer, and how does Kafka stop it without solving failure detection?</summary>
-    <div class="a"><b>Hits:</b> a slow/partitioned producer wrongly declared dead; a replacement starts on the same <code>transactional.id</code>. Fix: <code>initTransactions()</code> bumps the <em>epoch</em> and aborts the old open txn; the coordinator rejects the old epoch (<code>ProducerFenced</code>/<code>InvalidProducerEpoch</code>). It never detects death — only the latest epoch can act, dodging the FLP/"slow vs dead" impossibility.</div></details>
+    <details class="iq" data-level="core"><summary>Where are consumer offsets stored, and why does that matter for transactions?</summary>
+      <div class="a"><b>Hits:</b> offsets live in the internal <code>__consumer_offsets</code> topic, keyed by group/partition — a regular Kafka topic. Because the input offset is itself just another Kafka write, it can be enrolled in the same producer transaction via <code>sendOffsetsToTransaction</code>, which is exactly what lets "we consumed these inputs" commit atomically with the output.</div></details>
 
-  <details class="iq"><summary>6 · What's the LSO, and what does <code>read_committed</code> cost you?</summary>
-    <div class="a"><b>Hits:</b> the Last Stable Offset is the offset just before the first still-open transaction; a <code>read_committed</code> consumer never reads past it and filters aborted records via markers. Cost: a long-running transaction stalls its consumers at the LSO — read latency bounded by how long transactions stay open.</div></details>
+    <details class="iq" data-level="senior"><summary>Walk me through how a per-partition sequence number dedupes a producer retry.</summary>
+      <div class="a"><b>Hits:</b> broker assigns a PID, tracks last accepted seq per <code>(PID, partition)</code>; <code>seq &le; last</code> &rarr; ACK but discard (the dedup), <code>= last+1</code> &rarr; accept, <code>&gt; last+1</code> &rarr; reject <code>OutOfOrderSequence</code> (a gap = lost data). Bonus: needs <code>acks=all</code> + bounded in-flight to keep ordering; scoped to one PID, so a restart re-PIDs and this alone doesn't survive it.</div></details>
 
-  <details class="iq"><summary>7 · Your processing also writes to a SQL DB and charges a card. How far does Kafka EOS get you?</summary>
-    <div class="a"><b>Hits:</b> not at all for those — they're outside the transaction, so a crash-and-retry repeats them. You owe an <em>idempotency key</em> on the external call or the <em>outbox pattern</em> (write DB + outbox in one local txn, relay to Kafka). Nothing spans Kafka and your DB in one transaction.</div></details>
+    <details class="iq" data-level="senior"><summary>Why does committing the consumer's <em>input offset</em> inside the producer's transaction make the loop exactly-once?</summary>
+      <div class="a"><b>Hits:</b> <code>sendOffsetsToTransaction</code> writes the offset to <code>__consumer_offsets</code> as part of the txn, so output and "we consumed those inputs" commit together or not at all. Crash before commit &rarr; both abort &rarr; restart reprocesses from the last committed offset, partial output is aborted/invisible. It's the dual-write problem solved <em>only because both writes are in Kafka</em>.</div></details>
 
-  <details class="iq"><summary>8 · Whiteboard: design an exactly-once enrichment job (Kafka in, enrich, Kafka out). (rehearse this one with me)</summary>
-    <div class="a"><b>Hits:</b> transactional producer with a <em>stable, instance-unique</em> <code>transactional.id</code>; loop = consume → process → <code>produce</code> + <code>sendOffsetsToTransaction</code> → <code>commitTransaction</code>; downstream consumers <code>read_committed</code>; tune <code>commit.interval.ms</code> for latency vs overhead; rely on epoch fencing for restarts; prefer Kafka Streams <code>exactly_once_v2</code> if state is involved; and gate any external side effect behind an idempotency key/outbox. <em>Want to run this live? Ask me to grade your whiteboard answer.</em></div></details>
+    <details class="iq" data-level="senior"><summary>I produce transactionally but downstream still sees duplicates. Diagnose it.</summary>
+      <div class="a"><b>Hits:</b> the consumer is almost certainly default <code>read_uncommitted</code>, which returns aborted + in-flight records. EOS is a whole-pipeline property — txnal producer <em>and</em> <code>read_committed</code> consumer. The half-measure passes testing and duplicates in prod.</div></details>
+
+    <details class="iq" data-level="senior"><summary>What's the LSO, and what does <code>read_committed</code> cost you?</summary>
+      <div class="a"><b>Hits:</b> the Last Stable Offset is the offset just before the first still-open transaction; a <code>read_committed</code> consumer never reads past it and filters aborted records via markers. Cost: a long-running transaction stalls its consumers at the LSO — read latency bounded by how long transactions stay open.</div></details>
+
+    <details class="iq" data-level="staff"><summary>What is a "zombie" producer, and how does Kafka stop it without solving failure detection?</summary>
+      <div class="a"><b>Hits:</b> a slow/partitioned producer wrongly declared dead; a replacement starts on the same <code>transactional.id</code>. Fix: <code>initTransactions()</code> bumps the <em>epoch</em> and aborts the old open txn; the coordinator rejects the old epoch (<code>ProducerFenced</code>/<code>InvalidProducerEpoch</code>). It never detects death — only the latest epoch can act, dodging the FLP/"slow vs dead" impossibility.</div></details>
+
+    <details class="iq" data-level="staff"><summary>Your processing also writes to a SQL DB and charges a card. How far does Kafka EOS get you?</summary>
+      <div class="a"><b>Hits:</b> not at all for those — they're outside the transaction, so a crash-and-retry repeats them. You owe an <em>idempotency key</em> on the external call or the <em>outbox pattern</em> (write DB + outbox in one local txn, relay to Kafka). Nothing spans Kafka and your DB in one transaction.</div></details>
+
+    <details class="iq" data-level="staff"><summary>Distinguish the two failure modes — a duplicate and a gap — in the EOS machinery.</summary>
+      <div class="a"><b>Hits:</b> a <em>duplicate</em> comes from at-least-once delivery (retry after an ACK was lost) and is killed by the idempotent producer's sequence dedup or, end-to-end, by idempotent effects. A <em>gap</em> is data loss: the broker sees <code>seq &gt; last+1</code> (<code>OutOfOrderSequence</code>) or an offset committed before its work ran (at-most-once). Duplicates are recoverable; gaps are not — which is why the safe default is at-least-once + idempotency, never commit-before-process.</div></details>
+
+    <div class="designrubric" data-level="design">
+      <b>System Design — what a strong design round demonstrates:</b>
+      <ol>
+        <li>State the <b>scope</b> up front: exactly-once <em>effects</em> for read-process-write, Kafka-to-Kafka; anything leaving Kafka is out of the transaction.</li>
+        <li>Configure the <b>producer</b>: stable, instance-unique <code>transactional.id</code>; idempotence on; <code>acks=all</code>; bounded in-flight.</li>
+        <li>Configure every <b>downstream consumer</b> <code>read_committed</code> — call out that omitting this silently breaks EOS.</li>
+        <li>Show the <b>atomic loop</b>: consume &rarr; process &rarr; produce + <code>sendOffsetsToTransaction</code> &rarr; <code>commitTransaction</code>.</li>
+        <li>Handle <b>restarts</b> with epoch fencing; for stateful work prefer Kafka Streams <code>exactly_once_v2</code> (KIP-447).</li>
+        <li>Gate any <b>external side effect</b> behind an idempotency key or the outbox pattern.</li>
+        <li>Name the <b>cost</b>: long transactions stall consumers at the LSO; tune <code>commit.interval.ms</code> for latency vs overhead.</li>
+      </ol>
+    </div>
+
+    <details class="iq" data-level="design"><summary>Design an exactly-once enrichment job (Kafka in, enrich, Kafka out).</summary>
+      <div class="a"><b>A strong answer covers:</b> a transactional producer with a <em>stable, instance-unique</em> <code>transactional.id</code>; the loop = consume &rarr; process &rarr; <code>produce</code> + <code>sendOffsetsToTransaction</code> &rarr; <code>commitTransaction</code>; downstream consumers set <code>read_committed</code>; <code>commit.interval.ms</code> tuned for latency vs overhead; epoch fencing relied on for restarts; Kafka Streams <code>exactly_once_v2</code> if state is involved; and any external side effect gated behind an idempotency key/outbox. The candidate should name the boundary explicitly: EOS stops at the first byte leaving Kafka.</div></details>
+
+    <details class="iq" data-level="design"><summary>Design an exactly-once pipeline whose last step charges a payment provider.</summary>
+      <div class="a"><b>A strong answer covers:</b> accept that Kafka EOS cannot enroll the payment call, so the network step is at-least-once by nature; assign a deterministic <b>idempotency key</b> per logical charge (derived from the event id, not generated per attempt) and pass it to the provider so retries are no-ops; or use the <b>outbox</b> — record "charge requested" in a local DB txn, relay to a worker that calls the provider idempotently and records the result; reconcile on startup; and surface the unavoidable truth — exactly-once <em>delivery</em> across the boundary is impossible, so you build exactly-once <em>effects</em> with dedup + reconciliation, plus a DLQ and alerting for charges that neither confirm nor fail.</div></details>
+
+  </div>
 
   <!-- ================= CHEAT SHEET (compact) ================= -->
   <h2 class="sec" id="cheat">★ Cheat sheet — claim → what it actually means</h2>
@@ -538,5 +683,6 @@ commitTransaction()                            // markers to every partition, vi
     });
   });
 </script>
+<script defer src="../assets/interview.js"></script>
 </body>
 </html>

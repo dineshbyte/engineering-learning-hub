@@ -9,24 +9,25 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lesson 4 · Memory, Compression &amp; Failure Modes</title>
+<title>LLM Memory, Context Compression &amp; Failure Modes · StackDepth</title>
 <meta name="description" content="Your bar: distinguish memory from a knowledge base, manage a long-running agent's context with summarization and sliding windows, and diagnose the five ways context systems fail — missing, wrong, outdated, conflicting, excessive.">
 <meta name="author" content="dineshbyte">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0004-memory-compression-and-failure-modes.html">
 <meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Learning Hub">
-<meta property="og:title" content="Lesson 4 · Memory, Compression &amp; Failure Modes · Engineering Learning Hub">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="LLM Memory, Context Compression &amp; Failure Modes">
 <meta property="og:description" content="Memory vs knowledge base, context compression for long-running agents, and the five failure modes of context systems.">
 <meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0004-memory-compression-and-failure-modes.html">
 <meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Lesson 4 · Memory, Compression &amp; Failure Modes">
+<meta name="twitter:title" content="LLM Memory, Context Compression &amp; Failure Modes">
 <meta name="twitter:description" content="Most AI bugs are context bugs — classify them: missing, wrong, outdated, conflicting, excessive.">
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../../assets/tokens.css">
 <link rel="stylesheet" href="../../assets/lesson.css">
+<link rel="stylesheet" href="../../assets/interview.css">
 <style>
   :root{--accent:var(--track-context)}
 
@@ -84,6 +85,142 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "A teammate stores a user's preferences in the knowledge base index alongside the docs. Why is that a design smell?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the KB is shared, read-only reference truth; per-user preferences are mutable, user-scoped memory -> mixing them pollutes everyone's retrieval (one user's facts can surface for another) and breaks isolation/privacy -> lifecycles differ: KB is versioned by authors, memory is written constantly by the agent -> keep them separate stores, retrieve from both into context, and tag provenance so you know which is which."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your agent loses track of a database ID it was told 20 turns ago, after the history was summarized. What went wrong and how do you fix it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: root cause is lossy summarization — the ID lived in an old turn that got condensed into prose and dropped -> fix the policy, not just this case: distill structured state (IDs, decisions, constraints) into a durable key-value scratchpad that's always kept verbatim, separate from the narrative summary -> keep recent turns verbatim so freshly-mentioned facts survive -> and store the full transcript so you can retrieve the original turn on demand rather than relying on the summary to be complete."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your assistant quotes last quarter's pricing. Walk through diagnosing it with the failure-mode framework.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: classify the symptom — it answered from old data, so this is outdated context, not a model defect -> verify by inspecting what was retrieved: a stale index entry or cached doc with last quarter's price -> root cause is freshness — the index wasn't re-indexed after the price changed -> fixes: invalidate/re-index on source change, add a freshness/TTL signal, and for volatile fields like price prefer a live structured fetch over an embedded snapshot -> prevention: monitor index staleness and treat volatile data differently from static docs."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Two retrieved docs give different answers to the same question. Why does this happen and how do you make the system deterministic?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: this is conflicting context — duplicates or multiple versions both got retrieved, with no precedence -> the model picks arbitrarily, so the same query can flip answers -> fixes: dedupe near-identical chunks, establish a source-of-truth ranking (authority + recency), and drop or down-rank the loser -> pass provenance into the window so the model (and your logs) can see which source won -> prevention: version your KB and avoid indexing the same fact from multiple uncontrolled sources."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Distinguish memory, knowledge base, retrieval, and context. Use a human analogy.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: memory = persisted state the system writes about us (interaction-derived facts, preferences, decisions; updatable) — like your recollection of a friend -> knowledge base = external, read-only reference truth, the same for everyone — like the library/encyclopedia -> retrieval = the mechanism that looks things up and pulls them into the window; it stores nothing itself -> context = the window assembled for ONE call -> the model holds none of them — it's stateless, so both stores reach it only by being retrieved into context."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Who writes memory vs the knowledge base, and how does each one actually reach the model?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the system/agent writes memory over time — append & update, user-scoped -> the KB is authored externally and read-only to the agent, shared across users -> neither has a direct line to the model: both reach it only via retrieval into the context window -> the slogan: KB = what's true in general, memory = what I learned from us -> different owners, different lifecycle, different mutability."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Name the four compression moves and which ones are lossy.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: summarization — condense old history into prose (lossy) -> distillation — extract the salient facts/decisions/state, drop the narrative (lossy) -> compression/pruning — dedupe and strip redundancy/boilerplate (near-lossless) -> sliding window — keep the last N turns verbatim plus a rolling summary of everything older (mixed) -> the rule: summarize the OLD, keep the RECENT and the decisions/IDs verbatim."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "List the five failure modes with one symptom each.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: missing — \"I don't know\" or hallucinated filler -> wrong — confident but off-topic/incorrect -> outdated — answers from old data (old price/API) -> conflicting — contradictory or arbitrary answer that flips between runs -> excessive — slower, costlier, and the key fact gets ignored (\"lost in the middle\") -> the framing: most AI bugs are context bugs, not model bugs."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Summarize aggressively to save money.\" Where does that reasoning break down?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: summarizing isn't free — each summary is an extra LLM call, so aggressive summarization can cost more, not less -> it's lossy: a detail dropped now (an ID, a constraint) can be the exact one that matters three turns later -> compress the OLD, keep the RECENT and load-bearing facts verbatim -> compress as you approach the budget, not pre-emptively -> if the issue is redundancy, prefer near-lossless dedupe/pruning; if it's \"we might need it later,\" store-and-retrieve-on-demand beats summarize-and-hope."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your agent loses track of a database ID it was told 20 turns ago, after the history was summarized. Diagnose and fix.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: root cause is lossy summarization — the ID lived in an old turn that got condensed into prose and dropped -> fix the policy, not just this case: distill structured state (IDs, decisions, constraints) into a durable key-value scratchpad that's always kept verbatim, separate from the narrative summary -> keep recent turns verbatim so freshly-mentioned facts survive -> store the full transcript so you can retrieve the original turn on demand rather than trusting the summary to be complete."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "An assistant quotes last quarter's pricing. Walk the failure-mode framework to the fix.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: classify the symptom — it answered from old data, so this is outdated context, not a model defect -> verify by inspecting what was retrieved: a stale index entry or cached doc with last quarter's price -> root cause is freshness — the index wasn't re-indexed after the price changed -> fixes: invalidate/re-index on source change, add a freshness/TTL signal, and for volatile fields like price prefer a live structured fetch over an embedded snapshot -> prevention: monitor index staleness and treat volatile data differently from static docs."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the memory + context strategy for an agent that runs for hundreds of turns on a fixed budget.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: store the full transcript externally (memory) — never rely on the window to hold it all -> assemble each window from system prompt + rolling summary of old turns + last N turns verbatim + facts retrieved for THIS question -> keep decisions, IDs, and constraints in a structured scratchpad that's always verbatim, since summarization is lossy -> compress only as you approach the budget, and budget for the extra LLM calls summarizing costs -> retrieve old detail on demand from storage rather than carrying it; name the trade-off you're making — fidelity for room — out loud."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Two retrieved docs answer the same question differently and the answer flips between runs. Classify it and make the system deterministic.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: this is conflicting context — duplicates or multiple versions both got retrieved with no precedence, so the model picks arbitrarily -> fixes: dedupe near-identical chunks; establish a source-of-truth ranking (authority + recency) and drop or down-rank the loser -> pass provenance into the window so the model — and your logs — can see which source won -> prevention: version the KB and stop indexing the same fact from multiple uncontrolled sources -> note the security edge: if the \"loser\" is untrusted, treat retrieved text as data, not instructions (prompt injection). 5"
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Production incident: the model is fluent and confident but the answer is just wrong. Walk through classifying it before touching the model.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: resist \"we need a smarter model\" — most wrong answers are a context defect, and a bigger model just reasons better over bad input -> pull the actual retrieved window and ask which of the five shapes it is: was the right source never retrieved (missing)? topically-similar-but-wrong with no rerank (wrong)? stale (outdated)? contradicted by a duplicate (conflicting)? buried in a huge dump (excessive)? -> each shape has its own cheap fix — recall/chunking, rerank/filters, freshness, dedupe/precedence, select-less-but-right -> the discipline is classify first; the fix follows from the shape, and it's almost always cheaper than swapping the model."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the memory and compression strategy for a multi-session customer-support agent that talks to the same users for months.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: two distinct stores — user-scoped memory (their account facts, past tickets, derived preferences, open issues; writable, private per user) and a shared read-only KB (product docs, policies) — never co-mingled in one index -> per session, assemble the window from system prompt + a rolling summary of this user's history + the last N turns verbatim + KB facts retrieved for the current question -> persist structured state (decisions, IDs, entitlements) verbatim in a scratchpad, since summarization is lossy and a dropped account ID is a real bug -> freshness matters: invalidate cached account state on change and prefer a live fetch for volatile fields (balance, plan) over an embedded snapshot -> guard the five modes — provenance + authority/recency precedence for conflicting policy versions, recall checks for missing answers, and select-less-but-right to avoid burying the key fact -> call the cost and privacy trade-offs: per-user memory is storage + retrieval cost and a data-retention/PII surface, so scope, encrypt, and expire it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the context strategy for an autonomous agent that runs for hours on a single task (e.g. a long research or migration job).",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: the history is unbounded but the budget is fixed, so the full transcript lives in external storage and the window is assembled fresh each call — store it all, retrieve on demand -> window recipe: system prompt + objective/plan + a rolling summary of completed work + the last N turns verbatim + facts retrieved for the current step -> keep a durable, always-verbatim scratchpad of decisions, IDs, intermediate results, and constraints so a lossy summary can never drop a load-bearing fact -> trigger compression only as you approach the budget, and account for the extra LLM calls each summary costs over a multi-hour run -> checkpoint state so the run is resumable, and detect drift — if the summary diverges from the goal, re-retrieve the original turns -> close on failure modes: excessive context is the silent killer over long runs (lost-in-the-middle), so curate aggressively rather than dumping the whole history forward."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->
@@ -96,7 +233,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
 <div class="wrap">
   <nav id="hubbar">
-    <a href="../../index.html">&#8592; Learning Hub</a>
+    <a href="../../index.html">&#8592; StackDepth</a>
     <span class="pn"><a href="0003-codebase-context-chunking-and-rag.html" title="Codebase Context, Chunking &amp; RAG">&#8249; Prev</a><a href="0005-architecture-reviews-and-production-design.html" title="Architecture Reviews &amp; Production Design">Next &#8250;</a></span>
     <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Context Engineering</span></span>
   </nav>
@@ -459,46 +596,97 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   </div>
 
   <!-- ============ INTERVIEW QUESTIONS ============ -->
-  <h2 class="sec" id="interview">Interview questions — Modules 1–3</h2>
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
 
-  <details class="iq">
-    <summary>M1 — Distinguish memory, knowledge base, retrieval, and context. Use a human analogy.</summary>
-    <div class="a">
-      <b>Hit these points:</b> <b>memory</b> = what the system learned from us (interaction-derived facts/decisions, system-written, updatable) — like your recollection of a friend &rarr; <b>knowledge base</b> = external read-only reference truth — like the library/encyclopedia &rarr; <b>retrieval</b> = the mechanism that looks things up and pulls them into the window &rarr; <b>context</b> = what's in the model's head for one call &rarr; key point: the model is stateless, so both stores reach it only via retrieval into context; "memory" never means the model itself remembers.
-    </div>
-  </details>
+  <div data-interview>
 
-  <details class="iq">
-    <summary>M2 — Design context management for an agent that runs for hundreds of turns on a fixed budget.</summary>
-    <div class="a">
-      <b>Hit these points:</b> store the full transcript externally (memory) — never rely on the window to hold it all &rarr; assemble each window from system prompt + rolling summary of old turns + last N turns verbatim + retrieved facts &rarr; keep decisions, IDs, and constraints in a structured scratchpad that's always verbatim, since summarization is lossy &rarr; compress as you approach the budget, not pre-emptively, and weigh the extra LLM calls summarizing costs &rarr; retrieve old detail on demand from storage rather than carrying it.
-    </div>
-  </details>
+    <!-- ===== CORE ===== -->
+    <details class="iq" data-level="core">
+      <summary>Distinguish memory, knowledge base, retrieval, and context. Use a human analogy.</summary>
+      <div class="a"><b>Hit these points:</b> <b>memory</b> = persisted state the system writes about us (interaction-derived facts, preferences, decisions; updatable) — like your recollection of a friend &rarr; <b>knowledge base</b> = external, read-only reference truth, the same for everyone — like the library/encyclopedia &rarr; <b>retrieval</b> = the mechanism that looks things up and pulls them into the window; it stores nothing itself &rarr; <b>context</b> = the window assembled for ONE call &rarr; the model holds none of them — it's stateless, so both stores reach it only by being retrieved into context.</div>
+    </details>
 
-  <details class="iq">
-    <summary>M2 — When is compression the wrong call, and what do you do instead?</summary>
-    <div class="a">
-      <b>Hit these points:</b> compression is lossy and costs extra calls, so it's wrong when fidelity is cheap to keep or the content is small &rarr; never summarize recent turns or load-bearing facts (IDs, decisions, constraints) — keep those verbatim &rarr; if redundancy is the problem, prefer near-lossless dedupe/pruning over summarization &rarr; if the issue is "we might need an old detail later," the answer is store-and-retrieve-on-demand, not summarize-and-hope &rarr; only summarize the genuinely old, low-value narrative when you're actually near the budget ceiling.
-    </div>
-  </details>
+    <details class="iq" data-level="core">
+      <summary>Who writes memory vs the knowledge base, and how does each one actually reach the model?</summary>
+      <div class="a"><b>Hit these points:</b> the system/agent writes memory over time — append &amp; update, user-scoped &rarr; the KB is authored externally and read-only to the agent, shared across users &rarr; neither has a direct line to the model: both reach it only via retrieval into the context window &rarr; the slogan: KB = what's true in general, memory = what I learned from us &rarr; different owners, different lifecycle, different mutability.</div>
+    </details>
 
-  <details class="iq">
-    <summary>M3 — Give the five failure modes with one symptom and one fix each.</summary>
-    <div class="a">
-      <b>Hit these points:</b> <b>missing</b> — "I don't know"/hallucination, fix recall &amp; chunking &rarr; <b>wrong</b> — confident but off-topic, fix with rerank/filters/hybrid &rarr; <b>outdated</b> — old price/API, fix freshness/re-index/live fetch &rarr; <b>conflicting</b> — contradictory answers, fix dedupe + authority/recency precedence + provenance &rarr; <b>excessive</b> — slow/costly/key fact ignored, fix by selecting less but right (position bias). Close with: most AI bugs are context bugs — classify first, then the fix is obvious.
-    </div>
-  </details>
+    <details class="iq" data-level="core">
+      <summary>Name the four compression moves and which ones are lossy.</summary>
+      <div class="a"><b>Hit these points:</b> <b>summarization</b> — condense old history into prose (lossy) &rarr; <b>distillation</b> — extract the salient facts/decisions/state, drop the narrative (lossy) &rarr; <b>compression/pruning</b> — dedupe and strip redundancy/boilerplate (near-lossless) &rarr; <b>sliding window</b> — keep the last N turns verbatim plus a rolling summary of everything older (mixed) &rarr; the rule: summarize the OLD, keep the RECENT and the decisions/IDs verbatim.</div>
+    </details>
 
-  <details class="iq">
-    <summary>M3 — A retrieved doc is poisoned with injected instructions and the model follows them. Which failure mode, and how do you defend?</summary>
-    <div class="a">
-      <b>Hit these points:</b> this is a <em>wrong/conflicting</em> context defect with a security edge — untrusted retrieved content treated as instructions (prompt injection) &rarr; defenses: treat retrieved text as data, not commands; isolate it with clear delimiters and provenance; rank trusted sources above open ones &rarr; filter/sanitize sources, and prefer authoritative KBs over arbitrary scraped content &rarr; this maps to OWASP's LLM risks — poisoned/conflicting retrieved context is a named threat, not a model bug.<sup><a href="#s5" id="r5">5</a></sup>
+    <details class="iq" data-level="core">
+      <summary>List the five failure modes with one symptom each.</summary>
+      <div class="a"><b>Hit these points:</b> <b>missing</b> — "I don't know" or hallucinated filler &rarr; <b>wrong</b> — confident but off-topic/incorrect &rarr; <b>outdated</b> — answers from old data (old price/API) &rarr; <b>conflicting</b> — contradictory or arbitrary answer that flips between runs &rarr; <b>excessive</b> — slower, costlier, and the key fact gets ignored ("lost in the middle") &rarr; the framing: most AI bugs are context bugs, not model bugs.</div>
+    </details>
+
+    <!-- ===== SENIOR ===== -->
+    <details class="iq" data-level="senior">
+      <summary>A teammate stores a user's preferences in the knowledge base index alongside the docs. Why is that a design smell?</summary>
+      <div class="a"><b>Hit these points:</b> the KB is shared, read-only reference truth; per-user preferences are mutable, user-scoped memory &rarr; mixing them pollutes everyone's retrieval — one user's facts can surface for another — and breaks isolation/privacy &rarr; lifecycles differ: the KB is versioned by authors, memory is written constantly by the agent &rarr; keep them as separate stores, retrieve from both into context, and tag provenance so you know which is which.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>"Summarize aggressively to save money." Where does that reasoning break down?</summary>
+      <div class="a"><b>Hit these points:</b> summarizing isn't free — each summary is an extra LLM call, so aggressive summarization can cost more, not less &rarr; it's lossy: a detail dropped now (an ID, a constraint) can be the exact one that matters three turns later &rarr; compress the OLD, keep the RECENT and load-bearing facts verbatim &rarr; compress as you approach the budget, not pre-emptively &rarr; if the issue is redundancy, prefer near-lossless dedupe/pruning; if it's "we might need it later," store-and-retrieve-on-demand beats summarize-and-hope.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>Your agent loses track of a database ID it was told 20 turns ago, after the history was summarized. Diagnose and fix.</summary>
+      <div class="a"><b>Hit these points:</b> root cause is lossy summarization — the ID lived in an old turn that got condensed into prose and dropped &rarr; fix the policy, not just this case: distill <em>structured</em> state (IDs, decisions, constraints) into a durable key-value scratchpad that's always kept verbatim, separate from the narrative summary &rarr; keep recent turns verbatim so freshly-mentioned facts survive &rarr; store the full transcript so you can retrieve the original turn on demand rather than trusting the summary to be complete.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>An assistant quotes last quarter's pricing. Walk the failure-mode framework to the fix.</summary>
+      <div class="a"><b>Hit these points:</b> classify the symptom — it answered from old data, so this is <em>outdated</em> context, not a model defect &rarr; verify by inspecting what was retrieved: a stale index entry or cached doc with last quarter's price &rarr; root cause is freshness — the index wasn't re-indexed after the price changed &rarr; fixes: invalidate/re-index on source change, add a freshness/TTL signal, and for volatile fields like price prefer a live structured fetch over an embedded snapshot &rarr; prevention: monitor index staleness and treat volatile data differently from static docs.</div>
+    </details>
+
+    <!-- ===== STAFF ===== -->
+    <details class="iq" data-level="staff">
+      <summary>Design the memory + context strategy for an agent that runs for hundreds of turns on a fixed budget.</summary>
+      <div class="a"><b>Hit these points:</b> store the full transcript externally (memory) — never rely on the window to hold it all &rarr; assemble each window from system prompt + rolling summary of old turns + last N turns verbatim + facts retrieved for THIS question &rarr; keep decisions, IDs, and constraints in a structured scratchpad that's always verbatim, since summarization is lossy &rarr; compress only as you approach the budget, and budget for the extra LLM calls summarizing costs &rarr; retrieve old detail on demand from storage rather than carrying it; name the trade-off you're making — fidelity for room — out loud.</div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>Two retrieved docs answer the same question differently and the answer flips between runs. Classify it and make the system deterministic.</summary>
+      <div class="a"><b>Hit these points:</b> this is <em>conflicting</em> context — duplicates or multiple versions both got retrieved with no precedence, so the model picks arbitrarily &rarr; fixes: dedupe near-identical chunks; establish a source-of-truth ranking (authority + recency) and drop or down-rank the loser &rarr; pass provenance into the window so the model — and your logs — can see which source won &rarr; prevention: version the KB and stop indexing the same fact from multiple uncontrolled sources &rarr; note the security edge: if the "loser" is untrusted, treat retrieved text as data, not instructions (prompt injection).<sup><a href="#s5" id="r5">5</a></sup></div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>Production incident: the model is fluent and confident but the answer is just wrong. Walk through classifying it before touching the model.</summary>
+      <div class="a"><b>Hit these points:</b> resist "we need a smarter model" — most wrong answers are a context defect, and a bigger model just reasons better over bad input &rarr; pull the actual retrieved window and ask which of the five shapes it is: was the right source never retrieved (missing)? topically-similar-but-wrong with no rerank (wrong)? stale (outdated)? contradicted by a duplicate (conflicting)? buried in a huge dump (excessive)? &rarr; each shape has its own cheap fix — recall/chunking, rerank/filters, freshness, dedupe/precedence, select-less-but-right &rarr; the discipline is classify first; the fix follows from the shape, and it's almost always cheaper than swapping the model.</div>
+    </details>
+
+    <!-- ===== SYSTEM DESIGN ===== -->
+    <div class="designrubric" data-level="design"><b>Design-round framework</b> — there's no single right answer; a strong candidate narrates these steps out loud:
+      <ol>
+        <li><b>Clarify</b> the run shape — multi-session over days vs one long run for hours, number of users, latency/cost budget, what "remembering" must mean.</li>
+        <li><b>Separate the stores</b> — user-scoped memory (writable) vs shared read-only KB; decide what's worth persisting vs derivable.</li>
+        <li><b>Define the window recipe</b> — system prompt + rolling summary + last N verbatim + retrieved facts, and the fixed token budget it must fit.</li>
+        <li><b>Compression policy</b> — what's summarized vs kept verbatim (decisions/IDs/constraints), and <em>when</em> compression triggers (near budget, not pre-emptively).</li>
+        <li><b>Retrieval &amp; freshness</b> — how memory and KB get queried per call, plus invalidation/TTL for volatile facts.</li>
+        <li><b>Failure-mode guardrails</b> — provenance, dedupe/precedence, recall monitoring, and treating retrieved text as data.</li>
+        <li><b>Cost, eval &amp; observability</b> — the extra LLM calls compression adds, how you'd test recall, and what you log to diagnose the five modes.</li>
+      </ol>
     </div>
-  </details>
+
+    <details class="iq" data-level="design">
+      <summary>Design the memory and compression strategy for a multi-session customer-support agent that talks to the same users for months.</summary>
+      <div class="a"><b>A strong answer covers:</b> two distinct stores — user-scoped <em>memory</em> (their account facts, past tickets, derived preferences, open issues; writable, private per user) and a shared read-only <em>KB</em> (product docs, policies) — never co-mingled in one index &rarr; per session, assemble the window from system prompt + a rolling summary of this user's history + the last N turns verbatim + KB facts retrieved for the current question &rarr; persist structured state (decisions, IDs, entitlements) verbatim in a scratchpad, since summarization is lossy and a dropped account ID is a real bug &rarr; freshness matters: invalidate cached account state on change and prefer a live fetch for volatile fields (balance, plan) over an embedded snapshot &rarr; guard the five modes — provenance + authority/recency precedence for conflicting policy versions, recall checks for missing answers, and select-less-but-right to avoid burying the key fact &rarr; call the cost and privacy trade-offs: per-user memory is storage + retrieval cost and a data-retention/PII surface, so scope, encrypt, and expire it.</div>
+    </details>
+
+    <details class="iq" data-level="design">
+      <summary>Design the context strategy for an autonomous agent that runs for hours on a single task (e.g. a long research or migration job).</summary>
+      <div class="a"><b>A strong answer covers:</b> the history is unbounded but the budget is fixed, so the full transcript lives in external storage and the window is assembled fresh each call — store it all, retrieve on demand &rarr; window recipe: system prompt + objective/plan + a rolling summary of completed work + the last N turns verbatim + facts retrieved for the current step &rarr; keep a durable, always-verbatim scratchpad of decisions, IDs, intermediate results, and constraints so a lossy summary can never drop a load-bearing fact &rarr; trigger compression only as you approach the budget, and account for the extra LLM calls each summary costs over a multi-hour run &rarr; checkpoint state so the run is resumable, and detect drift — if the summary diverges from the goal, re-retrieve the original turns &rarr; close on failure modes: excessive context is the silent killer over long runs (lost-in-the-middle), so curate aggressively rather than dumping the whole history forward.</div>
+    </details>
+
+  </div>
 
   <!-- ============ NAV ============ -->
   <div class="nav">
-    <span style="color:var(--muted)">&#8592; <a href="../../index.html#grid">Learning Hub</a></span>
+    <span style="color:var(--muted)">&#8592; <a href="../../index.html#grid">StackDepth</a></span>
     <span>Lesson 5: <a href="0005-architecture-reviews-and-production-design.html">Architecture Reviews &amp; Production Design &rarr;</a></span>
   </div>
 
@@ -530,5 +718,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     });
   });
 </script>
+<script src="../../assets/interview.js" defer></script>
 </body>
 </html>

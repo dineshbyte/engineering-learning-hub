@@ -9,24 +9,25 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lesson 7 · Pre-retrieval &amp; Advanced RAG</title>
+<title>Advanced RAG: HyDE, GraphRAG &amp; Agentic Retrieval · StackDepth</title>
 <meta name="description" content="Your bar: transform the query before you retrieve, match the retrieval structure to the question shape, and know when to graduate from a static pipeline to a self-correcting agentic loop.">
 <meta name="author" content="dineshbyte">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0007-pre-retrieval-and-advanced-rag.html">
 <meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Learning Hub">
-<meta property="og:title" content="Lesson 7 · Pre-retrieval &amp; Advanced RAG · Engineering Learning Hub">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="Advanced RAG: HyDE, GraphRAG &amp; Agentic Retrieval">
 <meta property="og:description" content="The query is not the question, and naive top-k is not the ceiling: query transformation, advanced retrieval structures, and agentic self-correcting RAG.">
 <meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0007-pre-retrieval-and-advanced-rag.html">
 <meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Lesson 7 · Pre-retrieval &amp; Advanced RAG">
+<meta name="twitter:title" content="Advanced RAG: HyDE, GraphRAG &amp; Agentic Retrieval">
 <meta name="twitter:description" content="Fix the query before the index, match structure to question shape, and let the model check its own work.">
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../../assets/tokens.css">
 <link rel="stylesheet" href="../../assets/lesson.css">
+<link rel="stylesheet" href="../../assets/interview.css">
 <style>
   :root{--accent:var(--track-context)}
 
@@ -84,6 +85,142 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "M1 — Your RAG recall is poor on multi-part questions like \"compare our refund policy in the EU vs the US.\" Which pre-retrieval technique, and why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: this is two facts in one query, so a single embedding averages them and matches neither cleanly -> decomposition : split into \"EU refund policy\" and \"US refund policy\", retrieve each, then combine the chunks for the answer -> optionally add multi-query per sub-question for recall -> contrast: HyDE helps the vocabulary gap, not the multi-fact problem; a bigger window doesn't help if neither fact was retrieved -> verify by checking that chunks for both regions appear in the assembled context, not just the answer."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "M2 — A teammate proposes rebuilding the whole RAG stack on GraphRAG because \"it's the state of the art.\" How do you respond as the senior in the room?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: first ask what questions users actually ask — pull the distribution -> if most are local lookups (\"what is the limit for X?\"), flat top-k or small-to-big already answers them at a fraction of the cost -> GraphRAG earns its keep only on global, theme-spanning questions, and it carries real cost: building the entity graph, generating community summaries, keeping it fresh on every reindex -> propose it as an added retriever routed to for global queries, not a rip-and-replace -> name the trade-off: complexity and maintenance vs a capability you only need for a slice of traffic."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "M3 — When would you NOT add an agentic loop to a RAG system, and how do you decide?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: when the question distribution is simple and well-covered by the index — a static pipeline already answers correctly, so a loop only adds latency and cost -> when latency budget is tight (interactive UX) and the extra round-trips break the SLA -> when there's no reliable grading signal, the loop can't tell good from bad and just burns calls -> decide from eval data: measure static-pipeline accuracy first; add the loop only on the slice where correctness is high-stakes and static accuracy is provably insufficient -> always cap attempts and define a stop condition so it terminates."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is pre-retrieval query transformation, and name the main techniques.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: it's any transform applied to the raw query before it hits the retriever — the index and model are left untouched -> rewriting cleans up vague / pronoun-laden / misspelled input -> multi-query generates N paraphrases, retrieves each, unions and dedupes -> HyDE drafts a hypothetical answer and embeds that -> decomposition splits a multi-part question into sub-queries -> step-back asks a broader question first -> routing classifies the query and sends it to the right source -> the point: the raw user query is usually a bad search query."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Explain how HyDE works and what gap it bridges.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: HyDE = Hypothetical Document Embeddings -> the problem it fixes is the query<->document vocabulary gap — a question is worded nothing like the document that answers it, so its embedding sits far from the real source -> HyDE has the LLM draft a plausible (hypothetical) answer and embeds that , not the question -> even a partly-wrong draft has the right shape and lands near the real document in vector space -> cost: one extra LLM draft plus an embed call -> the answer-generating model itself is unchanged."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does the small-to-big (parent-document) retriever do?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: it decouples what you match on from what you return -> you embed and match on small, precise chunks so similarity is sharp -> but you hand the model back the larger parent document so it has the surrounding context to reason with -> you get the precision of small chunks and the context of big ones, not a trade-off between them -> cost is low — just an extra parent lookup after the match."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Define agentic RAG, Self-RAG, and Corrective RAG (CRAG) — what's the control loop in each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: baseline RAG = retrieve -> assemble -> LLM -> answer, once; an agent = an LLM using tools -> agentic RAG : the LLM decides whether / what / when to retrieve in a loop, issuing many searches and iterating -> Self-RAG : the model retrieves on demand, then reflects — critiques its own draft for grounding and revises before answering -> CRAG : grade the retrieved docs; if quality is low, fall back (e.g. web search) or re-retrieve before answering -> common thread: retrieval becomes an action inside a loop, not a fixed pipeline step."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your RAG recall is poor on multi-part questions like \"compare our refund policy in the EU vs the US.\" Which pre-retrieval technique, and why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: this is two facts in one query, so a single embedding averages them and matches neither cleanly -> reach for decomposition : split into \"EU refund policy\" and \"US refund policy\", retrieve each, then combine the chunks for the answer -> optionally add multi-query per sub-question for recall -> contrast: HyDE addresses the vocabulary gap, not the multi-fact problem; a bigger window doesn't help if neither fact was retrieved -> verify by checking that chunks for both regions appear in the assembled context, not just the final answer."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Routing and step-back are both pre-retrieval. Contrast what they do and when each is the right call.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: routing classifies the query and sends it to the right datasource / index / tool — code vs docs vs SQL — so you don't search the wrong corpus at all -> step-back generalizes a too-specific question to pull broader grounding first, then retrieves for the specific one -> routing is about where to look; step-back is about how broad to look -> use routing when sources are heterogeneous; use step-back when the specific query is too narrow to match useful context -> they compose: route first, then step-back within the chosen index -> each is one cheap extra call, so weigh that latency against the recall it buys."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A teammate proposes rebuilding the whole RAG stack on GraphRAG because \"it's the state of the art.\" How do you respond as the senior in the room?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: first ask what questions users actually ask — pull the distribution -> if most are local lookups (\"what is the limit for X?\"), flat top-k or small-to-big already answers them at a fraction of the cost -> GraphRAG earns its keep only on global, theme-spanning \"connect-the-dots\" questions, and it carries real cost: building the entity graph, generating community summaries, keeping it fresh on every reindex -> propose it as an added retriever, routed to for global queries, not a rip-and-replace -> name the trade-off: build and maintenance complexity vs a capability you only need for a slice of traffic."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Explain contextual retrieval and when its added cost is worth paying.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the failure it targets is chunks that are ambiguous on their own — a chunk stripped of its heading/section is hard to match and hard for the model to use -> contextual retrieval (Anthropic) prepends a short chunk-situating context before embedding, so each chunk self-describes -> it also adds a BM25 lexical index alongside the vectors, catching exact IDs and keywords that embeddings miss -> together they cut retrieval failures versus naive embedding-only chunking -> the cost: re-embedding every chunk with its generated context plus maintaining a dual index -> worth it when chunks are short/fragmentary and exact-match terms matter; skip it when chunks are already self-contained."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk through how you match retrieval structure to the shape of the question across a mixed query workload.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the principle: the shape of the question should pick the structure of the retriever, and flat chunk + top-k is the floor, not the ceiling -> local fact in one chunk -> flat top-k or small-to-big (match small, return parent for context) -> \"which section, then what\" over large docs -> hierarchical / summary retrieval -> recency / tenant / access scope -> metadata pre-filter before vector search -> precision-critical, latency-tolerant -> multi-vector / ColBERT late interaction -> global theme spread across the whole corpus -> GraphRAG community summaries -> operationalize with a router that classifies the query and dispatches; the staff move is not picking one structure but composing several and routing by question shape."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When is an agentic / corrective loop worth its latency and cost, and when is a static pipeline the right default?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the loop wins exactly one axis — quality / robustness — and pays for it in latency (multiple round-trips), cost (grading + re-tries), and complexity (loops, budgets, stop conditions) -> default static for simple, well-covered questions where one pass already answers correctly -> reach for CRAG-style grade-and-fallback on the long tail where the index comes up short -> reach for Self-RAG reflection where an ungrounded answer is high-stakes -> decide from eval data: measure static-pipeline accuracy first, add the loop only on the slice where correctness is high-stakes and static accuracy is provably insufficient -> you also need a reliable grading signal or the loop just burns calls -> always cap attempts and define a stop condition so it terminates."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Make the case that pre-retrieval is the highest-leverage place to spend — then steelman the opposite.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "For: recall lost at retrieval is unrecoverable downstream — no reranker reorders a document that was never in the candidate set, and no bigger model reasons over text it never received; the cheapest place to fix recall is the query, and HyDE / multi-query are a few extra calls. Steelman against: if the right doc is being retrieved but buried or context-poor, the bottleneck is retrieval structure (small-to-big, reranking) or assembly, not the query; and if questions are global-theme, no query rewrite helps — you need GraphRAG. Synthesis: attribute the failure by class first — is the right doc absent (pre-retrieval), present but mis-ranked (structure/rerank), or non-local (graph)? — then spend on the lever that matches, starting with the query because it's the common cause and the cheapest."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design an advanced-RAG pipeline for a question type that flat top-k fails on — e.g. \"summarize how our incident response process evolved over the last two years.\"",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: name why flat top-k fails — this is a global, multi-document synthesis question; no single chunk holds \"how it evolved,\" so nearest-k returns scattered fragments -> pre-retrieval: decompose into time-bucketed sub-questions and add metadata filtering on date so each retrieval is scoped -> structure: layer GraphRAG or hierarchical summary retrieval so community/section summaries supply the cross-document themes, with small-to-big underneath for the specific facts that anchor each claim -> assemble: rerank, then pack summaries plus a few grounding chunks within budget -> consider an agentic loop that grades whether each time period is covered and re-retrieves the gaps before drafting -> observability: log which periods and themes were retrieved; failure modes — missing year -> flag the gap rather than smooth over it -> name the trade-off: the graph/summary build and the loop add cost and latency, justified because flat retrieval simply can't answer this class."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design retrieval for a corpus that must serve both local facts (\"what's the retry limit?\") and global synthesis (\"what themes recur across all our incidents?\").",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: start by recognizing two question shapes need two structures — don't force one retriever to do both -> put a router up front that classifies the query as local-lookup vs global-theme -> local path: small-to-big / flat top-k with metadata filtering — cheap, fast, one chunk answers it -> global path: GraphRAG (or hierarchical summaries) so community summaries pre-aggregate relationships no single chunk holds -> share one ingestion pipeline that produces both the chunk/parent index and the entity graph + summaries, so the corpus is indexed once into two structures -> freshness: re-embed chunks and rebuild affected graph communities on change; the graph is the costlier thing to keep fresh, so name that -> assemble within budget per path and rerank -> observability: track hit-rate separately per path, since they fail differently -> name the trade-off: maintaining a graph alongside the vector index is real cost and operational complexity, paid only because a meaningful slice of traffic is global synthesis that flat retrieval can't serve."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <!-- shared arrowheads -->
@@ -96,7 +233,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
 <div class="wrap">
   <nav id="hubbar">
-    <a href="../../index.html">&#8592; Learning Hub</a>
+    <a href="../../index.html">&#8592; StackDepth</a>
     <span class="pn"><a href="0006-retrieval-evaluation-and-observability.html" title="Retrieval Evaluation &amp; Observability">&#8249; Prev</a><a href="0008-embeddings-indexing-and-cost.html" title="Embeddings, Indexing &amp; Cost">Next &#8250;</a></span>
     <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Context Engineering</span></span>
   </nav>
@@ -486,39 +623,108 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   </div>
 
   <!-- ============ INTERVIEW QUESTIONS ============ -->
-  <h2 class="sec" id="interview">Interview questions — Modules 1–3</h2>
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
 
-  <details class="iq">
-    <summary>M1 — Walk through three pre-retrieval techniques and the distinct failure each one fixes.</summary>
-    <div class="a">
-      <b>Hit these points:</b> <b>multi-query</b> fixes single-phrasing recall — generate N paraphrases, retrieve each, union and dedupe so a differently-worded doc still surfaces &rarr; <b>HyDE</b> fixes the query/document vocabulary gap — questions look unlike answers, so draft a hypothetical answer and embed that to land near the real document &rarr; <b>decomposition</b> fixes multi-part questions no single chunk answers — split into sub-queries, retrieve each, combine &rarr; tie it together: each is cheap (a few extra calls) and each buys recall that downstream reranking can't recover &rarr; the senior framing: recall lost here is gone, so this is the highest-leverage place to spend.
-    </div>
-  </details>
+  <div data-interview>
+    <details class="iq" data-level="core">
+      <summary>What is pre-retrieval query transformation, and name the main techniques.</summary>
+      <div class="a">
+        <b>Hit these points:</b> it's any transform applied to the raw query <em>before</em> it hits the retriever — the index and model are left untouched &rarr; <b>rewriting</b> cleans up vague / pronoun-laden / misspelled input &rarr; <b>multi-query</b> generates N paraphrases, retrieves each, unions and dedupes &rarr; <b>HyDE</b> drafts a hypothetical answer and embeds that &rarr; <b>decomposition</b> splits a multi-part question into sub-queries &rarr; <b>step-back</b> asks a broader question first &rarr; <b>routing</b> classifies the query and sends it to the right source &rarr; the point: the raw user query is usually a bad search query.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Explain how HyDE works and what gap it bridges.</summary>
+      <div class="a">
+        <b>Hit these points:</b> HyDE = Hypothetical Document Embeddings &rarr; the problem it fixes is the query&harr;document vocabulary gap — a question is worded nothing like the document that answers it, so its embedding sits far from the real source &rarr; HyDE has the LLM draft a plausible (hypothetical) answer and embeds <em>that</em>, not the question &rarr; even a partly-wrong draft has the right <em>shape</em> and lands near the real document in vector space &rarr; cost: one extra LLM draft plus an embed call &rarr; the answer-generating model itself is unchanged.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What does the small-to-big (parent-document) retriever do?</summary>
+      <div class="a">
+        <b>Hit these points:</b> it decouples <em>what you match on</em> from <em>what you return</em> &rarr; you embed and match on small, precise chunks so similarity is sharp &rarr; but you hand the model back the larger <b>parent</b> document so it has the surrounding context to reason with &rarr; you get the precision of small chunks <em>and</em> the context of big ones, not a trade-off between them &rarr; cost is low — just an extra parent lookup after the match.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Define agentic RAG, Self-RAG, and Corrective RAG (CRAG) — what's the control loop in each?</summary>
+      <div class="a">
+        <b>Hit these points:</b> baseline RAG = retrieve &rarr; assemble &rarr; LLM &rarr; answer, once; an agent = an LLM using tools &rarr; <b>agentic RAG</b>: the LLM decides whether / what / when to retrieve in a loop, issuing many searches and iterating &rarr; <b>Self-RAG</b>: the model retrieves on demand, then reflects — critiques its own draft for grounding and revises before answering &rarr; <b>CRAG</b>: grade the retrieved docs; if quality is low, fall back (e.g. web search) or re-retrieve before answering &rarr; common thread: retrieval becomes an action inside a loop, not a fixed pipeline step.
+      </div>
+    </details>
 
-  <details class="iq">
-    <summary>M1 — Routing and step-back are both pre-retrieval. Contrast what they do and when each is the right call.</summary>
-    <div class="a">
-      <b>Hit these points:</b> <b>routing</b> classifies the query and sends it to the right datasource / index / tool — code vs docs vs SQL — so you don't search the wrong corpus at all &rarr; <b>step-back</b> generalizes a too-specific question to pull broader grounding first, then retrieves for the specific one &rarr; routing is about <em>where</em> to look; step-back is about <em>how broad</em> to look &rarr; use routing when you have heterogeneous sources; use step-back when the specific query is too narrow to match useful context &rarr; they compose: route first, then step-back within the chosen index.
-    </div>
-  </details>
+    <details class="iq" data-level="senior">
+      <summary>Your RAG recall is poor on multi-part questions like "compare our refund policy in the EU vs the US." Which pre-retrieval technique, and why?</summary>
+      <div class="a">
+        <b>Hit these points:</b> this is two facts in one query, so a single embedding averages them and matches neither cleanly &rarr; reach for <b>decomposition</b>: split into "EU refund policy" and "US refund policy", retrieve each, then combine the chunks for the answer &rarr; optionally add multi-query per sub-question for recall &rarr; contrast: HyDE addresses the vocabulary gap, not the multi-fact problem; a bigger window doesn't help if neither fact was retrieved &rarr; verify by checking that chunks for both regions appear in the assembled context, not just the final answer.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Routing and step-back are both pre-retrieval. Contrast what they do and when each is the right call.</summary>
+      <div class="a">
+        <b>Hit these points:</b> <b>routing</b> classifies the query and sends it to the right datasource / index / tool — code vs docs vs SQL — so you don't search the wrong corpus at all &rarr; <b>step-back</b> generalizes a too-specific question to pull broader grounding first, then retrieves for the specific one &rarr; routing is about <em>where</em> to look; step-back is about <em>how broad</em> to look &rarr; use routing when sources are heterogeneous; use step-back when the specific query is too narrow to match useful context &rarr; they compose: route first, then step-back within the chosen index &rarr; each is one cheap extra call, so weigh that latency against the recall it buys.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>A teammate proposes rebuilding the whole RAG stack on GraphRAG because "it's the state of the art." How do you respond as the senior in the room?</summary>
+      <div class="a">
+        <b>Hit these points:</b> first ask what questions users actually ask — pull the distribution &rarr; if most are local lookups ("what is the limit for X?"), flat top-k or small-to-big already answers them at a fraction of the cost &rarr; GraphRAG earns its keep only on global, theme-spanning "connect-the-dots" questions, and it carries real cost: building the entity graph, generating community summaries, keeping it fresh on every reindex &rarr; propose it as an <em>added</em> retriever, routed to for global queries, not a rip-and-replace &rarr; name the trade-off: build and maintenance complexity vs a capability you only need for a slice of traffic.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Explain contextual retrieval and when its added cost is worth paying.</summary>
+      <div class="a">
+        <b>Hit these points:</b> the failure it targets is chunks that are ambiguous on their own — a chunk stripped of its heading/section is hard to match and hard for the model to use &rarr; <b>contextual retrieval</b> (Anthropic) prepends a short chunk-situating context before embedding, so each chunk self-describes &rarr; it also adds a BM25 lexical index alongside the vectors, catching exact IDs and keywords that embeddings miss &rarr; together they cut retrieval failures versus naive embedding-only chunking &rarr; the cost: re-embedding every chunk with its generated context plus maintaining a dual index &rarr; worth it when chunks are short/fragmentary and exact-match terms matter; skip it when chunks are already self-contained.
+      </div>
+    </details>
 
-  <details class="iq">
-    <summary>M2 — Explain contextual retrieval and connect it back to the chunking failures from Lesson 3.</summary>
-    <div class="a">
-      <b>Hit these points:</b> Lesson 3's failure was chunks that are ambiguous on their own — a chunk stripped of its heading/section is hard to match and hard for the model to use &rarr; <b>contextual retrieval</b> (Anthropic) prepends a short chunk-situating context before embedding, so each chunk self-describes &rarr; it also adds a BM25 lexical index alongside the vectors, catching exact IDs and keywords embeddings miss &rarr; together these cut retrieval failures versus naive embedding-only chunking &rarr; it's the same fix as contextual chunking from Lesson 3, applied at index time across both a dense and a lexical index.
-    </div>
-  </details>
+    <details class="iq" data-level="staff">
+      <summary>Walk through how you match retrieval structure to the shape of the question across a mixed query workload.</summary>
+      <div class="a">
+        <b>Hit these points:</b> the principle: the <em>shape</em> of the question should pick the <em>structure</em> of the retriever, and flat chunk + top-k is the floor, not the ceiling &rarr; <b>local fact in one chunk</b> &rarr; flat top-k or small-to-big (match small, return parent for context) &rarr; <b>"which section, then what" over large docs</b> &rarr; hierarchical / summary retrieval &rarr; <b>recency / tenant / access scope</b> &rarr; metadata pre-filter before vector search &rarr; <b>precision-critical, latency-tolerant</b> &rarr; multi-vector / ColBERT late interaction &rarr; <b>global theme spread across the whole corpus</b> &rarr; GraphRAG community summaries &rarr; operationalize with a router that classifies the query and dispatches; the staff move is not picking one structure but composing several and routing by question shape.
+      </div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>When is an agentic / corrective loop worth its latency and cost, and when is a static pipeline the right default?</summary>
+      <div class="a">
+        <b>Hit these points:</b> the loop wins exactly one axis — quality / robustness — and pays for it in latency (multiple round-trips), cost (grading + re-tries), and complexity (loops, budgets, stop conditions) &rarr; default static for simple, well-covered questions where one pass already answers correctly &rarr; reach for CRAG-style grade-and-fallback on the long tail where the index comes up short &rarr; reach for Self-RAG reflection where an ungrounded answer is high-stakes &rarr; decide from eval data: measure static-pipeline accuracy first, add the loop only on the slice where correctness is high-stakes and static accuracy is provably insufficient &rarr; you also need a reliable grading signal or the loop just burns calls &rarr; always cap attempts and define a stop condition so it terminates.
+      </div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>Make the case that pre-retrieval is the highest-leverage place to spend — then steelman the opposite.</summary>
+      <div class="a">
+        <b>For:</b> recall lost at retrieval is unrecoverable downstream — no reranker reorders a document that was never in the candidate set, and no bigger model reasons over text it never received; the cheapest place to fix recall is the query, and HyDE / multi-query are a few extra calls. <b>Steelman against:</b> if the right doc <em>is</em> being retrieved but buried or context-poor, the bottleneck is retrieval structure (small-to-big, reranking) or assembly, not the query; and if questions are global-theme, no query rewrite helps — you need GraphRAG. <b>Synthesis:</b> attribute the failure by class first — is the right doc absent (pre-retrieval), present but mis-ranked (structure/rerank), or non-local (graph)? — then spend on the lever that matches, starting with the query because it's the common cause and the cheapest.
+      </div>
+    </details>
 
-  <details class="iq">
-    <summary>M3 — Design a RAG system for a high-stakes legal Q&amp;A product. Where do you use a static pipeline and where do you add an agentic loop?</summary>
-    <div class="a">
-      <b>Hit these points:</b> start static for the common, well-covered lookups — cheap, fast, predictable, and good enough when the index covers the question &rarr; add a <b>CRAG</b>-style grade-and-fallback for the long tail: if retrieved statutes/precedents grade poorly, re-retrieve or escalate rather than answer from weak sources &rarr; add a <b>Self-RAG</b> critique pass before any answer ships, since an ungrounded legal answer is a real liability — grounding-check every claim against a cited source &rarr; cap attempts and set stop conditions so loops terminate &rarr; name the trade-off: you pay latency and cost on the high-stakes slice deliberately, because correctness there is worth far more than the extra calls.
+    <div class="designrubric" data-level="design">
+      <b>Design-round framework</b> — drive any advanced-RAG prompt through these, out loud:
+      <ol>
+        <li>Characterize the question distribution — local facts vs global themes, single- vs multi-part, recency-sensitive.</li>
+        <li>Pre-retrieval — rewrite / multi-query / HyDE / decompose / step-back, and route to the right source.</li>
+        <li>Retrieval structure — match it to question shape: small-to-big, hierarchical, contextual, multi-vector, GraphRAG.</li>
+        <li>Rerank &amp; assemble within budget — precision first, parents for context, order for primacy/recency.</li>
+        <li>Decide static vs loop — add CRAG grade-and-fallback / Self-RAG critique only where correctness justifies the cost.</li>
+        <li>Bound the loop — cap attempts, define stop conditions, set a latency/cost budget.</li>
+        <li>Observability &amp; failure modes — log assembled context, measure retrieval hit-rate; handle missing / low-quality / stale / conflicting docs.</li>
+      </ol>
     </div>
-  </details>
+    <details class="iq" data-level="design">
+      <summary>Design an advanced-RAG pipeline for a question type that flat top-k fails on — e.g. "summarize how our incident response process evolved over the last two years."</summary>
+      <div class="a">
+        <b>A strong answer covers:</b> name why flat top-k fails — this is a global, multi-document synthesis question; no single chunk holds "how it evolved," so nearest-k returns scattered fragments &rarr; pre-retrieval: decompose into time-bucketed sub-questions and add metadata filtering on date so each retrieval is scoped &rarr; structure: layer GraphRAG or hierarchical summary retrieval so community/section summaries supply the cross-document themes, with small-to-big underneath for the specific facts that anchor each claim &rarr; assemble: rerank, then pack summaries plus a few grounding chunks within budget &rarr; consider an agentic loop that grades whether each time period is covered and re-retrieves the gaps before drafting &rarr; observability: log which periods and themes were retrieved; failure modes — missing year &rarr; flag the gap rather than smooth over it &rarr; name the trade-off: the graph/summary build and the loop add cost and latency, justified because flat retrieval simply can't answer this class.
+      </div>
+    </details>
+    <details class="iq" data-level="design">
+      <summary>Design retrieval for a corpus that must serve both local facts ("what's the retry limit?") and global synthesis ("what themes recur across all our incidents?").</summary>
+      <div class="a">
+        <b>A strong answer covers:</b> start by recognizing two question shapes need two structures — don't force one retriever to do both &rarr; put a <b>router</b> up front that classifies the query as local-lookup vs global-theme &rarr; local path: small-to-big / flat top-k with metadata filtering — cheap, fast, one chunk answers it &rarr; global path: GraphRAG (or hierarchical summaries) so community summaries pre-aggregate relationships no single chunk holds &rarr; share one ingestion pipeline that produces both the chunk/parent index and the entity graph + summaries, so the corpus is indexed once into two structures &rarr; freshness: re-embed chunks and rebuild affected graph communities on change; the graph is the costlier thing to keep fresh, so name that &rarr; assemble within budget per path and rerank &rarr; observability: track hit-rate separately per path, since they fail differently &rarr; name the trade-off: maintaining a graph alongside the vector index is real cost and operational complexity, paid only because a meaningful slice of traffic is global synthesis that flat retrieval can't serve.
+      </div>
+    </details>
+  </div>
 
   <!-- ============ NAV ============ -->
   <div class="nav">
-    <span style="color:var(--muted)">&#8592; <a href="../../index.html#grid">Learning Hub</a></span>
+    <span style="color:var(--muted)">&#8592; <a href="../../index.html#grid">StackDepth</a></span>
     <span>Lesson 8: <a href="0008-embeddings-indexing-and-cost.html">Embeddings, Indexing &amp; Cost &rarr;</a></span>
   </div>
 
@@ -548,5 +754,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     });
   });
 </script>
+<script src="../../assets/interview.js" defer></script>
 </body>
 </html>

@@ -4,7 +4,20 @@
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Interview Bank · Async &amp; Long-Running Operations</title>
+<title>Async &amp; Long-Running API Operations Interview Questions · StackDepth</title>
+<meta name="description" content="Practice async and long-running operations with 40 senior and staff REST API interview questions on 202 Accepted, status polling, callbacks, webhooks, and jobs.">
+<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/interview/0010-async-and-long-running-operations.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="Async &amp; Long-Running API Operations Interview Questions · StackDepth">
+<meta property="og:description" content="Practice async and long-running operations with 40 senior and staff REST API interview questions on 202 Accepted, status polling, callbacks, webhooks, and jobs.">
+<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/interview/0010-async-and-long-running-operations.html">
+<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@dineshxbyte">
+<meta name="twitter:title" content="Async &amp; Long-Running API Operations Interview Questions · StackDepth">
+<meta name="twitter:description" content="Practice async and long-running operations with 40 senior and staff REST API interview questions on 202 Accepted, status polling, callbacks, webhooks, and jobs.">
+<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <style>
   :root{
     --ink:#111110; --paper:#fffff8; --muted:#6b675f; --rule:#d8d4c8;
@@ -48,265 +61,538 @@
   footer{margin-top:2.4rem; font-size:.78rem; color:var(--muted)}
   @media print{ .controls{position:static} .a{display:block} .reveal{display:none} a{color:var(--ink)} }
 </style>
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/interview.css">
+<style>
+  /* host the shared interview panel inside this standalone bank */
+  :root{--accent:var(--track-rest, #7a1f12)}
+  [data-interview]{--card:#fcfbf2; --bg:#fffff8; --line:var(--rule); --chip:#f1eee2; --muted:#6b675f}
+  [data-interview] details.iq{border-left:3px solid var(--track-rest,#7a1f12); border-radius:6px;
+    background:#fcfbf2; padding:.6rem .85rem}
+  [data-interview] details.iq summary{cursor:pointer; font-weight:600; list-style:none}
+  [data-interview] details.iq summary::-webkit-details-marker{display:none}
+  [data-interview] details.iq summary::before{content:"\1F4AC"; margin-right:.4em}
+  /* override the legacy .a{display:none}: answers show when the details is open */
+  [data-interview] details.iq .a{display:none; margin-top:.5rem; padding-top:.5rem;
+    border-top:1px dashed var(--rule); font-size:.94rem}
+  [data-interview] details.iq[open] .a{display:block}
+  [data-interview] details.iq .a b{color:var(--track-rest,#7a1f12)}
+</style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "When should an API handle work asynchronously instead of in the request?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The moment the work outlives the request: long jobs (data exports, video transcode, batch recompute), calls into slow external dependencies you don't control, and anything that risks blowing a gateway or load-balancer timeout. If you can't reliably finish inside a few seconds, don't hold the connection — return immediately and let the client track the work."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's wrong with just holding the connection open for a few minutes?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It's a resource leak and a reliability trap. Open connections tie up server/proxy resources, and intermediaries (LBs, gateways, proxies) impose their own timeouts that will kill it anyway. Worse, a dropped socket loses the client's only handle on work that's still running — they can't tell if it succeeded, failed, or is mid-flight."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does 202 Accepted mean?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "\"I've accepted the request for processing, but it isn't done and may not even have started.\" It's deliberately non-committal about the outcome — unlike 201 Created , nothing is guaranteed to exist yet. The response points the client at where to check progress."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk through the async request–reply (202 + polling) pattern.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "(1) Client POST s the work. (2) Server accepts it, kicks off processing, returns 202 Accepted with a Location header to a status/operation resource like /operations/{id} . (3) Client polls that resource with GET , which returns state ( pending / running ). (4) When finished, the status shows done / succeeded plus a link to the actual result resource ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What does the Location header point to in a 202 response?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "To the status/operation resource the client should poll (e.g. /jobs/{id} or /operations/{id} ), not to the final result. Contrast with 201 Created , where Location points at the newly created resource itself."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a webhook, and how does it differ from polling?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A webhook inverts the direction: instead of the client polling, the client registers a callback URL and the server POST s an event to it when something happens. It's push-based — efficient and near-real-time — but it makes the client a server and hands it a fistful of distributed-systems problems (duplicates, ordering, auth)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What delivery guarantee do webhooks give, and what follows from it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Delivery is at-least-once : failed deliveries are retried, so the same event can arrive more than once. The direct consequence: the consumer must be idempotent and dedupe on a stable event id . Assuming exactly-once delivery is the classic bug — it's how you bill a customer twice."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Anyone can POST to a public callback URL. How do you trust the payload?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Sign the payload. The sender computes an HMAC over the body using a shared signing secret and puts it in a header (e.g. a Stripe-style Stripe-Signature header). The receiver recomputes the HMAC with its copy of the secret and rejects the request unless they match — proving the event genuinely came from the sender and wasn't tampered with."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Polling vs webhooks — the one-line trade-off each.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Polling (202 + status): dead simple, no client endpoint needed, works through firewalls — but wasteful and laggy (you learn on the next tick). Webhooks: efficient, near-real-time push — but the client must expose a public endpoint and handle every delivery semantic (duplicates, ordering, signing, retries)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What's the core mental shift when moving from sync to async design?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Turn the work into a resource. Instead of returning the result, you create a first-class operation / job resource the client can address, query, and recover against. The request returns fast with a handle to that resource; the result becomes a separate resource the operation links to once it's done."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Give concrete examples of work that belongs behind an async API.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Large CSV/PDF exports , media transcoding , bulk/batch imports and recomputations, ML inference/training jobs, report generation, and anything fanning out to a slow third party (payment settlement, KYC, shipping carriers). Rule of thumb: if completion time is unbounded or measured in tens of seconds-plus, make it async."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Describe Google's long-running Operation model.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A uniform envelope (Google AIP-151) carrying name , a done boolean, and — once done — either an error or a response (never both). Clients poll GET /operations/{id} until done:true , then read the result or error from the same shape. The win is a consistent operation surface across every long job in the API rather than a bespoke status format per endpoint."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How should you control how often clients poll?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Use Retry-After on the status response so the server dictates a sane interval and clients don't hammer you; pair it with client-side backoff (and jitter) toward a ceiling. The server stays in control of its own load, and clients converge on a polite poll cadence instead of tight-looping."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why keep the operation queryable after it has completed?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "So a client that crashed or lost the network mid-poll can recover — it re-queries the operation id and learns the outcome and result link. If you delete the operation the instant it finishes, you create a race where the client never learns it succeeded. Retain completed operations for a sensible TTL."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Should the result live in the operation resource or a separate resource? Why?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A separate result resource the operation links to. It keeps the operation envelope small and uniform, lets the result have its own lifecycle (expiry, auth, content type — e.g. a signed, expiring download URL), and avoids stuffing large payloads into a polling response that clients fetch repeatedly."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Webhooks aren't ordered. How do you build a correct consumer anyway?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Carry a timestamp and/or sequence number in each event and never assume the last event you received is the latest write. Reconcile against current state (e.g. \"ignore an update older than what I've already applied\"), or fetch authoritative state from a status resource. Design so out-of-order arrival is merely handled , not fatal ."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why should a webhook receiver ack fast and process later?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Return a quick 2xx the instant you've durably captured the event, then do heavy work asynchronously. Doing the work before acking ties up the sender's delivery attempt, risks its timeout (→ spurious retries and duplicates), and couples your processing latency to their retry policy. Ack = \"I have it safely,\" not \"I've finished acting on it.\""
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What happens when the receiver returns a non- 2xx (or times out)?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The sender treats it as a failed delivery and retries with backoff (typically exponential + jitter, over hours). After enough give-ups it routes the event to a dead-letter for inspection/manual replay, and usually surfaces the failing endpoint to the developer. This is exactly why at-least-once duplicates happen — a slow receiver that did process but failed to ack gets the event again."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Explain dead-lettering for webhooks.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "When deliveries keep failing past the retry budget, the event is parked in a dead-letter queue/store instead of being dropped or retried forever. It preserves the event for diagnosis and lets you replay it once the endpoint is fixed. It bounds wasted retries while guaranteeing you don't silently lose events."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you dedupe reliably on the consumer side?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Persist processed event ids (with a TTL matching the sender's max retry window) and check-then-process atomically — e.g. an upsert/unique-constraint on event id, or an idempotency table — so a duplicate is a no-op. Make the effect idempotent too (use the event id as the key for any side effect), so even a race that processes twice converges to one outcome."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why HMAC over the raw body specifically, and what's the common pitfall?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "HMAC ties authenticity and integrity to a shared secret cheaply. The classic pitfall: verifying against a re-serialized/parsed body instead of the exact raw bytes received — any reformatting breaks the signature. Capture the raw payload before JSON parsing, and use a constant-time compare to avoid timing attacks."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A valid signed request can be captured and resent. How do you stop replay?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Include a timestamp in the signed payload and reject stale ones (outside a small tolerance window, e.g. a few minutes). A replayed event then fails even though its signature is genuine, because it's too old. Combine with consumer-side dedupe on event id so a replay inside the window is also a no-op."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you rotate a webhook signing secret without dropping events?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Support multiple active secrets during an overlap window: the sender can sign with the new secret (or send signatures for both), and the receiver accepts a payload if it validates against any currently-valid secret. Roll forward, confirm traffic verifies on the new one, then retire the old. Never hard-cut a single secret — in-flight/retried events would fail verification."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Where do SSE, WebSockets, and long-polling fit?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "They're the streaming shape — for low-latency, continuous updates where a per-event POST is too coarse. SSE : simple server→client stream over HTTP, auto-reconnect. WebSockets : full duplex, for interactive/bidirectional. Long-poll : a fallback that mimics push by holding a request open. The cost is a held connection (statefulness, scaling, reconnection logic)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A client is behind a corporate firewall / can't run a public server. Which pattern?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Polling , because webhooks require the client to expose an inbound, internet-reachable endpoint — often impossible behind NAT/firewalls or for browser/mobile clients. Polling only needs outbound calls, so it works everywhere. This constraint, not just latency, frequently decides the pattern."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why do mature APIs often offer both a status endpoint and webhooks?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "It's belt-and-suspenders, not indecision. The webhook delivers the happy-path, near-real-time push; the pollable status resource is the fallback for missed deliveries , crash recovery, and clients that can't receive webhooks. Together they give push performance with poll reliability — the consumer can always reconcile authoritative state."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design an API for a large data export that may take minutes, then notifies the client.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Don't block. POST /exports → 202 Accepted + Location to /exports/{id} (a status resource). Client polls ( pending → running → succeeded ), honoring Retry-After ; on done it links to a result resource — a signed, expiring download URL. Also offer a completion webhook: a signed (HMAC) event POST . Because delivery is at-least-once, the consumer dedupes on event id and stays idempotent, doesn't rely on ordering, and uses a timestamp to reject replays. Receiver acks fast 2xx and works async; non- 2xx → retries with backoff → dead-letter. Protect the result URL with auth + expiry. Offering both push and poll, plus securing the result, is the senior signal."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Walk me through making a webhook consumer robust.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Verify the signature (HMAC over raw body, constant-time compare) and reject if stale (timestamp window) — auth + anti-replay. Capture durably, ack fast with 2xx , then process async. Dedupe on event id and make side effects idempotent — at-least-once is the default. Don't trust order : reconcile using timestamps/sequence or re-fetch state. Handle failure : let the sender retry; have your own retry + dead-letter for downstream errors after the ack."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Two events for the same object arrive out of order. What goes wrong, and how do you handle it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The naive failure: you apply the older event last and clobber newer state (e.g. \"active\" then \"cancelled\" arrives reordered → you end up \"active\"). Fix by making each event carry a monotonic version/timestamp and applying it conditionally — ignore an event older than the state you've already recorded — or by treating the webhook as a trigger to re-fetch authoritative state rather than blindly applying the payload."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "The same payment-succeeded webhook is delivered twice. How do you avoid double-fulfilment?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Use the event id (or a business key like the payment/charge id) as an idempotency key for fulfilment: check-then-act atomically (unique constraint / conditional write) so the second delivery is a no-op. This is Lesson 3 cashing in — at-least-once delivery is fine precisely because the effect is idempotent."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A sync endpoint occasionally takes 90 seconds. Do you just bump the timeout?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "No — raising timeouts pushes the failure surface around without fixing it. Long-held connections still break under deploys, LB recycling, and client networks, and they hurt throughput and tail latency for everyone. The staff move is to convert the slow path to async ( 202 + status resource), keep the fast path sync, and possibly split the endpoint by expected cost so the common case stays snappy."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do idempotency keys interact with the 202 submission?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The submitting POST is not idempotent, so a retried submission could spawn a duplicate job. Accept an Idempotency-Key (Lesson 3): on a repeat, return the same 202 and Location for the already-created operation instead of starting a second one. That makes \"submit a long job\" safely retryable — the client gets one operation no matter how many times the request is replayed."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How would you let a client cancel a long-running operation?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Model cancellation as an action on the operation — e.g. POST /operations/{id}:cancel (or DELETE ) — and treat it as a request , not a guarantee: set the state to cancelling , signal the worker, and let it reach a terminal cancelled when it actually stops. Make cancel idempotent and define behavior for work that already finished (it's a no-op / terminal-state response). The honest framing is cooperative cancellation, not a hard kill."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "\"Just give me exactly-once delivery.\" How do you respond?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Exactly-once delivery is effectively unachievable over an unreliable network (the two-generals problem). What you can get is exactly-once effect : at-least-once delivery plus an idempotent consumer keyed on the event id. The senior framing is \"I want exactly-once effect , not exactly-once delivery\" — and then you build dedupe rather than chase an impossible guarantee."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Beyond signatures, what else hardens a webhook endpoint?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "HTTPS only (confidentiality + integrity in transit); optional source-IP allowlisting if the sender publishes stable ranges (defense-in-depth, not a substitute for signing); rate limiting / payload-size caps to blunt abuse; and treating the endpoint as untrusted input — validate, dedupe, and never let an unsigned/invalid request trigger side effects. Signatures prove who ; transport + IP + limits reduce the attack surface."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How does pattern choice change as the event rate scales 100×?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Polling cost scales with clients × poll frequency regardless of activity, so at high fan-out it wastes enormous request volume on \"nothing changed\" — push (webhooks/streaming) wins. But webhooks then concentrate delivery, retry, and dead-letter load on you, demanding a durable queue, batching/coalescing of events, and per-endpoint backpressure so one slow consumer can't stall the fleet. The trade-off flips from client simplicity toward sender-side delivery infrastructure."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A customer's webhook endpoint has been down for two hours. What should your platform do?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Retry with exponential backoff + jitter over a bounded window (hours), then dead-letter undelivered events and surface the failing endpoint to the customer (dashboard/alert). Critically, give them a recovery path that doesn't depend on the webhook : a list/status API to fetch events or current state for the gap, plus the ability to replay dead-lettered events. Don't retry forever (it amplifies load and duplicates); don't drop silently (they lose data). Belt-and-suspenders: the pollable resource is the safety net."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do you keep one slow or failing consumer from degrading webhook delivery for everyone?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Isolate per-consumer: independent delivery queues, per-endpoint concurrency limits and circuit breakers so a timing-out endpoint backs off without starving others; bound and parallelize retries; and dead-letter aggressively rather than letting a black-hole endpoint consume the retry budget. The principle is bulkheading — failure of one tenant's endpoint must not become a shared-fate outage of the delivery pipeline."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design an API for a large data export that can take several minutes, then notifies the client when it's ready.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: don't block - POST /exports -> 202 Accepted + Location to /exports/{id} , a status resource -> client polls ( pending -> running -> succeeded ) honoring Retry-After ; on done it links to a result resource - a signed, expiring download URL -> also offer a completion webhook: an HMAC-signed event POST -> because delivery is at-least-once, the consumer dedupes on event id and stays idempotent, doesn't rely on ordering, and uses a timestamp to reject replays -> receiver acks fast 2xx and works async; non- 2xx -> retries with backoff -> dead-letter -> protect the result URL with auth + expiry -> keep the operation queryable after completion so a client that crashed mid-poll can recover -> name the trade-off: offering both push and poll buys push performance with poll reliability."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design a webhook delivery platform: how do you guarantee customers eventually get every event without one bad endpoint taking the system down?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: persist every event durably first, then deliver from a queue - never couple production of the event to its delivery -> delivery is at-least-once : sign each payload (HMAC over raw bytes, constant-time compare) and include a timestamp so consumers can verify authenticity and reject replays -> expect non- 2xx /timeouts -> retry with exponential backoff + jitter over a bounded window (hours), then dead-letter and surface the failing endpoint to the customer -> give a webhook-independent recovery path: a list/status API to fetch the gap and the ability to replay dead-lettered events (belt-and-suspenders with a pollable resource) -> isolate per consumer - independent queues, per-endpoint concurrency limits and circuit breakers (bulkheading) so one slow/black-hole endpoint can't starve the fleet -> coalesce/batch at high fan-out and apply per-endpoint back-pressure -> observability: track delivery success, retry counts, and lag per endpoint -> name the trade-off: exactly-once delivery is unachievable over an unreliable network, so you provide at-least-once delivery + an idempotent consumer keyed on event id (exactly-once effect )."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <div class="wrap">
   <div class="kicker">Interview Bank · Lesson 10</div>
   <h1>Async &amp; long-running operations — interview questions</h1>
-  <p class="meta">38 questions · Core / Senior / Staff · pairs with <a href="../lessons/0010-async-and-long-running-operations.html">Lesson 10</a></p>
+  <p class="meta">40 questions · Core / Senior / Staff / System&nbsp;Design · pairs with <a href="../lessons/0010-async-and-long-running-operations.html">Lesson 10</a></p>
 
   <div class="how">
-    <strong>Use these as active recall, not reading.</strong> Read the question, answer it <em>out loud or in writing from memory first</em>, and only then reveal the model answer to grade yourself. Recognizing an answer ≠ being able to produce it under pressure. Filter by difficulty; reveal-all only for a final review pass.
+    <strong>Use these as active recall, not reading.</strong> Read the question, answer it <em>out loud or in writing from memory first</em>, and only then reveal the model answer to grade yourself. Recognizing an answer ≠ being able to produce it under pressure. Pick your bar with the tabs — <strong>Core</strong> = recall, <strong>Senior</strong> = trade-offs &amp; failure modes, <strong>Staff</strong> = synthesis under ambiguity, <strong>System&nbsp;Design</strong> = the open design round.
   </div>
 
-  <div class="controls">
-    <button class="chip active" data-f="all">All</button>
-    <button class="chip" data-f="core">Core</button>
-    <button class="chip" data-f="senior">Senior</button>
-    <button class="chip" data-f="staff">Staff</button>
-    <span class="sp"></span>
-    <button class="lnk" id="revealAll">Reveal all</button>
-    <button class="lnk" id="collapseAll">Collapse all</button>
-  </div>
+  <div data-interview>
+    <details class="iq" data-level="core">
+      <summary>When should an API handle work asynchronously instead of in the request?</summary>
+      <div class="a"><p>The moment the work outlives the request: <strong>long jobs</strong> (data exports, video transcode, batch recompute), calls into <strong>slow external dependencies</strong> you don't control, and anything that risks blowing a gateway or load-balancer timeout. If you can't reliably finish inside a few seconds, don't hold the connection — return immediately and let the client track the work.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What's wrong with just holding the connection open for a few minutes?</summary>
+      <div class="a"><p>It's a resource leak and a reliability trap. Open connections tie up server/proxy resources, and intermediaries (LBs, gateways, proxies) impose their own timeouts that will kill it anyway. Worse, a dropped socket loses the client's <em>only handle</em> on work that's still running — they can't tell if it succeeded, failed, or is mid-flight.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What does <code>202 Accepted</code> mean?</summary>
+      <div class="a"><p>"I've <strong>accepted</strong> the request for processing, but it <em>isn't done</em> and may not even have started." It's deliberately non-committal about the outcome — unlike <code>201 Created</code>, nothing is guaranteed to exist yet. The response points the client at where to check progress.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Walk through the async request–reply (202 + polling) pattern.</summary>
+      <div class="a"><p>(1) Client <code>POST</code>s the work. (2) Server accepts it, kicks off processing, returns <code>202 Accepted</code> with a <code>Location</code> header to a status/operation resource like <code>/operations/{id}</code>. (3) Client <strong>polls</strong> that resource with <code>GET</code>, which returns state (<code>pending</code>/<code>running</code>). (4) When finished, the status shows <code>done</code>/<code>succeeded</code> plus a link to the actual <strong>result resource</strong>.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What does the <code>Location</code> header point to in a 202 response?</summary>
+      <div class="a"><p>To the <strong>status/operation resource</strong> the client should poll (e.g. <code>/jobs/{id}</code> or <code>/operations/{id}</code>), <em>not</em> to the final result. Contrast with <code>201 Created</code>, where <code>Location</code> points at the newly created resource itself.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What is a webhook, and how does it differ from polling?</summary>
+      <div class="a"><p>A webhook inverts the direction: instead of the client polling, the client <strong>registers a callback URL</strong> and the server <code>POST</code>s an event to it when something happens. It's push-based — efficient and near-real-time — but it makes the client a server and hands it a fistful of distributed-systems problems (duplicates, ordering, auth).</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What delivery guarantee do webhooks give, and what follows from it?</summary>
+      <div class="a"><p>Delivery is <strong>at-least-once</strong>: failed deliveries are retried, so the same event can arrive more than once. The direct consequence: the <strong>consumer must be idempotent</strong> and <strong>dedupe on a stable event id</strong>. Assuming exactly-once delivery is the classic bug — it's how you bill a customer twice.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Anyone can POST to a public callback URL. How do you trust the payload?</summary>
+      <div class="a"><p><strong>Sign the payload.</strong> The sender computes an <strong>HMAC</strong> over the body using a shared signing secret and puts it in a header (e.g. a Stripe-style <code>Stripe-Signature</code> header). The receiver recomputes the HMAC with its copy of the secret and rejects the request unless they match — proving the event genuinely came from the sender and wasn't tampered with.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Polling vs webhooks — the one-line trade-off each.</summary>
+      <div class="a"><p><strong>Polling (202 + status):</strong> dead simple, no client endpoint needed, works through firewalls — but wasteful and laggy (you learn on the next tick). <strong>Webhooks:</strong> efficient, near-real-time push — but the client must expose a public endpoint and handle every delivery semantic (duplicates, ordering, signing, retries).</p></div>
+    </details>
 
-  <h2>When to go async</h2>
+    <details class="iq" data-level="senior">
+      <summary>What's the core mental shift when moving from sync to async design?</summary>
+      <div class="a"><p><strong>Turn the work into a resource.</strong> Instead of returning the result, you create a first-class <em>operation</em>/<em>job</em> resource the client can address, query, and recover against. The request returns fast with a handle to that resource; the result becomes a separate resource the operation links to once it's done.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Give concrete examples of work that belongs behind an async API.</summary>
+      <div class="a"><p>Large CSV/PDF <strong>exports</strong>, <strong>media transcoding</strong>, <strong>bulk/batch</strong> imports and recomputations, ML inference/training jobs, report generation, and anything fanning out to a <strong>slow third party</strong> (payment settlement, KYC, shipping carriers). Rule of thumb: if completion time is unbounded or measured in tens of seconds-plus, make it async.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Describe Google's long-running <code>Operation</code> model.</summary>
+      <div class="a"><p>A uniform envelope (Google AIP-151) carrying <code>name</code>, a <code>done</code> boolean, and — once done — <strong>either</strong> an <code>error</code> <strong>or</strong> a <code>response</code> (never both). Clients poll <code>GET /operations/{id}</code> until <code>done:true</code>, then read the result or error from the same shape. The win is a consistent operation surface across every long job in the API rather than a bespoke status format per endpoint.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>How should you control how often clients poll?</summary>
+      <div class="a"><p>Use <code>Retry-After</code> on the status response so the server dictates a sane interval and clients don't hammer you; pair it with client-side <strong>backoff</strong> (and jitter) toward a ceiling. The server stays in control of its own load, and clients converge on a polite poll cadence instead of tight-looping.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Why keep the operation queryable after it has completed?</summary>
+      <div class="a"><p>So a client that <strong>crashed or lost the network mid-poll can recover</strong> — it re-queries the operation id and learns the outcome and result link. If you delete the operation the instant it finishes, you create a race where the client never learns it succeeded. Retain completed operations for a sensible TTL.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Should the result live in the operation resource or a separate resource? Why?</summary>
+      <div class="a"><p>A <strong>separate result resource</strong> the operation links to. It keeps the operation envelope small and uniform, lets the result have its own lifecycle (expiry, auth, content type — e.g. a signed, expiring download URL), and avoids stuffing large payloads into a polling response that clients fetch repeatedly.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Webhooks aren't ordered. How do you build a correct consumer anyway?</summary>
+      <div class="a"><p>Carry a <strong>timestamp and/or sequence number</strong> in each event and never assume the last event you received is the latest write. Reconcile against current state (e.g. "ignore an update older than what I've already applied"), or fetch authoritative state from a status resource. Design so out-of-order arrival is merely <em>handled</em>, not <em>fatal</em>.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Why should a webhook receiver ack fast and process later?</summary>
+      <div class="a"><p>Return a quick <code>2xx</code> the instant you've durably <em>captured</em> the event, then do heavy work asynchronously. Doing the work before acking ties up the sender's delivery attempt, risks its timeout (→ spurious retries and duplicates), and couples your processing latency to their retry policy. Ack = "I have it safely," not "I've finished acting on it."</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>What happens when the receiver returns a non-<code>2xx</code> (or times out)?</summary>
+      <div class="a"><p>The sender treats it as a failed delivery and <strong>retries with backoff</strong> (typically exponential + jitter, over hours). After enough give-ups it routes the event to a <strong>dead-letter</strong> for inspection/manual replay, and usually surfaces the failing endpoint to the developer. This is exactly why at-least-once duplicates happen — a slow receiver that <em>did</em> process but failed to ack gets the event again.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Explain dead-lettering for webhooks.</summary>
+      <div class="a"><p>When deliveries keep failing past the retry budget, the event is parked in a <strong>dead-letter queue/store</strong> instead of being dropped or retried forever. It preserves the event for diagnosis and lets you <strong>replay</strong> it once the endpoint is fixed. It bounds wasted retries while guaranteeing you don't silently lose events.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>How do you dedupe reliably on the consumer side?</summary>
+      <div class="a"><p>Persist processed <strong>event ids</strong> (with a TTL matching the sender's max retry window) and check-then-process atomically — e.g. an upsert/unique-constraint on event id, or an idempotency table — so a duplicate is a no-op. Make the <em>effect</em> idempotent too (use the event id as the key for any side effect), so even a race that processes twice converges to one outcome.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Why HMAC over the raw body specifically, and what's the common pitfall?</summary>
+      <div class="a"><p>HMAC ties authenticity <em>and</em> integrity to a shared secret cheaply. The classic pitfall: verifying against a re-serialized/parsed body instead of the <strong>exact raw bytes</strong> received — any reformatting breaks the signature. Capture the raw payload before JSON parsing, and use a <strong>constant-time compare</strong> to avoid timing attacks.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>A valid signed request can be captured and resent. How do you stop replay?</summary>
+      <div class="a"><p>Include a <strong>timestamp in the signed payload</strong> and <strong>reject stale ones</strong> (outside a small tolerance window, e.g. a few minutes). A replayed event then fails even though its signature is genuine, because it's too old. Combine with consumer-side dedupe on event id so a replay inside the window is also a no-op.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>How do you rotate a webhook signing secret without dropping events?</summary>
+      <div class="a"><p>Support <strong>multiple active secrets</strong> during an overlap window: the sender can sign with the new secret (or send signatures for both), and the receiver accepts a payload if it validates against <em>any</em> currently-valid secret. Roll forward, confirm traffic verifies on the new one, then retire the old. Never hard-cut a single secret — in-flight/retried events would fail verification.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Where do SSE, WebSockets, and long-polling fit?</summary>
+      <div class="a"><p>They're the <strong>streaming</strong> shape — for low-latency, continuous updates where a per-event <code>POST</code> is too coarse. <strong>SSE</strong>: simple server→client stream over HTTP, auto-reconnect. <strong>WebSockets</strong>: full duplex, for interactive/bidirectional. <strong>Long-poll</strong>: a fallback that mimics push by holding a request open. The cost is a <strong>held connection</strong> (statefulness, scaling, reconnection logic).</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>A client is behind a corporate firewall / can't run a public server. Which pattern?</summary>
+      <div class="a"><p><strong>Polling</strong>, because webhooks require the client to expose an inbound, internet-reachable endpoint — often impossible behind NAT/firewalls or for browser/mobile clients. Polling only needs outbound calls, so it works everywhere. This constraint, not just latency, frequently decides the pattern.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Why do mature APIs often offer <em>both</em> a status endpoint and webhooks?</summary>
+      <div class="a"><p>It's belt-and-suspenders, not indecision. The <strong>webhook</strong> delivers the happy-path, near-real-time push; the <strong>pollable status resource</strong> is the fallback for <em>missed deliveries</em>, crash recovery, and clients that can't receive webhooks. Together they give push performance with poll reliability — the consumer can always reconcile authoritative state.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Design an API for a large data export that may take minutes, then notifies the client.</summary>
+      <div class="a"><p>Don't block. <code>POST /exports</code> → <code>202 Accepted</code> + <code>Location</code> to <code>/exports/{id}</code> (a status resource). Client <strong>polls</strong> (<code>pending</code>→<code>running</code>→<code>succeeded</code>), honoring <code>Retry-After</code>; on done it links to a <strong>result resource</strong> — a signed, expiring download URL. <strong>Also</strong> offer a completion webhook: a <strong>signed (HMAC)</strong> event <code>POST</code>. Because delivery is at-least-once, the consumer dedupes on <strong>event id</strong> and stays idempotent, doesn't rely on ordering, and uses a timestamp to reject replays. Receiver acks fast <code>2xx</code> and works async; non-<code>2xx</code> → retries with backoff → dead-letter. Protect the result URL with auth + expiry. Offering both push and poll, plus securing the result, is the senior signal.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Walk me through making a webhook consumer robust.</summary>
+      <div class="a"><ul><li><strong>Verify the signature</strong> (HMAC over raw body, constant-time compare) and reject if stale (timestamp window) — auth + anti-replay.</li><li><strong>Capture durably, ack fast</strong> with <code>2xx</code>, then process async.</li><li><strong>Dedupe on event id</strong> and make side effects idempotent — at-least-once is the default.</li><li><strong>Don't trust order</strong>: reconcile using timestamps/sequence or re-fetch state.</li><li><strong>Handle failure</strong>: let the sender retry; have your own retry + dead-letter for downstream errors after the ack.</li></ul></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Two events for the same object arrive out of order. What goes wrong, and how do you handle it?</summary>
+      <div class="a"><p>The naive failure: you apply the <em>older</em> event last and clobber newer state (e.g. "active" then "cancelled" arrives reordered → you end up "active"). Fix by making each event carry a <strong>monotonic version/timestamp</strong> and applying it conditionally — ignore an event older than the state you've already recorded — or by treating the webhook as a trigger to <strong>re-fetch authoritative state</strong> rather than blindly applying the payload.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>The same payment-succeeded webhook is delivered twice. How do you avoid double-fulfilment?</summary>
+      <div class="a"><p>Use the <strong>event id</strong> (or a business key like the payment/charge id) as an idempotency key for fulfilment: check-then-act atomically (unique constraint / conditional write) so the second delivery is a no-op. This is Lesson 3 cashing in — at-least-once delivery is fine precisely <em>because</em> the effect is idempotent.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> When should an API handle work asynchronously instead of in the request?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>The moment the work outlives the request: <strong>long jobs</strong> (data exports, video transcode, batch recompute), calls into <strong>slow external dependencies</strong> you don't control, and anything that risks blowing a gateway or load-balancer timeout. If you can't reliably finish inside a few seconds, don't hold the connection — return immediately and let the client track the work.</p></div>
-  </div>
+    <details class="iq" data-level="staff">
+      <summary>A sync endpoint occasionally takes 90 seconds. Do you just bump the timeout?</summary>
+      <div class="a"><p>No — raising timeouts pushes the failure surface around without fixing it. Long-held connections still break under deploys, LB recycling, and client networks, and they hurt throughput and tail latency for everyone. The staff move is to convert the slow path to async (<code>202</code> + status resource), keep the fast path sync, and possibly split the endpoint by expected cost so the common case stays snappy.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>How do idempotency keys interact with the 202 submission?</summary>
+      <div class="a"><p>The submitting <code>POST</code> is not idempotent, so a retried submission could spawn a duplicate job. Accept an <code>Idempotency-Key</code> (Lesson 3): on a repeat, return the <em>same</em> <code>202</code> and <code>Location</code> for the already-created operation instead of starting a second one. That makes "submit a long job" safely retryable — the client gets one operation no matter how many times the request is replayed.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>How would you let a client cancel a long-running operation?</summary>
+      <div class="a"><p>Model cancellation as an action on the operation — e.g. <code>POST /operations/{id}:cancel</code> (or <code>DELETE</code>) — and treat it as a <strong>request</strong>, not a guarantee: set the state to <code>cancelling</code>, signal the worker, and let it reach a terminal <code>cancelled</code> when it actually stops. Make cancel idempotent and define behavior for work that already finished (it's a no-op / terminal-state response). The honest framing is cooperative cancellation, not a hard kill.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>"Just give me exactly-once delivery." How do you respond?</summary>
+      <div class="a"><p>Exactly-once <em>delivery</em> is effectively unachievable over an unreliable network (the two-generals problem). What you can get is exactly-once <strong>effect</strong>: at-least-once delivery plus an idempotent consumer keyed on the event id. The senior framing is "I want exactly-once <em>effect</em>, not exactly-once delivery" — and then you build dedupe rather than chase an impossible guarantee.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>Beyond signatures, what else hardens a webhook endpoint?</summary>
+      <div class="a"><p><strong>HTTPS only</strong> (confidentiality + integrity in transit); optional <strong>source-IP allowlisting</strong> if the sender publishes stable ranges (defense-in-depth, not a substitute for signing); rate limiting / payload-size caps to blunt abuse; and treating the endpoint as untrusted input — validate, dedupe, and never let an unsigned/invalid request trigger side effects. Signatures prove <em>who</em>; transport + IP + limits reduce the attack surface.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>How does pattern choice change as the event rate scales 100×?</summary>
+      <div class="a"><p>Polling cost scales with <em>clients × poll frequency</em> regardless of activity, so at high fan-out it wastes enormous request volume on "nothing changed" — push (webhooks/streaming) wins. But webhooks then concentrate <strong>delivery, retry, and dead-letter</strong> load on you, demanding a durable queue, batching/coalescing of events, and per-endpoint backpressure so one slow consumer can't stall the fleet. The trade-off flips from client simplicity toward sender-side delivery infrastructure.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>A customer's webhook endpoint has been down for two hours. What should your platform do?</summary>
+      <div class="a"><p><strong>Retry with exponential backoff + jitter</strong> over a bounded window (hours), then <strong>dead-letter</strong> undelivered events and surface the failing endpoint to the customer (dashboard/alert). Critically, give them a <strong>recovery path that doesn't depend on the webhook</strong>: a list/status API to fetch events or current state for the gap, plus the ability to <strong>replay</strong> dead-lettered events. Don't retry forever (it amplifies load and duplicates); don't drop silently (they lose data). Belt-and-suspenders: the pollable resource is the safety net.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>How do you keep one slow or failing consumer from degrading webhook delivery for everyone?</summary>
+      <div class="a"><p><strong>Isolate per-consumer:</strong> independent delivery queues, per-endpoint concurrency limits and circuit breakers so a timing-out endpoint backs off without starving others; bound and parallelize retries; and dead-letter aggressively rather than letting a black-hole endpoint consume the retry budget. The principle is <strong>bulkheading</strong> — failure of one tenant's endpoint must not become a shared-fate outage of the delivery pipeline.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> What's wrong with just holding the connection open for a few minutes?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>It's a resource leak and a reliability trap. Open connections tie up server/proxy resources, and intermediaries (LBs, gateways, proxies) impose their own timeouts that will kill it anyway. Worse, a dropped socket loses the client's <em>only handle</em> on work that's still running — they can't tell if it succeeded, failed, or is mid-flight.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> What's the core mental shift when moving from sync to async design?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><strong>Turn the work into a resource.</strong> Instead of returning the result, you create a first-class <em>operation</em>/<em>job</em> resource the client can address, query, and recover against. The request returns fast with a handle to that resource; the result becomes a separate resource the operation links to once it's done.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Give concrete examples of work that belongs behind an async API.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Large CSV/PDF <strong>exports</strong>, <strong>media transcoding</strong>, <strong>bulk/batch</strong> imports and recomputations, ML inference/training jobs, report generation, and anything fanning out to a <strong>slow third party</strong> (payment settlement, KYC, shipping carriers). Rule of thumb: if completion time is unbounded or measured in tens of seconds-plus, make it async.</p></div>
-  </div>
-
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> A sync endpoint occasionally takes 90 seconds. Do you just bump the timeout?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>No — raising timeouts pushes the failure surface around without fixing it. Long-held connections still break under deploys, LB recycling, and client networks, and they hurt throughput and tail latency for everyone. The staff move is to convert the slow path to async (<code>202</code> + status resource), keep the fast path sync, and possibly split the endpoint by expected cost so the common case stays snappy.</p></div>
-  </div>
-
-  <h2>Async request–reply (202 pattern)</h2>
-
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> What does <code>202 Accepted</code> mean?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>"I've <strong>accepted</strong> the request for processing, but it <em>isn't done</em> and may not even have started." It's deliberately non-committal about the outcome — unlike <code>201 Created</code>, nothing is guaranteed to exist yet. The response points the client at where to check progress.</p></div>
-  </div>
-
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> Walk through the async request–reply (202 + polling) pattern.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>(1) Client <code>POST</code>s the work. (2) Server accepts it, kicks off processing, returns <code>202 Accepted</code> with a <code>Location</code> header to a status/operation resource like <code>/operations/{id}</code>. (3) Client <strong>polls</strong> that resource with <code>GET</code>, which returns state (<code>pending</code>/<code>running</code>). (4) When finished, the status shows <code>done</code>/<code>succeeded</code> plus a link to the actual <strong>result resource</strong>.</p></div>
-  </div>
-
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> What does the <code>Location</code> header point to in a 202 response?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>To the <strong>status/operation resource</strong> the client should poll (e.g. <code>/jobs/{id}</code> or <code>/operations/{id}</code>), <em>not</em> to the final result. Contrast with <code>201 Created</code>, where <code>Location</code> points at the newly created resource itself.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Describe Google's long-running <code>Operation</code> model.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>A uniform envelope (Google AIP-151) carrying <code>name</code>, a <code>done</code> boolean, and — once done — <strong>either</strong> an <code>error</code> <strong>or</strong> a <code>response</code> (never both). Clients poll <code>GET /operations/{id}</code> until <code>done:true</code>, then read the result or error from the same shape. The win is a consistent operation surface across every long job in the API rather than a bespoke status format per endpoint.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> How should you control how often clients poll?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Use <code>Retry-After</code> on the status response so the server dictates a sane interval and clients don't hammer you; pair it with client-side <strong>backoff</strong> (and jitter) toward a ceiling. The server stays in control of its own load, and clients converge on a polite poll cadence instead of tight-looping.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Why keep the operation queryable after it has completed?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>So a client that <strong>crashed or lost the network mid-poll can recover</strong> — it re-queries the operation id and learns the outcome and result link. If you delete the operation the instant it finishes, you create a race where the client never learns it succeeded. Retain completed operations for a sensible TTL.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Should the result live in the operation resource or a separate resource? Why?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>A <strong>separate result resource</strong> the operation links to. It keeps the operation envelope small and uniform, lets the result have its own lifecycle (expiry, auth, content type — e.g. a signed, expiring download URL), and avoids stuffing large payloads into a polling response that clients fetch repeatedly.</p></div>
-  </div>
-
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> How do idempotency keys interact with the 202 submission?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>The submitting <code>POST</code> is not idempotent, so a retried submission could spawn a duplicate job. Accept an <code>Idempotency-Key</code> (Lesson 3): on a repeat, return the <em>same</em> <code>202</code> and <code>Location</code> for the already-created operation instead of starting a second one. That makes "submit a long job" safely retryable — the client gets one operation no matter how many times the request is replayed.</p></div>
-  </div>
-
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> How would you let a client cancel a long-running operation?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Model cancellation as an action on the operation — e.g. <code>POST /operations/{id}:cancel</code> (or <code>DELETE</code>) — and treat it as a <strong>request</strong>, not a guarantee: set the state to <code>cancelling</code>, signal the worker, and let it reach a terminal <code>cancelled</code> when it actually stops. Make cancel idempotent and define behavior for work that already finished (it's a no-op / terminal-state response). The honest framing is cooperative cancellation, not a hard kill.</p></div>
-  </div>
-
-  <h2>Webhooks</h2>
-
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> What is a webhook, and how does it differ from polling?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>A webhook inverts the direction: instead of the client polling, the client <strong>registers a callback URL</strong> and the server <code>POST</code>s an event to it when something happens. It's push-based — efficient and near-real-time — but it makes the client a server and hands it a fistful of distributed-systems problems (duplicates, ordering, auth).</p></div>
-  </div>
-
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> What delivery guarantee do webhooks give, and what follows from it?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Delivery is <strong>at-least-once</strong>: failed deliveries are retried, so the same event can arrive more than once. The direct consequence: the <strong>consumer must be idempotent</strong> and <strong>dedupe on a stable event id</strong>. Assuming exactly-once delivery is the classic bug — it's how you bill a customer twice.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Webhooks aren't ordered. How do you build a correct consumer anyway?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Carry a <strong>timestamp and/or sequence number</strong> in each event and never assume the last event you received is the latest write. Reconcile against current state (e.g. "ignore an update older than what I've already applied"), or fetch authoritative state from a status resource. Design so out-of-order arrival is merely <em>handled</em>, not <em>fatal</em>.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Why should a webhook receiver ack fast and process later?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Return a quick <code>2xx</code> the instant you've durably <em>captured</em> the event, then do heavy work asynchronously. Doing the work before acking ties up the sender's delivery attempt, risks its timeout (→ spurious retries and duplicates), and couples your processing latency to their retry policy. Ack = "I have it safely," not "I've finished acting on it."</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> What happens when the receiver returns a non-<code>2xx</code> (or times out)?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>The sender treats it as a failed delivery and <strong>retries with backoff</strong> (typically exponential + jitter, over hours). After enough give-ups it routes the event to a <strong>dead-letter</strong> for inspection/manual replay, and usually surfaces the failing endpoint to the developer. This is exactly why at-least-once duplicates happen — a slow receiver that <em>did</em> process but failed to ack gets the event again.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Explain dead-lettering for webhooks.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>When deliveries keep failing past the retry budget, the event is parked in a <strong>dead-letter queue/store</strong> instead of being dropped or retried forever. It preserves the event for diagnosis and lets you <strong>replay</strong> it once the endpoint is fixed. It bounds wasted retries while guaranteeing you don't silently lose events.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> How do you dedupe reliably on the consumer side?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Persist processed <strong>event ids</strong> (with a TTL matching the sender's max retry window) and check-then-process atomically — e.g. an upsert/unique-constraint on event id, or an idempotency table — so a duplicate is a no-op. Make the <em>effect</em> idempotent too (use the event id as the key for any side effect), so even a race that processes twice converges to one outcome.</p></div>
-  </div>
-
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> "Just give me exactly-once delivery." How do you respond?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Exactly-once <em>delivery</em> is effectively unachievable over an unreliable network (the two-generals problem). What you can get is exactly-once <strong>effect</strong>: at-least-once delivery plus an idempotent consumer keyed on the event id. The senior framing is "I want exactly-once <em>effect</em>, not exactly-once delivery" — and then you build dedupe rather than chase an impossible guarantee.</p></div>
-  </div>
-
-  <h2>Webhook security</h2>
-
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> Anyone can POST to a public callback URL. How do you trust the payload?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><strong>Sign the payload.</strong> The sender computes an <strong>HMAC</strong> over the body using a shared signing secret and puts it in a header (e.g. a Stripe-style <code>Stripe-Signature</code> header). The receiver recomputes the HMAC with its copy of the secret and rejects the request unless they match — proving the event genuinely came from the sender and wasn't tampered with.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Why HMAC over the raw body specifically, and what's the common pitfall?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>HMAC ties authenticity <em>and</em> integrity to a shared secret cheaply. The classic pitfall: verifying against a re-serialized/parsed body instead of the <strong>exact raw bytes</strong> received — any reformatting breaks the signature. Capture the raw payload before JSON parsing, and use a <strong>constant-time compare</strong> to avoid timing attacks.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> A valid signed request can be captured and resent. How do you stop replay?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Include a <strong>timestamp in the signed payload</strong> and <strong>reject stale ones</strong> (outside a small tolerance window, e.g. a few minutes). A replayed event then fails even though its signature is genuine, because it's too old. Combine with consumer-side dedupe on event id so a replay inside the window is also a no-op.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> How do you rotate a webhook signing secret without dropping events?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Support <strong>multiple active secrets</strong> during an overlap window: the sender can sign with the new secret (or send signatures for both), and the receiver accepts a payload if it validates against <em>any</em> currently-valid secret. Roll forward, confirm traffic verifies on the new one, then retire the old. Never hard-cut a single secret — in-flight/retried events would fail verification.</p></div>
-  </div>
-
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> Beyond signatures, what else hardens a webhook endpoint?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><strong>HTTPS only</strong> (confidentiality + integrity in transit); optional <strong>source-IP allowlisting</strong> if the sender publishes stable ranges (defense-in-depth, not a substitute for signing); rate limiting / payload-size caps to blunt abuse; and treating the endpoint as untrusted input — validate, dedupe, and never let an unsigned/invalid request trigger side effects. Signatures prove <em>who</em>; transport + IP + limits reduce the attack surface.</p></div>
-  </div>
-
-  <h2>Pattern choice</h2>
-
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> Polling vs webhooks — the one-line trade-off each.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><strong>Polling (202 + status):</strong> dead simple, no client endpoint needed, works through firewalls — but wasteful and laggy (you learn on the next tick). <strong>Webhooks:</strong> efficient, near-real-time push — but the client must expose a public endpoint and handle every delivery semantic (duplicates, ordering, signing, retries).</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Where do SSE, WebSockets, and long-polling fit?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>They're the <strong>streaming</strong> shape — for low-latency, continuous updates where a per-event <code>POST</code> is too coarse. <strong>SSE</strong>: simple server→client stream over HTTP, auto-reconnect. <strong>WebSockets</strong>: full duplex, for interactive/bidirectional. <strong>Long-poll</strong>: a fallback that mimics push by holding a request open. The cost is a <strong>held connection</strong> (statefulness, scaling, reconnection logic).</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> A client is behind a corporate firewall / can't run a public server. Which pattern?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><strong>Polling</strong>, because webhooks require the client to expose an inbound, internet-reachable endpoint — often impossible behind NAT/firewalls or for browser/mobile clients. Polling only needs outbound calls, so it works everywhere. This constraint, not just latency, frequently decides the pattern.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Why do mature APIs often offer <em>both</em> a status endpoint and webhooks?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>It's belt-and-suspenders, not indecision. The <strong>webhook</strong> delivers the happy-path, near-real-time push; the <strong>pollable status resource</strong> is the fallback for <em>missed deliveries</em>, crash recovery, and clients that can't receive webhooks. Together they give push performance with poll reliability — the consumer can always reconcile authoritative state.</p></div>
-  </div>
-
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> How does pattern choice change as the event rate scales 100×?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Polling cost scales with <em>clients × poll frequency</em> regardless of activity, so at high fan-out it wastes enormous request volume on "nothing changed" — push (webhooks/streaming) wins. But webhooks then concentrate <strong>delivery, retry, and dead-letter</strong> load on you, demanding a durable queue, batching/coalescing of events, and per-endpoint backpressure so one slow consumer can't stall the fleet. The trade-off flips from client simplicity toward sender-side delivery infrastructure.</p></div>
-  </div>
-
-  <h2>Judgment</h2>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Design an API for a large data export that may take minutes, then notifies the client.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Don't block. <code>POST /exports</code> → <code>202 Accepted</code> + <code>Location</code> to <code>/exports/{id}</code> (a status resource). Client <strong>polls</strong> (<code>pending</code>→<code>running</code>→<code>succeeded</code>), honoring <code>Retry-After</code>; on done it links to a <strong>result resource</strong> — a signed, expiring download URL. <strong>Also</strong> offer a completion webhook: a <strong>signed (HMAC)</strong> event <code>POST</code>. Because delivery is at-least-once, the consumer dedupes on <strong>event id</strong> and stays idempotent, doesn't rely on ordering, and uses a timestamp to reject replays. Receiver acks fast <code>2xx</code> and works async; non-<code>2xx</code> → retries with backoff → dead-letter. Protect the result URL with auth + expiry. Offering both push and poll, plus securing the result, is the senior signal.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Walk me through making a webhook consumer robust.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><ul><li><strong>Verify the signature</strong> (HMAC over raw body, constant-time compare) and reject if stale (timestamp window) — auth + anti-replay.</li><li><strong>Capture durably, ack fast</strong> with <code>2xx</code>, then process async.</li><li><strong>Dedupe on event id</strong> and make side effects idempotent — at-least-once is the default.</li><li><strong>Don't trust order</strong>: reconcile using timestamps/sequence or re-fetch state.</li><li><strong>Handle failure</strong>: let the sender retry; have your own retry + dead-letter for downstream errors after the ack.</li></ul></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Two events for the same object arrive out of order. What goes wrong, and how do you handle it?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>The naive failure: you apply the <em>older</em> event last and clobber newer state (e.g. "active" then "cancelled" arrives reordered → you end up "active"). Fix by making each event carry a <strong>monotonic version/timestamp</strong> and applying it conditionally — ignore an event older than the state you've already recorded — or by treating the webhook as a trigger to <strong>re-fetch authoritative state</strong> rather than blindly applying the payload.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> The same payment-succeeded webhook is delivered twice. How do you avoid double-fulfilment?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Use the <strong>event id</strong> (or a business key like the payment/charge id) as an idempotency key for fulfilment: check-then-act atomically (unique constraint / conditional write) so the second delivery is a no-op. This is Lesson 3 cashing in — at-least-once delivery is fine precisely <em>because</em> the effect is idempotent.</p></div>
-  </div>
-
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> A customer's webhook endpoint has been down for two hours. What should your platform do?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><strong>Retry with exponential backoff + jitter</strong> over a bounded window (hours), then <strong>dead-letter</strong> undelivered events and surface the failing endpoint to the customer (dashboard/alert). Critically, give them a <strong>recovery path that doesn't depend on the webhook</strong>: a list/status API to fetch events or current state for the gap, plus the ability to <strong>replay</strong> dead-lettered events. Don't retry forever (it amplifies load and duplicates); don't drop silently (they lose data). Belt-and-suspenders: the pollable resource is the safety net.</p></div>
-  </div>
-
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> How do you keep one slow or failing consumer from degrading webhook delivery for everyone?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><strong>Isolate per-consumer:</strong> independent delivery queues, per-endpoint concurrency limits and circuit breakers so a timing-out endpoint backs off without starving others; bound and parallelize retries; and dead-letter aggressively rather than letting a black-hole endpoint consume the retry budget. The principle is <strong>bulkheading</strong> — failure of one tenant's endpoint must not become a shared-fate outage of the delivery pipeline.</p></div>
+    <div class="designrubric" data-level="design">
+      <b>Async / long-running design framework</b> &mdash; drive any "design a long-running operation" prompt through these, out loud:
+      <ol>
+        <li>Clarify: expected duration, completion SLA, who the client is (can it receive a callback?), idempotency &amp; consistency needs.</li>
+        <li>Make the work a resource: <code>POST</code> &rarr; <code>202 Accepted</code> + <code>Location</code> to a status/operation resource; keep it queryable after completion (TTL) for crash recovery.</li>
+        <li>Model the operation as a state machine: <code>queued &rarr; running &rarr; succeeded | failed | cancelled</code>; <code>done=true</code> resolves to exactly one of result or error; link the result as its own resource.</li>
+        <li>Choose the notification axis: polling (<code>Retry-After</code> + client backoff, works behind firewalls) vs signed webhooks (push, near-real-time) &mdash; mature APIs offer both, poll as the fallback.</li>
+        <li>Make submission safe: <code>Idempotency-Key</code> so a retried submit returns the same operation, not a duplicate job.</li>
+        <li>Webhook delivery semantics: at-least-once &amp; unordered &rarr; consumer dedupes on event id, stays idempotent, carries timestamp/sequence; HMAC-sign + reject stale (replay window); ack fast <code>2xx</code> then work async.</li>
+        <li>Reliability &amp; scale: retries with backoff + jitter &rarr; dead-letter; per-consumer isolation/bulkheading; observability on delivery, retry, and lag.</li>
+      </ol>
+    </div>
+    <details class="iq" data-level="design">
+      <summary>Design an API for a large data export that can take several minutes, then notifies the client when it's ready.</summary>
+      <div class="a"><p><b>A strong answer covers:</b> don't block &mdash; <code>POST /exports</code> &rarr; <code>202 Accepted</code> + <code>Location</code> to <code>/exports/{id}</code>, a status resource &rarr; client <strong>polls</strong> (<code>pending</code>&rarr;<code>running</code>&rarr;<code>succeeded</code>) honoring <code>Retry-After</code>; on done it links to a <strong>result resource</strong> &mdash; a signed, expiring download URL &rarr; <strong>also</strong> offer a completion webhook: an HMAC-signed event <code>POST</code> &rarr; because delivery is at-least-once, the consumer dedupes on <strong>event id</strong> and stays idempotent, doesn't rely on ordering, and uses a timestamp to reject replays &rarr; receiver acks fast <code>2xx</code> and works async; non-<code>2xx</code> &rarr; retries with backoff &rarr; dead-letter &rarr; protect the result URL with auth + expiry &rarr; keep the operation queryable after completion so a client that crashed mid-poll can recover &rarr; name the trade-off: offering both push and poll buys push performance with poll reliability.</p></div>
+    </details>
+    <details class="iq" data-level="design">
+      <summary>Design a webhook delivery platform: how do you guarantee customers eventually get every event without one bad endpoint taking the system down?</summary>
+      <div class="a"><p><b>A strong answer covers:</b> persist every event durably first, then deliver from a queue &mdash; never couple production of the event to its delivery &rarr; delivery is <strong>at-least-once</strong>: sign each payload (HMAC over raw bytes, constant-time compare) and include a timestamp so consumers can verify authenticity and reject replays &rarr; expect non-<code>2xx</code>/timeouts &rarr; retry with exponential backoff + jitter over a bounded window (hours), then <strong>dead-letter</strong> and surface the failing endpoint to the customer &rarr; give a webhook-independent recovery path: a list/status API to fetch the gap and the ability to <strong>replay</strong> dead-lettered events (belt-and-suspenders with a pollable resource) &rarr; isolate per consumer &mdash; independent queues, per-endpoint concurrency limits and circuit breakers (bulkheading) so one slow/black-hole endpoint can't starve the fleet &rarr; coalesce/batch at high fan-out and apply per-endpoint back-pressure &rarr; observability: track delivery success, retry counts, and lag per endpoint &rarr; name the trade-off: exactly-once <em>delivery</em> is unachievable over an unreliable network, so you provide at-least-once delivery + an idempotent consumer keyed on event id (exactly-once <em>effect</em>).</p></div>
+    </details>
   </div>
 
   <div class="nav">
@@ -317,29 +603,6 @@
   <footer>Interview bank · Lesson 10 · answer from memory first, then reveal · <a href="../index.html">all lessons &amp; banks</a></footer>
 </div>
 
-<script>
-  function setFilter(d){
-    document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active', c.dataset.f===d));
-    document.querySelectorAll('.card').forEach(card=>{
-      card.style.display = (d==='all'||card.dataset.diff===d) ? '' : 'none';
-    });
-  }
-  document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>setFilter(c.dataset.f)));
-  document.querySelectorAll('.reveal').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      var a = btn.nextElementSibling;
-      var shown = a.classList.toggle('show');
-      btn.textContent = shown ? 'Hide answer' : 'Reveal senior answer';
-    });
-  });
-  document.getElementById('revealAll').addEventListener('click',function(){
-    document.querySelectorAll('.a').forEach(a=>a.classList.add('show'));
-    document.querySelectorAll('.reveal').forEach(b=>b.textContent='Hide answer');
-  });
-  document.getElementById('collapseAll').addEventListener('click',function(){
-    document.querySelectorAll('.a').forEach(a=>a.classList.remove('show'));
-    document.querySelectorAll('.reveal').forEach(b=>b.textContent='Reveal senior answer');
-  });
-</script>
+<script src="../../assets/interview.js" defer></script>
 </body>
 </html>
