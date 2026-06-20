@@ -20,6 +20,14 @@ TRACKS = {
     'context-engineering': ('--track-context', 'Context Engineering'),
     'rest-api': ('--track-rest', 'REST API'),
 }
+# per-track keyword tags (kept in sync with the hub card data-name lists) so the
+# generated glossary/resources pages carry page tags like every other page.
+TRACK_KEYWORDS = {
+    'ai-agents': 'ai agents, agent loop, multi-agent, llm, tool, runtime, memory, mcp, claude, cursor, production',
+    'bloom-filters': 'bloom filters, data structures, false positive, probabilistic, sizing, lsm, cuckoo, counting, hash, membership',
+    'context-engineering': 'context engineering, rag, retrieval augmented generation, embeddings, semantic search, hybrid, bm25, rerank, chunking, context window, tokens, working memory',
+    'rest-api': 'rest api, http methods, status codes, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors, rate limiting',
+}
 THEME = ('<script>\n'
          "(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();\n"
          "function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}\n"
@@ -51,6 +59,7 @@ def build():
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title} · StackDepth</title>
 <meta name="description" content="{desc}">
+<meta name="keywords" content="{word.lower()} {slug.replace('-', ' ')}, {TRACK_KEYWORDS.get(slug, '')}">
 <link rel="canonical" href="{canon}">
 <meta name="robots" content="index, follow">
 <meta property="og:type" content="article">
