@@ -13,8 +13,9 @@
      clicks, engagement). We set send_page_view:false and emit ONE enriched
      page_view to avoid double counting, and we do NOT add a generic outbound
      event (EM covers it) — only the semantic social_click / github_click.
-   - Consent Mode v2 defaults to denied (cookieless pings still aggregate); a
-     stored grant (localStorage 'sd:consent') is re-applied on load. A banner is
+   - Consent Mode v2: analytics_storage GRANTED by default (ad_* stay denied —
+     ad-free site; usage disclosed in /privacy.html). A stored opt-out
+     (localStorage 'sd:consent'='denied') is honoured. An opt-in banner is
      available behind SHOW_BANNER but is OFF by default.
    - Production-only: nothing is sent off dineshbyte.github.io unless ?debug_mode=1.
    ========================================================================== */
@@ -38,18 +39,19 @@
   function gtag() { window.dataLayer.push(arguments); }
   window.gtag = gtag;
 
+  // analytics_storage granted by default (full-fidelity, first-party analytics
+  // cookie) — this is an ad-free, no-login educational site and usage is
+  // disclosed in /privacy.html. Advertising signals stay DENIED (no ads run).
+  // If a stored opt-out exists, honour it.
+  var analyticsConsent = 'granted';
+  try { if (localStorage.getItem('sd:consent') === 'denied') analyticsConsent = 'denied'; } catch (e) {}
   gtag('consent', 'default', {
     ad_storage: 'denied',
     ad_user_data: 'denied',
     ad_personalization: 'denied',
-    analytics_storage: 'denied',
+    analytics_storage: analyticsConsent,
     wait_for_update: 500
   });
-  try {
-    if (localStorage.getItem('sd:consent') === 'granted') {
-      gtag('consent', 'update', { analytics_storage: 'granted' });
-    }
-  } catch (e) { /* storage blocked — stay denied */ }
 
   // load the gtag.js library
   var s = document.createElement('script');
@@ -199,7 +201,7 @@
             '<button type="button" id="sdc-no" style="cursor:pointer">No thanks</button>';
           var decide = function (v) {
             try { localStorage.setItem('sd:consent', v); } catch (e) {}
-            if (v === 'granted') gtag('consent', 'update', { analytics_storage: 'granted' });
+            gtag('consent', 'update', { analytics_storage: v === 'granted' ? 'granted' : 'denied' });
             b.parentNode && b.parentNode.removeChild(b);
           };
           document.body.appendChild(b);
