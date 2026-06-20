@@ -83,3 +83,30 @@
     if (document.readyState !== 'loading') init();
     else document.addEventListener('DOMContentLoaded', init);
 })();
+
+/* ==========================================================================
+   Reading progress — remember the latest lesson per track (localStorage) so the
+   hub can turn "Start" into "Continue". Runs on every page that loads this file
+   (all lessons + interview banks). Reference sheets / READMEs are skipped so the
+   resume point is always a lesson.
+   ========================================================================== */
+(function () {
+    try {
+        var SLUGS = ['ai-agents', 'context-engineering', 'rest-api', 'bloom-filters',
+            'distributed-systems', 'storage-engines', 'transactions-isolation',
+            'streaming-event-driven', 'applied-systems-design'];
+        var path = location.pathname;
+        if (/\/(reference|interview)\//.test(path) || /readme\.html$/i.test(path)) return;
+        var slug = null;
+        for (var i = 0; i < SLUGS.length; i++) {
+            if (path.indexOf('/' + SLUGS[i] + '/') >= 0) { slug = SLUGS[i]; break; }
+        }
+        if (!slug) return;
+        var url = path.slice(path.indexOf('/' + slug + '/') + 1); // hub-relative path
+        var KEY = 'sd:progress', map = {};
+        try { map = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { map = {}; }
+        map[slug] = url;
+        localStorage.setItem(KEY, JSON.stringify(map));
+        localStorage.setItem('sd:last', slug); // most-recent track for the hub resume banner
+    } catch (e) { /* storage unavailable — ignore */ }
+})();

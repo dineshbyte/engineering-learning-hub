@@ -76,8 +76,13 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     .ghbtn .lbl{display:none}
     /* topbar wraps; the search drops to its own full-width row so it stays usable */
     .topbar{flex-wrap:wrap; row-gap:.55rem}
+    /* brand stays far-left; the Star + theme buttons get pushed to the right edge */
+    .brand{margin-right:auto}
     .search{order:5; flex-basis:100%; max-width:none; margin-left:0}
   }
+  /* NOTE: mobile overrides for grid/cards/filters live in the block at the END
+     of this stylesheet — they must come AFTER the base component rules below to
+     win on equal specificity. */
 
   .wrap{max-width:84rem; margin:0 auto; padding:1.6rem clamp(1rem,4vw,2rem) 5rem}
 
@@ -89,6 +94,31 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   .stat{font-size:.74rem; color:var(--muted); background:var(--card); border:1px solid var(--line);
     border-radius:20px; padding:.3rem .7rem}
   .stat b{color:var(--ink)}
+
+  /* topic filter chips */
+  .filters{display:flex; flex-wrap:wrap; gap:.5rem; margin:1.3rem 0 .2rem}
+  .fchip{display:inline-flex; align-items:center; font:inherit; font-size:.8rem; font-weight:600;
+    cursor:pointer; color:var(--muted); background:var(--card); border:1px solid var(--line);
+    border-radius:20px; padding:.42rem .55rem .42rem .9rem;
+    transition:background .12s, color .12s, border-color .12s, transform .08s}
+  .fchip:hover{background:var(--chip); color:var(--ink)}
+  .fchip:active{transform:scale(.96)}
+  .fchip.is-active{background:var(--accent); color:#fff; border-color:var(--accent)}
+  html[data-theme="dark"] .fchip.is-active{color:#15140f}
+  /* count as a small circular badge */
+  .fcount{display:inline-flex; align-items:center; justify-content:center; margin-left:.45rem;
+    min-width:1.2rem; height:1.2rem; padding:0 .22rem; border-radius:999px; font-size:.66rem;
+    font-weight:700; line-height:1; background:var(--chip); color:var(--muted)}
+  .fchip:hover .fcount{background:var(--line)}
+  .fchip.is-active .fcount{background:var(--bg); color:var(--ink)}
+
+  /* focus-visible (keyboard) + :active (tap) interaction states */
+  a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible{
+    outline:2px solid #5b54e6; outline-offset:2px; border-radius:6px}
+  a.lchip:active{background:var(--chip)}
+  a.pill:active{background:var(--line)}
+  a.ritem:active{background:var(--chip)}
+  .themebtn:active, .ghbtn:active, .fpill:active, .soclink:active{transform:scale(.96)}
 
   /* tile grid — CSS multicolumn masonry: tiles pack tightly, no ragged gaps */
   .grid{columns:23rem; column-gap:1rem; margin-top:1.3rem}
@@ -102,9 +132,52 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     font-size:1.2rem; background:color-mix(in srgb, var(--tc) 16%, transparent)}
   .tname{font-weight:700; font-size:1.06rem; letter-spacing:-.01em; line-height:1.1}
   .ttag{font-size:.63rem; letter-spacing:.11em; text-transform:uppercase; color:var(--muted); margin-top:.12rem}
-  .cnt{margin-left:auto; align-self:flex-start; font-size:.7rem; color:var(--tc); font-weight:700;
-    background:color-mix(in srgb, var(--tc) 12%, transparent); padding:.22rem .55rem; border-radius:20px; white-space:nowrap}
+  .cnt{margin-left:auto; align-self:flex-start; font-size:.7rem; font-weight:700; white-space:nowrap;
+    color:color-mix(in srgb, var(--tc) 70%, var(--ink));
+    background:color-mix(in srgb, var(--tc) 14%, transparent); padding:.22rem .55rem; border-radius:20px}
   .tdesc{margin:0; font-size:.85rem; color:var(--muted); line-height:1.45}
+  /* per-card keyword tags (scannable + indexable text for SEO) */
+  .tags{display:flex; flex-wrap:wrap; gap:.3rem; margin:0}
+  .tag{font-size:.66rem; font-weight:600; white-space:nowrap;
+    color:color-mix(in srgb, var(--tg,var(--tc)) 70%, var(--ink));
+    background:color-mix(in srgb, var(--tg,var(--tc)) 15%, transparent);
+    border:1px solid color-mix(in srgb, var(--tg,var(--tc)) 34%, transparent);
+    border-radius:6px; padding:.13rem .42rem}
+  /* each tag a distinct hue (cycled) so the row reads multi-colour */
+  .tags .tag:nth-child(6n+1){--tg:#5b54e6}
+  .tags .tag:nth-child(6n+2){--tg:#0f8a7e}
+  .tags .tag:nth-child(6n+3){--tg:#c2700f}
+  .tags .tag:nth-child(6n+4){--tg:#d6455d}
+  .tags .tag:nth-child(6n+5){--tg:#1f77d0}
+  .tags .tag:nth-child(6n+6){--tg:#8a3fbf}
+  /* Start CTA — brand accent (consistent across cards + the resume banner);
+     white text in light theme, dark text on the lighter dark-theme accent. */
+  .start{display:flex; align-items:center; justify-content:center; gap:.4rem; text-decoration:none;
+    font-size:.84rem; font-weight:700; color:#fff; background:var(--accent);
+    border-radius:9px; padding:.55rem .9rem; transition:filter .12s, transform .08s}
+  html[data-theme="dark"] .start{color:#15140f}
+  .start:hover{filter:brightness(1.06)}
+  .start:active{transform:scale(.99)}
+  /* estimated read time per track */
+  .rtime{display:flex; align-items:center; gap:.34rem; font-size:.73rem; color:var(--muted)}
+  .rtime::before{content:""; flex:none; width:.72rem; height:.72rem; border-radius:50%;
+    border:1.5px solid currentColor; box-shadow:inset 0 -.2rem 0 -.13rem currentColor}
+  /* started state: a resume glyph on the Continue button */
+  .tile.is-started .start::before{content:"\21BB"; font-weight:700; margin-right:.15rem}
+  /* in-progress card: its own green "continue" accent (distinct from the indigo
+     "start" cards), applied to the eyebrow, ring, progress bar, and button */
+  .tile.is-started{--accent:var(--good); border-color:color-mix(in srgb, var(--accent) 45%, var(--line));
+    box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent)}
+  /* keep white-on-green Continue above AA in light theme */
+  html[data-theme="light"] .tile.is-started .start{background:color-mix(in srgb, var(--good) 86%, #000)}
+  .tile.is-started::before{content:"\21BB  Continue where you left off"; order:-1;
+    font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; font-weight:800; color:var(--accent)}
+  /* per-card progress (replaces the read-time line once a track is started) */
+  .cprog{display:flex; flex-direction:column; gap:.34rem}
+  .cstep{font-size:.73rem; font-weight:700; color:var(--accent)}
+  .cbar{height:.42rem; border-radius:99px; overflow:hidden;
+    background:color-mix(in srgb, var(--accent) 18%, transparent)}
+  .cfill{display:block; height:100%; border-radius:99px; background:var(--accent)}
   .lessons{display:flex; flex-direction:column; gap:.18rem}
   a.lchip{display:flex; align-items:center; gap:.55rem; text-decoration:none; color:var(--ink);
     font-size:.85rem; padding:.32rem .4rem; border-radius:8px; transition:background .12s}
@@ -112,11 +185,27 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   a.lchip i{flex:none; font-style:normal; min-width:1.5rem; height:1.5rem; padding:0 .35rem; border-radius:6px;
     display:grid; place-items:center; font-size:.72rem; font-weight:700; color:#fff; background:var(--tc)}
   a.lchip span{line-height:1.2}
-  .tfoot{margin-top:auto; display:flex; flex-wrap:wrap; gap:.4rem; padding-top:.7rem; border-top:1px solid var(--line)}
+  /* lesson list collapses into a native <details>: on mobile a tap-to-expand
+     summary keeps cards short; on desktop the summary is hidden and lessons
+     stay visible (the open attribute is synced to viewport by a small script). */
+  /* lesson list hidden from the card (kept in the DOM for SEO/crawlers);
+     the header Start button is the entry point into a track now */
+  .lwrap{display:none}
+  .lwrap > summary{list-style:none; cursor:pointer}
+  .lwrap > summary::-webkit-details-marker{display:none}
+  .lsum{display:flex; align-items:center; gap:.4rem; font-size:.8rem; font-weight:700; color:var(--tc);
+    padding:.45rem .6rem; border-radius:8px; user-select:none;
+    background:color-mix(in srgb, var(--tc) 9%, transparent); transition:background .12s}
+  .lsum::after{content:"\25BE"; margin-left:auto; font-weight:400; transition:transform .15s}
+  .lwrap[open] .lsum::after{transform:rotate(180deg)}
+  .lwrap[open] > summary{margin-bottom:.3rem}
+  .lsum:hover{background:color-mix(in srgb, var(--tc) 16%, transparent)}
+  .lsum:active{background:color-mix(in srgb, var(--tc) 24%, transparent)}
+  .tfoot{margin-top:0; display:flex; flex-wrap:wrap; gap:.4rem; padding-top:.7rem; border-top:1px solid var(--line)}
   a.pill{font-size:.73rem; text-decoration:none; color:var(--ink); background:var(--chip);
     border:1px solid transparent; border-radius:20px; padding:.3rem .62rem; transition:filter .12s, background .12s}
   a.pill:hover{background:var(--line)}
-  a.pill.md{color:var(--muted)}
+  a.pill.md{color:var(--ink); font-weight:500}
   a.epub{font-size:.73rem; font-weight:700; text-decoration:none; color:#fff; background:var(--tc);
     border-radius:20px; padding:.3rem .66rem; transition:opacity .12s}
   a.epub:hover{opacity:.88}
@@ -161,11 +250,38 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     color:var(--muted); font-weight:700}
   .fcol a{display:block; color:var(--ink); text-decoration:none; font-weight:600; padding:.16rem 0; font-size:.82rem}
   .fcol a:hover{color:var(--accent)}
+  /* Connect column: social links inline, wrapping, centered */
+  .fconnect{text-align:center}
+  .socrow{display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:.25rem .9rem; margin-top:.15rem}
+  .socrow a{display:inline-block; padding:.16rem 0}
   .fbrand{display:flex; gap:.7rem; align-items:flex-start}
   .fbrand img{border-radius:50%; border:1px solid var(--line); flex:none}
   .fbrand .ftxt{font-size:.8rem; line-height:1.5}
   .fbrand .ftxt b{color:var(--ink)}
-  @media(max-width:640px){.fgrid{grid-template-columns:1fr; gap:1.1rem} .soc-hdr{display:none}}
+  @media(max-width:640px){
+    /* tighter hero so the filter row + cards surface sooner */
+    .wrap{padding-top:1rem}
+    .hero p{font-size:.86rem; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
+    .stats{margin:.7rem 0 .2rem}
+    /* filter chips scroll horizontally instead of wrapping */
+    .filters{flex-wrap:nowrap; overflow-x:auto; margin:1rem -.1rem .2rem; padding-bottom:.25rem; scrollbar-width:none}
+    .filters::-webkit-scrollbar{display:none}
+    .fchip{flex:none}
+    /* compact track cards so ~3 fit on small screens: drop the prose (kept in
+       the DOM for SEO) and lean on the header + keyword tags + Lessons toggle */
+    .grid{columns:auto; margin-top:1rem}
+    .tile{padding:.7rem .85rem .75rem; gap:.45rem}
+    .tdesc{display:none}
+    .tags{gap:.28rem}
+    .tag{font-size:.64rem}
+    a.lchip{padding:.28rem .35rem; font-size:.82rem; gap:.45rem}
+    a.lchip i{min-width:1.3rem; height:1.3rem; font-size:.66rem}
+    .tfoot{gap:.35rem; padding-top:.6rem}
+    /* footer: single column, centered */
+    .fgrid{grid-template-columns:1fr; gap:1.4rem} .soc-hdr{display:none}
+    .fcol{text-align:center}
+    .fbrand{flex-direction:column; align-items:center; text-align:center}
+  }
 
   /* dark theme — color tokens live in tokens.css; only component overrides here */
   html[data-theme="dark"] .topbar{background:rgba(19,18,16,.82)}
@@ -200,40 +316,52 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     </div>
   </section>
 
+  <nav class="filters" id="filters" aria-label="Filter tracks by topic">
+    <button type="button" class="fchip is-active" data-cat="all" aria-pressed="true">All tracks</button>
+    <button type="button" class="fchip" data-cat="ai" aria-pressed="false">AI &amp; LLMs</button>
+    <button type="button" class="fchip" data-cat="distributed" aria-pressed="false">Distributed</button>
+    <button type="button" class="fchip" data-cat="data" aria-pressed="false">Data &amp; storage</button>
+    <button type="button" class="fchip" data-cat="design" aria-pressed="false">APIs &amp; design</button>
+  </nav>
+
   <div class="results" id="results" role="listbox" aria-label="Search results"></div>
 
   <main class="grid" id="grid">
 
     <!-- AI AGENTS -->
-    <article class="tile" style="--tc:var(--track-agents)" data-name="ai agents llm tool agent loop runtime memory mcp multi-agent claude cursor production">
+    <article class="tile" style="--tc:var(--track-agents)" data-cat="ai" data-name="ai agents llm tool agent loop runtime memory mcp multi-agent claude cursor production">
       <div class="thead">
-        <span class="ico">🤖</span>
         <div><div class="tname">AI Agents</div><div class="ttag">Strategy &amp; architecture</div></div>
         <span class="cnt">4 lessons</span>
       </div>
+      <div class="tags"><span class="tag">Agent loop</span><span class="tag">Tool use</span><span class="tag">MCP</span><span class="tag">Memory</span><span class="tag">Runtime</span></div>
       <p class="tdesc">The whole agent stack, bottom-up — tell real capability from hype in pitches and reviews.</p>
+      <details class="lwrap"><summary class="lsum">Lessons</summary>
       <div class="lessons">
         <a class="lchip" href="ai-agents/lessons/0001-ai-agents-from-first-principles.html"><i>1</i><span>The ten-level stack — LLM → archetypes</span></a>
         <a class="lchip" href="ai-agents/lessons/0002-agent-runtime-and-context.html"><i>2</i><span>Runtime, context &amp; memory</span></a>
         <a class="lchip" href="ai-agents/lessons/0003-how-coding-agents-work.html"><i>3</i><span>How coding agents work (Claude Code · Cursor · MCP)</span></a>
         <a class="lchip" href="ai-agents/lessons/0004-agent-systems-and-production.html"><i>4</i><span>Multi-agent systems &amp; production</span></a>
-      </div>
+      </div></details>
+      <div class="rtime">~2h 10m read</div>
+      <a class="start" data-track="ai-agents" href="ai-agents/lessons/0001-ai-agents-from-first-principles.html"><span class="start-label">Start</span> <span aria-hidden="true">&#8594;</span></a>
       <div class="tfoot">
         <a class="pill" href="ai-agents/reference/agents-cheat-sheet.html">★ Cheat sheet</a>
         <a class="pill" href="ai-agents/reference/agent-architecture-review.html">☑ Review sheet</a>
-        <a class="pill md" href="ai-agents/GLOSSARY.md">Glossary</a>
-        <a class="pill md" href="ai-agents/RESOURCES.md">Resources</a>
+        <a class="pill md" href="ai-agents/GLOSSARY.html">Glossary</a>
+        <a class="pill md" href="ai-agents/RESOURCES.html">Resources</a>
       </div>
     </article>
 
     <!-- CONTEXT ENGINEERING -->
-    <article class="tile" style="--tc:var(--track-context)" data-name="context engineering rag retrieval augmented generation embeddings semantic search hybrid bm25 rerank chunking context window tokens working memory compression cursor claude code prompt failure modes">
+    <article class="tile" style="--tc:var(--track-context)" data-cat="ai" data-name="context engineering rag retrieval augmented generation embeddings semantic search hybrid bm25 rerank chunking context window tokens working memory compression cursor claude code prompt failure modes">
       <div class="thead">
-        <span class="ico">🧩</span>
         <div><div class="tname">Context Engineering</div><div class="ttag">Why same-LLM systems differ</div></div>
         <span class="cnt">9 lessons</span>
       </div>
+      <div class="tags"><span class="tag">RAG</span><span class="tag">Retrieval</span><span class="tag">Embeddings</span><span class="tag">Chunking</span><span class="tag">Reranking</span></div>
       <p class="tdesc">Why one AI system feels far smarter than another on the identical model — selection, retrieval &amp; assembly of context.</p>
+      <details class="lwrap"><summary class="lsum">Lessons</summary>
       <div class="lessons">
         <a class="lchip" href="context-engineering/lessons/0001-what-is-context-and-context-as-query.html"><i>1</i><span>What is context — &amp; the new database query</span></a>
         <a class="lchip" href="context-engineering/lessons/0002-context-selection-and-retrieval.html"><i>2</i><span>Context selection &amp; retrieval</span></a>
@@ -244,23 +372,26 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
         <a class="lchip" href="context-engineering/lessons/0007-pre-retrieval-and-advanced-rag.html"><i>7</i><span>Pre-retrieval &amp; advanced RAG</span></a>
         <a class="lchip" href="context-engineering/lessons/0008-embeddings-indexing-and-cost.html"><i>8</i><span>Embeddings, indexing &amp; cost</span></a>
         <a class="lchip" href="context-engineering/lessons/0009-context-caching-ordering-and-security.html"><i>9</i><span>Context caching, ordering &amp; security</span></a>
-      </div>
+      </div></details>
+      <div class="rtime">~2h 10m read</div>
+      <a class="start" data-track="context-engineering" href="context-engineering/lessons/0001-what-is-context-and-context-as-query.html"><span class="start-label">Start</span> <span aria-hidden="true">&#8594;</span></a>
       <div class="tfoot">
         <a class="pill" href="context-engineering/reference/context-engineering-cheat-sheet.html">★ Cheat sheet</a>
         <a class="pill" href="context-engineering/reference/context-architecture-review.html">☑ Review sheet</a>
-        <a class="pill md" href="context-engineering/GLOSSARY.md">Glossary</a>
-        <a class="pill md" href="context-engineering/RESOURCES.md">Resources</a>
+        <a class="pill md" href="context-engineering/GLOSSARY.html">Glossary</a>
+        <a class="pill md" href="context-engineering/RESOURCES.html">Resources</a>
       </div>
     </article>
 
     <!-- REST API -->
-    <article class="tile" style="--tc:var(--track-rest)" data-name="rest api http methods status codes idempotency pagination caching auth oauth jwt versioning errors rate limiting async">
+    <article class="tile" style="--tc:var(--track-rest)" data-cat="design" data-name="rest api http methods status codes idempotency pagination caching auth oauth jwt versioning errors rate limiting async">
       <div class="thead">
-        <span class="ico">🌐</span>
         <div><div class="tname">REST API Mastery</div><div class="ttag">Senior interview companion</div></div>
         <span class="cnt">11 lessons</span>
       </div>
+      <div class="tags"><span class="tag">HTTP</span><span class="tag">Idempotency</span><span class="tag">Pagination</span><span class="tag">Caching</span><span class="tag">Auth</span></div>
       <p class="tdesc">The design decisions a senior interview probes — each infographic-first with a quiz and a rehearse-out-loud drill.</p>
+      <details class="lwrap"><summary class="lsum">Lessons</summary>
       <div class="lessons">
         <a class="lchip" href="rest-api/lessons/0001-what-makes-an-api-restful.html"><i>1</i><span>What makes an API RESTful?</span></a>
         <a class="lchip" href="rest-api/lessons/0002-http-methods-and-status-codes.html"><i>2</i><span>HTTP methods &amp; status codes</span></a>
@@ -273,121 +404,141 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
         <a class="lchip" href="rest-api/lessons/0009-error-design-rate-limiting-observability.html"><i>9</i><span>Errors, limits &amp; observability</span></a>
         <a class="lchip" href="rest-api/lessons/0010-async-and-long-running-operations.html"><i>10</i><span>Async &amp; long-running ops</span></a>
         <a class="lchip" href="rest-api/lessons/0011-mock-interview-whiteboard-design.html"><i>11</i><span>Mock interview: design an API</span></a>
-      </div>
+      </div></details>
+      <div class="rtime">~1h 20m read</div>
+      <a class="start" data-track="rest-api" href="rest-api/lessons/0001-what-makes-an-api-restful.html"><span class="start-label">Start</span> <span aria-hidden="true">&#8594;</span></a>
       <div class="tfoot">
         <a class="pill" href="rest-api/reference/rest-constraints-and-maturity.html">Constraints</a>
         <a class="pill" href="rest-api/reference/idempotency-and-retries.html">Idempotency</a>
         <a class="pill" href="rest-api/reference/caching-pagination-versioning.html">Caching</a>
         <a class="pill" href="rest-api/reference/api-security-and-auth.html">Security</a>
         <a class="pill" href="rest-api/reference/api-design-interview-framework.html">Design framework</a>
-        <a class="pill md" href="rest-api/GLOSSARY.md">Glossary</a>
+        <a class="pill md" href="rest-api/GLOSSARY.html">Glossary</a>
       </div>
     </article>
 
     <!-- BLOOM FILTERS -->
-    <article class="tile" style="--tc:var(--track-bloom)" data-name="bloom filters probabilistic data structures sizing false positive lsm cuckoo counting hash membership">
+    <article class="tile" style="--tc:var(--track-bloom)" data-cat="data" data-name="bloom filters probabilistic data structures sizing false positive lsm cuckoo counting hash membership">
       <div class="thead">
-        <span class="ico">🧮</span>
         <div><div class="tname">Bloom Filters</div><div class="ttag">Probabilistic data structures</div></div>
         <span class="cnt">4 lessons</span>
       </div>
+      <div class="tags"><span class="tag">Probabilistic</span><span class="tag">Hashing</span><span class="tag">Sizing</span><span class="tag">LSM reads</span></div>
       <p class="tdesc">Foundation → Staff: the membership-test asymmetry, sizing math, failure modes, and variants at scale.</p>
+      <details class="lwrap"><summary class="lsum">Lessons</summary>
       <div class="lessons">
         <a class="lchip" href="bloom-filters/lessons/0001-what-is-a-bloom-filter.html"><i>1</i><span>What a Bloom filter is — the asymmetry</span></a>
         <a class="lchip" href="bloom-filters/lessons/0002-sizing-a-bloom-filter.html"><i>2</i><span>Sizing — pick the error, derive the rest</span></a>
         <a class="lchip" href="bloom-filters/lessons/0003-failure-modes-and-lsm-reads.html"><i>3</i><span>Failure modes &amp; the LSM read path</span></a>
         <a class="lchip" href="bloom-filters/lessons/0004-variants-at-scale.html"><i>4</i><span>Variants at scale — counting · cuckoo · dedup</span></a>
-      </div>
+      </div></details>
+      <div class="rtime">~30 min read</div>
+      <a class="start" data-track="bloom-filters" href="bloom-filters/lessons/0001-what-is-a-bloom-filter.html"><span class="start-label">Start</span> <span aria-hidden="true">&#8594;</span></a>
       <div class="tfoot">
         <a class="pill" href="bloom-filters/reference/bloom-filters-cheat-sheet.html">★ Cheat sheet</a>
-        <a class="pill md" href="bloom-filters/GLOSSARY.md">Glossary</a>
-        <a class="pill md" href="bloom-filters/RESOURCES.md">Resources</a>
+        <a class="pill md" href="bloom-filters/GLOSSARY.html">Glossary</a>
+        <a class="pill md" href="bloom-filters/RESOURCES.html">Resources</a>
       </div>
     </article>
 
     <!-- DISTRIBUTED SYSTEMS -->
-    <article class="tile" style="--tc:var(--track-distributed)" data-name="distributed systems failure time consensus raft paxos idempotency keys quorum replication">
+    <article class="tile" style="--tc:var(--track-distributed)" data-cat="distributed" data-name="distributed systems failure time consensus raft paxos idempotency keys quorum replication">
       <div class="thead">
-        <span class="ico">🛰️</span>
         <div><div class="tname">Distributed Systems</div><div class="ttag">Failure · time · consensus</div></div>
         <span class="cnt">3 lessons</span>
       </div>
+      <div class="tags"><span class="tag">Consensus</span><span class="tag">Clocks</span><span class="tag">Idempotency</span><span class="tag">Failure modes</span></div>
       <p class="tdesc">Why distributed systems are hard, and the primitives that tame failure and time.</p>
+      <details class="lwrap"><summary class="lsum">Lessons</summary>
       <div class="lessons">
         <a class="lchip" href="distributed-systems/distributed-systems-fundamentals.html"><i>★</i><span>Fundamentals — start here</span></a>
         <a class="lchip" href="distributed-systems/consensus-deep-dive.html"><i>1</i><span>Consensus — deep dive</span></a>
         <a class="lchip" href="distributed-systems/idempotency-keys-deep-dive.html"><i>2</i><span>Idempotency keys — deep dive</span></a>
-      </div>
+      </div></details>
+      <div class="rtime">~1h 35m read</div>
+      <a class="start" data-track="distributed-systems" href="distributed-systems/distributed-systems-fundamentals.html"><span class="start-label">Start</span> <span aria-hidden="true">&#8594;</span></a>
       <div class="tfoot">
         <a class="pill md" href="distributed-systems/README.html">Roadmap</a>
       </div>
     </article>
 
     <!-- STORAGE ENGINES -->
-    <article class="tile" style="--tc:var(--track-storage)" data-name="storage engines indexes b-tree lsm compaction write amplification sstable">
+    <article class="tile" style="--tc:var(--track-storage)" data-cat="data" data-name="storage engines indexes b-tree lsm compaction write amplification sstable">
       <div class="thead">
-        <span class="ico">🗄️</span>
         <div><div class="tname">Storage Engines</div><div class="ttag">Indexes · B-tree · LSM</div></div>
         <span class="cnt">2 lessons</span>
       </div>
+      <div class="tags"><span class="tag">B-trees</span><span class="tag">LSM</span><span class="tag">Indexes</span><span class="tag">Compaction</span></div>
       <p class="tdesc">How databases actually store and find data — and the read/write/space trade-offs underneath.</p>
+      <details class="lwrap"><summary class="lsum">Lessons</summary>
       <div class="lessons">
         <a class="lchip" href="storage-engines/storage-engines-fundamentals.html"><i>★</i><span>Fundamentals — start here</span></a>
         <a class="lchip" href="storage-engines/lsm-compaction-deep-dive.html"><i>1</i><span>LSM compaction — deep dive</span></a>
-      </div>
+      </div></details>
+      <div class="rtime">~1h 5m read</div>
+      <a class="start" data-track="storage-engines" href="storage-engines/storage-engines-fundamentals.html"><span class="start-label">Start</span> <span aria-hidden="true">&#8594;</span></a>
       <div class="tfoot">
         <a class="pill md" href="storage-engines/README.html">Roadmap</a>
       </div>
     </article>
 
     <!-- TRANSACTIONS & ISOLATION -->
-    <article class="tile" style="--tc:var(--track-transactions)" data-name="transactions isolation acid mvcc snapshot serializable ssi locks anomalies">
+    <article class="tile" style="--tc:var(--track-transactions)" data-cat="data" data-name="transactions isolation acid mvcc snapshot serializable ssi locks anomalies">
       <div class="thead">
-        <span class="ico">🔒</span>
         <div><div class="tname">Transactions &amp; Isolation</div><div class="ttag">ACID · isolation · MVCC</div></div>
         <span class="cnt">3 lessons</span>
       </div>
+      <div class="tags"><span class="tag">ACID</span><span class="tag">MVCC</span><span class="tag">Isolation levels</span><span class="tag">SSI</span></div>
       <p class="tdesc">What isolation levels really promise, and how MVCC and SSI deliver them.</p>
+      <details class="lwrap"><summary class="lsum">Lessons</summary>
       <div class="lessons">
         <a class="lchip" href="transactions-isolation/transactions-isolation-fundamentals.html"><i>★</i><span>Fundamentals — start here</span></a>
         <a class="lchip" href="transactions-isolation/mvcc-internals-deep-dive.html"><i>1</i><span>MVCC internals — deep dive</span></a>
         <a class="lchip" href="transactions-isolation/ssi-deep-dive.html"><i>2</i><span>SSI — deep dive</span></a>
-      </div>
+      </div></details>
+      <div class="rtime">~1h 25m read</div>
+      <a class="start" data-track="transactions-isolation" href="transactions-isolation/transactions-isolation-fundamentals.html"><span class="start-label">Start</span> <span aria-hidden="true">&#8594;</span></a>
       <div class="tfoot">
         <a class="pill md" href="transactions-isolation/README.html">Roadmap</a>
       </div>
     </article>
 
     <!-- STREAMING & EVENT-DRIVEN -->
-    <article class="tile" style="--tc:var(--track-streaming)" data-name="streaming event driven logs kafka windows watermarks exactly once processing">
+    <article class="tile" style="--tc:var(--track-streaming)" data-cat="distributed" data-name="streaming event driven logs kafka windows watermarks exactly once processing">
       <div class="thead">
-        <span class="ico">🌊</span>
         <div><div class="tname">Streaming &amp; Event-Driven</div><div class="ttag">Logs · Kafka · windows</div></div>
         <span class="cnt">3 lessons</span>
       </div>
+      <div class="tags"><span class="tag">The log</span><span class="tag">Exactly-once</span><span class="tag">Watermarks</span><span class="tag">Kafka</span></div>
       <p class="tdesc">The log as a primitive, and how exactly-once and event-time processing are really achieved.</p>
+      <details class="lwrap"><summary class="lsum">Lessons</summary>
       <div class="lessons">
         <a class="lchip" href="streaming-event-driven/streaming-event-driven-fundamentals.html"><i>★</i><span>Fundamentals — start here</span></a>
         <a class="lchip" href="streaming-event-driven/exactly-once-kafka-deep-dive.html"><i>1</i><span>Exactly-once in Kafka — deep dive</span></a>
         <a class="lchip" href="streaming-event-driven/watermarks-deep-dive.html"><i>2</i><span>Watermarks — deep dive</span></a>
-      </div>
+      </div></details>
+      <div class="rtime">~1h 25m read</div>
+      <a class="start" data-track="streaming-event-driven" href="streaming-event-driven/streaming-event-driven-fundamentals.html"><span class="start-label">Start</span> <span aria-hidden="true">&#8594;</span></a>
       <div class="tfoot">
         <a class="pill md" href="streaming-event-driven/README.html">Roadmap</a>
       </div>
     </article>
 
     <!-- APPLIED SYSTEMS DESIGN -->
-    <article class="tile" style="--tc:var(--track-applied)" data-name="applied systems design method estimation consistent hashing capacity back of envelope">
+    <article class="tile" style="--tc:var(--track-applied)" data-cat="design" data-name="applied systems design method estimation consistent hashing capacity back of envelope">
       <div class="thead">
-        <span class="ico">📐</span>
         <div><div class="tname">Applied Systems Design</div><div class="ttag">Method · estimation · designs</div></div>
         <span class="cnt">2 lessons</span>
       </div>
+      <div class="tags"><span class="tag">Estimation</span><span class="tag">Consistent hashing</span><span class="tag">Back-of-envelope</span></div>
       <p class="tdesc">A repeatable method for system-design rounds, plus the building blocks they lean on.</p>
+      <details class="lwrap"><summary class="lsum">Lessons</summary>
       <div class="lessons">
         <a class="lchip" href="applied-systems-design/applied-systems-design-fundamentals.html"><i>★</i><span>Fundamentals — start here</span></a>
         <a class="lchip" href="applied-systems-design/consistent-hashing-deep-dive.html"><i>1</i><span>Consistent hashing — deep dive</span></a>
-      </div>
+      </div></details>
+      <div class="rtime">~1h 5m read</div>
+      <a class="start" data-track="applied-systems-design" href="applied-systems-design/applied-systems-design-fundamentals.html"><span class="start-label">Start</span> <span aria-hidden="true">&#8594;</span></a>
       <div class="tfoot">
         <a class="pill md" href="applied-systems-design/README.html">Roadmap</a>
       </div>
@@ -414,12 +565,14 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
         <a href="#grid">All tracks</a>
         <a href="https://github.com/dineshbyte/engineering-learning-hub" target="_blank" rel="noopener">Browse on GitHub</a>
       </div>
-      <div class="fcol">
+      <div class="fcol fconnect">
         <h4>Connect</h4>
-        <a href="https://twitter.com/dineshxbyte" target="_blank" rel="noopener">Twitter / X</a>
-        <a href="https://medium.com/@dineshbyte" target="_blank" rel="noopener">Medium</a>
-        <a href="https://www.linkedin.com/in/dineshbyte/" target="_blank" rel="noopener">LinkedIn</a>
-        <a href="https://github.com/dineshbyte/engineering-learning-hub" target="_blank" rel="noopener">GitHub</a>
+        <div class="socrow">
+          <a href="https://twitter.com/dineshxbyte" target="_blank" rel="noopener">Twitter / X</a>
+          <a href="https://medium.com/@dineshbyte" target="_blank" rel="noopener">Medium</a>
+          <a href="https://www.linkedin.com/in/dineshbyte/" target="_blank" rel="noopener">LinkedIn</a>
+          <a href="https://github.com/dineshbyte/engineering-learning-hub" target="_blank" rel="noopener">GitHub</a>
+        </div>
       </div>
     </div>
   </footer>
@@ -437,7 +590,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     function esc(s){return s.replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function run(){
       var term=q.value.trim().toLowerCase();
-      if(!term){ results.style.display='none'; results.innerHTML=''; grid.style.display=''; return; }
+      if(!term){ results.style.display='none'; results.innerHTML=''; grid.style.display=''; applyFilter(); return; }
       var toks=term.split(/\s+/), hits=[];
       idx.forEach(function(d){
         var score=0, all=true, tl=d.t.toLowerCase();
@@ -469,6 +622,61 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       else if(e.key==='ArrowUp'){ e.preventDefault(); sel(items, Math.max(cur-1,0)); }
       else if(e.key==='Enter'){ if(cur>=0){ e.preventDefault(); window.location=items[cur].getAttribute('href'); } }
       else if(e.key==='Escape'){ q.value=''; run(); q.blur(); }
+    });
+
+    /* topic filter: chips show/hide track cards by data-cat */
+    var chips=[].slice.call(document.querySelectorAll('.fchip')),
+        tiles=[].slice.call(grid.querySelectorAll('.tile')), activeCat='all';
+    function applyFilter(){
+      tiles.forEach(function(t){
+        t.style.display=(activeCat==='all'||t.getAttribute('data-cat')===activeCat)?'':'none';
+      });
+    }
+    chips.forEach(function(c){
+      // count badge: how many tracks in this category
+      var cat=c.getAttribute('data-cat');
+      var n=cat==='all'?tiles.length:tiles.filter(function(t){return t.getAttribute('data-cat')===cat;}).length;
+      var b=document.createElement('span'); b.className='fcount'; b.textContent=n; c.appendChild(b);
+      c.addEventListener('click', function(){
+        activeCat=cat;
+        chips.forEach(function(x){ var on=x===c; x.classList.toggle('is-active',on); x.setAttribute('aria-pressed',on?'true':'false'); });
+        if(q.value){ q.value=''; results.style.display='none'; results.innerHTML=''; }
+        grid.style.display=''; applyFilter();
+      });
+    });
+
+    /* Start -> Continue + in-card progress. Started tracks (localStorage
+       'sd:progress', kept current by interview.js) turn the card into the
+       resume element: Continue button, a 'Lesson N of M' progress bar (in place
+       of the read-time line), an eyebrow label, and the card floats to the top. */
+    var PKEY='sd:progress';
+    function getProg(){ try{return JSON.parse(localStorage.getItem(PKEY))||{};}catch(e){return {};} }
+    var prog=getProg();
+    var last=null; try{ last=localStorage.getItem('sd:last'); }catch(e){}
+    [].slice.call(document.querySelectorAll('.start')).forEach(function(a){
+      var slug=a.getAttribute('data-track'), resume=prog[slug];
+      var tile=a.closest('.tile');
+      if(slug && resume && tile){
+        a.setAttribute('href', resume);
+        var lbl=a.querySelector('.start-label'); if(lbl) lbl.textContent='Continue';
+        tile.classList.add('is-started');
+        // progress: index of the resume lesson among this track's lessons
+        var hrefs=[].slice.call(tile.querySelectorAll('.lchip')).map(function(l){return l.getAttribute('href');});
+        var idx=hrefs.indexOf(resume), total=hrefs.length;
+        var rt=tile.querySelector('.rtime');
+        if(idx>=0 && total){
+          var pct=Math.round((idx+1)/total*100);
+          var prog2=document.createElement('div'); prog2.className='cprog';
+          prog2.innerHTML='<span class="cstep">Lesson '+(idx+1)+' of '+total+'</span>'+
+            '<span class="cbar"><span class="cfill" style="width:'+pct+'%"></span></span>';
+          if(rt){ rt.replaceWith(prog2); } else { a.parentNode.insertBefore(prog2, a); }
+        } else if(rt){ rt.remove(); }
+        // float the most-recently-read track to the top of the grid
+        if(slug===last && tile.parentNode){ tile.parentNode.insertBefore(tile, tile.parentNode.firstElementChild); }
+      }
+      a.addEventListener('click', function(){
+        var m=getProg(); if(slug && !m[slug]){ m[slug]=a.getAttribute('href'); try{localStorage.setItem(PKEY,JSON.stringify(m));}catch(e){} }
+      });
     });
   })();
 </script>
