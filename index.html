@@ -123,6 +123,19 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 
   .empty{display:none; text-align:center; color:var(--muted); padding:3rem 1rem; font-size:.95rem}
 
+  /* full-text search results (replaces the grid while searching) */
+  .results{display:none; margin-top:1.3rem}
+  .results .rhead{font-size:.78rem; color:var(--muted); margin:0 0 .7rem}
+  a.ritem{display:flex; align-items:center; gap:.7rem; text-decoration:none; color:var(--ink);
+    background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.6rem .8rem; margin:0 0 .5rem}
+  a.ritem:hover, a.ritem.sel{border-color:var(--rtc,var(--ink)); background:var(--chip)}
+  .ritem .rdot{flex:none; width:.62rem; height:.62rem; border-radius:50%; background:var(--rtc,#888)}
+  .ritem .rcol{display:flex; flex-direction:column; min-width:0}
+  .ritem .rt{font-weight:600; font-size:.92rem; line-height:1.25}
+  .ritem .rg{font-size:.7rem; color:var(--muted); margin-top:.08rem}
+  .ritem .rkind{margin-left:auto; flex:none; font-size:.62rem; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--muted); border:1px solid var(--line); border-radius:5px; padding:.12rem .4rem; white-space:nowrap}
+
   footer{margin-top:2.6rem; font-size:.78rem; color:var(--muted); border-top:1px solid var(--line); padding-top:1rem}
   footer em{color:var(--ink); font-style:normal; font-weight:600}
   .fcta{display:flex; flex-wrap:wrap; align-items:center; gap:.6rem 1rem; background:var(--card);
@@ -186,6 +199,8 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       <span class="stat">interactive quizzes</span>
     </div>
   </section>
+
+  <div class="results" id="results" role="listbox" aria-label="Search results"></div>
 
   <main class="grid" id="grid">
 
@@ -410,24 +425,50 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   </footer>
 </div>
 
+<script src="assets/search-index.js"></script>
 <script>
   (function(){
-    var q=document.getElementById('q'), tiles=[].slice.call(document.querySelectorAll('.tile')), empty=document.getElementById('empty');
-    q.addEventListener('input', function(){
-      var term=q.value.trim().toLowerCase(), shown=0;
-      tiles.forEach(function(tile){
-        var nameMatch = !term || tile.dataset.name.indexOf(term)>=0;
-        var any=false;
-        [].slice.call(tile.querySelectorAll('.lchip')).forEach(function(l){
-          var m = nameMatch || l.textContent.toLowerCase().indexOf(term)>=0;
-          l.style.display = m ? '' : 'none';
-          if(m) any=true;
-        });
-        var visible = !term || nameMatch || any;
-        tile.style.display = visible ? '' : 'none';
-        if(visible) shown++;
+    var q=document.getElementById('q'), grid=document.getElementById('grid'),
+        results=document.getElementById('results'), idx=window.SEARCH_INDEX||[];
+    var TOK={'AI Agents':'--track-agents','Context Engineering':'--track-context','REST API':'--track-rest',
+      'Bloom Filters':'--track-bloom','Distributed Systems':'--track-distributed','Storage Engines':'--track-storage',
+      'Transactions & Isolation':'--track-transactions','Streaming & Event-Driven':'--track-streaming',
+      'Applied Systems Design':'--track-applied'};
+    function esc(s){return s.replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+    function run(){
+      var term=q.value.trim().toLowerCase();
+      if(!term){ results.style.display='none'; results.innerHTML=''; grid.style.display=''; return; }
+      var toks=term.split(/\s+/), hits=[];
+      idx.forEach(function(d){
+        var score=0, all=true, tl=d.t.toLowerCase();
+        for(var i=0;i<toks.length;i++){
+          var inT=tl.indexOf(toks[i])>=0, inX=d.x.indexOf(toks[i])>=0;
+          if(!inT&&!inX){all=false;break;}
+          score+=(inT?5:0)+(inX?1:0);
+        }
+        if(all) hits.push({d:d,s:score});
       });
-      empty.style.display = shown ? 'none' : 'block';
+      hits.sort(function(a,b){return b.s-a.s || a.d.t.length-b.d.t.length;});
+      grid.style.display='none';
+      if(!hits.length){ results.innerHTML='<p class="rhead">No results for “'+esc(q.value.trim())+'”.</p>'; results.style.display=''; return; }
+      var html='<p class="rhead">'+hits.length+' result'+(hits.length>1?'s':'')+'</p>';
+      hits.slice(0,25).forEach(function(h,i){
+        var d=h.d, tk=TOK[d.g]||'--accent';
+        html+='<a class="ritem'+(i===0?' sel':'')+'" href="'+d.u+'" style="--rtc:var('+tk+')">'+
+          '<span class="rdot"></span><span class="rcol"><span class="rt">'+esc(d.t)+'</span>'+
+          '<span class="rg">'+esc(d.g)+'</span></span><span class="rkind">'+d.k+'</span></a>';
+      });
+      results.innerHTML=html; results.style.display='';
+    }
+    function sel(items,n){ items.forEach(function(it){it.classList.remove('sel');}); if(items[n]){items[n].classList.add('sel'); items[n].scrollIntoView({block:'nearest'});} }
+    q.addEventListener('input', run);
+    q.addEventListener('keydown', function(e){
+      var items=results.querySelectorAll('.ritem'); if(!items.length) return;
+      var cur=-1; for(var i=0;i<items.length;i++){ if(items[i].classList.contains('sel')){cur=i;break;} }
+      if(e.key==='ArrowDown'){ e.preventDefault(); sel(items, Math.min(cur+1,items.length-1)); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); sel(items, Math.max(cur-1,0)); }
+      else if(e.key==='Enter'){ if(cur>=0){ e.preventDefault(); window.location=items[cur].getAttribute('href'); } }
+      else if(e.key==='Escape'){ q.value=''; run(); q.blur(); }
     });
   })();
 </script>
