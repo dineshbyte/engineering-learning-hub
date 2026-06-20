@@ -59,6 +59,10 @@ function checkSeo(page, html) {
     if (!/<link[^>]+rel=["']canonical["']/i.test(html)) fail(page, 'missing <link rel="canonical">');
     if (!/<meta[^>]+property=["']og:url["']/i.test(html)) fail(page, 'missing og:url meta');
     if (!/<meta[^>]+name=["']description["']/i.test(html)) fail(page, 'missing meta description');
+
+    const kw = html.match(/<meta[^>]+name=["']keywords["'][^>]*content=["']([^"']*)["']/i);
+    if (!kw) fail(page, 'missing meta keywords (page tags)');
+    else if (kw[1].trim().length < 5) fail(page, 'empty/thin meta keywords');
 }
 
 function checkInterviewLevels(page, html) {
