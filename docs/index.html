@@ -95,25 +95,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     border-radius:20px; padding:.3rem .7rem}
   .stat b{color:var(--ink)}
 
-  /* "continue where you left off" banner (shown only if progress exists) */
-  .resume{position:relative; display:flex; align-items:center; flex-wrap:wrap; gap:.55rem .85rem;
-    margin:0 0 1.4rem; padding:.85rem 2.6rem .85rem 1rem;
-    background:color-mix(in srgb, var(--accent) 10%, var(--card));
-    border:1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius:12px; font-size:.9rem}
-  .resume[hidden]{display:none}            /* make the hidden attribute actually hide it */
-  .resume-msg{display:flex; align-items:center; gap:.55rem; flex:1 1 auto; min-width:0}
-  .resume-ic{flex:none; font-size:1.15rem; color:var(--accent); font-weight:700; line-height:1}
-  .resume-txt{min-width:0; color:var(--muted)}
-  .resume-txt b{color:var(--ink)}
-  .resume-go{flex:none; text-decoration:none; font-weight:700; font-size:.82rem; color:#fff;
-    background:var(--accent); border-radius:8px; padding:.44rem .85rem; white-space:nowrap;
-    transition:filter .12s}
-  html[data-theme="dark"] .resume-go{color:#15140f}
-  .resume-go:hover{filter:brightness(1.06)}
-  .resume-x{position:absolute; top:.5rem; right:.55rem; cursor:pointer; background:none; border:none;
-    color:var(--muted); font-size:1rem; line-height:1; padding:.25rem .3rem; border-radius:6px}
-  .resume-x:hover{color:var(--ink); background:var(--chip)}
-
   /* topic filter chips */
   .filters{display:flex; flex-wrap:wrap; gap:.5rem; margin:1.3rem 0 .2rem}
   .fchip{display:inline-flex; align-items:center; font:inherit; font-size:.8rem; font-weight:600;
@@ -183,6 +164,17 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     border:1.5px solid currentColor; box-shadow:inset 0 -.2rem 0 -.13rem currentColor}
   /* started state: a resume glyph on the Continue button */
   .tile.is-started .start::before{content:"\21BB"; font-weight:700; margin-right:.15rem}
+  /* in-progress card: an eyebrow label + accent ring so it reads as "your" track */
+  .tile.is-started{border-color:color-mix(in srgb, var(--accent) 42%, var(--line));
+    box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent)}
+  .tile.is-started::before{content:"\21BB  Continue where you left off"; order:-1;
+    font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; font-weight:800; color:var(--accent)}
+  /* per-card progress (replaces the read-time line once a track is started) */
+  .cprog{display:flex; flex-direction:column; gap:.34rem}
+  .cstep{font-size:.73rem; font-weight:700; color:var(--accent)}
+  .cbar{height:.42rem; border-radius:99px; overflow:hidden;
+    background:color-mix(in srgb, var(--accent) 18%, transparent)}
+  .cfill{display:block; height:100%; border-radius:99px; background:var(--accent)}
   .lessons{display:flex; flex-direction:column; gap:.18rem}
   a.lchip{display:flex; align-items:center; gap:.55rem; text-decoration:none; color:var(--ink);
     font-size:.85rem; padding:.32rem .4rem; border-radius:8px; transition:background .12s}
@@ -310,14 +302,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 </header>
 
 <div class="wrap">
-  <div class="resume" id="resume" hidden>
-    <div class="resume-msg">
-      <span class="resume-ic" aria-hidden="true">&#8635;</span>
-      <span class="resume-txt">Pick up where you left off — <b id="resume-track"></b></span>
-    </div>
-    <a class="resume-go" id="resume-go" href="#">Continue <span aria-hidden="true">&#8594;</span></a>
-    <button class="resume-x" id="resume-x" type="button" aria-label="Dismiss">&#10005;</button>
-  </div>
   <section class="hero">
     <h1>StackDepth</h1>
     <p><strong>Visual system design &amp; AI engineering, from first principles.</strong> Nine tracks — AI agents, context engineering, distributed systems, storage engines, transactions, streaming, REST APIs &amp; system design — built in engineering analogies, infographic-first, with quizzes and interview questions tuned for senior/staff interviews.</p>
@@ -658,38 +642,39 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       });
     });
 
-    /* Start -> Continue: remember started tracks (localStorage 'sd:progress').
-       interview.js updates the resume URL as the user reads lessons. */
+    /* Start -> Continue + in-card progress. Started tracks (localStorage
+       'sd:progress', kept current by interview.js) turn the card into the
+       resume element: Continue button, a 'Lesson N of M' progress bar (in place
+       of the read-time line), an eyebrow label, and the card floats to the top. */
     var PKEY='sd:progress';
     function getProg(){ try{return JSON.parse(localStorage.getItem(PKEY))||{};}catch(e){return {};} }
     var prog=getProg();
+    var last=null; try{ last=localStorage.getItem('sd:last'); }catch(e){}
     [].slice.call(document.querySelectorAll('.start')).forEach(function(a){
       var slug=a.getAttribute('data-track'), resume=prog[slug];
-      if(slug && resume){
+      var tile=a.closest('.tile');
+      if(slug && resume && tile){
         a.setAttribute('href', resume);
         var lbl=a.querySelector('.start-label'); if(lbl) lbl.textContent='Continue';
-        var tile=a.closest('.tile'); if(tile) tile.classList.add('is-started');
+        tile.classList.add('is-started');
+        // progress: index of the resume lesson among this track's lessons
+        var hrefs=[].slice.call(tile.querySelectorAll('.lchip')).map(function(l){return l.getAttribute('href');});
+        var idx=hrefs.indexOf(resume), total=hrefs.length;
+        var rt=tile.querySelector('.rtime');
+        if(idx>=0 && total){
+          var pct=Math.round((idx+1)/total*100);
+          var prog2=document.createElement('div'); prog2.className='cprog';
+          prog2.innerHTML='<span class="cstep">Lesson '+(idx+1)+' of '+total+'</span>'+
+            '<span class="cbar"><span class="cfill" style="width:'+pct+'%"></span></span>';
+          if(rt){ rt.replaceWith(prog2); } else { a.parentNode.insertBefore(prog2, a); }
+        } else if(rt){ rt.remove(); }
+        // float the most-recently-read track to the top of the grid
+        if(slug===last && tile.parentNode){ tile.parentNode.insertBefore(tile, tile.parentNode.firstElementChild); }
       }
       a.addEventListener('click', function(){
         var m=getProg(); if(slug && !m[slug]){ m[slug]=a.getAttribute('href'); try{localStorage.setItem(PKEY,JSON.stringify(m));}catch(e){} }
       });
     });
-
-    /* resume banner: show the most-recent track the user was reading
-       (unless they've dismissed it for that track) */
-    var last=null, dismissed=null;
-    try{ last=localStorage.getItem('sd:last'); dismissed=localStorage.getItem('sd:resume-x'); }catch(e){}
-    var rb=document.getElementById('resume');
-    if(rb && last && prog[last] && dismissed!==last){
-      var link=document.querySelector('.start[data-track="'+last+'"]');
-      var tname=link && link.closest('.tile') ? link.closest('.tile').querySelector('.tname') : null;
-      document.getElementById('resume-track').textContent=(tname?tname.textContent:last);
-      document.getElementById('resume-go').setAttribute('href', prog[last]);
-      rb.hidden=false;
-      document.getElementById('resume-x').addEventListener('click', function(){
-        rb.hidden=true; try{localStorage.setItem('sd:resume-x', last);}catch(e){}
-      });
-    }
   })();
 </script>
 </body>
