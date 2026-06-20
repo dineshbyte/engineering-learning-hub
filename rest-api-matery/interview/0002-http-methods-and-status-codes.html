@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/interview.css">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Interview Bank · HTTP Methods &amp; Status Codes</title>
 <style>
@@ -59,316 +61,245 @@
     <strong>Use these as active recall, not reading.</strong> Read the question, answer it <em>out loud or in writing from memory first</em>, and only then reveal the model answer to grade yourself. Recognizing an answer ≠ being able to produce it under pressure. Filter by difficulty; reveal-all only for a final review pass.
   </div>
 
-  <div class="controls">
-    <button class="chip active" data-f="all">All</button>
-    <button class="chip" data-f="core">Core</button>
-    <button class="chip" data-f="senior">Senior</button>
-    <button class="chip" data-f="staff">Staff</button>
-    <span class="sp"></span>
-    <button class="lnk" id="revealAll">Reveal all</button>
-    <button class="lnk" id="collapseAll">Collapse all</button>
-  </div>
+  <div data-interview>
+    <details class="iq" data-level="core">
+      <summary>Define a <em>safe</em> HTTP method.</summary>
+      <div class="a"><p>A method the client intends as <strong>read-only</strong> — no <em>intended</em> change to resource state. <code>GET</code>, <code>HEAD</code>, and <code>OPTIONS</code> are safe. The key word is <em>intent</em>: a safe request shouldn't be relied on to mutate anything.</p></div>
+    </details>
 
-  <h2>Safe, idempotent &amp; cacheable</h2>
+    <details class="iq" data-level="core">
+      <summary>Define an <em>idempotent</em> method.</summary>
+      <div class="a"><p>One where N identical requests have the <strong>same effect on server state as a single request</strong>. <code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>, <code>PUT</code>, and <code>DELETE</code> are idempotent. This is the property that makes a retry safe — note it's about <em>effect on state</em>, not about the response being byte-identical.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> Define a <em>safe</em> HTTP method.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>A method the client intends as <strong>read-only</strong> — no <em>intended</em> change to resource state. <code>GET</code>, <code>HEAD</code>, and <code>OPTIONS</code> are safe. The key word is <em>intent</em>: a safe request shouldn't be relied on to mutate anything.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary>What does <em>cacheable</em> mean, and which methods are cacheable by default?</summary>
+      <div class="a"><p>A cacheable response is one a client or intermediary may store and reuse. <code>GET</code> and <code>HEAD</code> are cacheable by default. Cacheability is an axis <em>independent</em> of safe and idempotent.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> Define an <em>idempotent</em> method.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>One where N identical requests have the <strong>same effect on server state as a single request</strong>. <code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>, <code>PUT</code>, and <code>DELETE</code> are idempotent. This is the property that makes a retry safe — note it's about <em>effect on state</em>, not about the response being byte-identical.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>Explain "safe ⊂ idempotent."</summary>
+      <div class="a"><p>Every safe method is idempotent: if reading changes nothing, repeating the read still changes nothing. The reverse doesn't hold — <code>PUT</code> and <code>DELETE</code> are idempotent but <em>not</em> safe, because they do change state; repeating them just lands you in the same final state. Keep the three axes (safe / idempotent / cacheable) separate; conflating them is a mid-level tell.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> What does <em>cacheable</em> mean, and which methods are cacheable by default?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>A cacheable response is one a client or intermediary may store and reuse. <code>GET</code> and <code>HEAD</code> are cacheable by default. Cacheability is an axis <em>independent</em> of safe and idempotent.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>"Safe means secure." True or false, and why?</summary>
+      <div class="a"><p>False — a common trap. "Safe" is about <em>read-only intent</em>, nothing about authentication, authorization, or transport security. A <code>GET</code> can still expose sensitive data and still needs authz and TLS. Safe ≠ secure, and safe ≠ free of all side effects.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Explain "safe ⊂ idempotent."</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Every safe method is idempotent: if reading changes nothing, repeating the read still changes nothing. The reverse doesn't hold — <code>PUT</code> and <code>DELETE</code> are idempotent but <em>not</em> safe, because they do change state; repeating them just lands you in the same final state. Keep the three axes (safe / idempotent / cacheable) separate; conflating them is a mid-level tell.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>Can a safe method have side effects? Give an example.</summary>
+      <div class="a"><p>Yes. "Safe" forbids only <em>intended</em> state change to the resource; incidental side effects are fine. A <code>GET</code> that writes an access log, increments analytics, or warms a cache is still safe — the client didn't request those mutations and shouldn't be held responsible for them.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> "Safe means secure." True or false, and why?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>False — a common trap. "Safe" is about <em>read-only intent</em>, nothing about authentication, authorization, or transport security. A <code>GET</code> can still expose sensitive data and still needs authz and TLS. Safe ≠ secure, and safe ≠ free of all side effects.</p></div>
-  </div>
+    <details class="iq" data-level="staff">
+      <summary>A teammate puts a "mark as read" action behind <code>GET /messages/42?read=true</code>. What's wrong, and what breaks?</summary>
+      <div class="a"><p>It makes a state-changing operation safe-in-name only, and the ecosystem assumes <code>GET</code> is safe: prefetchers, crawlers, link-preview bots, and proxies will fire it and silently mutate state, and caches may serve stale results. Intended state change belongs on a non-safe verb — <code>POST</code>, or <code>PATCH</code>/<code>PUT</code> if it's an idempotent update. The classic real-world casualty was an admin panel where a crawler followed every "delete" link.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Can a safe method have side effects? Give an example.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Yes. "Safe" forbids only <em>intended</em> state change to the resource; incidental side effects are fine. A <code>GET</code> that writes an access log, increments analytics, or warms a cache is still safe — the client didn't request those mutations and shouldn't be held responsible for them.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary>Is <code>POST</code> idempotent? Why does it matter?</summary>
+      <div class="a"><p>No. A retried <code>POST</code> can create a duplicate (e.g. a second charge or order). It matters because dropped connections and retries are normal in distributed systems — non-idempotency is exactly why <code>POST</code> creation needs an <code>Idempotency-Key</code> to be retry-safe.</p></div>
+    </details>
 
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> A teammate puts a "mark as read" action behind <code>GET /messages/42?read=true</code>. What's wrong, and what breaks?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>It makes a state-changing operation safe-in-name only, and the ecosystem assumes <code>GET</code> is safe: prefetchers, crawlers, link-preview bots, and proxies will fire it and silently mutate state, and caches may serve stale results. Intended state change belongs on a non-safe verb — <code>POST</code>, or <code>PATCH</code>/<code>PUT</code> if it's an idempotent update. The classic real-world casualty was an admin panel where a crawler followed every "delete" link.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>Lead with idempotency, not the verb — what's the senior framing?</summary>
+      <div class="a"><p>"<code>POST</code> isn't idempotent, so a dropped-connection retry can double-create — that's why creation either uses <code>PUT</code> at a client-known URI, or <code>POST</code> plus an idempotency key." Naming the property and its consequence signals senior; reciting "GET reads, POST creates" signals junior.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> Is <code>POST</code> idempotent? Why does it matter?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>No. A retried <code>POST</code> can create a duplicate (e.g. a second charge or order). It matters because dropped connections and retries are normal in distributed systems — non-idempotency is exactly why <code>POST</code> creation needs an <code>Idempotency-Key</code> to be retry-safe.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary><code>PUT</code> vs <code>PATCH</code> — what's the difference?</summary>
+      <div class="a"><p><code>PUT</code> <strong>replaces the whole resource</strong> with the representation you send — omitted fields are treated as removed/reset. <code>PATCH</code> applies a <strong>partial modification</strong>, touching only the fields in the patch. Sending a partial body with <code>PUT</code> is a common bug: it wipes the fields you left out.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Lead with idempotency, not the verb — what's the senior framing?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>"<code>POST</code> isn't idempotent, so a dropped-connection retry can double-create — that's why creation either uses <code>PUT</code> at a client-known URI, or <code>POST</code> plus an idempotency key." Naming the property and its consequence signals senior; reciting "GET reads, POST creates" signals junior.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary><code>PUT</code> vs <code>POST</code> for creation — what's the deciding question?</summary>
+      <div class="a"><p><strong>Who owns the URI.</strong> Use <code>PUT</code> when the <em>client</em> knows/controls the target URI — "create-or-replace at <em>this</em> address," e.g. <code>PUT /users/42</code>. Use <code>POST</code> when the <em>server</em> assigns the URI; it creates and returns <code>201</code> with a <code>Location</code> header to the new resource.</p></div>
+    </details>
 
-  <h2>Choosing the method</h2>
+    <details class="iq" data-level="senior">
+      <summary>Why is <code>PUT</code> idempotent but <code>POST</code> isn't, for creation?</summary>
+      <div class="a"><p><code>PUT /users/42</code> targets a specific URI: doing it twice yields exactly one user 42 in the same state. <code>POST /users</code> says "make a new one under a server-chosen id" — repeat it and you get two users. That's the whole reason <code>PUT</code>-at-a-known-URI is the retry-safe creation path when the client can choose the id.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> <code>PUT</code> vs <code>PATCH</code> — what's the difference?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>PUT</code> <strong>replaces the whole resource</strong> with the representation you send — omitted fields are treated as removed/reset. <code>PATCH</code> applies a <strong>partial modification</strong>, touching only the fields in the patch. Sending a partial body with <code>PUT</code> is a common bug: it wipes the fields you left out.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>Is <code>PATCH</code> idempotent?</summary>
+      <div class="a"><p>Not guaranteed — it depends on the patch document. <code>PATCH</code> that sets fields to absolute values is idempotent; one expressing a delta ("add 1 to the array", "increment by 5") is not. The senior move: <em>make your <code>PATCH</code> idempotent when you can</em>, and know why a given patch isn't.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> <code>PUT</code> vs <code>POST</code> for creation — what's the deciding question?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><strong>Who owns the URI.</strong> Use <code>PUT</code> when the <em>client</em> knows/controls the target URI — "create-or-replace at <em>this</em> address," e.g. <code>PUT /users/42</code>. Use <code>POST</code> when the <em>server</em> assigns the URI; it creates and returns <code>201</code> with a <code>Location</code> header to the new resource.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>JSON Merge Patch vs JSON Patch — how do they relate to idempotency?</summary>
+      <div class="a"><p><strong>JSON Merge Patch (RFC 7386)</strong> sends a partial object whose fields overwrite the target (with <code>null</code> meaning "remove") — that's value-setting, so it tends to be idempotent. <strong>JSON Patch (RFC 6902)</strong> is a sequence of ops (<code>add</code>, <code>remove</code>, <code>replace</code>, <code>test</code>…); ops like "<code>add</code> to an array" are <em>not</em> idempotent. Choose the format deliberately based on the semantics you need.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Why is <code>PUT</code> idempotent but <code>POST</code> isn't, for creation?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>PUT /users/42</code> targets a specific URI: doing it twice yields exactly one user 42 in the same state. <code>POST /users</code> says "make a new one under a server-chosen id" — repeat it and you get two users. That's the whole reason <code>PUT</code>-at-a-known-URI is the retry-safe creation path when the client can choose the id.</p></div>
-  </div>
+    <details class="iq" data-level="staff">
+      <summary>A client must atomically guard a <code>PATCH</code> against a concurrent edit. How?</summary>
+      <div class="a"><p>Use conditional requests: the client sends <code>If-Match</code> with the resource's <code>ETag</code>; the server applies the patch only if the version still matches, else returns <code>412 Precondition Failed</code>. With JSON Patch you can also encode a <code>test</code> op to assert current state before mutating. This turns a lost-update race into an explicit, retryable conflict.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Is <code>PATCH</code> idempotent?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Not guaranteed — it depends on the patch document. <code>PATCH</code> that sets fields to absolute values is idempotent; one expressing a delta ("add 1 to the array", "increment by 5") is not. The senior move: <em>make your <code>PATCH</code> idempotent when you can</em>, and know why a given patch isn't.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary>Is <code>DELETE</code> idempotent given that a second call returns <code>404</code>?</summary>
+      <div class="a"><p>Yes. Idempotency is about <em>effect on server state</em>, not the response code. First <code>DELETE</code> removes the resource (<code>204</code>/<code>200</code>); a repeat finds it already gone and returns <code>404</code> — but the end state ("resource does not exist") is identical. Different status, same effect.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> JSON Merge Patch vs JSON Patch — how do they relate to idempotency?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><strong>JSON Merge Patch (RFC 7386)</strong> sends a partial object whose fields overwrite the target (with <code>null</code> meaning "remove") — that's value-setting, so it tends to be idempotent. <strong>JSON Patch (RFC 6902)</strong> is a sequence of ops (<code>add</code>, <code>remove</code>, <code>replace</code>, <code>test</code>…); ops like "<code>add</code> to an array" are <em>not</em> idempotent. Choose the format deliberately based on the semantics you need.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>On a repeated <code>DELETE</code> of an already-gone resource, do you return <code>404</code> or <code>204</code>?</summary>
+      <div class="a"><p>Both are defensible; pick one and be consistent. <code>404</code> is most honest ("nothing here now") and matches normal GET semantics. <code>204</code> is friendlier to naive retry logic that treats only 2xx as success. Many teams choose <code>204</code> precisely so a retried delete doesn't look like a failure — just document the choice.</p></div>
+    </details>
 
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> A client must atomically guard a <code>PATCH</code> against a concurrent edit. How?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Use conditional requests: the client sends <code>If-Match</code> with the resource's <code>ETag</code>; the server applies the patch only if the version still matches, else returns <code>412 Precondition Failed</code>. With JSON Patch you can also encode a <code>test</code> op to assert current state before mutating. This turns a lost-update race into an explicit, retryable conflict.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary>What is <code>HEAD</code> for?</summary>
+      <div class="a"><p>Same as <code>GET</code> but returns <strong>headers only, no body</strong>. Use it to check existence, size (<code>Content-Length</code>), or freshness (<code>ETag</code>/<code>Last-Modified</code>) without transferring the payload — e.g. a cheap "does this exist / has it changed?" probe. It's safe, idempotent, and cacheable.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> Is <code>DELETE</code> idempotent given that a second call returns <code>404</code>?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Yes. Idempotency is about <em>effect on server state</em>, not the response code. First <code>DELETE</code> removes the resource (<code>204</code>/<code>200</code>); a repeat finds it already gone and returns <code>404</code> — but the end state ("resource does not exist") is identical. Different status, same effect.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary>What is <code>OPTIONS</code> for?</summary>
+      <div class="a"><p>To discover the <strong>communication options / capabilities</strong> for a resource — which methods are allowed (via the <code>Allow</code> header) and, critically, it's the verb browsers use for <strong>CORS preflight</strong> requests. Safe and idempotent; typically answered with <code>204</code>.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> On a repeated <code>DELETE</code> of an already-gone resource, do you return <code>404</code> or <code>204</code>?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Both are defensible; pick one and be consistent. <code>404</code> is most honest ("nothing here now") and matches normal GET semantics. <code>204</code> is friendlier to naive retry logic that treats only 2xx as success. Many teams choose <code>204</code> precisely so a retried delete doesn't look like a failure — just document the choice.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>A client sends <code>DELETE</code> to a read-only resource. What do you return, and what's required?</summary>
+      <div class="a"><p><code>405 Method Not Allowed</code>, and the response <strong>must include an <code>Allow</code> header</strong> listing the methods that <em>are</em> supported (e.g. <code>Allow: GET, HEAD</code>). The <code>Allow</code> header is what makes 405 actionable rather than just a dead end.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> What is <code>HEAD</code> for?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Same as <code>GET</code> but returns <strong>headers only, no body</strong>. Use it to check existence, size (<code>Content-Length</code>), or freshness (<code>ETag</code>/<code>Last-Modified</code>) without transferring the payload — e.g. a cheap "does this exist / has it changed?" probe. It's safe, idempotent, and cacheable.</p></div>
-  </div>
+    <details class="iq" data-level="staff">
+      <summary>When does an action genuinely not map to any standard verb, and what do you do?</summary>
+      <div class="a"><p>Some operations are inherently procedural — "send email", "transcode", "search with a huge body". Prefer modeling them as resources where possible (a <code>/transcodes</code> collection you <code>POST</code> to, returning a job resource). When you can't, use <code>POST</code> on a clearly-named sub-resource or controller URI (<code>POST /orders/42/cancel</code>) and accept it as a pragmatic, non-idempotent action — just don't tunnel <em>everything</em> through one POST.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> What is <code>OPTIONS</code> for?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>To discover the <strong>communication options / capabilities</strong> for a resource — which methods are allowed (via the <code>Allow</code> header) and, critically, it's the verb browsers use for <strong>CORS preflight</strong> requests. Safe and idempotent; typically answered with <code>204</code>.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary><code>200</code> vs <code>201</code> vs <code>204</code> — when each?</summary>
+      <div class="a"><p><code>200 OK</code>: success with a body (typical read or update returning the resource). <code>201 Created</code>: a new resource was created (must carry <code>Location</code>). <code>204 No Content</code>: success with <strong>no body</strong> — common for <code>DELETE</code> and for <code>PUT</code>/<code>PATCH</code> when you don't echo the resource back.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> A client sends <code>DELETE</code> to a read-only resource. What do you return, and what's required?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>405 Method Not Allowed</code>, and the response <strong>must include an <code>Allow</code> header</strong> listing the methods that <em>are</em> supported (e.g. <code>Allow: GET, HEAD</code>). The <code>Allow</code> header is what makes 405 actionable rather than just a dead end.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary>What header MUST a <code>201 Created</code> include?</summary>
+      <div class="a"><p>A <code>Location</code> header pointing at the URI of the newly created resource, so the client can fetch or reference it without guessing. Returning <code>201</code> without <code>Location</code> is the most common 201 mistake.</p></div>
+    </details>
 
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> When does an action genuinely not map to any standard verb, and what do you do?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Some operations are inherently procedural — "send email", "transcode", "search with a huge body". Prefer modeling them as resources where possible (a <code>/transcodes</code> collection you <code>POST</code> to, returning a job resource). When you can't, use <code>POST</code> on a clearly-named sub-resource or controller URI (<code>POST /orders/42/cancel</code>) and accept it as a pragmatic, non-idempotent action — just don't tunnel <em>everything</em> through one POST.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>What does <code>202 Accepted</code> mean, and how does it differ from <code>201</code>?</summary>
+      <div class="a"><p><code>202 Accepted</code> = "request accepted for processing, <strong>not done yet</strong>." The work is async; you typically return a status/Location URL the client can poll. <code>201</code> asserts the resource <em>now exists</em>; <code>202</code> makes no such promise — it may still fail later. Don't return <code>201</code> for work that hasn't actually completed.</p></div>
+    </details>
 
-  <h2>Success codes (2xx)</h2>
+    <details class="iq" data-level="senior">
+      <summary>Design the codes for synchronous vs asynchronous creation.</summary>
+      <div class="a"><p><strong>Sync:</strong> do the work, return <code>201 Created</code> + <code>Location</code> to the finished resource. <strong>Async:</strong> return <code>202 Accepted</code> + a <code>Location</code>/status URL for a job resource the client polls (which later reports success/failure and links to the result). The mistake is returning <code>200</code> for async work and pretending it's done.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> <code>200</code> vs <code>201</code> vs <code>204</code> — when each?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>200 OK</code>: success with a body (typical read or update returning the resource). <code>201 Created</code>: a new resource was created (must carry <code>Location</code>). <code>204 No Content</code>: success with <strong>no body</strong> — common for <code>DELETE</code> and for <code>PUT</code>/<code>PATCH</code> when you don't echo the resource back.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary>Successful <code>DELETE</code> — which code?</summary>
+      <div class="a"><p>Usually <code>204 No Content</code> (deleted, nothing to return). <code>200</code> is fine if you return a body, e.g. a representation of what was deleted or a status envelope. <code>202</code> if the deletion is queued for async processing rather than done immediately.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> What header MUST a <code>201 Created</code> include?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>A <code>Location</code> header pointing at the URI of the newly created resource, so the client can fetch or reference it without guessing. Returning <code>201</code> without <code>Location</code> is the most common 201 mistake.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary>Permanent vs temporary redirect — which codes?</summary>
+      <div class="a"><p><strong>Permanent:</strong> <code>301</code> and <code>308</code> ("this resource has moved for good" — clients/SEO should update the URL). <strong>Temporary:</strong> <code>302</code> and <code>307</code> ("go here for now, keep using the original"). Permanent redirects are cacheable and rewrite bookmarks; temporary ones aren't.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> What does <code>202 Accepted</code> mean, and how does it differ from <code>201</code>?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>202 Accepted</code> = "request accepted for processing, <strong>not done yet</strong>." The work is async; you typically return a status/Location URL the client can poll. <code>201</code> asserts the resource <em>now exists</em>; <code>202</code> makes no such promise — it may still fail later. Don't return <code>201</code> for work that hasn't actually completed.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>Why prefer <code>307</code>/<code>308</code> over <code>302</code>/<code>301</code>?</summary>
+      <div class="a"><p>Because <strong><code>307</code> and <code>308</code> preserve the original method and body</strong>. With <code>301</code>/<code>302</code>, clients historically rewrote a <code>POST</code> into a <code>GET</code> on the redirect, silently dropping the body. If you redirect a non-<code>GET</code> request, use <code>307</code> (temp) or <code>308</code> (permanent) to keep the verb intact.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Design the codes for synchronous vs asynchronous creation.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><strong>Sync:</strong> do the work, return <code>201 Created</code> + <code>Location</code> to the finished resource. <strong>Async:</strong> return <code>202 Accepted</code> + a <code>Location</code>/status URL for a job resource the client polls (which later reports success/failure and links to the result). The mistake is returning <code>200</code> for async work and pretending it's done.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>Why is <code>304 Not Modified</code> a feature, not an error?</summary>
+      <div class="a"><p>It's the payoff of conditional GET. The client revalidates with <code>If-None-Match</code> (<code>ETag</code>) or <code>If-Modified-Since</code>; if nothing changed, the server returns <code>304</code> with <strong>no body</strong> and the client reuses its cache. It saves bandwidth and latency while confirming freshness — a core piece of HTTP caching, not a failure.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> Successful <code>DELETE</code> — which code?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Usually <code>204 No Content</code> (deleted, nothing to return). <code>200</code> is fine if you return a body, e.g. a representation of what was deleted or a status envelope. <code>202</code> if the deletion is queued for async processing rather than done immediately.</p></div>
-  </div>
+    <details class="iq" data-level="staff">
+      <summary>A browser POST form keeps re-submitting on refresh. Which redirect pattern fixes it and why?</summary>
+      <div class="a"><p>Post/Redirect/Get: after a successful <code>POST</code>, respond <code>303 See Other</code> with a <code>Location</code> to the result page. <code>303</code> explicitly tells the client to <code>GET</code> that URL, so a refresh re-issues the safe <code>GET</code> rather than re-POSTing. This is the one case where switching the method on redirect is intended — which is exactly why <code>303</code> exists separately from <code>307</code>.</p></div>
+    </details>
 
-  <h2>Redirects &amp; conditional (3xx)</h2>
+    <details class="iq" data-level="core">
+      <summary><code>400</code> vs <code>422</code> — what's the distinction?</summary>
+      <div class="a"><p><code>400 Bad Request</code>: the request is <strong>malformed / syntactically broken</strong> — unparseable JSON, missing required structure, bad framing. <code>422 Unprocessable Content</code>: the request is <strong>well-formed but semantically invalid</strong> — it parses fine but fails business validation (e.g. email already taken, end-date before start-date).</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> Permanent vs temporary redirect — which codes?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><strong>Permanent:</strong> <code>301</code> and <code>308</code> ("this resource has moved for good" — clients/SEO should update the URL). <strong>Temporary:</strong> <code>302</code> and <code>307</code> ("go here for now, keep using the original"). Permanent redirects are cacheable and rewrite bookmarks; temporary ones aren't.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>Is <code>422</code> mandatory for validation failures?</summary>
+      <div class="a"><p>No — it's a useful convention, not a requirement. <code>422</code> precisely says "I understood the request but can't process its contents," which is more expressive than a blanket <code>400</code>. Some teams standardize on <code>400</code> for all client input errors to keep the surface small. Either is acceptable if it's consistent and the body carries machine-readable field-level details.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Why prefer <code>307</code>/<code>308</code> over <code>302</code>/<code>301</code>?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Because <strong><code>307</code> and <code>308</code> preserve the original method and body</strong>. With <code>301</code>/<code>302</code>, clients historically rewrote a <code>POST</code> into a <code>GET</code> on the redirect, silently dropping the body. If you redirect a non-<code>GET</code> request, use <code>307</code> (temp) or <code>308</code> (permanent) to keep the verb intact.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary><code>401</code> vs <code>403</code> — what's the difference?</summary>
+      <div class="a"><p><code>401 Unauthorized</code> = <strong>authentication</strong> failed: "we don't know who you are" — credentials missing, invalid, or expired; re-authenticate. <code>403 Forbidden</code> = <strong>authorization</strong> failed: "we know who you are, you're not allowed" — re-authenticating won't help. (The names are historically swapped, but that's the meaning.)</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Why is <code>304 Not Modified</code> a feature, not an error?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>It's the payoff of conditional GET. The client revalidates with <code>If-None-Match</code> (<code>ETag</code>) or <code>If-Modified-Since</code>; if nothing changed, the server returns <code>304</code> with <strong>no body</strong> and the client reuses its cache. It saves bandwidth and latency while confirming freshness — a core piece of HTTP caching, not a failure.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>When should a forbidden resource return <code>404</code> instead of <code>403</code>?</summary>
+      <div class="a"><p>When the very <em>existence</em> of the resource is sensitive. A <code>403</code> confirms "this exists, you just can't see it," which leaks information (resource enumeration, e.g. private repo names). Returning <code>404</code> hides existence entirely. The trade-off: <code>404</code> is harder to debug for legitimate users — so reserve it for genuinely sensitive resources, not as a blanket policy.</p></div>
+    </details>
 
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> A browser POST form keeps re-submitting on refresh. Which redirect pattern fixes it and why?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Post/Redirect/Get: after a successful <code>POST</code>, respond <code>303 See Other</code> with a <code>Location</code> to the result page. <code>303</code> explicitly tells the client to <code>GET</code> that URL, so a refresh re-issues the safe <code>GET</code> rather than re-POSTing. This is the one case where switching the method on redirect is intended — which is exactly why <code>303</code> exists separately from <code>307</code>.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary>When do you return <code>409 Conflict</code>?</summary>
+      <div class="a"><p>When the request can't be completed because it conflicts with the <strong>current state</strong> of the resource — a duplicate-creation clash, a version/edit conflict, or a state-machine violation (e.g. cancelling an already-shipped order). The body should explain the conflict so the client can reconcile and retry.</p></div>
+    </details>
 
-  <h2>Client errors (4xx)</h2>
+    <details class="iq" data-level="senior">
+      <summary>What does <code>429</code> require, and what should the client do?</summary>
+      <div class="a"><p><code>429 Too Many Requests</code> means rate-limited. Include a <code>Retry-After</code> header (seconds or a date) so the client knows when to try again; pairing it with rate-limit headers (limit/remaining/reset) is even better. The client should honor <code>Retry-After</code> and back off — ideally with jitter — rather than hammering.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> <code>400</code> vs <code>422</code> — what's the distinction?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>400 Bad Request</code>: the request is <strong>malformed / syntactically broken</strong> — unparseable JSON, missing required structure, bad framing. <code>422 Unprocessable Content</code>: the request is <strong>well-formed but semantically invalid</strong> — it parses fine but fails business validation (e.g. email already taken, end-date before start-date).</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary><code>404</code> vs <code>410</code> — when is <code>410 Gone</code> the right call?</summary>
+      <div class="a"><p><code>404 Not Found</code> means "no resource here" (maybe never existed, maybe temporary). <code>410 Gone</code> is the stronger, deliberate signal: "this existed and is <strong>permanently removed</strong>, stop asking." Use <code>410</code> for sunset endpoints or purged content so clients and crawlers drop the URL instead of retrying.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> Is <code>422</code> mandatory for validation failures?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>No — it's a useful convention, not a requirement. <code>422</code> precisely says "I understood the request but can't process its contents," which is more expressive than a blanket <code>400</code>. Some teams standardize on <code>400</code> for all client input errors to keep the surface small. Either is acceptable if it's consistent and the body carries machine-readable field-level details.</p></div>
-  </div>
+    <details class="iq" data-level="staff">
+      <summary>How do you express optimistic-concurrency conflicts at the HTTP layer?</summary>
+      <div class="a"><p>Hand out an <code>ETag</code> on reads; require <code>If-Match</code> on writes. If the version still matches, apply the write; if it doesn't, return <code>412 Precondition Failed</code> (the precondition the client asserted is no longer true). Use <code>409</code> for a higher-level domain/state conflict that isn't expressed as a precondition. The distinction: <code>412</code> = "your version is stale," <code>409</code> = "this action conflicts with current state."</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> <code>401</code> vs <code>403</code> — what's the difference?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>401 Unauthorized</code> = <strong>authentication</strong> failed: "we don't know who you are" — credentials missing, invalid, or expired; re-authenticate. <code>403 Forbidden</code> = <strong>authorization</strong> failed: "we know who you are, you're not allowed" — re-authenticating won't help. (The names are historically swapped, but that's the meaning.)</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary>What does the <code>5xx</code> family signify, and what's the cardinal rule?</summary>
+      <div class="a"><p><code>5xx</code> means the <strong>server</strong> failed to fulfill an otherwise valid request — it's <em>our</em> fault, not the client's. Cardinal rule: <strong>never return <code>5xx</code> for bad client input</strong> — malformed or invalid input is <code>4xx</code>. Mislabeling client errors as <code>5xx</code> pollutes error budgets, pages on-call needlessly, and triggers pointless retries.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> When should a forbidden resource return <code>404</code> instead of <code>403</code>?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>When the very <em>existence</em> of the resource is sensitive. A <code>403</code> confirms "this exists, you just can't see it," which leaks information (resource enumeration, e.g. private repo names). Returning <code>404</code> hides existence entirely. The trade-off: <code>404</code> is harder to debug for legitimate users — so reserve it for genuinely sensitive resources, not as a blanket policy.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary><code>500</code> vs <code>502</code> vs <code>504</code> — distinguish them.</summary>
+      <div class="a"><p><code>500 Internal Server Error</code>: a generic unhandled failure <em>in this server</em> (e.g. an exception). <code>502 Bad Gateway</code>: this server was acting as a gateway/proxy and got an <strong>invalid response</strong> from upstream. <code>504 Gateway Timeout</code>: as a gateway, it <strong>didn't get a response in time</strong> from upstream. <code>502</code>/<code>504</code> point at a dependency; <code>500</code> points at this service.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> When do you return <code>409 Conflict</code>?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>When the request can't be completed because it conflicts with the <strong>current state</strong> of the resource — a duplicate-creation clash, a version/edit conflict, or a state-machine violation (e.g. cancelling an already-shipped order). The body should explain the conflict so the client can reconcile and retry.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>When is <code>503</code> the right code, and what should accompany it?</summary>
+      <div class="a"><p><code>503 Service Unavailable</code> for a temporary inability to serve — overload, maintenance, or a dependency down — with the expectation that it'll recover. Include a <code>Retry-After</code> header so well-behaved clients (and load balancers) back off instead of retrying immediately and deepening the outage. It's the politest 5xx because it signals "transient, try later."</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> What does <code>429</code> require, and what should the client do?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>429 Too Many Requests</code> means rate-limited. Include a <code>Retry-After</code> header (seconds or a date) so the client knows when to try again; pairing it with rate-limit headers (limit/remaining/reset) is even better. The client should honor <code>Retry-After</code> and back off — ideally with jitter — rather than hammering.</p></div>
-  </div>
+    <details class="iq" data-level="staff">
+      <summary>A downstream dependency is timing out under load. Walk through the status codes and behavior you'd return.</summary>
+      <div class="a"><p>If a circuit breaker is open / you're shedding load, return <code>503</code> + <code>Retry-After</code> so clients back off. If you actually called upstream and it timed out, <code>504</code> is the honest code; if it returned garbage, <code>502</code>. Crucially, don't let upstream's timeout surface as a <code>500</code> for what was a valid client request, and never convert it into a <code>4xx</code> — the client did nothing wrong. Combine with idempotency keys so the inevitable retries don't double-act.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> <code>404</code> vs <code>410</code> — when is <code>410 Gone</code> the right call?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>404 Not Found</code> means "no resource here" (maybe never existed, maybe temporary). <code>410 Gone</code> is the stronger, deliberate signal: "this existed and is <strong>permanently removed</strong>, stop asking." Use <code>410</code> for sunset endpoints or purged content so clients and crawlers drop the URL instead of retrying.</p></div>
-  </div>
+    <details class="iq" data-level="core">
+      <summary>What's wrong with returning <code>200 OK</code> with an error in the body?</summary>
+      <div class="a"><p>It tunnels failures through success, defeating the entire point of status codes. Caches, retries, monitoring, and generic client code all key off the status line — a <code>200</code> tells them "all good," so failures get cached, never retried, and never alert. Let the status code carry the outcome; put <em>details</em> in the body, not the verdict.</p></div>
+    </details>
 
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> How do you express optimistic-concurrency conflicts at the HTTP layer?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Hand out an <code>ETag</code> on reads; require <code>If-Match</code> on writes. If the version still matches, apply the write; if it doesn't, return <code>412 Precondition Failed</code> (the precondition the client asserted is no longer true). Use <code>409</code> for a higher-level domain/state conflict that isn't expressed as a precondition. The distinction: <code>412</code> = "your version is stale," <code>409</code> = "this action conflicts with current state."</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>A GraphQL-style API returns <code>200</code> for everything. Is that ever defensible?</summary>
+      <div class="a"><p>For GraphQL it's the spec's transport convention — partial successes are real, errors travel in an <code>errors</code> array, and tooling expects it; that's a different contract. For a <em>REST</em> API it's an anti-pattern: you forfeit HTTP-native semantics (caching, conditional requests, intermediary behavior). The point is that the contract must be explicit and consistent — don't accidentally adopt 200-for-all in something claiming to be REST.</p></div>
+    </details>
 
-  <h2>Server errors (5xx)</h2>
+    <details class="iq" data-level="senior">
+      <summary>What's the problem with tunnelling everything through <code>POST</code>?</summary>
+      <div class="a"><p>That's Richardson Level 0 — HTTP as a dumb tunnel. You lose idempotency and safety guarantees (everything becomes non-idempotent), lose HTTP caching, and lose the self-describing semantics intermediaries rely on. Reads can't be cached or retried freely; the method no longer tells anyone what's happening. Use the verbs so the protocol works <em>for</em> you.</p></div>
+    </details>
 
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> What does the <code>5xx</code> family signify, and what's the cardinal rule?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>5xx</code> means the <strong>server</strong> failed to fulfill an otherwise valid request — it's <em>our</em> fault, not the client's. Cardinal rule: <strong>never return <code>5xx</code> for bad client input</strong> — malformed or invalid input is <code>4xx</code>. Mislabeling client errors as <code>5xx</code> pollutes error budgets, pages on-call needlessly, and triggers pointless retries.</p></div>
-  </div>
+    <details class="iq" data-level="senior">
+      <summary>When is reaching for <code>PATCH</code> over-engineering?</summary>
+      <div class="a"><p>When the resource is small or you always send the full representation anyway — then <code>PUT</code> is simpler, idempotent by construction, and avoids patch-format ambiguity. <code>PATCH</code> earns its keep for large resources, bandwidth-sensitive partial edits, or when distinguishing "set to null" from "don't touch" matters. Don't add JSON Patch machinery for a two-field update.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> <code>500</code> vs <code>502</code> vs <code>504</code> — distinguish them.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>500 Internal Server Error</code>: a generic unhandled failure <em>in this server</em> (e.g. an exception). <code>502 Bad Gateway</code>: this server was acting as a gateway/proxy and got an <strong>invalid response</strong> from upstream. <code>504 Gateway Timeout</code>: as a gateway, it <strong>didn't get a response in time</strong> from upstream. <code>502</code>/<code>504</code> point at a dependency; <code>500</code> points at this service.</p></div>
-  </div>
+    <details class="iq" data-level="staff">
+      <summary>Status code as the contract, or body error codes — how do you reconcile them?</summary>
+      <div class="a"><p>Use both at the right layer. The HTTP status is the <strong>coarse, machine-actionable verdict</strong> that infrastructure (caches, LBs, retry logic, alerting) acts on — get it right first. The body carries a <strong>stable, fine-grained error code</strong> plus human/field detail for the application to branch on (e.g. a documented <code>"code": "card_declined"</code> alongside a <code>402</code>/<code>422</code>). Status for the network, body codes for the application — not one instead of the other.</p></div>
+    </details>
 
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> When is <code>503</code> the right code, and what should accompany it?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>503 Service Unavailable</code> for a temporary inability to serve — overload, maintenance, or a dependency down — with the expectation that it'll recover. Include a <code>Retry-After</code> header so well-behaved clients (and load balancers) back off instead of retrying immediately and deepening the outage. It's the politest 5xx because it signals "transient, try later."</p></div>
-  </div>
-
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> A downstream dependency is timing out under load. Walk through the status codes and behavior you'd return.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>If a circuit breaker is open / you're shedding load, return <code>503</code> + <code>Retry-After</code> so clients back off. If you actually called upstream and it timed out, <code>504</code> is the honest code; if it returned garbage, <code>502</code>. Crucially, don't let upstream's timeout surface as a <code>500</code> for what was a valid client request, and never convert it into a <code>4xx</code> — the client did nothing wrong. Combine with idempotency keys so the inevitable retries don't double-act.</p></div>
-  </div>
-
-  <h2>Anti-patterns &amp; judgment</h2>
-
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> What's wrong with returning <code>200 OK</code> with an error in the body?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>It tunnels failures through success, defeating the entire point of status codes. Caches, retries, monitoring, and generic client code all key off the status line — a <code>200</code> tells them "all good," so failures get cached, never retried, and never alert. Let the status code carry the outcome; put <em>details</em> in the body, not the verdict.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> A GraphQL-style API returns <code>200</code> for everything. Is that ever defensible?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>For GraphQL it's the spec's transport convention — partial successes are real, errors travel in an <code>errors</code> array, and tooling expects it; that's a different contract. For a <em>REST</em> API it's an anti-pattern: you forfeit HTTP-native semantics (caching, conditional requests, intermediary behavior). The point is that the contract must be explicit and consistent — don't accidentally adopt 200-for-all in something claiming to be REST.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> What's the problem with tunnelling everything through <code>POST</code>?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>That's Richardson Level 0 — HTTP as a dumb tunnel. You lose idempotency and safety guarantees (everything becomes non-idempotent), lose HTTP caching, and lose the self-describing semantics intermediaries rely on. Reads can't be cached or retried freely; the method no longer tells anyone what's happening. Use the verbs so the protocol works <em>for</em> you.</p></div>
-  </div>
-
-  <div class="card" data-diff="senior">
-    <p class="q"><span class="tag t-senior">Senior</span> When is reaching for <code>PATCH</code> over-engineering?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>When the resource is small or you always send the full representation anyway — then <code>PUT</code> is simpler, idempotent by construction, and avoids patch-format ambiguity. <code>PATCH</code> earns its keep for large resources, bandwidth-sensitive partial edits, or when distinguishing "set to null" from "don't touch" matters. Don't add JSON Patch machinery for a two-field update.</p></div>
-  </div>
-
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> Status code as the contract, or body error codes — how do you reconcile them?</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p>Use both at the right layer. The HTTP status is the <strong>coarse, machine-actionable verdict</strong> that infrastructure (caches, LBs, retry logic, alerting) acts on — get it right first. The body carries a <strong>stable, fine-grained error code</strong> plus human/field detail for the application to branch on (e.g. a documented <code>"code": "card_declined"</code> alongside a <code>402</code>/<code>422</code>). Status for the network, body codes for the application — not one instead of the other.</p></div>
-  </div>
-
-  <div class="card" data-diff="core">
-    <p class="q"><span class="tag t-core">Core</span> Run the senior "gotcha checklist" for methods and status codes.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><ul>
+    <details class="iq" data-level="core">
+      <summary>Run the senior "gotcha checklist" for methods and status codes.</summary>
+      <div class="a"><ul>
       <li><code>201</code> needs a <code>Location</code> header.</li>
       <li><code>401</code> is authn (who are you), <code>403</code> is authz (you can't).</li>
       <li><code>404</code> can hide a resource's existence on purpose.</li>
@@ -376,12 +307,33 @@
       <li><code>PATCH</code> idempotency depends on the patch document.</li>
       <li>Never tunnel errors through a <code>200</code>; never use <code>5xx</code> for bad client input.</li>
     </ul></div>
-  </div>
+    </details>
 
-  <div class="card" data-diff="staff">
-    <p class="q"><span class="tag t-staff">Staff</span> "A client calls <code>POST /payments</code> and the connection drops before they get a response." Design for a safe retry.</p>
-    <button class="reveal">Reveal senior answer</button>
-    <div class="a"><p><code>POST</code> is right because the <strong>server assigns the payment id</strong> — the client can't know the URI ahead of time. Sync: <code>201 Created</code> + <code>Location</code>; async: <code>202 Accepted</code> + a status URL to poll. The dropped connection is the hard part: <code>POST</code> isn't idempotent, so a blind retry risks a double-charge. Fix it with a client-generated <strong><code>Idempotency-Key</code></strong> — the server records it and a retry with the same key returns the <em>original</em> result instead of charging again. On a genuine state conflict return <code>409</code>; on validation failure <code>422</code>; and never return <code>200</code> with an error in the body.</p></div>
+    <details class="iq" data-level="staff">
+      <summary>"A client calls <code>POST /payments</code> and the connection drops before they get a response." Design for a safe retry.</summary>
+      <div class="a"><p><code>POST</code> is right because the <strong>server assigns the payment id</strong> — the client can't know the URI ahead of time. Sync: <code>201 Created</code> + <code>Location</code>; async: <code>202 Accepted</code> + a status URL to poll. The dropped connection is the hard part: <code>POST</code> isn't idempotent, so a blind retry risks a double-charge. Fix it with a client-generated <strong><code>Idempotency-Key</code></strong> — the server records it and a retry with the same key returns the <em>original</em> result instead of charging again. On a genuine state conflict return <code>409</code>; on validation failure <code>422</code>; and never return <code>200</code> with an error in the body.</p></div>
+    </details>
+
+    <div class="designrubric" data-level="design">
+      <b>REST design-round framework</b> &mdash; drive any "design a REST API" prompt through these, out loud:
+      <ol>
+        <li>Model resources &amp; URIs &mdash; nouns not verbs, collections vs items (<code>/orders</code>, <code>/orders/{id}</code>), nesting only for true ownership.</li>
+        <li>Map methods &amp; status codes &mdash; GET/POST/PUT/PATCH/DELETE to the right semantics; 2xx/4xx/5xx that mean what they say (201+<code>Location</code>, 401 vs 403, 422 vs 400).</li>
+        <li>Idempotency &amp; caching &mdash; safe/idempotent verbs, idempotency keys for POST, <code>ETag</code>/<code>If-Match</code>/conditional requests.</li>
+        <li>Pagination, filtering &amp; sorting &mdash; cursor vs offset, bounded page sizes, consistent query params.</li>
+        <li>AuthN/AuthZ &mdash; bearer tokens on every request (stateless), scopes/roles, transport security, rate limits with <code>Retry-After</code> (OWASP API Top 10).</li>
+        <li>Versioning &amp; evolution &mdash; additive changes, deprecation policy, URL vs header versioning.</li>
+        <li>Errors &amp; contracts &mdash; status as the machine verdict plus a stable body error code (e.g. RFC 9457 problem+json), correlation IDs.</li>
+      </ol>
+    </div>
+    <details class="iq" data-level="design">
+      <summary>Design the request/response contract for <code>POST /payments</code> where the connection can drop mid-flight. Walk the methods and status codes.</summary>
+      <div class="a"><p><b>A strong answer covers:</b> <code>POST</code> is correct because the server assigns the payment id &rarr; sync path returns <code>201 Created</code> + <code>Location</code>; async path returns <code>202 Accepted</code> + a status URL to poll, never <code>200</code> for unfinished work &rarr; the dropped connection is the hard part: <code>POST</code> isn't idempotent, so a client-generated <code>Idempotency-Key</code> lets a retry replay the original result instead of double-charging &rarr; map the failure modes to honest codes: <code>422</code> for validation, <code>409</code> for a state conflict, <code>402</code>/body error code for a declined card, <code>503</code>+<code>Retry-After</code> when shedding load, <code>504</code> if upstream timed out &rarr; never tunnel an error through <code>200</code>, never return <code>5xx</code> for bad client input &rarr; name the contract split: status code for the network/infra, stable body error code for the application.</p></div>
+    </details>
+    <details class="iq" data-level="design">
+      <summary>Design the update + concurrency story for a resource many clients edit at once (PUT vs PATCH, conditional requests).</summary>
+      <div class="a"><p><b>A strong answer covers:</b> choose <code>PUT</code> (full replace, idempotent by construction) vs <code>PATCH</code> (partial edit) by resource size and whether "set to null" must differ from "leave untouched" &rarr; for <code>PATCH</code>, pick the format deliberately &mdash; JSON Merge Patch (value-setting, tends to be idempotent) vs JSON Patch (op sequence, <code>add</code> isn't idempotent) &rarr; guard lost updates with optimistic concurrency: hand out an <code>ETag</code> on reads, require <code>If-Match</code> on writes, return <code>412 Precondition Failed</code> on a stale version &rarr; distinguish <code>412</code> ("your version is stale") from <code>409</code> ("this action conflicts with current state") &rarr; make retries safe: idempotent verbs retry freely, and a turned-into-explicit conflict is retryable after a re-read &rarr; name the trade-off: <code>PUT</code> is simpler and retry-safe but bandwidth-heavy; <code>PATCH</code> saves bytes but adds format and idempotency nuance.</p></div>
+    </details>
   </div>
 
   <div class="nav">
@@ -416,5 +368,6 @@
     document.querySelectorAll('.reveal').forEach(b=>b.textContent='Reveal senior answer');
   });
 </script>
+<script src="../../assets/interview.js" defer></script>
 </body>
 </html>

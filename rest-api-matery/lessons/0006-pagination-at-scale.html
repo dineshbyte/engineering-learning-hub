@@ -27,6 +27,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../../assets/tokens.css">
 <link rel="stylesheet" href="../../assets/lesson.css">
+<link rel="stylesheet" href="../../assets/interview.css">
 <style>
   :root{--accent:var(--track-rest)}
   /* chips — pill row (not in lesson.css) */
@@ -313,6 +314,52 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Primary source (read this next)</h3>
   <p>📖 <a href="https://docs.stripe.com/api/pagination"><strong>Stripe API — Pagination</strong></a>: the cleanest production reference for cursor pagination done right — <code>starting_after</code>/<code>ending_before</code> and <code>has_more</code>, no totals. Then compare <a href="https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api">GitHub's Link-header approach</a> to see page-number and cursor styles side by side.</p>
 
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
+  <div data-interview>
+
+   <details class="iq" data-level="core"><summary>What's the single biggest performance problem with deep offsets?</summary><div class="a"><p>The engine can't seek to row 1,000,000 — it must <strong>scan and discard</strong> every row before the offset. <code>OFFSET 1000000 LIMIT 50</code> reads a million rows to hand you fifty. Cost is <code>O(offset)</code>, so deep pages crawl while page 1 stays fast.</p></div></details>
+
+   <details class="iq" data-level="core"><summary>What is cursor (keyset) pagination, in one sentence?</summary><div class="a"><p>Instead of "skip N rows," you remember <strong>where you stopped</strong> using a stable, unique, ordered key, and the next page is a <em>range scan</em> from that anchor rather than a skip.</p></div></details>
+
+   <details class="iq" data-level="core"><summary>Why does cursor pagination's cost stay flat with depth?</summary><div class="a"><p>With an index on the sort key, the engine <strong>seeks straight to your anchor and reads forward</strong> <code>n</code> rows. There's nothing to scan-and-discard, so page 20,000 costs the same as page 1.</p></div></details>
+
+   <details class="iq" data-level="core"><summary>Why hand the client an <em>opaque</em> cursor instead of raw column values?</summary><div class="a"><p>So you can <strong>change the internals without breaking clients</strong>. If a cursor is just <code>?after_id=839</code>, that ID becomes a public contract. Wrap the key in an opaque token (e.g. base64) and you can change the encoding, add a tiebreaker, switch sort keys, or migrate storage later — clients only ever echo the blob back.</p></div></details>
+
+   <details class="iq" data-level="senior"><summary>Explain the consistency problem with offset pagination under concurrent writes.</summary><div class="a"><p>Offsets are <strong>positional, not anchored to data</strong>. If a row is inserted before your window between two page requests, everything shifts down by one: a row you already saw is pushed into the next page and <strong>duplicated</strong>. If a row is deleted, rows slide up and one gets <strong>skipped</strong> entirely. On a feed being written to constantly, every user hits this.</p></div></details>
+
+   <details class="iq" data-level="senior"><summary>Write the core keyset query and explain each piece.</summary><div class="a"><p><code>WHERE (created_at, id) &gt; (last_created_at, last_id) ORDER BY created_at, id LIMIT n</code>. The <code>WHERE</code> seeks past the last row you returned; the <strong>composite</strong> <code>(created_at, id)</code> uses a tuple comparison so ties on <code>created_at</code> are broken deterministically by <code>id</code>; <code>ORDER BY</code> must match the index and the cursor's order exactly; <code>LIMIT n</code> bounds the page.</p></div></details>
+
+   <details class="iq" data-level="senior"><summary>The product wants a total count on a huge feed. What are your options?</summary><div class="a"><p>Three senior moves: <strong>omit it</strong> (most streaming clients don't need it); return an <strong>approximate</strong> count from table statistics ("~2.4M results"); or compute it <strong>lazily / off the hot path</strong> (cached, async, or a separate endpoint). The mistake is silently promising an exact count and eating an unbounded query on every request.</p></div></details>
+
+   <details class="iq" data-level="senior"><summary>What does cursor pagination cost you compared to offset?</summary><div class="a"><p>Two things you must volunteer: <strong>no jump-to-arbitrary-page</strong> (only next/prev from where you are — there's no "page 7" because there's no positional counting), and it <strong>requires a total, stable sort order</strong> that can't change mid-walk. Exact totals also become expensive. You trade addressability for consistency and flat cost.</p></div></details>
+
+   <details class="iq" data-level="staff"><summary>The tuple comparison <code>(a,b) &gt; (x,y)</code> — does every database optimize it as a single index range seek?</summary><div class="a"><p>No — that's a real portability trap. Postgres treats row-value comparison as a clean range seek on the composite index. MySQL historically optimized the tuple form poorly, so people expand it by hand: <code>WHERE created_at &gt; ? OR (created_at = ? AND id &gt; ?)</code>, which is logically identical but must be written carefully to stay sargable. Always <code>EXPLAIN</code> it on your engine; "it's keyset, so it's fast" is an assumption, not a guarantee.</p></div></details>
+
+   <details class="iq" data-level="staff"><summary>How do filtering and sorting interact with cursor pagination?</summary><div class="a"><p>The cursor is valid <em>only</em> for the filter+sort it was minted under, so each distinct sort order needs its <strong>own composite key and a supporting index</strong> — "sort by price" and "sort by date" are different walks with different cursors. Arbitrary user-chosen sort + filter combinations cause an <strong>index explosion</strong>; you either constrain sortable fields to an indexed allow-list, or accept that rarely-used sorts fall back to slower paths. Filters that narrow the set are fine as long as they stay constant across the walk and the index still supports the leading columns.</p></div></details>
+
+   <details class="iq" data-level="staff"><summary>You inherit an offset API in production and need to migrate to cursors without breaking clients. How?</summary><div class="a"><p>Run them in parallel: <strong>add</strong> cursor params (and a <code>next_cursor</code> in responses) <em>alongside</em> existing <code>page</code>/<code>per_page</code> — purely additive, no break. Steer new and high-volume clients to cursors, optionally <strong>cap offset depth</strong> to contain the worst queries immediately. Emit <code>Deprecation</code>/<code>Sunset</code> signals on the offset params, watch real usage, and only remove offset once traffic drains — a standard additive-evolution + deprecation lifecycle.</p></div></details>
+
+   <div class="designrubric" data-level="design">
+    <b>System Design round — a framework for any "design pagination" prompt.</b> This is a different axis, not a harder level: open-ended design under ambiguity. Work the prompt in this order out loud:
+    <ol>
+     <li><strong>Clarify the access pattern</strong> — is this an infinite-scroll feed, a jump-to-page admin table, or a full export? The consumer shape dictates the strategy.</li>
+     <li><strong>Pick a strategy by depth &amp; write-rate</strong> — offset/limit for small, mostly-static, human-clicked data; cursor/keyset (seek) for large, growing, or constantly-written data and machine consumers.</li>
+     <li><strong>Define a stable total ordering</strong> — choose sort columns and add a unique tiebreaker (e.g. <code>id</code>) so the order is total and deterministic; compare the tuple <code>(sort_key, id)</code>.</li>
+     <li><strong>Design the cursor</strong> — opaque token encoding the sort keys + direction (and ideally the sort/filter it was minted under); sign it if tampering could leak or rescope rows, version it so you can evolve the encoding.</li>
+     <li><strong>Answer the total-count question explicitly</strong> — exact (cheap only on small sets), approximate from statistics, or omit + use <code>has_more</code> via an <code>n+1</code> fetch.</li>
+     <li><strong>State consistency under concurrent writes</strong> — name the drift/duplicate/missing-row failure modes and how the chosen strategy handles them; for true snapshots, use an <code>as_of</code> filter or a changefeed.</li>
+     <li><strong>Set limits &amp; guardrails</strong> — default and max page size, clamp oversized limits, cap offset depth, and treat uncapped page size as a DoS/cost vector.</li>
+     <li><strong>Call out observability</strong> — watch deep-page / tail latency and cursor-invalid error rates so the cliff shows up in metrics, not just incidents.</li>
+    </ol>
+   </div>
+
+   <details class="iq" data-level="design"><summary>Design pagination for an activity feed with millions of rows and constant inserts.</summary><div class="a"><p><b>A strong answer covers:</b> cursor/keyset on a stable composite key <code>(created_at, id)</code> with a matching index, each page a range scan <code>WHERE (created_at, id) &lt; last ORDER BY created_at DESC, id DESC LIMIT n</code> returning an <strong>opaque cursor</strong> + <code>has_more</code> (fetch <code>n+1</code>). <strong>Explicitly reject offset</strong>: deep offsets scan-and-discard so cost grows with depth, and the window shifts under constant writes, duplicating or skipping rows. <strong>Omit or approximate the total</strong> — an exact count over millions of rows is too expensive per request. Keep <strong>sort and filter fixed</strong> for the cursor's life since it's only valid against the ordering it was minted under, <strong>don't offer jump-to-page</strong> (next/prev is what a streaming consumer needs), and cap page size. Name the trade-off you're accepting — that conscious drop of total + jump-to-page is the senior signal.</p></div></details>
+
+   <details class="iq" data-level="design"><summary>Design a paginated, filterable, sortable list endpoint that must also support jump-to-page in an admin UI.</summary><div class="a"><p><b>A strong answer covers:</b> start from the access pattern — a human-driven admin table that genuinely needs "Page X of Y" and arbitrary jump is <strong>offset-shaped</strong>, so offset/limit is defensible here even though it's the weaker default. Mitigate its two failure modes: <strong>cap depth</strong> (no page 10,000) and steer deep navigation through filters; use a <strong>deferred join</strong> (page the indexed key, then join back) to shrink the scanned width; and accept the under-writes drift as tolerable for a low-churn admin set, or add a stable sort tiebreaker to bound it. For the filter/sort surface, constrain sortable fields to an <strong>indexed allow-list</strong> to avoid index explosion, and keep each sort backed by a supporting index. Provide an <strong>approximate or cached total</strong> for the page count rather than an exact scan per request, and bound/clamp <code>per_page</code>. If the same data also feeds a machine/export consumer, expose a <strong>parallel cursor path</strong> for that surface rather than forcing one model on both.</p></div></details>
+
+  </div>
+
   <div class="nav">
     <span>📄 Keep handy: <a href="../reference/caching-pagination-versioning.html">Caching, pagination &amp; versioning reference</a></span>
     <span><a href="../lessons/0005-api-versioning-strategies.html">◂ Prev</a> · <a href="../lessons/0007-caching-and-conditional-requests.html"><em>Next ▸ Lesson 7</em></a></span>
@@ -340,5 +387,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     });
   });
 </script>
+<script src="../../assets/interview.js" defer></script>
 </body>
 </html>

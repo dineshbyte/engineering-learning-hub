@@ -27,6 +27,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../../assets/tokens.css">
 <link rel="stylesheet" href="../../assets/lesson.css">
+<link rel="stylesheet" href="../../assets/interview.css">
 <style>
   :root{--accent:var(--track-rest)}
   /* chips — pill row (not in lesson.css) */
@@ -42,6 +43,14 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.8rem 0; font-size:.9rem}
   /* bottom footer nav — lesson.css names this .next */
   .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.85rem}
+  /* interview-question disclosure (shared panel) */
+  details.iq{border-left:3px solid var(--track-rest); font-size:.9rem}
+  details.iq summary{list-style:none; cursor:pointer}
+  details.iq summary::-webkit-details-marker{display:none}
+  details.iq summary::before{content:"\1F4AC "}
+  details.iq[open] summary{color:var(--track-rest)}
+  details.iq .a{margin-top:.45rem; font-size:.88rem; line-height:1.5}
+  details.iq .a b{color:var(--track-rest)}
   @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
 </style>
 </head>
@@ -316,6 +325,96 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Primary source (read this next)</h3>
   <p>📖 <a href="https://www.oreilly.com/library/view/-/9781492026914"><strong><em>Designing Web APIs</em> (O'Reilly)</strong></a> — the single best end-to-end treatment of the decisions this framework walks. Then <strong>study Stripe's API as the worked exemplar</strong>: it is the cleanest public model of idempotency keys, cursor pagination, dated versioning, signed webhooks, and problem-style errors all in one product — read its reference like a design textbook.</p>
 
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
+
+  <div data-interview>
+    <details class="iq" data-level="core">
+      <summary>What is a "design X's API" round actually testing?</summary>
+      <div class="a"><p>Not whether you produce <em>the</em> answer — there isn't one. It grades <strong>structure</strong> (did you clarify before designing?), <strong>breadth</strong> (writes got idempotency, reads got pagination, you named object-level auth), and <strong>judgment</strong> (you named a trade-off and what changes at 100×). It's a 45-minute integration exam over every prior topic at once, not a quiz on one.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What should you do <em>first</em> in a design round, before any endpoint?</summary>
+      <div class="a"><p>Clarify requirements and constraints — clients, scale, read/write ratio, consistency needs, auth model, SLAs. <strong>Diagnose, then design.</strong> The resource model falls out of the questions you ask; the endpoints fall out of the resource model. Drawing URIs before clarifying is the classic junior tell.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What's the winning arc of a design answer in one phrase?</summary>
+      <div class="a"><p><strong>Diagnose, design, defend.</strong> Clarify constraints first, walk the resource model and endpoints with a reason attached to each choice, then close with a trade-off and what changes at scale. A candidate who narrates a clear checklist and the <em>why</em> beats one who free-associates brilliant fragments.</p></div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>For any "design X" prompt, what two things must every <em>list</em> endpoint have?</summary>
+      <div class="a"><p><strong>Pagination</strong> (cursor-based at scale, with a bounded/hard-capped page size) and a <strong>filter/sort contract</strong>. An unbounded list is a latency and memory landmine. Reaching for these on every collection without being prompted is a fast breadth signal — the mirror of reaching for idempotency on every unsafe write.</p></div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>What's the single biggest mistake candidates make in this round?</summary>
+      <div class="a"><p>Starting to type endpoints. <strong>Don't design — diagnose, then design.</strong> The first five minutes are requirements and constraints. The endpoints fall out of the resource model; the resource model falls out of the questions you asked. Leading with verbs before you know the clients, scale, and consistency needs signals junior.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Walk the 11-step framework from memory.</summary>
+      <div class="a"><p>(1) Clarify requirements/constraints; (2) resource model &amp; URIs; (3) endpoints — methods + status codes; (4) idempotency on unsafe writes; (5) collections — pagination/filter/sort; (6) caching &amp; concurrency (ETag/If-Match); (7) versioning &amp; evolution; (8) authN/authZ + object-level (BOLA); (9) errors, rate limiting, observability; (10) async/webhooks where needed; (11) trade-offs &amp; "what changes at 100×." Name the step, make the one decision that matters, signal you know the rest is there.</p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>How do you communicate a trade-off so it reads as "senior"?</summary>
+      <div class="a"><p>State the option, <strong>pick a side</strong>, attach the reason, and name when you'd decide differently: <em>"That's a deliberate trade-off because X; at 100× I'd revisit it because Y."</em> Defaulting silently (offset pagination, no idempotency) reads junior; choosing and defending reads senior. Other tells: <em>"it's at-least-once, so the consumer must be idempotent,"</em> <em>"I care about p99, not the mean,"</em> <em>"exactly-once effect, not exactly-once delivery."</em></p></div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Cursor vs offset pagination — defend your default.</summary>
+      <div class="a"><p>Default to <strong>cursor (keyset)</strong> at any real scale: deep pages stay cheap (no <code>OFFSET N</code> scan) and stable under concurrent inserts/deletes — offset skips or repeats rows when the set shifts. Offset is fine only for small, slow-changing, jump-to-page-N UIs. Always cap page size. The senior tell is naming <em>stability under writes</em>, not just performance.</p></div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>The interviewer twists a constraint mid-answer ("now there are 10M third-party clients"). How do you respond?</summary>
+      <div class="a"><p>Don't restart. Re-anchor to the framework and say what <em>changes</em>: untrusted third parties tighten authZ (object-level checks, scoped tokens), force strict versioning + deprecation discipline, demand per-tenant rate limits and abuse controls, and push you toward HATEOAS/discoverability so you can evolve URLs without redeploying their code. Naming the deltas — rather than re-drawing — is the signal that you understand which decisions are constraint-sensitive.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>Consistency vs availability — how does CAP show up in API design?</summary>
+      <div class="a"><p>Decide <em>per resource/operation</em>, not globally. Money, inventory, and bookings need <strong>strong consistency</strong> on the write path — refuse or fail (<code>409</code>/<code>503</code>) rather than risk a double-charge or oversell. Feeds, counts, search, and history can be <strong>eventually consistent</strong> and stay available. Make it visible in the contract: an explicit <code>status</code>/<code>pending</code> state, a "may be stale" note, read-your-writes only where it's promised. The senior move is naming which path is which and why.</p></div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>"What changes at 100×?" — how do you answer this generically?</summary>
+      <div class="a"><p>Walk the bottlenecks in order: <strong>hot partitions / keys</strong> (a whale tenant or merchant — protect with per-entity caps), <strong>reads</strong> move to replicas + caching tiers + CDN, <strong>writes</strong> get sharded (and cursors must stay stable across shards), <strong>async work</strong> goes behind durable queues with back-pressure and DLQs, and the <strong>synchronous critical path</strong> gets kept narrow and wrapped in circuit breakers. Close with what you'd <em>measure</em> (p99 per route) to know when to act. This step is the headline senior signal.</p></div>
+    </details>
+
+    <div class="designrubric" data-level="design">
+      <b>The 11-step API-design framework</b> &mdash; run it in order, out loud, in any whiteboard round (diagnose &rarr; design &rarr; defend):
+      <ol>
+        <li>Clarify requirements &amp; constraints: clients (1st vs 3rd-party), scale &amp; read/write ratio, consistency, auth, SLA &mdash; pin before drawing.</li>
+        <li>Model resources &amp; URIs: name the nouns, ownership, shallow hierarchy &mdash; the data model is the design.</li>
+        <li>Map methods + precise status codes: 201 vs 202, 200 vs 204, 409 vs 422.</li>
+        <li>Idempotency on unsafe writes: <code>Idempotency-Key</code> + dedup store on money/create <code>POST</code>s.</li>
+        <li>Collections: cursor pagination, a filter/sort contract, bounded page sizes on every list.</li>
+        <li>Caching &amp; concurrency: <code>ETag</code>+<code>Cache-Control</code> on reads, <code>If-Match</code> on mutables to stop lost updates.</li>
+        <li>Versioning &amp; evolution + authN/authZ with object-level (BOLA) checks on every access.</li>
+        <li>Errors, rate limits, observability: RFC 9457 problem+json, <code>429</code> + limit headers, request/trace IDs.</li>
+        <li>Async / webhooks where it matters: <code>202</code> + status resource, signed at-least-once webhooks.</li>
+        <li>Trade-offs &amp; "what changes at 100×": hot partitions, caching tiers, replicas, sharded cursors, queues + DLQ, back-pressure.</li>
+      </ol>
+    </div>
+    <details class="iq" data-level="design">
+      <summary>Design the API for a payments service &mdash; charge a card, refund, list transactions.</summary>
+      <div class="a"><ul>
+        <li><b>A strong answer covers:</b> <strong>clarify first</strong> &mdash; untrusted merchant callers, write-heavy money path / read-heavy history, charges strongly consistent &amp; exactly-once from the caller's view, server-to-server auth, "never double-charge."</li>
+        <li><strong>Resources:</strong> <code>Charge</code>, <code>Refund</code> (sub-resource of a charge), <code>Customer</code>, <code>PaymentMethod</code>; money as integer minor units + currency, never floats.</li>
+        <li><strong>Endpoints:</strong> <code>POST /v1/charges</code> &rarr; <code>201</code> sync / <code>202</code> async capture; <code>POST /v1/charges/{id}/refunds</code> &rarr; <code>201</code> (<code>422</code> over captured total, <code>409</code> if fully refunded); <code>GET /v1/charges?customer=&amp;limit=</code> cursor-paginated.</li>
+        <li><strong>Idempotency &mdash; the headline:</strong> <code>Idempotency-Key</code> on every charge/refund, key&rarr;result stored ~24h; a replay returns the original response.</li>
+        <li><strong>Auth + object-level:</strong> OAuth2 client-credentials, scopes like <code>charges:write</code>; verify this account owns <code>{id}</code> or return <code>404</code> (don't leak existence); RFC 9457 errors; per-account <code>429</code> with limit headers.</li>
+        <li><strong>Async + at 100×:</strong> async capture &rarr; <code>202</code> + HMAC-signed at-least-once <code>charge.succeeded</code> webhook (consumer dedups); shard idempotency/charge stores by account, watch hot merchants, replica for list reads, queue + DLQ behind webhooks, circuit-break the card-network path.</li>
+      </ul></div>
+    </details>
+    <details class="iq" data-level="design">
+      <summary>Design the API for a hotel / room booking system &mdash; search, hold, book, cancel.</summary>
+      <div class="a"><ul>
+        <li><b>A strong answer covers:</b> <strong>clarify</strong> &mdash; inventory is scarce and contended; double-booking is the cardinal sin; consistency over availability on the book path.</li>
+        <li><strong>Hold as a first-class resource:</strong> <code>POST /holds</code> reserves a room with a short <strong>TTL</strong> (e.g. 10 min) &rarr; <code>201</code> + expiry, decrementing inventory atomically. Separating hold from book is the senior move.</li>
+        <li><strong>Book:</strong> <code>POST /bookings</code> {hold_id} &rarr; <code>201</code>, <strong>idempotent</strong> via <code>Idempotency-Key</code> so a retried payment doesn't book twice; <code>409</code> if the hold expired.</li>
+        <li><strong>Concurrency:</strong> optimistic concurrency (<code>If-Match</code>/version) on the inventory row so two simultaneous holds can't both win; loser gets <code>412</code>/<code>409</code>.</li>
+        <li><strong>Search/cancel:</strong> <code>GET /rooms?dates=&amp;guests=&amp;limit=</code> cursor-paginated, cacheable; <code>POST /bookings/{id}/cancel</code> enforces a refund-by-time policy and releases inventory.</li>
+        <li><strong>At 100×:</strong> sweep stale holds via a queue, partition inventory by property/date, guard thundering herds on hot dates; object-level checks so callers only touch their own bookings.</li>
+      </ul></div>
+    </details>
+  </div>
+
   <div class="nav">
     <span>📄 Keep handy: <a href="../reference/api-design-interview-framework.html">Senior API design interview framework</a></span>
     <span><a href="../lessons/0010-async-and-long-running-operations.html">◂ Prev</a> · <em>End of the track</em></span>
@@ -344,5 +443,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     });
   });
 </script>
+<script src="../../assets/interview.js" defer></script>
 </body>
 </html>

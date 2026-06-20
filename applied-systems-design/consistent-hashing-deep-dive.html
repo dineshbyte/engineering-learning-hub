@@ -27,6 +27,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../assets/tokens.css">
 <link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/interview.css">
 <style>:root{--accent:var(--track-applied)}
 /* slim rules for classes not in lesson.css */
 .sans{font-family:ui-sans-serif,system-ui,sans-serif}
@@ -583,32 +584,104 @@ details.iq .a b{color:var(--accent)}
   </div>
 
   <!-- ================= INTERVIEW QUESTIONS ================= -->
-  <h2 class="sec" id="interview">Interview questions on these concepts</h2>
-  <p>Use each one <strong>twice</strong>: answer it yourself from memory (recall), and ask it of a candidate to test depth. Reveal shows what a strong answer <em>hits</em> — a checklist, not a script.</p>
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
 
-  <details class="iq"><summary>1 · Why not just use <code>hash(key) mod N</code>? Quantify the cost of adding a node.</summary>
-    <div class="a"><b>Hits:</b> mod N is balanced and O(1) but has no locality — when N→N+1, <code>mod (N+1)</code> differs for almost every key, so only ~<code>1/(N+1)</code> stay put. For a store: re-shuffle nearly the whole dataset over the network. For a cache: universal miss → DB stampede. Consistent hashing exists to move only ~K/N.</div></details>
+  <div data-interview>
+    <details class="iq" data-level="core">
+      <summary>What problem does consistent hashing solve, and what's the one property it buys?</summary>
+      <div class="a">
+        <b>Hit these points:</b> it maps keys <em>and</em> nodes into one hash space (a ring, 0&hellip;2&sup3;&sup2;&minus;1; Dynamo uses 2&sup1;&#8310;&#8304;) &rarr; a key is owned by the first node clockwise &rarr; the property: a membership change (add/remove a node) moves only ~<b>K/N</b> keys &mdash; one node's worth &mdash; instead of nearly all of them &rarr; that's the entire reason it exists, versus <code>mod N</code> which has no locality.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Why is <code>hash(key) mod N</code> a trap? Quantify what happens when you add a node.</summary>
+      <div class="a">
+        <b>Hit these points:</b> <code>mod N</code> is balanced and O(1), so it's the default everyone reaches for &rarr; but it has no locality: when N &rarr; N+1, <code>mod (N+1) &ne; mod N</code> for almost every key &rarr; the expected fraction that stays put is only ~<code>1/(N+1)</code> &mdash; nearly every key remaps &rarr; for a cache that means a universal miss &rarr; DB stampede; for a sharded store it means re-shuffling almost the whole dataset over the network on every scaling event.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Walk me through a lookup on the ring and what its cost is.</summary>
+      <div class="a">
+        <b>Hit these points:</b> a node sits at <code>hash(node_id)</code>; a key is owned by the first node clockwise from <code>hash(key)</code> &mdash; same hash space for both &rarr; lookup is a <b>successor search</b>: binary-search the sorted node positions for the next one clockwise, wrapping past the top of the ring &rarr; that's O(log N) in the number of (v)node positions &rarr; the wrap-around at 2&sup3;&#8322; is what makes it a ring rather than a line.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Exactly which keys move when a node joins, and which when one leaves?</summary>
+      <div class="a">
+        <b>Hit these points:</b> on <b>add</b>, the new node claims only the arc between it and its counter-clockwise neighbour &mdash; ~K/N keys, taken from <em>one</em> node; every other key stays exactly where it was &rarr; on <b>remove</b>, that node's arc falls to its clockwise successor &mdash; again ~K/N keys, to <em>one</em> node &rarr; the locality (only one neighbour's arc is disturbed) is the whole win, and it's what <code>mod N</code> cannot give you.
+      </div>
+    </details>
 
-  <details class="iq"><summary>2 · Walk me through a lookup on the ring, and exactly what moves when a node joins.</summary>
-    <div class="a"><b>Hits:</b> both keys and nodes hash into one space (0…2³², Dynamo 2¹⁶⁰); a key is owned by the first node clockwise; lookup = binary search of sorted node positions → O(log N). A join claims only the arc between it and its counter-clockwise neighbour — ~K/N keys, from <em>one</em> node; everything else is untouched. Removal: the arc falls to the clockwise successor.</div></details>
+    <details class="iq" data-level="senior">
+      <summary>A bare ring with 5 nodes is hot-spotting. Diagnose it with the math, then fix it.</summary>
+      <div class="a">
+        <b>Hit these points:</b> random placement does NOT give equal arcs &mdash; the largest arc is ~<code>&Theta;((log N)/N)</code>, so the hottest node can hold ~<code>log N</code>&times; the average; with few nodes one routinely owns 2&ndash;3&times; another &rarr; fix: virtual nodes &mdash; hash each <em>physical</em> node to many positions (V &asymp; 100&ndash;200), scattering N&middot;V points around the ring &rarr; a node's load becomes the <em>sum</em> of V independent little arcs, which concentrates at <code>1/N</code> with std dev ~<code>1/&radic;V</code> &mdash; within a few % of uniform &rarr; bonus dividends: a dead node's vnodes spread to many successors (graceful failure), and 2&times; capacity = 2&times; vnodes gives weighting for free.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Vnodes balanced my keyspace but one node is still on fire. What's the failure mode and the fix?</summary>
+      <div class="a">
+        <b>Hit these points:</b> vnodes balance the <em>keyspace</em>, not <em>popularity</em> &mdash; a single viral key has exactly one home node, and no amount of vnode count splits one key &rarr; reach for consistent hashing with <b>bounded loads</b>: cap each node at <code>(1+&epsilon;)&times;</code> the average load and, when a key's home node is full, overflow it clockwise to the next node with spare capacity &rarr; this guarantees no node exceeds the cap while keeping the extra key movement bounded &rarr; &epsilon; is the knob: small &epsilon; = tighter balance but more churn/overflow, larger &epsilon; = looser cap but less movement &rarr; used in GCP's load balancer and HAProxy &rarr; if the hot key is read-heavy specifically, also replicate it across more nodes so reads fan out.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>How do you place N replicas on a vnode ring, and what's the classic bug?</summary>
+      <div class="a">
+        <b>Hit these points:</b> walk clockwise from the key's position and pick the next N <em>distinct physical</em> nodes &mdash; that ordered set is Dynamo's <b>preference list</b> &rarr; the classic bug: naively taking the next N ring positions can land several replicas on vnodes of the <em>same physical machine</em>, so one host failure loses the key entirely &mdash; you must skip vnodes whose physical node is already chosen &rarr; go further and prefer distinct racks/AZs so a rack power loss or AZ outage doesn't take all N copies &rarr; the preference list is exactly the set the <code>R + W &gt; N</code> quorum operates over.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>When would you pick rendezvous (HRW) or jump hash over a vnode ring?</summary>
+      <div class="a">
+        <b>Hit these points:</b> <b>HRW</b> assigns a key to the node with the highest <code>hash(key, node)</code> (argmax) &mdash; it gives K/N-minimal movement and uniform balance with no vnode bookkeeping, so it's simpler and more balanced for tens-to-low-hundreds of nodes, at the cost of O(N) per lookup &rarr; <b>jump hash</b> is ~5 lines, zero memory, perfect balance &mdash; but buckets only grow/shrink at the high end and it has no weighting, so it fits numbered reshards (8 &rarr; 10) and is wrong for arbitrary node failure or heterogeneous capacity &rarr; the vnode ring wins when you need incremental, weighted, arbitrary membership changes &mdash; which is most real clusters.
+      </div>
+    </details>
 
-  <details class="iq"><summary>3 · A plain ring with 5 nodes is hot-spotting. Diagnose and fix it, with the math.</summary>
-    <div class="a"><b>Hits:</b> random placement gives unequal arcs — largest ≈ <code>Θ((log N)/N)</code>, hottest node ≈ log N × average; with few nodes one owns 2–3× another. Fix: virtual nodes (V≈100–200). A node's load = sum of V arcs → concentrates at 1/N with std dev ~<code>1/√V</code>. Bonus: vnodes also spread a dead node's load across many successors and make weighting free.</div></details>
+    <details class="iq" data-level="staff">
+      <summary>Separate consistent hashing from quorum replication. Where's the boundary, and why does it matter?</summary>
+      <div class="a">
+        <b>Hit these points:</b> they are two orthogonal decisions that people conflate &rarr; consistent hashing answers <em>which</em> nodes hold a key &mdash; placement, the ring, vnodes, and the preference list (routing + rebalancing) &rarr; the quorum answers <em>how many must agree</em> &mdash; <code>R + W &gt; N</code> guarantees a read overlaps the latest write &rarr; together they form the storage layer, but you can vary one without the other: tune R/W for the consistency/availability point (W=1 for always-writeable) while the ring stays fixed, or change vnode count/placement without touching the quorum &rarr; why it matters: a membership change is a <em>placement</em> event (re-replicate ~K/N keys to new owners), while a slow/lost node is a <em>quorum</em> event (hinted handoff, read-repair) &mdash; keeping them separate is how you reason about each failure cleanly.
+      </div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>Argue for vnodes — then steelman why a system might deliberately avoid them.</summary>
+      <div class="a">
+        <b>For:</b> a bare ring is a hot-spot generator (hottest node ~log N&times; average); vnodes turn each node into a sum of many arcs so load concentrates at 1/N with variance ~1/&radic;V, and they give graceful failure spread and free weighting &mdash; which is why Dynamo, Cassandra and Riak all use tokens. <b>Steelman against:</b> vnodes multiply ring metadata (N&middot;V positions) and gossip/membership overhead; range scans and ordered iteration fragment across many small arcs; rebuilding/streaming a node's data touches many peers; and at small, homogeneous, fixed-size clusters HRW gives equal-or-better balance with simpler reasoning. <b>Synthesis:</b> default to vnodes for large, heterogeneous, frequently-changing clusters; tune V to trade balance against metadata; consider HRW or fewer tokens when N is small and stable or when ordered range access dominates &mdash; pick by membership volatility, heterogeneity, and access pattern, not by reflex.
+      </div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>A team caches with <code>mod N</code> and says "rehashing on scale-up is a one-time blip." Make the principal-level call.</summary>
+      <div class="a">
+        <b>Hit these points:</b> reject the framing &mdash; it's not a one-time blip, it recurs on <em>every</em> membership change, planned or not: a deploy, an autoscale event, or a single node death all change N &rarr; each one re-scatters ~all keys, so the cache cold-starts and the full miss traffic stampedes the DB at exactly the moment you're already losing capacity (a node just died) &rarr; that couples a routine operational event to a correlated DB overload &mdash; a reliability hazard, not a performance footnote &rarr; the fix is cheap and well-understood: a consistent-hashing ring with vnodes limits movement to ~K/N and confines the miss blast radius to one node's keys &rarr; quantify it for them: with 50 nodes, <code>mod N</code> invalidates ~98% of keys on one change, the ring ~2% &rarr; principal move: mandate the ring (or HRW) for any cluster whose membership ever changes, and add stampede protection (single-flight + jittered TTLs) regardless, so even the ~K/N miss can't take the DB down.
+      </div>
+    </details>
 
-  <details class="iq"><summary>4 · Vnodes balanced my keyspace but node 7 is still on fire. Now what?</summary>
-    <div class="a"><b>Hits:</b> vnodes balance the keyspace, not <em>popularity</em> — a viral key has one home. Use consistent hashing with bounded loads: cap each node at <code>(1+ε)×</code> average and overflow a full node's keys clockwise to the next with room. Guarantees no node exceeds the cap while keeping movement bounded. ε trades tightness vs churn. Used by GCP LB and HAProxy.</div></details>
-
-  <details class="iq"><summary>5 · When would you pick rendezvous (HRW) or jump hash over a vnode ring?</summary>
-    <div class="a"><b>Hits:</b> HRW (argmax of <code>hash(k, node)</code>) gives K/N-minimal moves and uniform balance with no vnodes — simpler &amp; more balanced for tens-to-low-hundreds of nodes, at O(N) lookup. Jump hash is 5 lines, zero memory, perfect balance — but only grows/shrinks at the high end and has no weights, so it fits numbered reshards (8→10) and is wrong for arbitrary node failure.</div></details>
-
-  <details class="iq"><summary>6 · How do you place N replicas on a vnode ring? What's the classic bug?</summary>
-    <div class="a"><b>Hits:</b> walk clockwise to N <em>distinct physical</em> nodes, skipping extra vnodes of a machine already chosen — otherwise all replicas can land on one box and a single failure loses the key. Prefer distinct racks/AZs to survive a rack power loss. That ordered list is Dynamo's preference list — the set the <code>R + W &gt; N</code> quorum operates over.</div></details>
-
-  <details class="iq"><summary>7 · How does consistent hashing compose with quorum replication? Draw the boundary.</summary>
-    <div class="a"><b>Hits:</b> two orthogonal decisions. Consistent hashing answers <em>which</em> nodes hold a key (placement + preference list). The quorum answers <em>how many must agree</em> — <code>R + W &gt; N</code> for read-your-writes overlap. Together they form the storage layer: ring decides routing &amp; rebalancing, quorum decides consistency/availability.</div></details>
-
-  <details class="iq"><summary>8 · Whiteboard: design the sharding layer for a 100-node distributed cache. (rehearse this one with me)</summary>
-    <div class="a"><b>Hits:</b> ring in a 2³²/2¹⁶⁰ space; V≈128–256 vnodes/node for balance and weighting; O(log N) successor-search lookup; bounded loads (small ε) because cache items are hot/popular; rebalancing moves only ~K/N on membership change; rack-aware preference list if replicated; mention HRW as a simpler alternative at this scale and why you'd still likely pick the ring (incremental, weighted). <em>Want to run this live? Ask me to grade your whiteboard answer.</em></div></details>
+    <div class="designrubric" data-level="design">
+      <b>Design-round framework</b> — drive any "partition/route across a fleet" prompt through these, out loud:
+      <ol>
+        <li>Requirements — membership volatility (how often N changes), node heterogeneity, replication factor, ordered-scan needs, hot-key risk.</li>
+        <li>Scheme choice — ring+vnodes (arbitrary, weighted, incremental) vs HRW (small/stable) vs jump hash (numbered reshards only); justify against the requirements.</li>
+        <li>Hash space &amp; placement — ring size, V per node (and weighting via vnode count), successor-search lookup cost.</li>
+        <li>Rebalancing — what moves on add/remove (~K/N to one neighbour), how data streams, and the throttle to avoid saturating the network.</li>
+        <li>Balance &amp; hot spots — vnode variance (1/&radic;V) for keyspace skew; bounded loads ((1+&epsilon;) cap + clockwise overflow) and/or hot-key replication for popularity skew.</li>
+        <li>Replication placement — next N distinct physical nodes / racks / AZs (the preference list); how it composes with R + W &gt; N.</li>
+        <li>Failure &amp; operations — node death (re-replication, hinted handoff), correlated failures, membership detection (gossip), and the metadata/overhead cost you accepted.</li>
+      </ol>
+    </div>
+    <details class="iq" data-level="design">
+      <summary>Design the sharding/routing layer for a 100-node distributed cache.</summary>
+      <div class="a">
+        <b>A strong answer covers:</b> clarify &mdash; membership changes often (deploys, autoscale, failures), nodes may be heterogeneous, items are hot/popular, replication optional &rarr; pick a consistent-hashing ring in a 2&sup3;&sup2;/2&sup1;&#8310;&#8304; space with V &asymp; 128&ndash;256 vnodes/node for balance and capacity-weighting &rarr; lookup is an O(log N) successor search over sorted token positions &rarr; on membership change only ~K/N keys move (one node's worth), so the miss blast radius and the DB stampede are confined to one node's keyspace &rarr; because cache items are popular, add bounded loads with a small &epsilon; so no single node can be buried by a hot home arc, and replicate genuinely viral keys for read fan-out &rarr; if replicated, use a rack/AZ-aware preference list of the next N distinct physical nodes &rarr; protect the DB on every reshard with single-flight + jittered TTLs &rarr; failure modes: hot key, correlated rack loss, reshard streaming saturating the network (throttle it) &rarr; trade-off: mention HRW as a simpler alternative at ~100 nodes, but justify the ring for incremental, weighted, arbitrary membership.
+      </div>
+    </details>
+    <details class="iq" data-level="design">
+      <summary>Design partitioning + replication for a write-heavy distributed key-value store that must survive node and AZ loss.</summary>
+      <div class="a">
+        <b>A strong answer covers:</b> clarify &mdash; durability and availability targets, the consistency bar (eventual + conflict resolution acceptable?), and that it's write-heavy &rarr; placement: consistent-hashing ring with vnodes so a membership change moves only ~K/N keys and load stays even; weight vnodes by node capacity for heterogeneity &rarr; replication: each key to the next N=3 <em>distinct physical</em> nodes clockwise (the preference list), spread across racks/AZs so an AZ loss doesn't take all N copies &rarr; consistency: leaderless tunable quorums, R + W &gt; N for overlap; W can be low for write-availability at the cost of more reconciliation &rarr; concurrent writes &rarr; vector clocks / version vectors return siblings to merge rather than blind last-write-wins &rarr; write-heavy storage engine: an LSM-tree per node &rarr; failure handling: hinted handoff for a briefly-down node, Merkle-tree anti-entropy + read-repair for divergence, gossip for membership/failure detection, throttled re-replication on permanent loss &rarr; rebalancing: adding capacity moves ~K/N keys to the new owners; stream in the background with backpressure &rarr; trade-off: this is an AP design (CAP) that accepts temporary inconsistency under partition &mdash; if strong consistency were required you'd shift to single-leader-per-shard with synchronous replication, losing some write availability.
+      </div>
+    </details>
+  </div>
 
   <!-- ================= CHEAT SHEET ================= -->
   <h2 class="sec" id="cheat">★ Cheat sheet — claim → engineering</h2>
@@ -659,5 +732,6 @@ details.iq .a b{color:var(--accent)}
     });
   });
 </script>
+<script src="../assets/interview.js" defer></script>
 </body>
 </html>

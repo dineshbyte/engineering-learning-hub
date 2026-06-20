@@ -27,6 +27,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../assets/tokens.css">
 <link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/interview.css">
 <style>:root{--accent:var(--track-transactions)}
 /* ---- slim rules: classes not covered by lesson.css ---- */
 .sans{font-family:ui-sans-serif,system-ui,sans-serif}
@@ -635,33 +636,79 @@ details.iq .a b{color:var(--track-rest)}
     <strong>I'm your teacher — ask me anything.</strong> Say <em>"grill me on isolation"</em> for mixed no-clue questions, or paste a real read-modify-write and I'll name the anomaly and the cheapest fix with you. Want a worked write-skew trace, or the next book on storage engines? Just ask.
   </div>
 
-  <!-- ================= INTERVIEW QUESTIONS ================= -->
-  <h2 class="sec" id="interview">Interview questions on these concepts</h2>
-  <p>Use each one <strong>twice</strong>: answer it yourself from memory (recall), and ask it of a candidate to test depth. Reveal shows what a strong answer <em>hits</em> — a checklist, not a script.</p>
+  <!-- ================= INTERVIEW PANEL — level tabs ================= -->
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
 
-  <details class="iq"><summary>1 · What does ACID actually promise — and what does "atomic" not mean?</summary>
-    <div class="a"><b>Hits:</b> A = abortable (undo a partial txn), <em>not</em> concurrency. C = your app invariant, mostly your code's job. I = concurrent txns behave as some serial order. D = survives planned faults. Bonus: A and D ride the same WAL; "ACID-compliant" says nothing about the default isolation level.<sup><a href="#s1" id="r1c">1</a></sup></div></details>
+  <div data-interview>
+    <details class="iq" data-level="core">
+      <summary>What does ACID actually promise — and what does "atomic" <em>not</em> mean?</summary>
+      <div class="a"><b>Hit these points:</b> A = abortable — undo a partial txn on failure, <em>not</em> anything about concurrency &rarr; C = your application invariant, mostly your code's job, the database only enforces what you declare &rarr; I = concurrent txns behave <em>as if</em> run in some serial order &rarr; D = committed data survives planned faults (crash, power loss) &rarr; bonus: A and D ride the same WAL, and "ACID-compliant" says nothing about the default isolation level you actually run at.</div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Name the standard isolation levels from weakest to strongest, and what each adds.</summary>
+      <div class="a"><b>Hit these points:</b> <b>Read Uncommitted</b> — may see another txn's uncommitted writes (dirty reads); almost no engine actually offers true dirty reads as a default &rarr; <b>Read Committed</b> — only committed data, but a fresh read each statement, so values can change mid-txn &rarr; <b>Repeatable Read</b> — a stable per-txn view; in practice this is snapshot isolation in Postgres &rarr; <b>Serializable</b> — the result equals <em>some</em> serial order; forbids all anomalies &rarr; the ladder is "which anomalies are still allowed," and the name on the tin lies — reason from the matrix, not the label.</div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>List the read/write anomalies and give a one-line definition of each.</summary>
+      <div class="a"><b>Hit these points:</b> <b>dirty read</b> — read data another txn hasn't committed &rarr; <b>non-repeatable read (read skew)</b> — same row read twice in one txn returns two values &rarr; <b>phantom</b> — a range/predicate query returns a different set because rows were inserted/deleted &rarr; <b>lost update</b> — two read-modify-write cycles on the same row, one overwrites the other &rarr; <b>write skew</b> — two txns read an overlapping condition and each write a <em>different</em> row, breaking an invariant &rarr; an anomaly is any result no serial order could produce.</div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Explain how an MVCC engine serves a consistent read without taking locks.</summary>
+      <div class="a"><b>Hit these points:</b> every write appends a <em>new</em> versioned tuple tagged with its creating txn id rather than overwriting in place &rarr; a reader carries a snapshot and walks the version chain, returning the newest version committed before its snapshot &rarr; therefore readers never block writers and writers never block readers &rarr; the cost is dead versions that need VACUUM/GC, and a long-running txn pins the cleanup horizon open &rarr; bloat &rarr; "consistent read = read your snapshot, ignore everything newer."</div>
+    </details>
 
-  <details class="iq"><summary>2 · Name the anomalies, and which one every real engine forbids.</summary>
-    <div class="a"><b>Hits:</b> dirty read, non-repeatable read (read skew), phantom, lost update, write skew. <em>Dirty write (P0)</em> is forbidden everywhere — allowing it breaks atomic rollback. An anomaly = a result no serial order could produce.<sup><a href="#s2" id="r2c">2</a></sup></div></details>
+    <details class="iq" data-level="senior">
+      <summary>Two services both set "Repeatable Read." Do they give the same guarantees?</summary>
+      <div class="a"><b>Hit these points:</b> no — the name is not the guarantee &rarr; Postgres RR is snapshot isolation: it leaks write skew and has no gap locks &rarr; MySQL InnoDB RR is snapshot-ish but adds next-key (gap) locks that block many phantoms RR doesn't require &rarr; Oracle's "Serializable" is actually SI and still admits write skew &rarr; the senior move: reason from the level&times;anomaly matrix for <em>your</em> engine and version, never from the ANSI label, and verify with a concurrency test before you rely on it.</div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>A counter is losing increments under load. Walk me through diagnosis and the fix ladder.</summary>
+      <div class="a"><b>Hit these points:</b> classic <em>lost update</em> — read-modify-write in app code where both txns read the same stale value and write back, so one increment vanishes &rarr; confirm by checking whether the write is computed in the app from a prior SELECT rather than in the database &rarr; fixes cheapest-first: atomic <code>SET n = n + 1</code> in one statement &rarr; <code>SELECT … FOR UPDATE</code> to serialize the read-modify-write &rarr; compare-and-set with a version column plus a retry loop &rarr; note Postgres SI auto-detects lost updates and aborts a loser, but MySQL InnoDB RR does not, so the engine changes which fix you need.</div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Why doesn't Snapshot Isolation prevent write skew, and how do you actually fix it?</summary>
+      <div class="a"><b>Hit these points:</b> both txns read their pre-write snapshots and each write a <em>different</em> row, so first-committer-wins has no same-row conflict to catch &rarr; both commit and break an invariant (last on-call doctor, last unit of inventory, double-booked room) that no serial order would allow &rarr; fixes: raise to Serializable — Postgres SSI tracks read/write dependencies and aborts a loser at commit, so budget for retries on SQLSTATE 40001 &rarr; or materialize the conflict into a single lockable row (a guard row / summary row) and take <code>FOR UPDATE</code> on it &rarr; "lock the row you can name; serialize the conflict you can't."</div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Locking (2PL) vs MVCC for isolation — what's the real trade-off?</summary>
+      <div class="a"><b>Hit these points:</b> strict 2PL takes shared/exclusive locks and holds them to commit, so readers and writers block each other and you get serializability but contention and deadlocks &rarr; MVCC keeps multiple versions so reads run off a snapshot and never block writes, giving great read concurrency but only snapshot isolation by default (write skew leaks) &rarr; pure MVCC needs an extra layer (SSI, or explicit locks) to reach serializable &rarr; cost shifts from blocking (2PL) to version cleanup + abort/retry (MVCC) &rarr; most engines are MVCC for reads with locks on writes; the crossover is contention — measure where 2PL's blocking tax beats MVCC's abort tax.</div>
+    </details>
 
-  <details class="iq"><summary>3 · Two services both set "Repeatable Read." Do they give the same guarantees?</summary>
-    <div class="a"><b>Hits:</b> No. Postgres RR = snapshot isolation (leaks write skew, no gap locks); MySQL InnoDB RR = snapshot-ish with next-key gap locks that block many phantoms. Same name, different real guarantees. Reason from the matrix, never the label. Oracle "Serializable" is even SI.</div></details>
+    <details class="iq" data-level="staff">
+      <summary>"Just set everything to Serializable and stop worrying about anomalies." Argue for, then against.</summary>
+      <div class="a"><b>For:</b> Serializable is the only level that removes the whole anomaly class, so you stop reasoning case-by-case about write skew and phantoms; on Postgres SSI reads stay non-blocking, so the baseline cost is modest at low contention. <b>Against:</b> under contention SSI aborts climb (false positives included), and <em>every</em> serializable txn now needs a correct retry loop on 40001 — without it you've shipped a latent 500; the guarantee is single-node only, so a sharded fleet isn't serializable just because each node is; latency and abort rate become workload-dependent. <b>Synthesis:</b> default to the lowest level that provably forbids the anomalies your invariants need; reserve Serializable for the txns that truly require it, and only after the retry loop and observability are in place.</div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>You inherit a service on Read Committed with occasional "impossible" data states. How do you find and classify the bug?</summary>
+      <div class="a"><b>Hit these points:</b> don't guess the level — reproduce and characterize the corruption first: is it a single row diverging (lost update), a cross-row invariant broken (write skew), or a count/range that shifted (phantom)? &rarr; map the symptom to the anomaly using the level&times;anomaly matrix for the actual engine/version, not the ANSI name &rarr; confirm with a deterministic two-session interleaving that reproduces it, so the fix is verified, not hoped &rarr; choose the narrowest fix: atomic statement or <code>FOR UPDATE</code> for lost update, materialized lock row or Serializable for write skew, predicate/index-range locks or Serializable for phantoms &rarr; add the missing observability — log isolation level per txn and alert on retry/abort spikes &rarr; the staff move is turning "occasional impossible state" into a named, reproduced anomaly with a regression test, not bumping the global level and hoping.</div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>An invariant must hold across two microservices with separate databases. How do you reason about isolation here?</summary>
+      <div class="a"><b>Hit these points:</b> first reframe — isolation levels are a <em>single-database</em> tool; there is no shared serializable order across two stores &rarr; options: a distributed txn (2PC) buys real atomicity but blocks on coordinator crash and couples availability, acceptable only for short steps on a shared XA stack or inside one engine with a replicated coordinator &rarr; the usual answer is a <em>saga</em>: a local txn per service plus a compensating action each, ordered so the irreversible pivot is last &rarr; make it safe with a transactional outbox (publish the event atomically with the local commit) and idempotency keys for at-least-once delivery &rarr; accept that you trade ACID isolation for eventual consistency with a visible <code>PENDING</code> state &rarr; the staff call is naming what guarantee you actually need (atomic vs eventually-consistent) before reaching for 2PC.</div>
+    </details>
 
-  <details class="iq"><summary>4 · Explain how an MVCC engine serves a consistent read without locking.</summary>
-    <div class="a"><b>Hits:</b> every write appends a new versioned tuple tagged with its txn id; a read walks the version chain and returns the newest version committed before its snapshot. Readers never block writers. Cost: dead versions need VACUUM/GC, and a long-running txn pins them open → bloat.</div></details>
-
-  <details class="iq"><summary>5 · A counter is losing increments under load. Walk me through the diagnosis and fixes.</summary>
-    <div class="a"><b>Hits:</b> classic lost update — read-modify-write in app code, both write a value off a stale read. Fixes in order: atomic <code>SET n = n + 1</code> (cheapest); <code>SELECT … FOR UPDATE</code>; compare-and-set with a version column + retry. Note Postgres SI auto-detects lost updates but MySQL InnoDB RR does not.</div></details>
-
-  <details class="iq"><summary>6 · Why doesn't Snapshot Isolation prevent write skew, and how do you actually fix it?</summary>
-    <div class="a"><b>Hits:</b> both txns read pre-write snapshots and write <em>different</em> rows, so first-committer-wins has nothing to conflict on. Fix: Serializable (Postgres SSI tracks read-write dependencies and aborts a loser at commit — budget for retries / 40001), or materialize the conflict into one lockable row.<sup><a href="#s3" id="r3b">3</a></sup></div></details>
-
-  <details class="iq"><summary>7 · Why is 2PC a blocking protocol, and when would you still use it?</summary>
-    <div class="a"><b>Hits:</b> after a participant votes YES, a coordinator crash leaves it in doubt — can't commit (maybe abort) or abort (maybe commit), so it blocks holding locks. The coordinator is a SPOF that freezes data. 3PC needs a synchronous network, so it's out. Still fine when participants share an XA stack, steps are short, and you need real isolation — or inside one engine (Spanner/Cockroach) where a Raft-replicated coordinator removes the block.</div></details>
-
-  <details class="iq"><summary>8 · Whiteboard: a checkout spanning orders, payments, inventory. Design it safe. (rehearse with me)</summary>
-    <div class="a"><b>Hits:</b> not a distributed txn — a <em>saga</em>. Local txn per service + a compensating txn each (refund ≠ delete); order steps so the irreversible pivot is last; transactional <em>outbox</em> to publish events atomically with the local commit; <em>idempotency keys</em> (<code>{sagaId}:{step}</code>) for at-least-once dedup; a visible <code>PENDING</code> state. The three — outbox, idempotency, compensation — are a set.<sup><a href="#s4" id="r4b">4</a></sup> <em>Want to run this live? Ask me to grade your whiteboard answer.</em></div></details>
+    <div class="designrubric" data-level="design">
+      <b>Design-round framework</b> — drive any "choose the concurrency control" prompt through these, out loud:
+      <ol>
+        <li>Clarify the invariants — which exact data rules must never break, and which anomalies would violate them.</li>
+        <li>Read/write shape &amp; contention — read-heavy vs write-heavy, hot rows, txn duration.</li>
+        <li>Pick the floor level that forbids those anomalies — reason from the matrix, not the ANSI name.</li>
+        <li>Concurrency-control mechanism — MVCC snapshot, explicit locks (<code>FOR UPDATE</code>), or SSI/Serializable.</li>
+        <li>Retry &amp; idempotency — every Serializable path needs a 40001 retry loop; make writes idempotent.</li>
+        <li>Failure modes — lost update / write skew / phantom / deadlock / abort storm under contention.</li>
+        <li>Observability — log isolation level and abort/retry rate per txn; alert on the long-txn that pins cleanup.</li>
+      </ol>
+    </div>
+    <details class="iq" data-level="design">
+      <summary>Design the transaction &amp; isolation strategy for a ticket-booking system where each seat may be sold once.</summary>
+      <div class="a"><b>A strong answer covers:</b> the invariant is "one seat &rarr; at most one paid booking," a classic write-skew / oversell risk &rarr; clarify scale: bursty contention on hot events, mostly short txns &rarr; cheapest correct design is to make the conflict a same-row write: a <code>seat</code> row with a status, taken with <code>SELECT … FOR UPDATE</code> (or a unique constraint on <code>(seat_id)</code> in a bookings table) so the second writer blocks or fails &rarr; if you'd rather not lock, run the reserve-then-pay txn at Serializable and retry on 40001 &rarr; reserve a short hold with a TTL so abandoned carts free the seat &rarr; keep the reserve txn tiny to cut contention and abort rate &rarr; name the trade-off: explicit lock (predictable, blocks) vs Serializable (non-blocking reads, aborts under contention) &rarr; observability: alert on oversell-attempt rate and abort spikes; cross-service payment uses a saga + idempotency, not a distributed txn.</div>
+    </details>
+    <details class="iq" data-level="design">
+      <summary>Choose isolation levels for a system with a high-volume write path and a separate analytics reporting path on the same database.</summary>
+      <div class="a"><b>A strong answer covers:</b> partition by workload — the two paths have opposite needs &rarr; the OLTP write path wants short txns at the lowest level that protects its invariants (often Read Committed with targeted <code>FOR UPDATE</code> or Serializable only on the few invariant-critical txns) to minimize contention and abort rate &rarr; the analytics path wants a stable consistent view but must not pin the cleanup horizon: on Postgres use <code>READ ONLY DEFERRABLE</code> for a safe snapshot with zero SSI cost, and ideally route it to a read replica so long scans don't bloat the primary &rarr; call out the cross-path hazard: a long-running report's snapshot holds back VACUUM/purge DB-wide &rarr; bloat and freeze lag, so cap it with statement/idle-in-txn timeouts &rarr; observability: monitor oldest <code>xact_start</code> / backend_xmin and dead-tuple growth &rarr; trade-off: same-DB simplicity vs replica isolation, and freshness (replica lag) vs primary protection.</div>
+    </details>
+  </div>
 
   <!-- ================= CHEAT SHEET (compact) ================= -->
   <h2 class="sec" id="cheat">★ Cheat sheet — symptom → fix</h2>
@@ -722,5 +769,6 @@ details.iq .a b{color:var(--track-rest)}
     });
   });
 </script>
+<script src="../assets/interview.js" defer></script>
 </body>
 </html>

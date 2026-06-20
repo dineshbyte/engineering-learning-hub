@@ -27,6 +27,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../assets/tokens.css">
 <link rel="stylesheet" href="../assets/lesson.css">
+<link rel="stylesheet" href="../assets/interview.css">
 <style>:root{--accent:var(--track-transactions)}
 /* ---- slim rules: classes not covered by lesson.css ---- */
 .sans{font-family:ui-sans-serif,system-ui,sans-serif}
@@ -342,33 +343,79 @@ details.iq .a b{color:var(--track-rest)}
     </ul></details>
   </section>
 
-  <!-- ================= INTERVIEW QUESTIONS ================= -->
-  <h2 class="sec" id="interview">Interview questions on SSI</h2>
-  <p>Use each one <strong>twice</strong>: answer it from memory (recall), and ask it of a candidate to test depth. Reveal shows what a strong answer <em>hits</em> — a checklist, not a script.</p>
+  <!-- ================= INTERVIEW PANEL — level tabs ================= -->
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
 
-  <details class="iq"><summary>1 · Snapshot isolation prevents dirty reads and lost updates. So what does it <em>not</em> prevent, and why?</summary>
-    <div class="a"><b>Hits:</b> <em>write skew</em> — two txns read an overlapping condition and each write a <em>different</em> row. SI's first-committer-wins only catches same-row write-write conflicts, so neither write is blocked; both commit and break an invariant no serial order could. Bonus: name a concrete instance (last-unit inventory, double-booked room, on-call doctors).</div></details>
+  <div data-interview>
+    <details class="iq" data-level="core">
+      <summary>Snapshot isolation prevents dirty reads and lost updates. So what does it <em>not</em> prevent, and why?</summary>
+      <div class="a"><b>Hit these points:</b> <em>write skew</em> — two txns read an overlapping condition and each write a <em>different</em> row &rarr; SI's first-committer-wins only catches same-row write-write conflicts, so neither write is blocked &rarr; both commit and together break an invariant no serial order could produce &rarr; name a concrete instance: last unit of inventory, double-booked room, both on-call doctors going off shift &rarr; the one-liner: "SI's only hole is write skew — read a shared condition, write different rows."</div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What is serializable snapshot isolation, in one breath?</summary>
+      <div class="a"><b>Hit these points:</b> SSI runs every txn on ordinary MVCC snapshots — reads stay non-blocking, exactly like SI &rarr; on top of that it <em>additionally</em> tracks read/write dependencies between concurrent txns at runtime &rarr; when it spots the pattern that can cause write skew (the dangerous structure of rw-antidependencies), it aborts one txn rather than let the anomaly commit &rarr; so it delivers true serializability with SI's read performance, paying in aborts instead of read locks &rarr; "SI plus a runtime detector that aborts the txn that would break serializability."</div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What is an rw-antidependency, and why is it the only edge SI can't prevent?</summary>
+      <div class="a"><b>Hit these points:</b> an rw-antidependency is "T1 reads a version of x, then T2 writes a <em>newer</em> version of x" — T1 read stale, so in any serial order T1 must come <em>before</em> T2 &rarr; SI already prevents ww (first-committer-wins) and cross-txn wr (you only read committed snapshot versions) &rarr; but a write that lands after your frozen snapshot is invisible to you, yet it still orders you first — SI has no way to notice it &rarr; hence the only cycles SI can produce are made of rw-edges &rarr; that's why SSI watches rw-edges specifically and nothing else.</div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Define serializability precisely enough that you could build a detector from the definition.</summary>
+      <div class="a"><b>Hit these points:</b> model each committed txn as a node &rarr; draw a directed edge whenever one txn must precede another in any equivalent serial order (wr = read another's write, ww = write-write order, rw = read-then-overwritten) &rarr; a history is serializable <em>iff</em> the resulting dependency graph is acyclic &rarr; a cycle means each txn is both before and after the others, so no serial order exists &rarr; the detector's only job: don't let a cycle commit &rarr; this is the conflict-serializability / dependency-graph framing the whole SSI argument rests on.</div>
+    </details>
 
-  <details class="iq"><summary>2 · Define serializability precisely enough that you could build a detector from the definition.</summary>
-    <div class="a"><b>Hits:</b> model each committed txn as a node; draw a directed edge whenever one must precede another (wr, ww, rw). A history is serializable <em>iff</em> the dependency graph is acyclic — a cycle means every txn is both before and after the others. The detector's only job: don't let a cycle commit.</div></details>
+    <details class="iq" data-level="senior">
+      <summary>State Fekete's theorem and explain why it makes SSI cheap.</summary>
+      <div class="a"><b>Hit these points:</b> every non-serializable SI history contains <em>two consecutive rw-edges</em> meeting at a pivot txn — an inbound rw from T-in and an outbound rw to T-out, with the pivot concurrent with both &rarr; that local two-edge shape (the "dangerous structure") is <em>necessary</em> for any SI anomaly &rarr; so the engine never has to build the full graph or confirm a cycle actually closed — it just watches each txn for one inbound + one outbound rw flag &rarr; break any one of the three edges and the cycle can't form &rarr; that's the whole reason SSI is cheap: detect a local pattern, not a global cycle.</div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Why does SSI abort transactions that were actually serializable — and is that a bug?</summary>
+      <div class="a"><b>Hit these points:</b> the dangerous structure is <em>necessary</em> for an anomaly but <em>not sufficient</em> — the same two-edge shape also appears in histories where the cycle never closes and the result is serializable &rarr; aborting on the shape alone is deliberately <strong>conservative</strong>: it catches every real anomaly plus some innocents (false positives) &rarr; that's the price of detecting a local pattern instead of proving a global cycle, which would be far more expensive &rarr; so it's a designed trade-off, not a bug &rarr; the false-positive rate climbs with contention and with coarse predicate-lock granularity, which is exactly what you tune.</div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>How does PostgreSQL detect an rw-edge at runtime without making reads block, and what must the app do?</summary>
+      <div class="a"><b>Hit these points:</b> SIRead predicate locks — non-blocking <em>records</em> of what each serializable read touched (tuple &rarr; page &rarr; relation granularity, plus index-range locks to catch phantoms) &rarr; they take no real lock, so they never block a writer; they just leave a trace &rarr; a write landing on a SIRead-locked datum is a detected rw-conflict, flagged on both txns involved &rarr; when one txn ends up with both an inbound and an outbound rw flag (the pivot), the engine aborts it with SQLSTATE <code>40001</code> &rarr; the app contract: <strong>retry on 40001</strong>, made safe by idempotent transactions &rarr; note SIRead locks outlive the reader's commit, because a later writer can still close the cycle.</div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>A serializable workload is aborting too often under load. Walk me through your tuning levers.</summary>
+      <div class="a"><b>Hit these points:</b> keep txns short and reads selective — this cuts both false positives and predicate-lock pressure, and it's the highest-leverage fix &rarr; raise <code>max_pred_locks_per_transaction</code> to delay summarization, because once SIRead locks summarize up to coarse (page/relation) granularity, false positives spike &rarr; move long reporting reads to <code>READ ONLY DEFERRABLE</code> for a free safe snapshot that can't be aborted &rarr; watch the oldest open txn — like VACUUM, it sets the cost &rarr; if contention is genuinely high, measure the crossover where 2PL's blocking tax beats SSI's abort tax, rather than assuming SSI always wins.</div>
+    </details>
 
-  <details class="iq"><summary>3 · Why does SSI only have to watch rw-antidependencies, not all three edge types?</summary>
-    <div class="a"><b>Hits:</b> SI already prevents ww (first-committer-wins) and cross-txn wr (you read only committed snapshot versions). The <em>only</em> edge SI can't prevent is rw — your snapshot is frozen, so a write that lands after it is invisible yet still orders you first. Hence the only SI cycles are made of rw-edges.</div></details>
+    <details class="iq" data-level="staff">
+      <summary>Compare SI, SSI, and 2PL on what they guarantee and how they fail — and when you'd pick each.</summary>
+      <div class="a"><b>Hit these points:</b> <b>SI</b> — consistent snapshot, first-committer-wins; fast non-blocking reads but leaks write skew; pick it when no cross-row invariant is at risk or you can materialize the conflict &rarr; <b>SSI</b> — SI plus rw-dependency tracking; true serializability with non-blocking reads, fails by <em>aborting</em> (40001) and consumes predicate-lock memory; pick it for invariant-critical workloads at low-to-moderate contention with a retry loop &rarr; <b>2PL</b> — locks held to commit; serializable by blocking, fails by <em>waiting</em> and deadlocks; pick it (or explicit <code>FOR UPDATE</code>) at high contention where abort-and-retry would thrash &rarr; synthesis: the choice is "fail by aborting (optimistic, SSI) vs fail by blocking (pessimistic, 2PL)," decided by contention; measure the crossover, don't assume.</div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>Your fleet is sharded and each Postgres node runs SERIALIZABLE. Is the system serializable?</summary>
+      <div class="a"><b>Hit these points:</b> no — PostgreSQL SSI guarantees serializability <em>within one server</em> only &rarr; it tracks rw-dependencies through that node's own SIRead locks; it has no visibility into reads/writes on another shard, so a cycle that spans shards is invisible to every node &rarr; the guarantee does not extend across shards or logical-replication boundaries for free &rarr; distributed serializability is a separate, harder problem requiring a global commit order (consensus / a distributed SSI, as in CockroachDB/Spanner-style systems) &rarr; the staff move: state the scope of the guarantee explicitly, and don't let "each node is serializable" be mistaken for "the system is serializable."</div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>A team wants to default the whole OLTP service to SERIALIZABLE to "never think about anomalies again." Make the principal call.</summary>
+      <div class="a"><b>Hit these points:</b> don't decide by slogan — characterize the workload: contention level, txn duration, which txns actually carry cross-row invariants &rarr; upside: Serializable removes the whole anomaly class, and on SSI reads stay non-blocking, so at low contention the cost is modest &rarr; but the cost is real and workload-dependent: abort rate (and false positives) rises with contention, predicate-lock memory grows, and <em>every</em> serializable txn now needs a correct 40001 retry loop or you've shipped a latent failure &rarr; and the guarantee is single-node, so it gives nothing across shards &rarr; the principal call: apply Serializable to the specific txns whose invariants need it, keep the rest at the lowest sufficient level, mandate retry + idempotency, and gate the rollout on measured abort rate with a kill criterion &rarr; make it a measured decision, not a global flag flipped on faith.</div>
+    </details>
 
-  <details class="iq"><summary>4 · State Fekete's theorem and explain why it makes SSI cheap.</summary>
-    <div class="a"><b>Hits:</b> every non-serializable SI history contains <em>two consecutive rw-edges</em> meeting at a pivot (inbound from T-in, outbound to T-out, both concurrent with the pivot). So you never build the whole graph or confirm a cycle closed — you watch for one local two-edge shape. Break any one of the three and the cycle can't form.</div></details>
-
-  <details class="iq"><summary>5 · Why does SSI abort transactions that were actually serializable — and is that a bug?</summary>
-    <div class="a"><b>Hits:</b> the dangerous structure is <em>necessary</em> for an anomaly but <em>not sufficient</em> — it also appears in serializable histories where the cycle never closes. Aborting on it is deliberately <strong>conservative</strong>: catch every anomaly plus some innocents. Not a bug — the cost of being cheap. False-positive rate climbs with contention and coarse predicate locks.</div></details>
-
-  <details class="iq"><summary>6 · How does PostgreSQL detect an rw-edge at runtime without making reads block, and what must the app do?</summary>
-    <div class="a"><b>Hits:</b> SIRead predicate locks — non-blocking records of what each serializable read touched (tuple→page→relation, index-range for phantoms). A write landing on a SIRead-locked datum is a detected rw-conflict; both an inbound and outbound flag on one txn → abort the pivot with SQLSTATE <code>40001</code>. The app contract: <strong>retry on 40001</strong>, made safe by idempotency. SIRead locks outlive the reader's commit.</div></details>
-
-  <details class="iq"><summary>7 · A serializable workload is aborting too often under load. Walk me through your tuning levers.</summary>
-    <div class="a"><b>Hits:</b> keep txns short and reads selective (cuts both false positives and lock pressure); raise <code>max_pred_locks_per_transaction</code> to delay summarization to coarse granularity; move long reporting reads to <code>READ ONLY DEFERRABLE</code> for a free safe snapshot; watch the oldest open txn (it sets the cost, like VACUUM). If contention is genuinely high, measure the crossover where 2PL's blocking tax beats SSI's abort tax.</div></details>
-
-  <details class="iq"><summary>8 · Your fleet is sharded and each Postgres node runs SERIALIZABLE. Is the system serializable?</summary>
-    <div class="a"><b>Hits:</b> no. PostgreSQL SSI guarantees serializability <em>within one server</em> only; it does not extend across shards or logical-replication boundaries for free. Distributed serializability is a separate, harder problem (consensus / globally-ordered commit). Don't assume a sharded fleet is serializable because each node is.</div></details>
+    <div class="designrubric" data-level="design">
+      <b>Design-round framework</b> — drive any serializable-vs-SI / concurrency-control prompt through these, out loud:
+      <ol>
+        <li>Invariants at risk — which cross-row conditions could write skew break, with a concrete instance.</li>
+        <li>Contention &amp; txn shape — hot keys, read selectivity, txn duration (sets abort vs block cost).</li>
+        <li>Mechanism choice — SI + materialized lock, SSI/Serializable, or explicit 2PL (<code>FOR UPDATE</code>).</li>
+        <li>Abort/retry contract — 40001 retry loop + idempotency for every serializable path.</li>
+        <li>Predicate-lock budget — granularity, summarization, <code>max_pred_locks_per_transaction</code>, safe snapshots for long reads.</li>
+        <li>Scope — single-node only; what changes if the data is sharded.</li>
+        <li>Observability — abort rate, oldest open txn, predicate-lock usage; alert on abort storms.</li>
+      </ol>
+    </div>
+    <details class="iq" data-level="design">
+      <summary>Choose a concurrency-control design for a hospital on-call scheduler that must always keep at least one doctor on call.</summary>
+      <div class="a"><b>A strong answer covers:</b> name the hazard — this is the canonical write-skew case: two doctors each read "another is still on call" and each go off shift, dropping the count to zero &rarr; clarify scale: low write volume, a hard invariant, correctness dominates throughput &rarr; option A, the cheap fix: materialize the conflict into a single lockable row (an on-call <em>count</em> or a guard row) and take <code>SELECT … FOR UPDATE</code> before going off shift, so the two txns serialize on one row &rarr; option B: run the go-off-shift txn at SERIALIZABLE so SSI's rw-tracking aborts the loser, with a 40001 retry loop &rarr; given low contention either works; prefer SSI if there are many such invariants and you don't want to hand-place locks, prefer the materialized lock if it's one hot invariant &rarr; reserve fixed effort for idempotent retries &rarr; trade-off: explicit lock (predictable, blocks, must remember to take it) vs SSI (declarative, non-blocking reads, aborts under contention) &rarr; note the guarantee is single-node, so a sharded scheduler needs a global ordering.</div>
+    </details>
+    <details class="iq" data-level="design">
+      <summary>Design isolation for a service that runs short invariant-critical writes and long analytical reads against the same database, choosing among SI, SSI, and 2PL.</summary>
+      <div class="a"><b>A strong answer covers:</b> partition by workload — the two paths have opposite needs and shouldn't share one global level &rarr; the short invariant-critical writes are where write skew bites, so run those at SERIALIZABLE (SSI) with a 40001 retry loop, or pin the conflict with <code>FOR UPDATE</code> if contention is high enough that aborts would thrash &rarr; the long analytical reads must not be aborted and must not pin cleanup: run them as <code>READ ONLY DEFERRABLE</code> to get a safe snapshot with zero SSI overhead, or route them to a read replica &rarr; keep write txns short and reads selective to bound predicate-lock memory and false positives &rarr; watch the crossover: if write contention is genuinely high, 2PL's blocking may beat SSI's abort churn — measure it &rarr; observability: track abort rate, predicate-lock usage, and the oldest open txn &rarr; trade-offs: SSI (non-blocking reads, aborts) vs 2PL (no aborts, blocks + deadlocks); safe-snapshot reads (free, must be read-only) vs replica reads (isolated, but lag); and the reminder that all of it is single-node.</div>
+    </details>
+  </div>
 
   <!-- ================= INTERACTIVE RECALL ================= -->
   <h2 class="sec" id="quiz">Retrieval practice — mix the levels</h2>
@@ -494,5 +541,6 @@ details.iq .a b{color:var(--track-rest)}
     });
   });
 </script>
+<script src="../assets/interview.js" defer></script>
 </body>
 </html>

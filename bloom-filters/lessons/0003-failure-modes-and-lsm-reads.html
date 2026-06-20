@@ -24,6 +24,7 @@
 <script>function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}</script>
 <link rel="stylesheet" href="../../assets/tokens.css">
 <link rel="stylesheet" href="../../assets/lesson.css">
+<link rel="stylesheet" href="../../assets/interview.css">
 <style>:root{--accent:var(--track-bloom)}</style>
 </head>
 <body>
@@ -205,6 +206,105 @@
   <h3>Primary source (read this next)</h3>
   <p>📖 <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter"><strong>RocksDB Wiki — Bloom Filter</strong></a><sup><a href="#s1" id="r1b">1</a></sup>. The per-SSTable filter and the disk-skip read path, in production.</p>
 
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
+
+  <div data-interview>
+    <details class="iq" data-level="core">
+      <summary>In an LSM-tree read, what does a Bloom "no" let the engine do, and why is that safe?</summary>
+      <div class="a">
+        <b>Hit these points:</b> a "no" lets the engine <em>skip the on-disk SSTable read</em> entirely — pure RAM cost &rarr; it's safe because a Bloom filter has <b>no false negatives</b>: "not present" is certain &rarr; so skipping never loses a key that's actually there &rarr; that's the whole payoff: most absent-key lookups become a nanosecond RAM check instead of a disk/SSD seek &rarr; RocksDB and Cassandra put one filter per SSTable for exactly this.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What does a Bloom "maybe" cost in the LSM read path?</summary>
+      <div class="a">
+        <b>Hit these points:</b> "maybe" means all <code>k</code> bits are set, so the engine must actually <em>read the SSTable</em> and verify the key &rarr; that read is the slow path (microseconds–milliseconds, orders of magnitude over the RAM check) &rarr; some "maybes" are true hits; a few are false positives that read disk and find nothing — wasted I/O bounded by the FP rate &rarr; so the filter doesn't make hits faster, it makes the common <em>miss</em> free &rarr; the value scales with how miss-heavy the workload is.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>As a filter fills past its design n, what happens to the false-positive rate?</summary>
+      <div class="a">
+        <b>Hit these points:</b> the FP rate is <em>not</em> constant — it's <code>(1&minus;e<sup>&minus;kn/m</sup>)<sup>k</sup></code>, which rises with <code>n</code> &rarr; as you insert past the <code>n</code> you sized for, more bits get set, so more random lookups trip "all bits set" &rarr; the rate climbs steadily toward 1 &rarr; crucially nothing errors — the structure keeps answering, just less accurately &rarr; this is the saturation failure mode.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Why can't a standard Bloom filter delete keys, and what does that cause over time?</summary>
+      <div class="a">
+        <b>Hit these points:</b> bits are shared, so clearing a bit to remove one key could un-set a bit a live key depends on — that would create false negatives &rarr; so deletes are unsupported &rarr; over time, churned/deleted entries keep matching: stale "present" answers pile up &rarr; the filter drifts away from the live set, raising effective FP load until you rebuild &rarr; fixes: periodic rebuild from the live set, or a counting variant.
+      </div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>You're paged on a rising false-positive rate in a Bloom-fronted cache in production. Diagnose and fix.</summary>
+      <div class="a">
+        <b>Hit these points:</b> first hypothesis <b>saturation</b> — the set grew past the sized <code>n</code>, so bits-set fraction and the FP rate climbed (it's <code>(1&minus;e<sup>&minus;kn/m</sup>)<sup>k</sup></code>, not a constant); confirm by comparing current item count and bits-set fraction to design &rarr; second <b>no-delete staleness</b> — churned/deleted keys accumulate and keep matching &rarr; fix: rebuild from the live set on a schedule (or on compaction), resize for the new peak <code>n</code>, switch to a counting variant if deletes are frequent &rarr; also verify hashes are independent — correlated hashes push FPR above theory &rarr; structure: name the primary cause, tie it to the load-dependent formula, then list rebuild/resize/counting fixes.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>What happens to the LSM read path once the filter saturates — why is it operationally dangerous?</summary>
+      <div class="a">
+        <b>Hit these points:</b> as the FP rate approaches 1, the certain "no" nearly vanishes — almost every lookup returns "maybe" &rarr; the guard stops guarding: reads that should have skipped disk now hit it &rarr; read amplification and latency spike, often suddenly and during peak load when the set is largest &rarr; it's dangerous because there's no error — throughput just collapses and the cause is non-obvious unless you monitor bits-set fraction / FP rate &rarr; the fix is capacity (rebuild/shard) before saturation, plus alerting on the FP rate, not on end-latency alone.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Your measured FP rate is worse than the formula predicts. What are the likely causes?</summary>
+      <div class="a">
+        <b>Hit these points:</b> <b>hash quality</b> — weak or correlated hashes don't spread bits uniformly, so collisions exceed theory; use independent, well-mixed hashes (double-hashing done right) &rarr; <b>saturation</b> — actual <code>n</code> exceeds the design <code>n</code>, so the real bits-set fraction is higher than assumed &rarr; <b>staleness</b> — no-delete churn means the live set is smaller than the inserted set, inflating effective load &rarr; <b>wrong k</b> — too many hashes for the array fills it faster, raising FPR &rarr; the formula is also a slightly optimistic approximation (independence assumption), so expect a small gap even when everything's right &rarr; diagnose by measuring bits-set fraction and comparing to expected for the current <code>n</code>.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Why is the Bloom filter's silent degradation harder to operate than a loud failure?</summary>
+      <div class="a">
+        <b>Hit these points:</b> there's no exception, no error code — the filter keeps returning plausible answers as accuracy decays &rarr; the symptom shows up far downstream (disk I/O, latency, cost), not at the filter, so it's easy to misattribute &rarr; it correlates with growth/load, so it tends to bite at the worst time (peak, large set) &rarr; you can't rely on the system to tell you; you must instrument it: track bits-set fraction, measured FP rate, and verify-path hit rate, with alerts before the rate is bad &rarr; the senior point: design observability in, because the structure won't fail loudly on your behalf.
+      </div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>Counting Bloom to enable deletes vs scheduled rebuild — make the principal call.</summary>
+      <div class="a">
+        <b>For counting:</b> supports real-time deletes without rebuild, good when the set churns continuously and staleness can't be tolerated. <b>Cost:</b> ~4× the memory (counters instead of bits) and counter-overflow edge cases. <b>For rebuild:</b> keeps the compact 1-bit array, dead simple, and aligns naturally with compaction/time windows in many systems. <b>Cost:</b> staleness between rebuilds and rebuild CPU/IO. <b>Synthesis:</b> if deletes are rare or events expire on a window, rebuild (or roll filters) — cheapest and simplest; reach for counting only when continuous deletes with low staleness are a hard requirement and the 4× RAM is affordable; cuckoo if you want deletes <em>and</em> tight space.
+      </div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>How would you design alerting so a Bloom-fronted read path can't silently rot in production?</summary>
+      <div class="a">
+        <b>Hit these points:</b> don't alert only on end-to-end latency — that fires after the damage &rarr; export <em>filter-level</em> metrics: bits-set fraction, current <code>n</code> vs design <code>n</code>, and a sampled measured FP rate (probe with known-absent keys) &rarr; alert when bits-set fraction crosses the design threshold or measured FP exceeds target, before disk reads spike &rarr; track verify-path hit rate: a falling ratio of true-hits among "maybes" signals saturation or staleness &rarr; tie alerts to an automated/runbook response: rebuild, resize, or shard &rarr; the staff move is making the silent decay observable and giving it a remediation path, so growth is a planned capacity event, not an incident.
+      </div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>An LSM store's read latency is creeping up over weeks. Walk your root-cause approach and where the Bloom filter fits.</summary>
+      <div class="a">
+        <b>Hit these points:</b> separate causes: more SSTables/levels (compaction backlog), cache pressure, or filter degradation — don't assume the filter &rarr; check per-SSTable filter effectiveness: is the fraction of lookups skipping disk falling over time? &rarr; if absent-key reads increasingly hit disk, the filters are either under-sized for grown tables or saturating — compare bits-set fraction to design per level &rarr; also check for read-amp from delayed compaction (more tables to probe) which multiplies even a healthy filter's "maybe" cost &rarr; remediate the right cause: resize/rebuild filters on compaction, tune per-level bits/key (hotter upper levels get tighter filters), or fix compaction throughput &rarr; the staff framing: instrument disk-skip rate as a first-class metric so "the filter is rotting" is provable, not guessed, and weigh RAM-for-filters against the I/O it saves.
+      </div>
+    </details>
+
+    <div class="designrubric" data-level="design">
+      <b>Design-round framework</b> — drive any "Bloom in a read/dedup path under load" prompt through these, out loud:
+      <ol>
+        <li>Map the path: where does "no" save the expensive work, and how often is the answer "absent"?</li>
+        <li>Size from peak <code>n</code> and a <code>p</code> chosen from the cost of the slow path.</li>
+        <li>Saturation plan: rebuild/shard thresholds on bits-set fraction, not on incidents.</li>
+        <li>Churn plan: rebuild, time-windowed roll, or counting/cuckoo if deletes are real.</li>
+        <li>Hash quality: independent, well-mixed hashes; validate measured vs theoretical FPR.</li>
+        <li>Observability: bits-set fraction, measured FP rate, disk-skip / verify-hit rate.</li>
+        <li>Failure modes: saturation, staleness, correlated hashes, read-amp from too many segments.</li>
+      </ol>
+    </div>
+    <details class="iq" data-level="design">
+      <summary>Design the Bloom layer for a read-heavy LSM key-value store so it stays healthy as data grows for years.</summary>
+      <div class="a">
+        <b>A strong answer covers:</b> one filter per SSTable, built at flush/compaction from that table's keys — immutable tables mean no deletes and natural rebuilds on compaction, sidestepping staleness &rarr; size each filter from its key count and a per-level <code>p</code> (tighter for hot upper levels; numbers illustrative), so the FP rate per table stays at design even as total data grows &rarr; the certain "no" skips the SSTable read; "maybe" reads and verifies &rarr; guard against read-amp: as levels multiply, a query probes many filters, so monitor disk-skip rate and compaction backlog together &rarr; keep filters in RAM, spill/cache cold ones, budget aggregate bits/key across the fleet &rarr; observability: per-level bits-set fraction, measured FP, fraction of lookups skipping disk &rarr; trade-off: RAM for filters vs I/O saved on misses; tune per level rather than one global setting.
+      </div>
+    </details>
+    <details class="iq" data-level="design">
+      <summary>Design a Bloom-fronted dedup cache that won't silently rot — given the set churns and grows.</summary>
+      <div class="a">
+        <b>A strong answer covers:</b> the two threats are saturation (growth) and staleness (churn/no-delete), so design for both up front &rarr; place the filter as a <em>negative</em> filter before the authoritative store: "no" &rarr; certainly new, fast path; "maybe" &rarr; verify against the store, never final &rarr; handle churn with time-windowed filters you roll and rebuild (entries age out) or a counting variant if continuous deletes are required &rarr; handle growth with scalable/sharded filters sized from peak per-window <code>n</code> plus headroom &rarr; instrument bits-set fraction, measured FP, and verify-hit rate, with alerts that fire before the FP rate is bad and trigger a rebuild/roll &rarr; pick <code>p</code> from the cost of the verify path &times; query rate &rarr; trade-off: rebuild simplicity + brief staleness vs counting's 4× RAM for live deletes; favor rolling rebuilds when entries naturally expire, counting only when they don't.
+      </div>
+    </details>
+  </div>
+
   <div class="next">
     <span>📄 Keep handy: <a href="../reference/bloom-filters-cheat-sheet.html">Bloom filters reference</a></span>
     <span><em>Next ▸ Lesson 4: Variants &amp; scale (Staff) — planned</em></span>
@@ -238,5 +338,6 @@
     });
   });
 </script>
+<script src="../../assets/interview.js" defer></script>
 </body>
 </html>
