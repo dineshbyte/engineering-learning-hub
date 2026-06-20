@@ -63,6 +63,11 @@ function checkSeo(page, html) {
     const kw = html.match(/<meta[^>]+name=["']keywords["'][^>]*content=["']([^"']*)["']/i);
     if (!kw) fail(page, 'missing meta keywords (page tags)');
     else if (kw[1].trim().length < 5) fail(page, 'empty/thin meta keywords');
+
+    // every page must load the shared GA4 module (run scripts/inject-analytics.js)
+    if (!/<script[^>]+src=["'][^"']*assets\/analytics\.js["']/i.test(html)) {
+        fail(page, 'missing analytics.js include (run scripts/inject-analytics.js)');
+    }
 }
 
 function checkInterviewLevels(page, html) {

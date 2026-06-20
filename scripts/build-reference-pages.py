@@ -90,6 +90,7 @@ def build():
 <meta property="og:image" content="{BASE}/assets/og-cover.png">
 <link rel="stylesheet" href="../assets/tokens.css">
 <link rel="stylesheet" href="../assets/lesson.css">
+<script src="../assets/analytics.js" defer></script>
 </head>
 <body>
 <div class="wrap">
