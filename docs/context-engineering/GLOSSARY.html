@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en" style="--accent:var(--track-context)">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glossary — Context
+Engineering · StackDepth</title>
+<meta name="description" content="Context Engineering glossary — the canonical terms used across the StackDepth Context Engineering lessons, defined in dependency order.">
+<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/GLOSSARY.html">
+<meta name="robots" content="index, follow">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="Glossary — Context
+Engineering · StackDepth">
+<meta property="og:description" content="Context Engineering glossary — the canonical terms used across the StackDepth Context Engineering lessons, defined in dependency order.">
+<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/GLOSSARY.html">
+<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<div class="wrap">
+<nav id="hubbar">
+  <a href="../index.html">&#8592; StackDepth</a>
+  <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Context Engineering · Glossary</span></span>
+</nav>
+<h1 id="glossary-context-engineering">Glossary — Context
+Engineering</h1>
+<p>Covers Lessons 1–9. Grouped by where each term first lands.</p>
+<h2 id="foundations-l12">Foundations (L1–2)</h2>
+<ul>
+<li><strong>LLM (large language model)</strong> — the reasoning model
+itself: the brain. Fixed weights, no memory between calls, no access to
+your data except what you place in its context window for that
+call.</li>
+<li><strong>Context</strong> — everything the model can see for a single
+call: system prompt + instructions + conversation history + retrieved
+data + tool definitions/results + the user’s query. The model’s
+<em>entire</em> world for that one inference. It has no other access to
+your data.</li>
+<li><strong>Context window</strong> — the model’s fixed maximum number
+of tokens per call (input + output). A hard ceiling, like total RAM.
+Exceed it and content must be dropped, truncated, or summarized.</li>
+<li><strong>Token</strong> — the unit the model counts in. A sub-word
+chunk (~4 chars / ~0.75 words of English on average). Limits, latency,
+and cost are all measured in tokens, not characters or lines.</li>
+<li><strong>Working context</strong> — the curated subset actually
+assembled into the window for <em>this</em> turn: the few things
+relevant right now, not everything that exists. The output of context
+engineering.</li>
+<li><strong>Context engineering</strong> — selecting, retrieving,
+compressing, and assembling the window before the model runs. Decide
+what to put in the window (and what to leave out) so a fixed model
+produces the best answer it can.</li>
+<li><strong>Context assembly</strong> — the step that packs
+selected/retrieved content (plus prompt, history, tools) into the final
+window, within budget, in an order the model uses well.</li>
+<li><strong>Context-as-query</strong> — the mental model: in classic
+software the query (SQL) fetches from the DB; in AI the
+context-retrieval pipeline fetches what the LLM reasons over. The
+“query” moved from SQL into context assembly.</li>
+<li><strong>Retrieval quality vs model quality</strong> — past a
+baseline, <em>what you feed</em> the model usually moves answer quality
+more than <em>which model</em> you use. Right context + smaller model
+often beats wrong context + best model.</li>
+</ul>
+<h2 id="selection-retrieval-l2">Selection &amp; retrieval (L2)</h2>
+<ul>
+<li><strong>Selection</strong> — choosing the smallest set of content
+that still contains the answer, within the token budget. Candidate
+generation → ranking → packing.</li>
+<li><strong>Lexical / keyword search (BM25)</strong> — exact-term
+matching with TF-IDF/BM25 scoring. Precise on identifiers and exact
+terms; blind to synonyms (vocabulary mismatch).</li>
+<li><strong>Semantic / vector search</strong> — encode query and chunks
+as embeddings, retrieve by similarity. Captures meaning and paraphrase;
+can return “topically similar but wrong”; weak on rare exact
+tokens.</li>
+<li><strong>Hybrid search</strong> — run lexical + semantic and fuse
+results (e.g. Reciprocal Rank Fusion). Covers exact <em>and</em>
+semantic; more infra to tune.</li>
+<li><strong>Ranking</strong> — ordering candidates by a cheap score;
+first stage optimizes <strong>recall</strong> (don’t miss it).</li>
+<li><strong>Re-ranking</strong> — a second, expensive, accurate stage
+(e.g. a cross-encoder) that re-scores the top-N jointly with the query;
+optimizes <strong>precision</strong>. Can’t recover a doc the first
+stage missed.</li>
+</ul>
+<h2 id="codebase-chunking-rag-l3">Codebase, chunking &amp; RAG (L3)</h2>
+<ul>
+<li><strong>Repository indexing</strong> — building a searchable
+representation of a codebase (embeddings and/or a symbol/dependency
+index) so relevant code can be retrieved.</li>
+<li><strong>Read-on-demand (agentic) context</strong> — fetching files
+live via tools (grep/glob/read) instead of a persistent embedding index.
+Always fresh; costs tool round-trips. (Claude Code’s model.)</li>
+<li><strong>Chunking</strong> — splitting documents into retrievable
+units. Chunk on meaning/structure, not raw character count.</li>
+<li><strong>Overlap</strong> — sharing boundary text between chunks so a
+fact spanning a boundary survives.</li>
+<li><strong>Context fragmentation</strong> — a fact split across chunks
+so no single chunk is complete/retrievable.</li>
+<li><strong>Contextual chunking/retrieval</strong> — prepend a short
+doc/section-situating summary to each chunk before embedding (and index
+BM25 too) to cut retrieval failures.</li>
+<li><strong>RAG (Retrieval-Augmented Generation)</strong> — retrieve →
+assemble → LLM → answer. Grounds the model in your private or current
+data; only as good as its retrieval.</li>
+</ul>
+<h2 id="memory-compression-failure-modes-l4">Memory, compression &amp;
+failure modes (L4)</h2>
+<ul>
+<li><strong>Memory</strong> — persisted state (derived facts, decisions)
+about an ongoing task or relationship. Reachable only by retrieving it
+back into context — the model never reads it directly.</li>
+<li><strong>Knowledge base</strong> — the corpus of source
+documents/facts; usually read-only reference material.</li>
+<li><strong>Compression</strong> — fitting more useful signal into the
+budget via <strong>summarization</strong> (condense),
+<strong>distillation</strong> (extract salient facts), pruning
+redundancy, and <strong>sliding windows</strong> (recent verbatim +
+rolling summary). Lossy — keep recent turns and decisions verbatim.</li>
+<li><strong>The 5 failure modes</strong> — <strong>missing</strong>
+(never retrieved), <strong>wrong</strong> (irrelevant retrieved),
+<strong>outdated</strong> (stale index), <strong>conflicting</strong>
+(sources disagree), <strong>excessive</strong> (too much → noise /
+lost-in-the-middle). Diagnose by symptom → cause → fix.</li>
+</ul>
+<h2 id="evaluation-observability-l6">Evaluation &amp; observability
+(L6)</h2>
+<ul>
+<li><strong>recall@k</strong> — is at least one relevant doc in the
+top-k. The most important RAG retrieval metric; nothing downstream can
+use what wasn’t retrieved.</li>
+<li><strong>precision@k</strong> — fraction of the top-k that are
+relevant.</li>
+<li><strong>MRR (mean reciprocal rank)</strong> — how high the first
+relevant result sits.</li>
+<li><strong>nDCG</strong> — graded, position-discounted relevance;
+rewards putting the best at the top.</li>
+<li><strong>Faithfulness / groundedness</strong> — is every claim in the
+answer supported by the retrieved context (detects hallucination).</li>
+<li><strong>Context precision / recall</strong> — are retrieved chunks
+relevant and well-ranked (precision); did retrieval capture everything
+the ideal answer needs (recall, needs ground truth). RAGAS
+vocabulary.</li>
+<li><strong>Golden set</strong> — a versioned eval set of (query,
+relevant doc IDs, ideal answer) for offline regression testing.</li>
+<li><strong>Offline vs online eval</strong> — offline = regression on
+the golden set before deploy; online = production signals (thumbs,
+deflection/escalation, citation-clicks, rephrase rate).</li>
+<li><strong>LLM-as-judge</strong> — using an LLM to score
+faithfulness/relevance at scale (needs calibration).</li>
+</ul>
+<h2 id="pre-retrieval-advanced-rag-l7">Pre-retrieval &amp; advanced RAG
+(L7)</h2>
+<ul>
+<li><strong>Query rewriting</strong> — clean/expand/disambiguate the raw
+query before retrieval.</li>
+<li><strong>Multi-query</strong> — generate several paraphrases,
+retrieve for each, union the results (boosts recall).</li>
+<li><strong>HyDE (Hypothetical Document Embeddings)</strong> — embed a
+generated hypothetical <em>answer</em> (not the question) to bridge the
+query↔︎document vocabulary gap.</li>
+<li><strong>Query decomposition</strong> — split a complex question into
+sub-queries, retrieve each, combine.</li>
+<li><strong>Step-back prompting</strong> — ask a broader question first
+to pull grounding, then the specific one.</li>
+<li><strong>Routing</strong> — classify the query and send it to the
+right index/datasource/tool.</li>
+<li><strong>Parent-document / small-to-big</strong> — match small
+precise chunks but return the larger parent for context.</li>
+<li><strong>GraphRAG</strong> — retrieve over an entity/knowledge graph
+(subgraphs + community summaries); wins on global “connect-the-dots
+across the corpus” questions.</li>
+<li><strong>Agentic RAG</strong> — the LLM decides whether/what/when to
+retrieve, iterating in a loop.</li>
+<li><strong>Self-RAG / Corrective RAG (CRAG)</strong> — the model
+critiques its own retrieval/answer; CRAG grades retrieved docs and falls
+back (e.g. web search) when quality is low.</li>
+</ul>
+<h2 id="embeddings-indexing-cost-l8">Embeddings, indexing &amp; cost
+(L8)</h2>
+<ul>
+<li><strong>Embedding</strong> — a dense vector capturing meaning; near
+vectors ≈ similar meaning.</li>
+<li><strong>Similarity metric</strong> — cosine (most common), dot
+product, or Euclidean distance over embeddings.</li>
+<li><strong>ANN (approximate nearest neighbor)</strong> — trade a little
+recall for large speed at scale; exact k-NN is O(n) per query.</li>
+<li><strong>HNSW / IVF / PQ</strong> — vector index families:
+graph-based (fast, high recall, memory-heavy) / clustering (probe a few
+cells) / product quantization (compress vectors, lower recall). The
+recall ↔︎ latency ↔︎ memory trade-off.</li>
+<li><strong>Metadata filtering</strong> — pre/post-filtering candidates
+by attributes (date, type, tenant); also an access-control hook.</li>
+<li><strong>Index freshness / invalidation</strong> — keeping the index
+current (incremental updates, CDC, re-embedding on model change); a
+stale index <em>is</em> the “outdated context” failure mode.</li>
+</ul>
+<h2 id="caching-ordering-security-l9">Caching, ordering &amp; security
+(L9)</h2>
+<ul>
+<li><strong>Prompt / KV caching</strong> — reusing the processed state
+of a stable prefix across calls to cut cost and latency. Put stable
+content (system prompt, tools) first, volatile content (query, retrieved
+docs) last; any change busts the cache from that point on.</li>
+<li><strong>Lost in the middle</strong> — models attend most to the
+start (primacy) and end (recency) of the window, weakest in the middle.
+Order matters: put the query last and the best doc at an edge.</li>
+<li><strong>Indirect prompt injection</strong> — a malicious instruction
+hidden in <em>retrieved</em> content that the model may obey. Treat all
+retrieved content as untrusted data, never as instructions.</li>
+<li><strong>Multi-tenant access control</strong> — enforce
+row/document-level permissions in the <em>retrieval query</em> (scope by
+tenant/ACL before anything reaches the model). Never rely on the prompt
+to enforce access.</li>
+</ul>
+
+</div>
+</body>
+</html>
