@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Context Engineering — Cheat Sheet</title>
+<link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+
+
+<div class="wrap">
+  
+  <div class="kicker">Reference · Context Engineering</div>
+  <h1>Context engineering — one-page cheat sheet</h1>
+  <div class="sub">For the principal chair · print me · pairs with <a href="../lessons/0001-what-is-context-and-context-as-query.html">Lesson 1</a> &amp; the <a href="../GLOSSARY.md">glossary</a></div>
+
+  <div class="one"><strong>The one sentence:</strong> the model is the constant, <em>context is the
+  variable</em> — what you retrieve and assemble into a fixed window decides how smart the system looks,
+  not which LLM you bought.</div>
+
+  <div class="cols">
+    <div>
+      <h2>The spine (mental models)</h2>
+      <ol class="rules">
+        <li><strong>Context = the new database query</strong> — retrieval/assembly plays SQL's role: it decides what the model ever sees.</li>
+        <li><strong>The window is RAM</strong> — a fixed token budget you allocate, not a pipe to your data. Bigger ≠ solved.</li>
+        <li><strong>Selection → retrieval → rerank</strong> — turn a huge corpus into the curated few that fit.</li>
+        <li><strong>Recall first, precision second</strong> — first stage casts wide (don't miss it); rerank surfaces the best.</li>
+        <li><strong>Chunk on meaning + overlap</strong> — split on structure; overlap so boundary facts survive.</li>
+        <li><strong>RAG = retrieval + assembly + LLM</strong> — ground the answer in fetched facts, not frozen weights.</li>
+        <li><strong>Memory vs knowledge base</strong> — memory = what I learned from us; KB = what's true in general.</li>
+        <li><strong>Compress for long runs</strong> — summarize the old, keep the recent &amp; the IDs verbatim.</li>
+        <li><strong>Match retrieval to the data type</strong> — exact→structured, fuzzy→hybrid, volatile→live, long→compress.</li>
+        <li><strong>Most AI bugs are context bugs</strong> — suspect the input before blaming the model.</li>
+      </ol>
+
+      <h2>What competes for the window</h2>
+      <table>
+        <tr><td>System prompt</td><td>Instructions — fixed overhead, paid every call.</td></tr>
+        <tr><td>Tool defs</td><td>Function schemas — grows with #tools.</td></tr>
+        <tr><td>History</td><td>Conversation — grows every turn (silent eater).</td></tr>
+        <tr><td>Retrieved</td><td>Docs/code/facts for THIS turn — the part you engineer.</td></tr>
+        <tr><td>Question</td><td>The user's actual query.</td></tr>
+        <tr><td>Answer</td><td>Reserved room the output needs too.</td></tr>
+      </table>
+    </div>
+
+    <div>
+      <h2>The two diagrams</h2>
+      <pre class="dgm">AI PIPELINE            CLASSIC SOFTWARE
+Question               Request
+   ↓        same role     ↓
+Retrieval  ◀───────▶   SQL query   (the new query)
+   ↓                      ↓
+Assembly (pack window) DB  source of truth
+   ↓                      ↓
+LLM   fixed/commodity  Response
+   ↓
+Answer
+the LLM only ever sees what Retrieval surfaced</pre>
+
+      <pre class="dgm">TWO-STAGE RETRIEVAL — recall first, precision second
+query
+  │
+  ▼  STAGE 1 · cheap · wide  (optimize RECALL)
+┌──────────────┬──────────────┐
+│ Lexical/BM25 │ Vector/embed │
+│ exact terms  │ meaning      │
+└──────┬───────┴──────┬───────┘
+       └──▶ fuse (RRF) ◀──┘  one candidate list
+                │
+                ▼  STAGE 2 · expensive · top-N (PRECISION)
+          cross-encoder rerank
+                │
+                ▼
+            top-k → window
+stage 2 cannot recover what stage 1 missed</pre>
+
+      <h2>Chunking rules</h2>
+      <ol class="rules">
+        <li>Split on <strong>structure</strong> (function/class/heading bounds), not character count.</li>
+        <li>Add <strong>overlap</strong> so a fact spanning a boundary survives whole in one chunk.</li>
+        <li>Beware <strong>fragmentation</strong> — a split fact lives in neither chunk and is unretrievable.</li>
+        <li><strong>Contextual chunking</strong> — prepend a short doc/section summary so each chunk self-describes.</li>
+        <li>Each chunk must be <strong>complete</strong> (answers alone) and <strong>retrievable</strong> (matches its questions).</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>Retrieval techniques</h2>
+  <table>
+    <tr><th>Technique</th><th>Good at</th><th>Weakness</th><th>Failure mode</th></tr>
+    <tr><td>Lexical / BM25</td><td>Exact terms, identifiers, error codes, IDs</td><td>No synonyms / semantics</td><td>Vocabulary mismatch → total miss</td></tr>
+    <tr><td>Semantic / embeddings</td><td>Meaning, synonyms, paraphrase</td><td>Misses rare exact tokens (IDs, fn names)</td><td>Plausible-but-wrong; topically similar</td></tr>
+    <tr><td>Hybrid</td><td>Exact and meaning together (fuse via RRF)</td><td>More infra; fusion weights to tune</td><td>Bounded by both stages' recall</td></tr>
+    <tr><td>Re-rank</td><td>Ordering the final top-k (cross-encoder)</td><td>Latency &amp; cost; top-N only</td><td>Can't recover a missed document</td></tr>
+  </table>
+
+  <h2>The five failure modes</h2>
+  <table>
+    <tr><th>Mode</th><th>Symptom</th><th>Root cause</th><th>Fix</th></tr>
+    <tr><td>Missing</td><td>"I don't know" / hallucinated filler</td><td>Recall gap; not in KB; chunking fragmented it</td><td>Improve recall (hybrid), better chunking, add source</td></tr>
+    <tr><td>Wrong</td><td>Confident but off-topic / incorrect</td><td>Embedding "similar-but-wrong"; no rerank</td><td>Rerank, metadata filters, hybrid + exact match</td></tr>
+    <tr><td>Outdated</td><td>Old price / old API answer</td><td>Index not refreshed; cached doc</td><td>Freshness/invalidation, re-index, live fetch</td></tr>
+    <tr><td>Conflicting</td><td>Contradictory / arbitrary answer</td><td>Duplicates/versions; no source-of-truth precedence</td><td>Dedupe, rank by authority/recency, pass provenance</td></tr>
+    <tr><td>Excessive</td><td>Slower, costlier; key fact ignored</td><td>Dump-everything; no selection</td><td>Select less but right; cite position bias (lost in middle)</td></tr>
+  </table>
+
+  <div class="cols">
+    <div>
+      <h2>Context compression (long runs)</h2>
+      <table>
+        <tr><th>Move</th><th>What + when</th></tr>
+        <tr><td>Summarization</td><td>Condense old history. <strong>Lossy.</strong> History too long to carry verbatim.</td></tr>
+        <tr><td>Distillation</td><td>Extract facts/decisions/state, drop narrative. <strong>Lossy.</strong> Want conclusions, not chatter.</td></tr>
+        <tr><td>Compression</td><td>Dedupe/prune boilerplate. Near-lossless. Content is repetitive.</td></tr>
+        <tr><td>Sliding window</td><td>Last N turns verbatim + rolling summary of older. The default for long agents.</td></tr>
+      </table>
+      <p style="font-size:.78rem;color:var(--muted)"><strong>Lossy warning:</strong> a dropped ID/constraint
+      can be the one that matters later. Compress the OLD; keep recent + decisions/IDs verbatim; store the
+      full transcript and retrieve on demand. Compress as you approach the budget, not pre-emptively.</p>
+    </div>
+
+    <div>
+      <h2>Match retrieval to data type</h2>
+      <table>
+        <tr><th>Data</th><th>Retrieval</th></tr>
+        <tr><td>Exact / financial</td><td>Deterministic <strong>structured query</strong> (SQL keyed by id) — never fuzzy embeddings; never invent amounts.</td></tr>
+        <tr><td>Fuzzy / textual</td><td><strong>Hybrid + rerank</strong> over the KB; cite sources back.</td></tr>
+        <tr><td>Volatile</td><td><strong>Fetch live</strong> — freshness/invalidation; don't trust a stale index.</td></tr>
+        <tr><td>Long-running</td><td><strong>Compress + remember</strong> — summarize old, keep recent verbatim.</td></tr>
+      </table>
+      <p style="font-size:.78rem;color:var(--muted)">Vector search returns the most <em>similar</em>, not
+      the <em>correct</em>. For an invoice total you need a deterministic lookup. Log the assembled context
+      per call — a wrong answer is undebuggable otherwise.</p>
+    </div>
+  </div>
+
+  <h2>Retrieval evaluation <span class="tag">L6</span></h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>Retrieval metric</th><th>Asks</th></tr>
+        <tr><td>recall@k</td><td><strong>Most important</strong> — is &#8805;1 relevant doc in top-k? Nothing downstream can use what wasn't retrieved.</td></tr>
+        <tr><td>precision@k</td><td>What fraction of top-k is actually relevant? Junk crowds the window.</td></tr>
+        <tr><td>MRR</td><td>How high the <em>first</em> relevant hit sits (one good hit is enough).</td></tr>
+        <tr><td>nDCG</td><td>Graded, position-discounted — judges the <em>reranker</em>'s ordering.</td></tr>
+      </table>
+    </div>
+    <div>
+      <table>
+        <tr><th>Answer quality (RAGAS)</th><th>Asks</th></tr>
+        <tr><td>Faithfulness</td><td>Is every claim grounded in the retrieved context? (catches hallucination)</td></tr>
+        <tr><td>Answer relevance</td><td>Does it address the question? (catches off-topic)</td></tr>
+        <tr><td>Context precision</td><td>Are retrieved chunks relevant <em>and</em> well-ranked?</td></tr>
+        <tr><td>Context recall</td><td>Did retrieval capture all the ideal answer needs? (needs ground truth)</td></tr>
+      </table>
+    </div>
+  </div>
+  <ol class="rules">
+    <li><strong>Measure retrieval separately from generation</strong> — faithful-but-wrong = retrieval bug; hallucination over good context = generation bug; don't fix the wrong half.</li>
+    <li><strong>Golden set + offline regression</strong> (CI, gates deploys) + <strong>online signals</strong> (thumbs · deflection · citation-clicks · rephrase rate); curate new misses back into the golden set.</li>
+    <li><strong>Trace every call</strong> — query &#183; retrieved IDs+scores &#183; packed chunks &#183; answer — turns "the bot was wrong" into "doc X wasn't retrieved." LLM-as-judge scales grading but must be calibrated vs human labels.</li>
+  </ol>
+
+  <h2>Pre-retrieval &amp; advanced RAG <span class="tag">L7</span></h2>
+  <p style="font-size:.78rem;color:var(--muted);margin:.2rem 0 .3rem">The raw query is a bad search query — fix it <em>before</em> the index (recall no reranker can recover); flat top-k is a floor, not a ceiling.</p>
+  <table>
+    <tr><th>Query transform</th><th>Problem it solves</th></tr>
+    <tr><td>Rewriting</td><td>Vague / pronoun-laden / misspelled input — clean, expand, disambiguate.</td></tr>
+    <tr><td>Multi-query</td><td>One phrasing misses — N paraphrases, retrieve each, union &amp; dedupe &#8594; recall.</td></tr>
+    <tr><td>HyDE</td><td>Questions look unlike answers — embed a drafted hypothetical answer to bridge the vocab gap.</td></tr>
+    <tr><td>Decomposition</td><td>Multi-part question no single chunk answers — split into sub-queries, combine.</td></tr>
+    <tr><td>Step-back</td><td>Too specific to find grounding — ask a broader question first.</td></tr>
+    <tr><td>Routing</td><td>Wrong datasource — classify and send to docs vs code vs SQL.</td></tr>
+  </table>
+  <ol class="rules">
+    <li><strong>Parent-doc / small-to-big</strong> — match the small precise chunk, return the larger parent for context.</li>
+    <li><strong>Hierarchical</strong> — retrieve over summaries, then drill into details (large docs).</li>
+    <li><strong>Contextual retrieval</strong> — prepend chunk-situating context + add BM25 alongside vectors.</li>
+    <li><strong>ColBERT / multi-vector</strong> — token-level late interaction &#8594; higher precision (costly).</li>
+    <li><strong>GraphRAG</strong> — subgraphs + community summaries for global "connect-the-dots across the corpus" themes; overkill for local facts.</li>
+    <li><strong>Agentic RAG / Self-RAG / CRAG</strong> — retrieval becomes an action in a loop: decide-to-retrieve, grade docs, re-retrieve / web-fallback, critique the draft. Buys quality; pays in latency, cost, complexity.</li>
+  </ol>
+
+  <h2>Embeddings, indexing &amp; cost <span class="tag">L8</span></h2>
+  <ol class="rules">
+    <li><strong>The lens</strong> = embedding model + dimensions + similarity metric (cosine = angle, ignores magnitude; normalize first).</li>
+    <li><strong>Chunk granularity drives embedding quality</strong> — a vector is the average of its text; too big &#8594; blurry centroid, too small &#8594; lost context.</li>
+    <li><strong>Changing the embedding model = re-index the world</strong> — old/new vectors live in different spaces, incomparable; a full migration, not a config flip.</li>
+  </ol>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>ANN index</th><th>Strength</th><th>Cost</th></tr>
+        <tr><td>HNSW (graph)</td><td>Fast, high recall</td><td>Memory-heavy; slow build</td></tr>
+        <tr><td>IVF (cluster)</td><td>Tunable speed via #probes</td><td>Recall dips if neighbor in un-probed cell</td></tr>
+        <tr><td>PQ (compress)</td><td>Big memory savings</td><td>Lossy &#8594; lower recall (pair as IVF+PQ)</td></tr>
+        <tr><td>Flat (brute)</td><td>Perfect recall, zero build</td><td>O(n)/query — small corpora only</td></tr>
+      </table>
+      <p style="font-size:.78rem;color:var(--muted)">Pick a corner: <strong>recall &#8596; latency &#8596; memory</strong> can't all max. ANN gives up a few % recall for sub-linear speed; a reranker cleans the top.</p>
+    </div>
+    <div>
+      <table>
+        <tr><th>Cost lever</th><th>Why</th></tr>
+        <tr><td>Fewer / better chunks</td><td>Tokens are the bill; noise also lowers accuracy.</td></tr>
+        <tr><td>Rerank only top-n</td><td>Cross-encoder on candidates, not all.</td></tr>
+        <tr><td>Cheaper embed model</td><td>Lower query + corpus embed price.</td></tr>
+        <tr><td>Prompt caching</td><td>Stop reprocessing the stable prefix (L9).</td></tr>
+        <tr><td>Batch embedding</td><td>Corpus embed offline, avoid needless re-embeds.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>Caching, ordering &amp; security <span class="tag">L9</span></h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>Prompt cache</th><th>Placement</th></tr>
+        <tr><td>System prompt</td><td><strong>Stable &#8594; first</strong> — byte-identical every call.</td></tr>
+        <tr><td>Tool defs</td><td>Stable &#8594; in prefix — changes only on deploy.</td></tr>
+        <tr><td>Few-shots</td><td>Stable &#8594; in prefix — reused across calls.</td></tr>
+        <tr><td>Retrieved docs</td><td><strong>Volatile &#8594; after prefix</strong> — can't cache.</td></tr>
+        <tr><td>User query</td><td><strong>Volatile &#8594; last</strong> — new every call.</td></tr>
+      </table>
+      <p style="font-size:.78rem;color:var(--muted)">Cache key = exact identical prefix; one changed token busts it from there down. <strong>Lost in the middle:</strong> attention is U-shaped — put the query last (recency, also cache-friendly) and the best doc at an edge; never bury key evidence mid-window.</p>
+    </div>
+    <div>
+      <ol class="rules">
+        <li><strong>Retrieved content is untrusted data, not instructions</strong> — indirect prompt injection rides in through your own KB; delimit it as data, filter outputs, constrain tool egress (OWASP LLM #1).</li>
+        <li><strong>Multi-tenant access control belongs in the retrieval query</strong> — filter by <code>tenant_id</code>/ACL at the index, never in the prompt; the prompt is not a security boundary.</li>
+        <li><strong>PII / sensitive-info disclosure</strong> — redaction, retention/residency limits, least-privilege retrieval.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>5-minute revision (the whole spine)</h2>
+  <ol class="rules">
+    <li>Say the one sentence: <strong>model = constant, context = variable</strong>; right context + smaller model often beats wrong context + flagship.</li>
+    <li>Name the window tenants: prompt · tools · history · retrieved · question · answer — all compete for one fixed budget.</li>
+    <li>Draw the inversion: <strong>context retrieval is the new SQL query</strong>; the bug is silent — fluent and confidently wrong.</li>
+    <li>Selection funnel: <strong>candidate generation (recall) → ranking → pack to budget</strong>; you can't pack what you never retrieved.</li>
+    <li>Engines: lexical=exact, semantic=meaning, hybrid=both, rerank=precision at the top.</li>
+    <li>Chunk on meaning + overlap + contextual summary; chunk grain is the retrieval grain.</li>
+    <li>RAG = retrieve + assemble + LLM; <strong>most "the LLM is dumb" bugs are retrieval bugs</strong> — fix recall before model.</li>
+    <li>Memory (system-written, per-user) ≠ knowledge base (external, read-only); both reach the model only via retrieval.</li>
+    <li>Long runs: store the transcript, compress the old, keep recent + IDs verbatim.</li>
+    <li>Classify any bad answer: <strong>missing / wrong / outdated / conflicting / excessive</strong> — then the fix is obvious.</li>
+    <li>Production reflex: name the strategy (pre-index · read-on-demand · none) → you've named its failure mode → match retrieval to the data type.</li>
+    <li><strong>Eval (L6):</strong> grade retrieval and generation <em>separately</em> — recall@k first, then RAGAS (faithfulness · relevance · context precision/recall); golden set offline + signals online; trace every call.</li>
+    <li><strong>Pre-retrieval (L7):</strong> the query is not the question — rewrite · multi-query · HyDE · decompose · step-back · route; fix the query before the index, recall no reranker can recover.</li>
+    <li><strong>Advanced RAG (L7):</strong> flat top-k is a floor — small-to-big · hierarchical · contextual · ColBERT · GraphRAG (global themes); agentic/Self-RAG/CRAG loop buys quality, pays latency+cost.</li>
+    <li><strong>Embeddings &amp; cost (L8):</strong> model+dims+metric+chunk = the lens; change the model → re-index the world; ANN (HNSW/IVF/PQ/Flat) trades recall↔latency↔memory; tokens are the bill.</li>
+    <li><strong>Production layer (L9):</strong> stable-first/volatile-last for cache; query last + best doc at an edge for "lost in the middle"; retrieved text is data not instructions; ACL in the query, not the prompt.</li>
+  </ol>
+
+  <footer>
+    Recall, don't re-read — recite the spine, draw both diagrams, classify a bug by failure mode.
+    Pairs with the <a href="context-architecture-review.html">architecture-review sheet</a> ·
+    <a href="../lessons/0001-what-is-context-and-context-as-query.html">Lesson 1</a> ·
+    <a href="../lessons/0006-retrieval-evaluation-and-observability.html">L6</a> ·
+    <a href="../lessons/0007-pre-retrieval-and-advanced-rag.html">L7</a> ·
+    <a href="../lessons/0008-embeddings-indexing-and-cost.html">L8</a> ·
+    <a href="../lessons/0009-context-caching-ordering-and-security.html">L9</a> ·
+    <a href="../GLOSSARY.md">glossary</a>.
+    <br/><br/>
+    <strong>References / further reading.</strong>
+    Anthropic — <a href="https://www.anthropic.com/engineering">Effective context engineering</a>,
+    <a href="https://www.anthropic.com/news/contextual-retrieval">Contextual Retrieval</a>,
+    <a href="https://www.anthropic.com/research/building-effective-agents">Building effective agents</a> ·
+    Lewis et al., <a href="https://arxiv.org/abs/2005.11401">Retrieval-Augmented Generation</a> ·
+    Karpukhin et al., <a href="https://arxiv.org/abs/2004.04906">Dense Passage Retrieval (DPR)</a> ·
+    Robertson &amp; Zaragoza, <a href="https://doi.org/10.1561/1500000019">BM25 / Probabilistic Relevance</a> ·
+    Cormack et al., <a href="https://doi.org/10.1145/1571941.1572114">Reciprocal Rank Fusion (RRF)</a> ·
+    Liu et al., <a href="https://arxiv.org/abs/2307.03172">Lost in the Middle</a> ·
+    <a href="https://owasp.org/www-project-top-10-for-large-language-model-applications/">OWASP Top 10 for LLM Applications</a> ·
+    <a href="https://docs.cursor.com">Cursor</a> &amp; <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a> docs.
+    Full annotated list in <a href="../RESOURCES.md">RESOURCES.md</a>.
+  </footer>
+</div>
+
+</body>
+</html>
