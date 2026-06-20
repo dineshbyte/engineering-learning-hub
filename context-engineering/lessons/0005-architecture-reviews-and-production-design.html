@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 5 · Architecture Reviews &amp; Production Design — the Capstone</title>
+<meta name="description" content="The capstone: review real AI products (Cursor, Claude Code, ChatGPT, Copilot) by their context strategy, design production agents (billing, support, engineering, research), and walk away with the Principal's toolkit — cheat sheet, checklists, and interview banks.">
+<meta name="author" content="dineshbyte">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0005-architecture-reviews-and-production-design.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Engineering Learning Hub">
+<meta property="og:title" content="Lesson 5 · Architecture Reviews &amp; Production Design · Engineering Learning Hub">
+<meta property="og:description" content="Review AI products by their context strategy, design production agents, and take home the Principal's toolkit. The capstone of the Context Engineering track.">
+<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0005-architecture-reviews-and-production-design.html">
+<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@dineshxbyte">
+<meta name="twitter:title" content="Lesson 5 · Architecture Reviews &amp; Production Design">
+<meta name="twitter:description" content="Name the context strategy, name the failure mode. The capstone of the Context Engineering track.">
+<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<style>
+  :root{--accent:var(--track-context)}
+
+  /* one-sentence decomposition chips */
+  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+  .chip b{color:var(--accent)}
+  .chip.c2 b{color:var(--track-rest)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
+
+  /* TOC as a grid */
+  .toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
+  .toc a{text-decoration:none; padding:.15rem 0}
+
+  /* level block */
+  .lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
+  .lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
+  .num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
+  .lvltop h2{margin:0; font-size:1.24rem; font-weight:700}
+  .tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
+
+  /* fact cards — labelled 2-col variant */
+  .facts{grid-template-columns:1fr 1fr}
+  .fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+  .fact.blue b{color:var(--track-rest)}
+
+  /* myth -> truth (2-col grid) */
+  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
+  .myth div{border-radius:6px; padding:.45rem .6rem}
+  .myth .m{background:color-mix(in srgb,var(--bad) 12%,transparent); border-left:3px solid var(--bad); color:var(--bad)}
+  .myth .t{background:color-mix(in srgb,var(--good) 14%,transparent); border-left:3px solid var(--good); color:var(--good)}
+
+  /* dark "memory rule" band */
+  .rule{font-size:.92rem; font-weight:600; background:var(--ink); color:var(--bg); border-radius:8px; padding:.55rem .85rem; margin:.7rem 0}
+  .rule span{color:var(--accent)}
+
+  /* memory-check disclosure */
+  details.mc{border:0; background:transparent; padding:0; margin:.5rem 0 0; font-size:.84rem}
+  details.mc summary{cursor:pointer; color:var(--good); font-weight:600; list-style:none}
+  details.mc summary::before{content:"\25B8 "}
+  details.mc[open] summary::before{content:"\25BE "}
+  details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
+  details.mc .ans{color:var(--muted)}
+
+  /* interview-question disclosure */
+  details.iq{border-left:3px solid var(--track-rest); font-size:.88rem}
+  details.iq summary{list-style:none}
+  details.iq summary::-webkit-details-marker{display:none}
+  details.iq summary::before{content:"\1F4AC "}
+  details.iq[open] summary{color:var(--track-rest)}
+  details.iq .a{margin-top:.45rem; font-size:.85rem; color:var(--ink); line-height:1.45}
+  details.iq .a b{color:var(--track-rest)}
+
+  /* footer nav row */
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
+
+  @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<!-- shared arrowheads -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
+  <marker id="arwM" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b5179e"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="0004-memory-compression-and-failure-modes.html" title="Memory, Compression &amp; Failure Modes">&#8249; Prev</a><a href="0006-retrieval-evaluation-and-observability.html" title="Retrieval Evaluation &amp; Observability">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Context Engineering</span></span>
+  </nav>
+
+  <div class="kicker">Lesson 5 · Principal Track · Staff</div>
+  <h1>Architecture Reviews &amp; <em>Production Design</em></h1>
+  <p class="meta">~16 min · 2 modules + the capstone toolkit · the final lesson — where the whole track becomes one reusable reviewing instinct</p>
+
+  <div class="mission">
+    <strong>Your bar:</strong> walk into any AI architecture review and, within a minute, <em>name the context strategy</em> (pre-indexed vs read-on-demand vs none), name its failure mode, and prescribe the right retrieval for the data type. This capstone makes you fluent on real products (Cursor, Claude Code, ChatGPT, Copilot), on production agents (billing, support, engineering, research), and hands you the <b>Principal's toolkit</b> — a cheat sheet, mental models, checklists, and interview banks you keep.<sup><a href="#s1" id="r1">1</a></sup>
+  </div>
+
+  <p>The whole capstone collapses to one reviewing reflex. Each chip is one move you'll make on sight:</p>
+  <div class="chips">
+    <span class="chip">Every assistant is a <b>context strategy + a model</b></span>
+    <span class="chip c2">name the strategy: <b>pre-index · read-on-demand · none</b></span>
+    <span class="chip c3">and you've named its <b>failure mode</b></span>
+    <span class="chip c4">then <b>match retrieval to the data type</b></span>
+  </div>
+
+  <!-- ============ HERO ============ -->
+  <figure>
+    <svg viewBox="0 0 640 300" role="img" aria-label="Four AI products placed on a spectrum from pre-indexed retrieval to read-on-demand, each with its own failure mode.">
+      <text x="320" y="20" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111110">Every assistant lives on one spectrum</text>
+      <!-- spectrum line -->
+      <line x1="60" y1="120" x2="580" y2="120" stroke="#6b675f" stroke-width="2" marker-start="url(#arw)" marker-end="url(#arw)"/>
+      <text x="64" y="142" font-size="10" font-weight="700" fill="#1f3a5a">PRE-INDEXED (embeddings)</text>
+      <text x="576" y="142" text-anchor="end" font-size="10" font-weight="700" fill="#2f5d3a">READ-ON-DEMAND (tools)</text>
+      <!-- product nodes -->
+      <rect x="80" y="56" width="120" height="40" rx="8" fill="#eef2f7" stroke="#1f3a5a"/><text x="140" y="74" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1f3a5a">Cursor</text><text x="140" y="88" text-anchor="middle" font-size="8" fill="#6b675f">repo embeddings</text>
+      <rect x="222" y="56" width="120" height="40" rx="8" fill="#f6eef7" stroke="#b5179e"/><text x="282" y="74" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b5179e">Copilot</text><text x="282" y="88" text-anchor="middle" font-size="8" fill="#6b675f">open files + index</text>
+      <rect x="364" y="56" width="120" height="40" rx="8" fill="#f6eef7" stroke="#b5179e"/><text x="424" y="74" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b5179e">ChatGPT</text><text x="424" y="88" text-anchor="middle" font-size="8" fill="#6b675f">history + connectors</text>
+      <rect x="478" y="56" width="120" height="40" rx="8" fill="#e9f3ec" stroke="#2f5d3a"/><text x="538" y="74" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">Claude Code</text><text x="538" y="88" text-anchor="middle" font-size="8" fill="#6b675f">grep / glob / read</text>
+      <!-- tethers -->
+      <line x1="140" y1="96" x2="140" y2="118" stroke="#6b675f"/>
+      <line x1="282" y1="96" x2="282" y2="118" stroke="#6b675f"/>
+      <line x1="424" y1="96" x2="424" y2="118" stroke="#6b675f"/>
+      <line x1="538" y1="96" x2="538" y2="118" stroke="#6b675f"/>
+      <!-- failure-mode row -->
+      <text x="320" y="180" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a2417">…and each position picks its own way to fail</text>
+      <rect x="40" y="192" width="560" height="80" rx="8" fill="#fbecec" stroke="#9a2417"/>
+      <text x="56" y="214" font-size="9.5" fill="#9a2417"><tspan font-weight="700">Pre-indexed:</tspan> stale index · retrieves a topically-similar but wrong file · misses exact identifiers</text>
+      <text x="56" y="234" font-size="9.5" fill="#9a2417"><tspan font-weight="700">Read-on-demand:</tspan> latency &amp; token cost from round-trips · misses a file it never thought to grep</text>
+      <text x="56" y="254" font-size="9.5" fill="#9a2417"><tspan font-weight="700">History / none:</tspan> weak grounding in live systems · hallucinates when nothing was retrieved</text>
+    </svg>
+    <figcaption>The reviewer's first move on any AI product: place it on the <b>pre-indexed &harr; read-on-demand</b> spectrum. Position predicts failure mode — staleness on the left, missed-grep and cost on the right, hallucination at the "none" extreme. Product specifics here are <em>at time of writing</em> and version-dependent.<sup><a href="#s4" id="r4">4</a></sup></figcaption>
+  </figure>
+
+  <nav class="toc">
+    <a href="#m1">11 · Architecture reviews — real AI products</a>
+    <a href="#m2">12 · Production design — agents by data type</a>
+    <a href="#toolkit">★ The Principal's toolkit (9 deliverables)</a>
+    <a href="#quiz">★ Retrieval practice — the capstone</a>
+  </nav>
+
+  <!-- ============ MODULE 1 ============ -->
+  <section class="lvl" id="m1">
+    <div class="lvltop"><span class="num">11</span><h2>Architecture Reviews — Reading Real AI Products</h2></div>
+    <p class="tagline">You can't review what you can't name. Each product below is a <b>context strategy with a model attached</b>. Name the strategy and the strengths, weaknesses, and failure mode fall out almost mechanically.</p>
+
+    <h3>The four products, side by side</h3>
+    <table>
+      <thead><tr><th>Product</th><th>Context strategy</th><th>Strengths</th><th>Weaknesses</th><th>Signature failure</th></tr></thead>
+      <tbody>
+        <tr><td><b>Cursor</b></td><td>Pre-indexed embeddings of the repo + semantic retrieval (+ open files)</td><td>Fast recall across huge repos; finds code before you know the filename</td><td>Index staleness; embeddings miss exact identifiers</td><td>Retrieves a topically-similar but <em>wrong</em> file</td></tr>
+        <tr><td><b>Claude&nbsp;Code</b></td><td>Agentic read-on-demand via tools (grep / glob / read); follows the dependency graph live; no persistent index</td><td>Always fresh; precise; transparent about what it read</td><td>More tool round-trips &rarr; latency &amp; token cost; depends on choosing good searches</td><td>Misses a file it never thought to grep</td></tr>
+        <tr><td><b>ChatGPT</b></td><td>Conversation history + optional retrieval / uploads / connectors / a memory feature</td><td>Broad general capability; cross-session memory</td><td>Weak grounding in <em>your</em> live systems without connectors</td><td>Hallucinates when nothing was retrieved</td></tr>
+        <tr><td><b>GitHub&nbsp;Copilot</b></td><td>Open files + nearby code + (newer) repo / workspace indexing for chat</td><td>Very low-latency inline local context</td><td>Historically a limited window of surrounding code; weaker whole-repo reasoning</td><td>Suggests plausible code that ignores a distant constraint</td></tr>
+      </tbody>
+    </table>
+
+    <div class="facts">
+      <div class="fact"><b>Pre-index (Cursor)</b> Builds embeddings ahead of time so retrieval is one fast lookup. The bet: precompute relevance. The tax: an index drifts from reality the moment code changes.</div>
+      <div class="fact"><b>Read-on-demand (Claude Code)</b> No precompute; it searches the live tree per task. The bet: always-fresh, auditable reads. The tax: round-trips cost tokens and latency, and a bad search plan misses files.</div>
+      <div class="fact blue"><b>History + connectors (ChatGPT)</b> Strong generalist whose grounding in your systems is only as good as the connectors you wire up. With nothing retrieved, it fills gaps confidently.</div>
+      <div class="fact blue"><b>Local window (Copilot)</b> Optimised for instant inline completion from what's near the cursor; whole-repo constraints far from the cursor can be silently violated.</div>
+    </div>
+
+    <h3>Same query, two strategies</h3>
+    <figure>
+      <svg viewBox="0 0 640 224" role="img" aria-label="A pre-indexed lookup versus a read-on-demand search resolving the same query.">
+        <text x="160" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1f3a5a">Pre-indexed (embeddings)</text>
+        <text x="480" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#2f5d3a">Read-on-demand (tools)</text>
+        <!-- left -->
+        <rect x="60" y="30" width="200" height="32" rx="6" fill="#eef2f7" stroke="#1f3a5a"/><text x="160" y="50" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">query &rarr; embed</text>
+        <rect x="60" y="80" width="200" height="32" rx="6" fill="#eef2f7" stroke="#1f3a5a"/><text x="160" y="100" text-anchor="middle" font-size="10" font-weight="700" fill="#1f3a5a">vector lookup (1 hop)</text>
+        <rect x="60" y="130" width="200" height="32" rx="6" fill="#eef2f7" stroke="#1f3a5a"/><text x="160" y="150" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">top-k chunks</text>
+        <line x1="160" y1="62" x2="160" y2="78" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="160" y1="112" x2="160" y2="128" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="160" y="186" text-anchor="middle" font-size="9" fill="#9a2417">fast · but as stale as the index</text>
+        <text x="160" y="202" text-anchor="middle" font-size="9" fill="#9a2417">&amp; blind to exact identifiers</text>
+        <!-- right -->
+        <rect x="380" y="30" width="200" height="32" rx="6" fill="#e9f3ec" stroke="#2f5d3a"/><text x="480" y="50" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">grep / glob</text>
+        <rect x="380" y="80" width="200" height="32" rx="6" fill="#e9f3ec" stroke="#2f5d3a"/><text x="480" y="100" text-anchor="middle" font-size="10" font-weight="700" fill="#2f5d3a">read &rarr; follow imports</text>
+        <rect x="380" y="130" width="200" height="32" rx="6" fill="#e9f3ec" stroke="#2f5d3a"/><text x="480" y="150" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">grep again (N hops)</text>
+        <line x1="480" y1="62" x2="480" y2="78" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <line x1="480" y1="112" x2="480" y2="128" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <text x="480" y="186" text-anchor="middle" font-size="9" fill="#9a2417">fresh &amp; precise · but more</text>
+        <text x="480" y="202" text-anchor="middle" font-size="9" fill="#9a2417">round-trips, and misses unsearched files</text>
+      </svg>
+      <figcaption>One hop versus N hops. Pre-index trades freshness for speed; read-on-demand trades speed for freshness and transparency. Neither is "better" — they fail differently, and the review names <em>which</em> failure your use-case can't tolerate.<sup><a href="#s3" id="r3">3</a></sup></figcaption>
+    </figure>
+
+    <div class="myth">
+      <div class="m">&#10007; "Cursor is smarter than Copilot" (or vice-versa).</div>
+      <div class="t">&#10003; They picked different context strategies. "Smarter" is use-case dependent: huge-repo recall vs instant local completion vs always-fresh precision.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; "An embedding index means it always finds the right code."</div>
+      <div class="t">&#10003; Embeddings retrieve by <em>topical similarity</em>; they can miss an exact identifier and surface a plausible-but-wrong file. Hybrid + rerank exists for exactly this.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> Every assistant is a <span>context strategy with a model attached</span>. Name the strategy — <span>pre-index vs read-on-demand vs none</span> — and you've named its failure mode.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What's Cursor's signature failure, and why? <span class="ans">&rarr; retrieves a topically-similar but wrong file — embeddings match meaning, not exact identifiers; index can also be stale</span></li>
+      <li>What does Claude Code trade for always-fresh context? <span class="ans">&rarr; more tool round-trips &rarr; higher latency and token cost; relies on choosing good searches</span></li>
+      <li>When does a history/connector assistant hallucinate most? <span class="ans">&rarr; when nothing relevant was retrieved and it isn't grounded in your live systems</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>You're reviewing a vendor's "AI code assistant." What's the first question you ask, and why?</summary>
+      <div class="a">
+        <b>Hit these points:</b> "What's the context strategy — pre-indexed embeddings, read-on-demand tools, or just history?" &rarr; that single answer predicts strengths, cost shape, and the failure mode &rarr; pre-index &rarr; ask about index freshness/invalidation and identifier recall; read-on-demand &rarr; ask about round-trip latency and search-coverage gaps; history/none &rarr; ask what grounds it in live systems &rarr; then ask if there's hybrid + rerank to cover the embedding blind spot &rarr; frame: I'm not comparing models, I'm comparing retrieval architectures.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ MODULE 2 ============ -->
+  <section class="lvl" id="m2">
+    <div class="lvltop"><span class="num">12</span><h2>Production Design — Match Retrieval to the Data</h2></div>
+    <p class="tagline">A production agent is a context pipeline. The senior move is <b>choosing the retrieval mechanism by data type</b>: exact &amp; financial &rarr; structured query; fuzzy &amp; textual &rarr; hybrid + rerank; volatile &rarr; fetch live; long-running &rarr; compress + remember.</p>
+
+    <h3>The generic production context pipeline</h3>
+    <figure>
+      <svg viewBox="0 0 660 150" role="img" aria-label="A production context pipeline from ingest through guardrails to the LLM, with logging.">
+        <text x="330" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111110">Every production agent is this pipeline</text>
+        <!-- stages -->
+        <rect x="14" y="40" width="78" height="40" rx="7" fill="#eef2f7" stroke="#1f3a5a"/><text x="53" y="64" text-anchor="middle" font-size="9" font-weight="700" fill="#111110">ingest</text>
+        <rect x="106" y="40" width="86" height="40" rx="7" fill="#eef2f7" stroke="#1f3a5a"/><text x="149" y="60" text-anchor="middle" font-size="9" font-weight="700" fill="#111110">index /</text><text x="149" y="72" text-anchor="middle" font-size="9" font-weight="700" fill="#111110">store</text>
+        <rect x="206" y="40" width="86" height="40" rx="7" fill="#f6eef7" stroke="#b5179e"/><text x="249" y="64" text-anchor="middle" font-size="9" font-weight="700" fill="#b5179e">retrieve</text>
+        <rect x="306" y="40" width="86" height="40" rx="7" fill="#f6eef7" stroke="#b5179e"/><text x="349" y="64" text-anchor="middle" font-size="9" font-weight="700" fill="#b5179e">assemble</text>
+        <rect x="406" y="40" width="92" height="40" rx="7" fill="#fbecec" stroke="#9a2417"/><text x="452" y="64" text-anchor="middle" font-size="9" font-weight="700" fill="#9a2417">guardrails</text>
+        <rect x="512" y="40" width="64" height="40" rx="7" fill="#e9f3ec" stroke="#2f5d3a"/><text x="544" y="64" text-anchor="middle" font-size="9" font-weight="700" fill="#2f5d3a">LLM</text>
+        <rect x="590" y="40" width="56" height="40" rx="7" fill="#efe7f0" stroke="#111110"/><text x="618" y="64" text-anchor="middle" font-size="9" font-weight="700" fill="#111110">log</text>
+        <!-- arrows -->
+        <line x1="92" y1="60" x2="104" y2="60" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="192" y1="60" x2="204" y2="60" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="292" y1="60" x2="304" y2="60" stroke="#b5179e" marker-end="url(#arwM)"/>
+        <line x1="392" y1="60" x2="404" y2="60" stroke="#b5179e" marker-end="url(#arwM)"/>
+        <line x1="498" y1="60" x2="510" y2="60" stroke="#9a2417" marker-end="url(#arwR)"/>
+        <line x1="576" y1="60" x2="588" y2="60" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <text x="330" y="112" text-anchor="middle" font-size="9.5" font-style="italic" fill="#b5179e">The magenta stages — retrieve &amp; assemble — are where data type dictates the mechanism.</text>
+        <text x="330" y="130" text-anchor="middle" font-size="9" fill="#6b675f">Guardrails defend against poisoned/injected context; the log makes the whole call auditable.</text>
+      </svg>
+      <figcaption>The pipeline is constant; the <em>retrieve</em> stage changes per agent. Get that one stage wrong for the data type and no amount of model or prompt fixes it.<sup><a href="#s8" id="r8">8</a></sup></figcaption>
+    </figure>
+
+    <h3>Four agents, four data shapes</h3>
+    <table>
+      <thead><tr><th>Agent</th><th>Retrieval (matched to data)</th><th>Scalability</th><th>Cost</th><th>Reliability</th><th>Observability</th></tr></thead>
+      <tbody>
+        <tr><td><b>Billing</b></td><td><em>Deterministic</em> structured query — SQL keyed by <code>account_id</code>, never fuzzy embeddings</td><td>Cheap point lookups</td><td>Low tokens</td><td>No hallucinated numbers; never invent amounts</td><td>Log every assembled context + tool call for audit</td></tr>
+        <tr><td><b>Support</b></td><td>Hybrid over help-center KB + customer history (memory); rerank</td><td>KB grows; cache hot articles</td><td>Moderate</td><td>KB freshness; PII handling / compliance</td><td>Retrieval hit-rate; deflection/escalation; cite sources to user</td></tr>
+        <tr><td><b>Engineering</b></td><td>Codebase retrieval (hybrid + structural) and/or read-on-demand; tests as a grounding signal</td><td>Large repos; token-heavy</td><td>Token cost dominates</td><td>Ground in real code; run tests</td><td>Log which files / symbols loaded per task</td></tr>
+        <tr><td><b>Research</b></td><td>Multi-source web/doc retrieval, multi-step; compress intermediate findings; keep citations</td><td>Many calls / sources</td><td>High (fan-out)</td><td>Adversarial verification; dedupe conflicting sources</td><td>Source provenance per claim</td></tr>
+      </tbody>
+    </table>
+
+    <div class="facts">
+      <div class="fact"><b>Billing — exact</b> Financial data must be exact and auditable. A SQL point-lookup returns the true number; a semantic search returns the <em>most-similar</em> number — which is a bug. Match mechanism to data type.</div>
+      <div class="fact"><b>Support — fuzzy</b> Natural-language KB articles are the home turf of hybrid retrieval + rerank, with customer history as memory. Cache hot articles; cite sources back to the user.</div>
+      <div class="fact blue"><b>Engineering — structural</b> Code has structure (imports, symbols, tests). Hybrid + structural retrieval or read-on-demand grounds answers in real code; tests are a verification signal the agent can run.</div>
+      <div class="fact blue"><b>Research — volatile</b> Truth is spread across many fresh sources. Fan out, verify adversarially, compress intermediate findings to fit the budget, and keep provenance per claim.</div>
+    </div>
+
+    <div class="myth">
+      <div class="m">&#10007; "Just use vector search for everything — it's the AI way."</div>
+      <div class="t">&#10003; Vector search returns the <em>most similar</em>, not the <em>correct</em>. For exact/transactional data (an invoice total) you need a deterministic structured query, not semantic similarity.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; "We'll add observability later — ship the agent first."</div>
+      <div class="t">&#10003; Without logging the assembled context per call, a wrong answer is undebuggable. For billing it's also non-negotiable for audit. Observability is part of the design, not a follow-up.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> <span>Design the retrieval to the data:</span> exact &amp; financial &rarr; structured query; fuzzy &amp; textual &rarr; hybrid + rerank; volatile &rarr; fetch live; long-running &rarr; <span>compress + remember</span>.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Why is embedding search wrong for a billing agent? <span class="ans">&rarr; it returns the most-similar value, not the exact one; financial data needs deterministic, auditable structured queries</span></li>
+      <li>What's the dominant cost driver for an engineering agent? <span class="ans">&rarr; tokens — large repos mean token-heavy context; cost scales with what you load per task</span></li>
+      <li>What does a research agent need that a billing agent doesn't? <span class="ans">&rarr; adversarial verification, dedupe of conflicting sources, and source provenance per claim across a fan-out</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>Design the retrieval layer for a billing-support agent that must quote exact charges. Walk the trade-offs.</summary>
+      <div class="a">
+        <b>Hit these points:</b> charges are exact, transactional, auditable &rarr; retrieve via deterministic SQL keyed by <code>account_id</code>/invoice id, <em>not</em> embeddings &rarr; embeddings would return the most-similar amount, i.e. a confidently-wrong number &rarr; reliability rule: the agent may quote only values it pulled, never synthesize amounts &rarr; log every assembled context + tool call for audit and dispute resolution &rarr; if the user also asks policy questions, that's a <em>different</em> data type &rarr; layer hybrid KB retrieval for the textual part &rarr; one agent, two retrieval mechanisms matched to two data types.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ CAPSTONE TOOLKIT ============ -->
+  <h2 class="sec" id="toolkit">The Principal's toolkit — your 9 take-home deliverables</h2>
+  <p class="tagline">Compact, visual revision artifacts. Skim them before a review or an interview; each one is a tool you keep.</p>
+
+  <!-- D1 cheat sheet -->
+  <h3 id="d1">1 · One-page Context Engineering cheat sheet</h3>
+  <div class="facts">
+    <div class="fact"><b>The window</b> A fixed token budget shared by prompt, tools, history, retrieved context, and the answer. Bigger ≠ solved.</div>
+    <div class="fact"><b>Context = the new query</b> Retrieval/assembly plays SQL's role: it decides what the model ever sees.</div>
+    <div class="fact"><b>Selection &rarr; retrieve</b> Lexical (BM25) · semantic (embeddings) · <em>hybrid</em>; recall first.</div>
+    <div class="fact"><b>Rerank</b> Precision second: re-order the recalled set so the best lands near the top.</div>
+    <div class="fact blue"><b>Chunking</b> Split on meaning, add overlap; add per-chunk context so a chunk stands alone.</div>
+    <div class="fact blue"><b>RAG</b> retrieval + assembly + LLM — ground the answer in fetched facts.</div>
+    <div class="fact blue"><b>Memory vs KB</b> Memory = per-user/session state you carry; KB = shared corpus you retrieve from.</div>
+    <div class="fact blue"><b>Compression</b> For long runs: summarize/prune intermediate context to stay in budget.</div>
+  </div>
+  <table>
+    <thead><tr><th>The 5 failure modes</th><th>In one line</th></tr></thead>
+    <tbody>
+      <tr><td><b>Missing</b></td><td>The needed fact was never retrieved.</td></tr>
+      <tr><td><b>Wrong</b></td><td>Topically-similar but incorrect context retrieved.</td></tr>
+      <tr><td><b>Outdated</b></td><td>Stale index/doc; reality has moved on.</td></tr>
+      <tr><td><b>Conflicting</b></td><td>Two sources disagree; model picks one silently.</td></tr>
+      <tr><td><b>Excessive</b></td><td>Too much noise; signal buried, cost up, "lost in the middle."</td></tr>
+    </tbody>
+  </table>
+
+  <!-- D2 mental models -->
+  <h3 id="d2">2 · Context Engineering mental models</h3>
+  <div class="facts">
+    <div class="fact"><b>Constant vs variable</b> Context is the variable; the model is the constant. Change the context, change the answer.</div>
+    <div class="fact"><b>The new query</b> Context retrieval is the new database query — same role SQL played.</div>
+    <div class="fact"><b>Recall, then precision</b> Cast wide first; rerank to surface the best. Two stages, two jobs.</div>
+    <div class="fact"><b>Match retrieval to data</b> Exact &rarr; structured; fuzzy &rarr; hybrid; volatile &rarr; live; long &rarr; compress.</div>
+    <div class="fact blue"><b>Most AI bugs are context bugs</b> Suspect the input before blaming the model.</div>
+    <div class="fact blue"><b>The window is RAM</b> A budget you allocate, not a pipe to your data.</div>
+  </div>
+
+  <!-- D3 architecture-review checklist -->
+  <h3 id="d3">3 · Architecture-review checklist</h3>
+  <details class="mc"><summary>The ten questions to run on any AI design</summary><ul>
+    <li>What's the <b>context strategy</b>? <span class="ans">&rarr; pre-index · read-on-demand · none</span></li>
+    <li>Are there <b>recall and precision</b> stages? <span class="ans">&rarr; retrieve wide, then rerank</span></li>
+    <li>What's the <b>chunking</b> strategy? <span class="ans">&rarr; split on meaning + overlap + per-chunk context</span></li>
+    <li>How is <b>index freshness / invalidation</b> handled? <span class="ans">&rarr; or is it stale-by-default?</span></li>
+    <li>Is retrieval <b>hybrid + reranked</b>? <span class="ans">&rarr; lexical + semantic covers each other's blind spots</span></li>
+    <li>Is <b>retrieval evaluated</b> — not just answers? <span class="ans">&rarr; hit-rate / recall@k, not vibes</span></li>
+    <li>Is there a <b>budget / compression</b> plan for long sessions? <span class="ans">&rarr; summarize, prune, prioritize</span></li>
+    <li>Can you <b>observe the assembled context</b> per call? <span class="ans">&rarr; log what was sent, auditable</span></li>
+    <li>Is each <b>failure mode</b> covered? <span class="ans">&rarr; missing / wrong / outdated / conflicting / excessive</span></li>
+    <li>Is <b>PII / compliance</b> handled in retrieval? <span class="ans">&rarr; redaction, access control, injection defense</span></li>
+  </ul></details>
+
+  <!-- D4 failure modes table -->
+  <h3 id="d4">4 · Common failure modes — symptom &rarr; cause &rarr; fix</h3>
+  <table>
+    <thead><tr><th>Mode</th><th>Symptom</th><th>Root cause</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td><b>Missing</b></td><td>"I don't have info on that" / vague answer</td><td>Relevant doc never retrieved (recall gap)</td><td>Improve recall: hybrid retrieval, better chunking, more k</td></tr>
+      <tr><td><b>Wrong</b></td><td>Confident answer about the wrong thing</td><td>Topically-similar but incorrect chunk ranked top</td><td>Add rerank; lexical signal for exact identifiers</td></tr>
+      <tr><td><b>Outdated</b></td><td>Answer reflects an old state of the world</td><td>Stale index / cached doc</td><td>Invalidation on write; or fetch live for volatile data</td></tr>
+      <tr><td><b>Conflicting</b></td><td>Inconsistent answers; arbitrary choice</td><td>Sources disagree; no resolution policy</td><td>Dedupe, prefer authoritative source, surface the conflict</td></tr>
+      <tr><td><b>Excessive</b></td><td>Slow, costly, "lost in the middle"</td><td>Too much low-signal context packed in</td><td>Tighten selection; rerank; compress; trim history</td></tr>
+    </tbody>
+  </table>
+
+  <!-- D5 interview questions -->
+  <h3 id="d5">5 · Interview questions (Core &rarr; Staff)</h3>
+  <details class="iq">
+    <summary>Core — What is a context window and why can't an LLM just read the whole codebase?</summary>
+    <div class="a"><b>Hit these points:</b> the window is a fixed token budget — the model's only channel &rarr; real repos are orders of magnitude larger &rarr; bigger windows cost more, run slower, and recall the middle poorly &rarr; so you must <em>select</em> a relevant subset &rarr; the job is "which slice," not "read it all."</div>
+  </details>
+  <details class="iq">
+    <summary>Core — Lexical vs semantic vs hybrid retrieval — when each?</summary>
+    <div class="a"><b>Hit these points:</b> lexical (BM25) nails exact tokens/identifiers but misses synonyms &rarr; semantic (embeddings) matches meaning but misses exact strings and can drift &rarr; hybrid runs both and fuses (e.g. reciprocal rank fusion) &rarr; rerank then sharpens precision &rarr; default to hybrid + rerank in production.</div>
+  </details>
+  <details class="iq">
+    <summary>Mid — Walk me through a RAG pipeline and where each failure mode enters.</summary>
+    <div class="a"><b>Hit these points:</b> ingest &rarr; chunk &rarr; index &rarr; retrieve &rarr; rerank &rarr; assemble &rarr; LLM &rarr; log &rarr; <em>missing</em> enters at retrieve (recall gap), <em>wrong</em> at rerank, <em>outdated</em> at index freshness, <em>conflicting</em> at assemble, <em>excessive</em> at assemble/budget &rarr; each stage gets its own metric.</div>
+  </details>
+  <details class="iq">
+    <summary>Senior — How do you evaluate retrieval quality, not just answer quality?</summary>
+    <div class="a"><b>Hit these points:</b> build a labeled set of query&rarr;gold-doc pairs &rarr; measure recall@k and rerank precision separately from end-answer accuracy &rarr; log assembled context per call so failures are attributable &rarr; a wrong answer with the right context is a reasoning bug; with the wrong context it's a retrieval bug &rarr; you can't fix what you can't separate.</div>
+  </details>
+  <details class="iq">
+    <summary>Senior — Why is matching retrieval to data type a senior decision?</summary>
+    <div class="a"><b>Hit these points:</b> exact/transactional (a balance) &rarr; deterministic structured query; semantic search would return the most-similar, i.e. wrong &rarr; fuzzy text &rarr; hybrid + rerank &rarr; volatile &rarr; fetch live, don't cache stale &rarr; long-running &rarr; compress + remember &rarr; the mistake juniors make is one-size-fits-all vector search.</div>
+  </details>
+  <details class="iq">
+    <summary>Staff — Review this design: an AI agent answers finance questions over a vector DB of reports. Pushback?</summary>
+    <div class="a"><b>Hit these points:</b> numbers must be exact and auditable — vector search returns similar, not correct &rarr; risk: confidently-wrong amounts, no audit trail &rarr; redesign: structured query for the figures, vector/hybrid only for narrative text &rarr; add a rule that figures are quoted, never synthesized &rarr; log assembled context per call &rarr; add freshness/invalidation since reports update &rarr; name the failure modes this design currently invites (wrong, outdated).</div>
+  </details>
+  <details class="iq">
+    <summary>Staff — Same model, two products, one feels far smarter. Explain to a skeptical interviewer.</summary>
+    <div class="a"><b>Hit these points:</b> the model is the constant; context is the variable &rarr; the smarter product retrieves and assembles better context per call &rarr; "smart vs dumb" is mostly an artifact of what got loaded &rarr; therefore investment goes to retrieval, evaluation, and assembly — not chasing model versions &rarr; verify by logging context for the failing cases.</div>
+  </details>
+
+  <!-- D6 VP questions -->
+  <h3 id="d6">6 · VP Engineering review questions (leadership framing)</h3>
+  <details class="iq">
+    <summary>VP — Build vs buy: when do we build our own retrieval vs adopt a vendor assistant?</summary>
+    <div class="a"><b>Hit these points:</b> buy when the data is generic and the vendor's context strategy fits our use-case &rarr; build when our differentiation <em>is</em> the retrieval over proprietary data &rarr; the model is a commodity; the retrieval pipeline is the moat &rarr; decision pivots on whether off-the-shelf grounding reaches our live systems.</div>
+  </details>
+  <details class="iq">
+    <summary>VP — Where are the cost levers in an AI feature?</summary>
+    <div class="a"><b>Hit these points:</b> cost scales with tokens sent &rarr; tighter selection + rerank cuts wasted context &rarr; compress long sessions; trim history &rarr; cache hot retrievals &rarr; right context on a cheaper model often beats wrong context on the flagship — a structural saving, not a discount.</div>
+  </details>
+  <details class="iq">
+    <summary>VP — Where does investment in retrieval actually pay off?</summary>
+    <div class="a"><b>Hit these points:</b> retrieval fixes compound across every feature on the stack &rarr; a model upgrade is a flat tax on every call &rarr; better retrieval lifts accuracy, lowers cost, and reduces hallucination simultaneously &rarr; prioritize where wrong answers carry the highest business/compliance risk.</div>
+  </details>
+  <details class="iq">
+    <summary>VP — How do we measure retrieval quality as a leadership metric?</summary>
+    <div class="a"><b>Hit these points:</b> recall@k and rerank precision on a labeled set &rarr; retrieval hit-rate in production &rarr; deflection/escalation for support, audit-pass for billing &rarr; track these <em>separately</em> from end-answer accuracy so we know whether to invest in retrieval or the model.</div>
+  </details>
+  <details class="iq">
+    <summary>VP — What are the risk and compliance exposures?</summary>
+    <div class="a"><b>Hit these points:</b> PII in retrieved context &rarr; redaction + access control at the retrieve stage &rarr; prompt injection via poisoned/retrieved content (OWASP LLM Top 10) &rarr; guardrails before the model &rarr; auditability: log assembled context per call &rarr; for finance, deterministic retrieval + no-synthesis rule.</div>
+  </details>
+  <details class="iq">
+    <summary>VP — When do we upgrade the model vs invest in retrieval?</summary>
+    <div class="a"><b>Hit these points:</b> instrument first: was the right context retrieved for the failing cases? &rarr; if no &rarr; fix retrieval (cheaper, compounds) &rarr; if yes and reasoning is the bottleneck (multi-step synthesis) &rarr; pay for model capability &rarr; never upgrade the model to paper over a retrieval gap.</div>
+  </details>
+
+  <!-- D7 5-min revision -->
+  <h3 id="d7">7 · 5-minute revision guide (the spine)</h3>
+  <ol style="font-size:.86rem;line-height:1.5">
+    <li>The model only sees its <b>context window</b> — a fixed token budget, not your data.</li>
+    <li><b>Context is the new database query</b>: retrieval decides what the model ever sees.</li>
+    <li>Retrieve = recall first (lexical / semantic / <b>hybrid</b>), then <b>rerank</b> for precision.</li>
+    <li><b>Chunk on meaning</b> + overlap + per-chunk context; assemble within budget.</li>
+    <li><b>Memory</b> (per-user state) vs <b>KB</b> (shared corpus); <b>compress</b> long runs.</li>
+    <li>Five failure modes: <b>missing · wrong · outdated · conflicting · excessive</b>.</li>
+    <li>Review reflex: <b>name the context strategy &rarr; name the failure &rarr; match retrieval to data type</b>.</li>
+  </ol>
+
+  <!-- D8 30-min deep-dive -->
+  <h3 id="d8">8 · 30-minute deep-dive revision (linking the track)</h3>
+  <ol style="font-size:.86rem;line-height:1.5">
+    <li><b>Lesson 1 — What Is Context &amp; Context-as-Query.</b> Window as fixed budget; why bigger ≠ solved; the model is constant, context is variable; retrieval = the new SQL.</li>
+    <li><b>Lesson 2 — Selection &amp; Retrieval.</b> Lexical vs semantic vs hybrid; recall vs precision; rerank; reciprocal rank fusion. Re-derive when each retrieval type wins.</li>
+    <li><b>Lesson 3 — Chunking, RAG &amp; Assembly.</b> Split on meaning + overlap; contextual chunks; the RAG pipeline ingest&rarr;index&rarr;retrieve&rarr;assemble&rarr;LLM; assembly order and position bias.</li>
+    <li><b>Lesson 4 — Memory, Compression &amp; Failure Modes.</b> Memory vs KB; compression for long-running agents; the five failure modes and their fixes; observability.</li>
+    <li><b>Lesson 5 — Architecture Reviews &amp; Production Design (here).</b> Place real products on the pre-index&harr;read-on-demand spectrum; design billing/support/engineering/research agents by data type; run the review checklist.</li>
+    <li><b>Self-test:</b> for each lesson, state its one memory rule from memory, then design a small system that would violate it — and the fix.</li>
+  </ol>
+
+  <!-- D9 what to learn next -->
+  <h3 id="d9">9 · What to learn next</h3>
+  <div class="facts">
+    <div class="fact"><b>Next: Evaluation &amp; Observability for LLM systems ("evals")</b> The natural sequel — this whole track kept saying "measure retrieval quality, not just answers." Evals make that rigorous: labeled sets, recall@k, regression suites, LLM-as-judge, and tracing assembled context in production.</div>
+    <div class="fact blue"><b>Sibling: Agent orchestration &amp; multi-agent systems</b> Once one agent's context is solid, scale to many: planners, tool routing, sub-agent delegation, and how context flows (and compresses) between agents without losing provenance.</div>
+  </div>
+
+  <!-- ============ QUIZ ============ -->
+  <h2 class="sec" id="quiz">Retrieval practice — the capstone</h2>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q1.</span> Cursor's signature failure mode is best described as…</p>
+      <button class="opt">Refusing to answer any question until the entire repository has been fully re-indexed</button>
+      <button class="opt">Running out of tool round-trips before it can finish reading the dependency graph</button>
+      <button class="opt">Retrieving a topically-similar but wrong file because embeddings match meaning</button>
+      <button class="opt">Inventing exact dollar amounts when no financial record was actually retrieved</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q2.</span> Claude Code's read-on-demand strategy trades freshness for what cost?</p>
+      <button class="opt">More tool round-trips, which add latency and token cost to each task it runs</button>
+      <button class="opt">A persistent embedding index that quickly drifts out of sync with the code</button>
+      <button class="opt">An inability to ever cite which specific files it actually read for an answer</button>
+      <button class="opt">Total dependence on connectors to reach any of your live production systems</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q3.</span> For a billing agent that must quote exact charges, the right retrieval is…</p>
+      <button class="opt">Semantic embedding search across all historical invoices for the closest match</button>
+      <button class="opt">A hybrid retriever with a reranker tuned for natural-language help articles</button>
+      <button class="opt">Read-on-demand grepping of log files until a plausible number is located</button>
+      <button class="opt">A deterministic structured query keyed by account id, never fuzzy embeddings</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q4.</span> "Conflicting context" as a failure mode is fixed primarily by…</p>
+      <button class="opt">Raising the value of k so that many more candidate chunks get retrieved</button>
+      <button class="opt">Deduping sources and preferring an authoritative one, surfacing the conflict</button>
+      <button class="opt">Switching to a larger model with a much wider total context window size</button>
+      <button class="opt">Caching the first answer so identical questions never reach the model again</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q5.</span> The reviewer's first move on any unfamiliar AI product should be to…</p>
+      <button class="opt">Benchmark its underlying model against every other frontier model available</button>
+      <button class="opt">Measure the raw size of its context window in tokens before anything else</button>
+      <button class="opt">Name its context strategy — pre-index, read-on-demand, or none — and its failure</button>
+      <button class="opt">Estimate the monthly token bill assuming peak concurrent production traffic</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <!-- ============ NAV ============ -->
+  <div class="nav">
+    <span style="color:var(--muted)">&#8592; <a href="../../index.html#grid">Learning Hub</a></span>
+    <span>Lesson 6: <a href="0006-retrieval-evaluation-and-observability.html">Retrieval Evaluation &amp; Observability &rarr;</a></span>
+  </div>
+
+  <footer>
+    <p>Sources</p>
+    <ol style="padding-left:1.2rem;margin:.3rem 0">
+      <li id="s1">Anthropic, "Effective context engineering for AI agents" &mdash; anthropic.com/engineering. Context as a finite, curated resource; selection over dumping; the spine of every deliverable here.</li>
+      <li id="s2">Anthropic, "Building effective agents" &mdash; anthropic.com/engineering. Runtime, tool use, and when retrieval is warranted in production agents.</li>
+      <li id="s3">Anthropic, Claude Code documentation &mdash; docs.anthropic.com. Read-on-demand context model via tools; treated as version-dependent / at time of writing.</li>
+      <li id="s4">Cursor, documentation &mdash; cursor.com/docs. Codebase indexing via embeddings and semantic retrieval; product specifics are version-dependent / at time of writing.</li>
+      <li id="s5">Anthropic, "Introducing Contextual Retrieval" &mdash; anthropic.com/news/contextual-retrieval. Contextual embeddings + BM25 hybrid + rerank; covers the embedding blind spot.</li>
+      <li id="s6">Liu et al., 2023, "Lost in the Middle: How Language Models Use Long Contexts" &mdash; arXiv:2307.03172. Position bias behind the "excessive context" failure mode.</li>
+      <li id="s7">Lewis et al., 2020, "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks" &mdash; arXiv:2005.11401. The RAG formulation behind the production pipeline.</li>
+      <li id="s8">OWASP, Top 10 for LLM Applications &mdash; owasp.org. Prompt injection via poisoned/retrieved context; basis for guardrails and the PII/compliance checklist item. Illustrative numbers throughout are at time of writing.</li>
+    </ol>
+  </footer>
+
+</div><!-- /wrap -->
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

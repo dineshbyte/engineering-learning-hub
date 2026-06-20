@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 3 · Codebase Context, Chunking &amp; RAG</title>
+<meta name="description" content="Your bar: explain how Cursor and Claude Code understand large repos, why chunking exists and how it fails, and how RAG works from first principles — and why most RAG bugs are retrieval bugs.">
+<meta name="author" content="dineshbyte">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0003-codebase-context-chunking-and-rag.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Engineering Learning Hub">
+<meta property="og:title" content="Lesson 3 · Codebase Context, Chunking &amp; RAG · Engineering Learning Hub">
+<meta property="og:description" content="How Cursor and Claude Code read large repos, why chunking exists and breaks, and RAG from first principles.">
+<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0003-codebase-context-chunking-and-rag.html">
+<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@dineshxbyte">
+<meta name="twitter:title" content="Lesson 3 · Codebase Context, Chunking &amp; RAG">
+<meta name="twitter:description" content="Pre-index vs read-on-demand, chunking trade-offs, and why RAG is only as good as its retrieval.">
+<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<style>
+  :root{--accent:var(--track-context)}
+
+  /* one-sentence decomposition chips */
+  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+  .chip b{color:var(--accent)}
+  .chip.c2 b{color:var(--track-rest)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
+
+  /* TOC as a grid */
+  .toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
+  .toc a{text-decoration:none; padding:.15rem 0}
+
+  /* level block */
+  .lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
+  .lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
+  .num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
+  .lvltop h2{margin:0; font-size:1.24rem; font-weight:700}
+  .tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
+
+  /* fact cards — labelled 2-col variant */
+  .facts{grid-template-columns:1fr 1fr}
+  .fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+  .fact.blue b{color:var(--track-rest)}
+
+  /* myth -> truth (2-col grid) */
+  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
+  .myth div{border-radius:6px; padding:.45rem .6rem}
+  .myth .m{background:color-mix(in srgb,var(--bad) 12%,transparent); border-left:3px solid var(--bad); color:var(--bad)}
+  .myth .t{background:color-mix(in srgb,var(--good) 14%,transparent); border-left:3px solid var(--good); color:var(--good)}
+
+  /* dark "memory rule" band */
+  .rule{font-size:.92rem; font-weight:600; background:var(--ink); color:var(--bg); border-radius:8px; padding:.55rem .85rem; margin:.7rem 0}
+  .rule span{color:var(--accent)}
+
+  /* memory-check disclosure */
+  details.mc{border:0; background:transparent; padding:0; margin:.5rem 0 0; font-size:.84rem}
+  details.mc summary{cursor:pointer; color:var(--good); font-weight:600; list-style:none}
+  details.mc summary::before{content:"\25B8 "}
+  details.mc[open] summary::before{content:"\25BE "}
+  details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
+  details.mc .ans{color:var(--muted)}
+
+  /* interview-question disclosure */
+  details.iq{border-left:3px solid var(--track-rest); font-size:.88rem}
+  details.iq summary{list-style:none}
+  details.iq summary::-webkit-details-marker{display:none}
+  details.iq summary::before{content:"\1F4AC "}
+  details.iq[open] summary{color:var(--track-rest)}
+  details.iq .a{margin-top:.45rem; font-size:.85rem; color:var(--ink); line-height:1.45}
+  details.iq .a b{color:var(--track-rest)}
+
+  /* footer nav row */
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
+
+  @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<!-- shared arrowheads -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
+  <marker id="arwM" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b5179e"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="0002-context-selection-and-retrieval.html" title="Context Selection &amp; Retrieval">&#8249; Prev</a><a href="0004-memory-compression-and-failure-modes.html" title="Memory, Compression &amp; Failure Modes">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Context Engineering</span></span>
+  </nav>
+
+  <div class="kicker">Lesson 3 · Principal Track · Senior</div>
+  <h1>Codebase Context, Chunking &amp; <em>RAG</em></h1>
+  <p class="meta">~16 min · 3 modules · how real tools turn a giant repo into the right few tokens — and why retrieval, not the model, decides the answer</p>
+
+  <div class="mission">
+    <strong>Your bar:</strong> explain how Cursor and Claude Code make sense of a repo too large for any window, why chunking exists and the precise way it fails, and how RAG works from first principles — then argue, with an interviewer pushing back, why <em>most "the LLM is dumb" bugs are retrieval bugs</em>. By the end you can answer: <b>given a 2M-token codebase and a 200k window, how does the system surface the right symbols — and where does that pipeline silently break?</b><sup><a href="#s1" id="r1">1</a></sup>
+  </div>
+
+  <p>This lesson is the productization of Lesson 1's "context is the new database query." Three steps build the query engine:</p>
+  <div class="chips">
+    <span class="chip">find the right code via <b>indexing or live tools</b></span>
+    <span class="chip c2">split documents into <b>retrievable chunks</b></span>
+    <span class="chip c3">retrieve &amp; assemble them with <b>RAG</b></span>
+    <span class="chip c4">where bad retrieval becomes <b>fluent wrong answers</b></span>
+  </div>
+
+  <!-- ============ HERO ============ -->
+  <figure>
+    <svg viewBox="0 0 640 250" role="img" aria-label="A giant repo is reduced through indexing or live tools, file and symbol discovery, dependency traversal, and assembly into the window.">
+      <!-- repo -->
+      <rect x="22" y="96" width="120" height="58" rx="10" fill="#efe7f0" stroke="#111110" stroke-width="1.5"/>
+      <text x="82" y="120" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">Repository</text>
+      <text x="82" y="136" text-anchor="middle" font-size="8.5" fill="#6b675f">~2M tokens</text>
+      <!-- two strategies -->
+      <rect x="186" y="36" width="150" height="46" rx="9" fill="#f1eef2" stroke="#b5179e" stroke-width="1.5"/>
+      <text x="261" y="56" text-anchor="middle" font-size="10" font-weight="700" fill="#b5179e">Pre-indexed embeddings</text>
+      <text x="261" y="71" text-anchor="middle" font-size="8.5" fill="#6b675f">Cursor · semantic recall</text>
+      <rect x="186" y="168" width="150" height="46" rx="9" fill="#e9f3ec" stroke="#2f5d3a" stroke-width="1.5"/>
+      <text x="261" y="188" text-anchor="middle" font-size="10" font-weight="700" fill="#2f5d3a">Live tools (read-on-demand)</text>
+      <text x="261" y="203" text-anchor="middle" font-size="8.5" fill="#6b675f">Claude Code · grep/read</text>
+      <!-- discovery pipeline -->
+      <rect x="380" y="36" width="150" height="34" rx="8" fill="#ffffff" stroke="#111110"/>
+      <text x="455" y="57" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">Discover files</text>
+      <rect x="380" y="80" width="150" height="34" rx="8" fill="#ffffff" stroke="#111110"/>
+      <text x="455" y="101" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">Discover symbols</text>
+      <rect x="380" y="124" width="150" height="34" rx="8" fill="#ffffff" stroke="#111110"/>
+      <text x="455" y="145" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">Traverse dependencies</text>
+      <rect x="380" y="168" width="150" height="34" rx="8" fill="#ffffff" stroke="#111110"/>
+      <text x="455" y="189" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">Assemble window</text>
+      <!-- arrows repo -> strategies -->
+      <line x1="142" y1="118" x2="184" y2="66"  stroke="#b5179e" marker-end="url(#arwM)"/>
+      <line x1="142" y1="132" x2="184" y2="184" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+      <!-- strategies -> discovery -->
+      <line x1="336" y1="59" x2="378" y2="55"  stroke="#6b675f" marker-end="url(#arw)"/>
+      <line x1="336" y1="191" x2="378" y2="187" stroke="#6b675f" marker-end="url(#arw)"/>
+      <!-- discovery chain -->
+      <line x1="455" y1="70"  x2="455" y2="78"  stroke="#6b675f" marker-end="url(#arw)"/>
+      <line x1="455" y1="114" x2="455" y2="122" stroke="#6b675f" marker-end="url(#arw)"/>
+      <line x1="455" y1="158" x2="455" y2="166" stroke="#6b675f" marker-end="url(#arw)"/>
+      <!-- window out -->
+      <rect x="556" y="168" width="68" height="34" rx="8" fill="#f1eef2" stroke="#b5179e" stroke-width="2"/>
+      <text x="590" y="184" text-anchor="middle" font-size="9" font-weight="700" fill="#b5179e">window</text>
+      <text x="590" y="196" text-anchor="middle" font-size="7.5" fill="#6b675f">~200k</text>
+      <line x1="530" y1="185" x2="554" y2="185" stroke="#b5179e" marker-end="url(#arwM)"/>
+    </svg>
+    <figcaption>Same goal, two doors. Both paths reduce a 2M-token repo to the few right symbols that fit a 200k window. <b>Cursor pre-indexes; Claude Code reads on demand</b> — but both must discover files, discover symbols, and follow dependencies before assembling.<sup><a href="#s2" id="r2">2</a></sup></figcaption>
+  </figure>
+
+  <nav class="toc">
+    <a href="#m1">5 · Codebase context (Cursor vs Claude Code)</a>
+    <a href="#m2">6 · Chunking (size · overlap · fragmentation)</a>
+    <a href="#m3">7 · RAG from first principles</a>
+    <a href="#quiz">★ Retrieval practice</a>
+    <a href="#interview">★ Interview questions</a>
+    <a href="#">&nbsp;</a>
+  </nav>
+
+  <!-- ============ MODULE 1 ============ -->
+  <section class="lvl" id="m1">
+    <div class="lvltop"><span class="num">1</span><h2>Codebase Context</h2></div>
+    <p class="tagline">A repo is far bigger than any window. So the tool must <b>discover</b> the relevant files and symbols, <b>follow</b> their dependencies, and <b>assemble</b> the smallest sufficient slice — the way a human navigates an unfamiliar codebase.</p>
+
+    <h3>Two strategies, side by side</h3>
+    <figure>
+      <svg viewBox="0 0 640 250" role="img" aria-label="Cursor pre-indexes embeddings at setup; Claude Code reads the live filesystem on demand at query time.">
+        <text x="160" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#b5179e">Cursor — pre-indexed</text>
+        <text x="480" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#2f5d3a">Claude Code — read-on-demand</text>
+
+        <!-- LEFT: index path -->
+        <rect x="56" y="32" width="208" height="34" rx="7" fill="#f6eef7" stroke="#b5179e"/><text x="160" y="53" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">At setup: chunk + embed files</text>
+        <rect x="56" y="76" width="208" height="34" rx="7" fill="#f6eef7" stroke="#b5179e"/><text x="160" y="97" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">Store vectors in an index</text>
+        <rect x="56" y="120" width="208" height="34" rx="7" fill="#f1eef2" stroke="#b5179e" stroke-width="2"/><text x="160" y="138" text-anchor="middle" font-size="9.5" font-weight="700" fill="#b5179e">At query: semantic retrieval</text><text x="160" y="150" text-anchor="middle" font-size="8" fill="#6b675f">nearest vectors &rarr; window</text>
+        <line x1="160" y1="66"  x2="160" y2="74"  stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="160" y1="110" x2="160" y2="118" stroke="#6b675f" marker-end="url(#arw)"/>
+        <rect x="56" y="172" width="100" height="60" rx="7" fill="#e9f3ec" stroke="#2f5d3a"/><text x="106" y="189" text-anchor="middle" font-size="9" font-weight="700" fill="#2f5d3a">+ strengths</text><text x="106" y="203" text-anchor="middle" font-size="7.6" fill="#6b675f">fast recall, huge</text><text x="106" y="214" text-anchor="middle" font-size="7.6" fill="#6b675f">repos; finds it</text><text x="106" y="225" text-anchor="middle" font-size="7.6" fill="#6b675f">before you name it</text>
+        <rect x="164" y="172" width="100" height="60" rx="7" fill="#fbecec" stroke="#9a2417"/><text x="214" y="189" text-anchor="middle" font-size="9" font-weight="700" fill="#9a2417">&minus; costs</text><text x="214" y="203" text-anchor="middle" font-size="7.6" fill="#6b675f">index goes stale;</text><text x="214" y="214" text-anchor="middle" font-size="7.6" fill="#6b675f">misses exact IDs;</text><text x="214" y="225" text-anchor="middle" font-size="7.6" fill="#6b675f">upfront indexing</text>
+
+        <!-- RIGHT: agentic path -->
+        <rect x="376" y="32" width="208" height="34" rx="7" fill="#e9f3ec" stroke="#2f5d3a"/><text x="480" y="53" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">No persistent embedding index</text>
+        <rect x="376" y="76" width="208" height="34" rx="7" fill="#e9f3ec" stroke="#2f5d3a"/><text x="480" y="97" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">Tools: grep · glob · read</text>
+        <rect x="376" y="120" width="208" height="34" rx="7" fill="#e9f3ec" stroke="#2f5d3a" stroke-width="2"/><text x="480" y="138" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a">Search live filesystem</text><text x="480" y="150" text-anchor="middle" font-size="8" fill="#6b675f">follow imports like a human</text>
+        <line x1="480" y1="66"  x2="480" y2="74"  stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="480" y1="110" x2="480" y2="118" stroke="#6b675f" marker-end="url(#arw)"/>
+        <rect x="376" y="172" width="100" height="60" rx="7" fill="#e9f3ec" stroke="#2f5d3a"/><text x="426" y="189" text-anchor="middle" font-size="9" font-weight="700" fill="#2f5d3a">+ strengths</text><text x="426" y="203" text-anchor="middle" font-size="7.6" fill="#6b675f">always fresh;</text><text x="426" y="214" text-anchor="middle" font-size="7.6" fill="#6b675f">precise on exact</text><text x="426" y="225" text-anchor="middle" font-size="7.6" fill="#6b675f">names; transparent</text>
+        <rect x="484" y="172" width="100" height="60" rx="7" fill="#fbecec" stroke="#9a2417"/><text x="534" y="189" text-anchor="middle" font-size="9" font-weight="700" fill="#9a2417">&minus; costs</text><text x="534" y="203" text-anchor="middle" font-size="7.6" fill="#6b675f">more tool round-</text><text x="534" y="214" text-anchor="middle" font-size="7.6" fill="#6b675f">trips: latency +</text><text x="534" y="225" text-anchor="middle" font-size="7.6" fill="#6b675f">tokens; needs good</text>
+      </svg>
+      <figcaption>The centerpiece contrast. <b>Pre-index = precompute recall</b> (fast, but a snapshot that drifts). <b>Read-on-demand = compute recall live</b> (fresh and exact, but pays in round-trips). Neither is "better" — they trade staleness against latency.<sup><a href="#s3" id="r3">3</a></sup><sup><a href="#s4" id="r4">4</a></sup></figcaption>
+    </figure>
+
+    <h3>The three discovery steps, pinned down</h3>
+    <table>
+      <thead><tr><th>Step</th><th>What it finds</th><th>Classic-tooling analogue</th></tr></thead>
+      <tbody>
+        <tr><td><b>File discovery</b></td><td>Which files are even relevant (by path, glob, directory tree).</td><td><code>glob</code> / file tree walk.</td></tr>
+        <tr><td><b>Symbol discovery</b></td><td>Definitions &amp; references of the functions/classes in play.</td><td>An LSP index or <code>ctags</code>.</td></tr>
+        <tr><td><b>Dependency traversal</b></td><td>What those symbols import &amp; call — the surrounding graph.</td><td>The import / call graph.</td></tr>
+        <tr><td><b>Context assembly</b></td><td>Pack the slice within budget — prefer signatures over full bodies.</td><td>Building a query result set.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> Codebase context is the slice of a repo a tool surfaces for one task: the right files, their symbols, and the dependencies that make them make sense — assembled within the token budget.</div>
+      <div class="fact"><b>Why it exists</b> The repo is ~10&times; any window<sup><a href="#s1" id="r1b">1</a></sup>, so the tool can never load it all. It must reproduce, automatically, how a human finds the few relevant places before reading.</div>
+      <div class="fact blue"><b>Like (world)</b> A new hire who can't read the whole wiki — they search, open the few right pages, follow links between them, then answer. Pre-index = they read a summary deck first; read-on-demand = they search fresh each time.</div>
+      <div class="fact blue"><b>Like (code)</b> A search index vs a live <code>SELECT</code>: a materialized view (embeddings) is fast but can lag the source; querying the table directly (grep) is always current but slower per hit.</div>
+    </div>
+
+    <div class="myth">
+      <div class="m">&#10007; "Cursor and Claude Code do the same thing under the hood."</div>
+      <div class="t">&#10003; Cursor leans on a precomputed embedding index; Claude Code searches the live filesystem with tools. Different freshness/latency trade-offs, same end goal: the right symbols in budget.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; "An embedding index always beats grep for code."</div>
+      <div class="t">&#10003; Embeddings shine for fuzzy/semantic recall, but can miss an exact identifier that lexical search nails — and a stale index returns deleted code. Each tool wins different queries.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> <span>Pre-index = fast but can go stale; read-on-demand = fresh but costs round-trips.</span> Same goal: <span>surface the right symbols within the budget.</span></div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Name the three discovery steps before assembly. <span class="ans">&rarr; file discovery, symbol discovery (definitions/references), dependency traversal (imports/call graph)</span></li>
+      <li>One downside each of pre-index vs read-on-demand? <span class="ans">&rarr; pre-index can go stale / miss exact IDs; read-on-demand pays in tool round-trips (latency + tokens)</span></li>
+      <li>Why prefer signatures over full bodies when assembling? <span class="ans">&rarr; they convey the interface at a fraction of the tokens, leaving budget for more relevant code and the answer</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>Your team's embedding-indexed code assistant keeps citing a function that was deleted last week. What's happening and how do you fix it?</summary>
+      <div class="a">
+        <b>Hit these points:</b> a pre-built embedding index is a snapshot — if it isn't reindexed on change, it serves stale vectors pointing at code that no longer exists &rarr; the fix is incremental reindexing on commit/save, plus a freshness check or TTL on the index &rarr; pair embeddings with a lexical/grep pass so exact current identifiers are verified against the live tree &rarr; or move latency-tolerant queries to read-on-demand so they always hit fresh files &rarr; root cause is index/source skew, not the model.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ MODULE 2 ============ -->
+  <section class="lvl" id="m2">
+    <div class="lvltop"><span class="num">2</span><h2>Chunking</h2></div>
+    <p class="tagline">You can't embed or retrieve a whole file — it's too big and too coarse. <b>Chunking</b> splits documents into pieces that each fit the embedder <em>and</em> are granular enough to return as a precise hit. How you cut decides what you can ever retrieve.</p>
+
+    <h3>The size trade-off</h3>
+    <figure>
+      <svg viewBox="0 0 640 210" role="img" aria-label="A document split too big, too small, and just-right on function boundaries.">
+        <!-- too big -->
+        <text x="106" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">Too big</text>
+        <rect x="36" y="30" width="140" height="120" rx="8" fill="#fbecec" stroke="#9a2417"/>
+        <line x1="36" y1="90" x2="176" y2="90" stroke="#9a2417" stroke-dasharray="3 3"/>
+        <text x="106" y="168" text-anchor="middle" font-size="8.2" fill="#6b675f">diluted, averaged</text>
+        <text x="106" y="180" text-anchor="middle" font-size="8.2" fill="#6b675f">embedding; imprecise</text>
+        <text x="106" y="192" text-anchor="middle" font-size="8.2" fill="#6b675f">hits; wasted tokens</text>
+
+        <!-- too small -->
+        <text x="320" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">Too small</text>
+        <rect x="250" y="30" width="140" height="120" rx="8" fill="#fbecec" stroke="#9a2417"/>
+        <line x1="250" y1="54" x2="390" y2="54" stroke="#9a2417" stroke-dasharray="3 3"/>
+        <line x1="250" y1="78" x2="390" y2="78" stroke="#9a2417" stroke-dasharray="3 3"/>
+        <line x1="250" y1="102" x2="390" y2="102" stroke="#9a2417" stroke-dasharray="3 3"/>
+        <line x1="250" y1="126" x2="390" y2="126" stroke="#9a2417" stroke-dasharray="3 3"/>
+        <text x="320" y="168" text-anchor="middle" font-size="8.2" fill="#6b675f">lost surrounding</text>
+        <text x="320" y="180" text-anchor="middle" font-size="8.2" fill="#6b675f">context; many</text>
+        <text x="320" y="192" text-anchor="middle" font-size="8.2" fill="#6b675f">scattered fragments</text>
+
+        <!-- just right -->
+        <text x="534" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">Just right</text>
+        <rect x="464" y="30" width="140" height="120" rx="8" fill="#e9f3ec" stroke="#2f5d3a"/>
+        <line x1="464" y1="70" x2="604" y2="70" stroke="#2f5d3a"/>
+        <line x1="464" y1="110" x2="604" y2="110" stroke="#2f5d3a"/>
+        <text x="534" y="55" text-anchor="middle" font-size="8" fill="#2f5d3a">fn calcTax()</text>
+        <text x="534" y="95" text-anchor="middle" font-size="8" fill="#2f5d3a">fn applyRule()</text>
+        <text x="534" y="135" text-anchor="middle" font-size="8" fill="#2f5d3a">fn format()</text>
+        <text x="534" y="168" text-anchor="middle" font-size="8.2" fill="#6b675f">split on meaning</text>
+        <text x="534" y="180" text-anchor="middle" font-size="8.2" fill="#6b675f">(function bounds);</text>
+        <text x="534" y="192" text-anchor="middle" font-size="8.2" fill="#6b675f">each self-contained</text>
+      </svg>
+      <figcaption>One chunk = one retrievable unit. Too big averages many ideas into one vague vector; too small strips the context that made a passage meaningful. <b>"Just right" splits on structure</b>, so each chunk is one coherent idea.<sup><a href="#s5" id="r5">5</a></sup></figcaption>
+    </figure>
+
+    <h3>Overlap &amp; the fragmentation failure</h3>
+    <figure>
+      <svg viewBox="0 0 640 200" role="img" aria-label="Without overlap a fact spanning a boundary is split across two chunks and retrieved by neither; with overlap it survives whole in one chunk.">
+        <text x="160" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">No overlap &rarr; fact split</text>
+        <rect x="40" y="30" width="110" height="64" rx="7" fill="#fbecec" stroke="#9a2417"/>
+        <rect x="170" y="30" width="110" height="64" rx="7" fill="#fbecec" stroke="#9a2417"/>
+        <text x="95" y="58" text-anchor="middle" font-size="8.5" fill="#111110">"The retry limit</text>
+        <text x="95" y="70" text-anchor="middle" font-size="8.5" fill="#111110">is set …"</text>
+        <text x="225" y="58" text-anchor="middle" font-size="8.5" fill="#111110">"… to 5 per</text>
+        <text x="225" y="70" text-anchor="middle" font-size="8.5" fill="#111110">minute."</text>
+        <line x1="160" y1="20" x2="160" y2="100" stroke="#9a2417" stroke-dasharray="3 3"/>
+        <text x="160" y="118" text-anchor="middle" font-size="8.5" fill="#9a2417">neither chunk answers "what is the retry limit?"</text>
+        <line x1="160" y1="128" x2="160" y2="150" stroke="#9a2417" marker-end="url(#arwR)"/>
+        <text x="160" y="170" text-anchor="middle" font-size="9" font-weight="700" fill="#9a2417">retrieval misses the fact</text>
+
+        <text x="480" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">Overlap &rarr; fact survives</text>
+        <rect x="360" y="30" width="130" height="64" rx="7" fill="#e9f3ec" stroke="#2f5d3a"/>
+        <rect x="470" y="30" width="130" height="64" rx="7" fill="#e9f3ec" stroke="#2f5d3a" opacity="0.55"/>
+        <text x="425" y="58" text-anchor="middle" font-size="8.2" fill="#111110">"…retry limit is</text>
+        <text x="425" y="70" text-anchor="middle" font-size="8.2" fill="#111110">set to 5 / min"</text>
+        <text x="480" y="118" text-anchor="middle" font-size="8.5" fill="#2f5d3a">shared boundary text keeps the fact whole in chunk 1</text>
+        <line x1="480" y1="128" x2="480" y2="150" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <text x="480" y="170" text-anchor="middle" font-size="9" font-weight="700" fill="#2f5d3a">retrieval finds it</text>
+      </svg>
+      <figcaption><b>Context fragmentation:</b> a single fact split across a boundary lives whole in neither chunk, so no chunk is a complete answer and retrieval misses it. Overlap shares boundary text so the fact survives intact in at least one chunk.<sup><a href="#s5" id="r5b">5</a></sup></figcaption>
+    </figure>
+
+    <h3>Common mistakes &rarr; the better move</h3>
+    <table>
+      <thead><tr><th>Common mistake</th><th>Why it hurts</th><th>Better</th></tr></thead>
+      <tbody>
+        <tr><td>Fixed-size character splitting</td><td>Cuts mid-function / mid-sentence; chunks are incoherent.</td><td>Structure-aware: split on function / class / heading bounds.</td></tr>
+        <tr><td>Zero overlap</td><td>Boundary-spanning facts fragment and become unretrievable.</td><td>Modest overlap so cross-boundary facts survive.</td></tr>
+        <tr><td>Ignoring document structure</td><td>A chunk lacks the heading/section it belongs to; ambiguous alone.</td><td><b>Contextual chunking:</b> prepend a short doc/section summary to each chunk so it self-describes.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> Chunking is the rule for splitting a document into retrievable units. A good chunk is <em>complete</em> (answers on its own) and <em>retrievable</em> (its embedding matches the questions it should serve).</div>
+      <div class="fact"><b>Why it exists</b> Files exceed embedding input limits, and retrieval needs granularity — you want the relevant passage back, not a whole file. Chunking is the unit of both storage and recall.</div>
+      <div class="fact blue"><b>Like (world)</b> Index cards from a book. Cut them on chapter/section lines and each card stands alone; cut every 500 letters and you get cards that start mid-sentence and answer nothing.</div>
+      <div class="fact blue"><b>Like (code)</b> Choosing a primary key / row grain in a table: too coarse and a query returns bloated rows; too fine and you must join many rows to answer. Chunk grain is the retrieval grain.</div>
+    </div>
+
+    <div class="myth">
+      <div class="m">&#10007; "Just split every N characters — simple and good enough."</div>
+      <div class="t">&#10003; Fixed-size splits cut mid-thought and fragment facts. Split on meaning (function/heading bounds) and add overlap so each chunk is complete and retrievable.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; "Smaller chunks are always more precise."</div>
+      <div class="t">&#10003; Too small strips the surrounding context that made the passage meaningful — and multiplies fragments. Precision needs the right grain plus enough context, not minimum size.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> <span>Chunk on meaning, not character count.</span> A chunk should be <span>retrievable and complete on its own.</span></div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What does overlap protect against? <span class="ans">&rarr; context fragmentation — a fact spanning a boundary that would otherwise be split across two chunks and retrieved by neither</span></li>
+      <li>Too-big vs too-small chunks fail how? <span class="ans">&rarr; too big = diluted/averaged embedding, imprecise hits, wasted tokens; too small = lost surrounding context, many fragments</span></li>
+      <li>What is contextual chunking? <span class="ans">&rarr; prepend a short summary of the doc/section to each chunk so it's self-describing and matches better (Anthropic Contextual Retrieval)</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>A RAG bot answers most questions but always whiffs on "what is the rate limit?" even though the docs clearly state it. Where do you look first?</summary>
+      <div class="a">
+        <b>Hit these points:</b> suspect context fragmentation — the fact ("limit is set to 5/min") likely straddles a chunk boundary, so neither chunk is a complete, retrievable answer &rarr; inspect the actual chunks around that sentence, not the model output &rarr; fixes: add overlap so the fact survives whole; switch to structure-aware splitting so the sentence isn't cut; apply contextual chunking so the chunk carries its section heading &rarr; verify by checking whether the right chunk now appears in top-k for that query — a retrieval check, not an answer check.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ MODULE 3 ============ -->
+  <section class="lvl" id="m3">
+    <div class="lvltop"><span class="num">3</span><h2>RAG — From First Principles</h2></div>
+    <p class="tagline"><b>Retrieval-Augmented Generation</b> is Lesson 1's idea, shipped: take a question, <em>retrieve</em> the relevant chunks, <em>assemble</em> them into the window, and let the LLM answer — grounded in <em>your</em> data instead of its frozen weights.</p>
+
+    <h3>The pipeline</h3>
+    <figure>
+      <svg viewBox="0 0 640 150" role="img" aria-label="RAG pipeline: question to retrieval to context assembly to LLM to answer, with retrieval pulling from a chunk index.">
+        <rect x="14" y="56" width="96" height="40" rx="8" fill="#eef2f7" stroke="#1f3a5a"/><text x="62" y="80" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">Question</text>
+        <rect x="142" y="56" width="104" height="40" rx="8" fill="#f1eef2" stroke="#b5179e" stroke-width="2"/><text x="194" y="74" text-anchor="middle" font-size="10" font-weight="700" fill="#b5179e">Retrieval</text><text x="194" y="87" text-anchor="middle" font-size="7.5" fill="#6b675f">search the index</text>
+        <rect x="278" y="56" width="104" height="40" rx="8" fill="#f6eef7" stroke="#b5179e"/><text x="330" y="74" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">Assemble</text><text x="330" y="87" text-anchor="middle" font-size="7.5" fill="#6b675f">pack into window</text>
+        <rect x="414" y="56" width="96" height="40" rx="8" fill="#f6eef7" stroke="#b5179e"/><text x="462" y="80" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">LLM</text>
+        <rect x="542" y="56" width="84" height="40" rx="8" fill="#e9f3ec" stroke="#2f5d3a"/><text x="584" y="80" text-anchor="middle" font-size="10" font-weight="700" fill="#2f5d3a">Answer</text>
+        <line x1="110" y1="76" x2="140" y2="76" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="246" y1="76" x2="276" y2="76" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="382" y1="76" x2="412" y2="76" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="510" y1="76" x2="540" y2="76" stroke="#6b675f" marker-end="url(#arw)"/>
+        <!-- chunk index feeding retrieval -->
+        <rect x="142" y="12" width="104" height="28" rx="6" fill="#ffffff" stroke="#111110"/><text x="194" y="30" text-anchor="middle" font-size="8.5" font-weight="700" fill="#111110">Chunk index</text>
+        <line x1="194" y1="40" x2="194" y2="54" stroke="#b5179e" marker-end="url(#arwM)"/>
+        <text x="320" y="128" text-anchor="middle" font-size="9" font-style="italic" fill="#b5179e">the LLM only ever sees what Retrieval surfaced — everything downstream rides on this one step</text>
+      </svg>
+      <figcaption>RAG = retrieval bolted onto generation. The model answers from <b>the retrieved chunks</b>, not its training weights — so it can cite, stay current, and use your private data. The whole answer rides on whether Retrieval pulled the right chunk.<sup><a href="#s6" id="r6">6</a></sup></figcaption>
+    </figure>
+
+    <h3>Why RAG exists vs the alternatives</h3>
+    <table>
+      <thead><tr><th>Need</th><th>Stuff it all in the window</th><th>Fine-tune the model</th><th>RAG</th></tr></thead>
+      <tbody>
+        <tr><td>Private / current data</td><td>Doesn't fit; truncated</td><td>Stale at next data change</td><td>&#10003; fresh, pulled per query</td></tr>
+        <tr><td>Citations / provenance</td><td>Buried in noise</td><td>&#10007; weights can't cite</td><td>&#10003; returns the source chunk</td></tr>
+        <tr><td>Cost to update</td><td>Pay per token every call</td><td>Retrain run each time</td><td>&#10003; reindex changed docs only</td></tr>
+      </tbody>
+    </table>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> RAG is the pattern of retrieving relevant external text at query time and putting it in the context window so the model answers from it — the productized form of "context is the new database query."</div>
+      <div class="fact"><b>Why it exists</b> To ground the model in private, current, authoritative data; cut hallucination; enable citations; and do it cheaper and fresher than fine-tuning — without stuffing everything into a fixed window.</div>
+      <div class="fact blue"><b>Like (world)</b> An open-book exam. The student (LLM) is fixed, but pulling the right page before answering changes the grade. RAG is the "go fetch the right page" step.</div>
+      <div class="fact blue"><b>Like (code)</b> A read-through cache in front of a database: on each request you fetch the few relevant records and hand them to the handler. Retrieval is that fetch; the LLM is the handler.</div>
+    </div>
+
+    <h3>Why so many RAG systems are poor</h3>
+    <table>
+      <thead><tr><th>The naive default</th><th>What it costs</th><th>The fix (maps to Module 2)</th></tr></thead>
+      <tbody>
+        <tr><td>Fixed-size chunking</td><td>Fragmented, incoherent chunks</td><td>Structure-aware + contextual chunking</td></tr>
+        <tr><td>Embedding-only retrieval</td><td>Misses exact keywords/IDs</td><td>Hybrid: embeddings + BM25 lexical</td></tr>
+        <tr><td>Top-k, no reranking</td><td>Right doc buried below the cut</td><td>Rerank so the best chunk rises to top</td></tr>
+        <tr><td>No retrieval evaluation</td><td>You measure the answer, never the recall</td><td>Eval retrieval hit-rate, not just vibes</td></tr>
+      </tbody>
+    </table>
+    <div class="pull">Read the middle column. Every failure is upstream of the model: bad chunks, blind retrieval, no rerank, no measurement. Teams grade the <em>answer</em> and never check whether the right document was even retrieved &mdash; so they "fix the LLM" and nothing improves.</div>
+
+    <div class="myth">
+      <div class="m">&#10007; "RAG gave a wrong answer, so we need a smarter model."</div>
+      <div class="t">&#10003; Usually retrieval missed: the model got nothing or the wrong passage and answered confidently anyway. Garbage in &rarr; fluent garbage out. Fix recall before model.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; "Embeddings + top-k is a complete RAG system."</div>
+      <div class="t">&#10003; That's the naive baseline. Without hybrid search and reranking, the relevant doc often sits below the cut (and "lost in the middle" even when included) — so it never reaches the model usefully.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> <span>RAG is only as good as its retrieval.</span> Most <span>"the LLM is dumb" bugs are retrieval bugs.</span></div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Name the five stages of the RAG pipeline. <span class="ans">&rarr; Question &rarr; Retrieval &rarr; Context assembly &rarr; LLM &rarr; Answer</span></li>
+      <li>Why RAG over fine-tuning for current/private data? <span class="ans">&rarr; fresh per query, can cite the source chunk, cheaper to update (reindex changed docs vs retrain), no stuffing the window</span></li>
+      <li>Three reasons real RAG systems disappoint? <span class="ans">&rarr; naive fixed-size chunking, embedding-only retrieval with no rerank, and no evaluation of retrieval quality (they measure the answer, not recall)</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>Sketch a docs-Q&amp;A or support assistant as RAG, then name the three places it most often breaks in production.</summary>
+      <div class="a">
+        <b>Hit these points:</b> pipeline — chunk the help center / docs, embed + index, then per question retrieve top chunks, assemble into the window with the question, LLM answers with citations &rarr; break 1: chunking destroyed the fact (fragmentation / fixed-size cuts) &rarr; break 2: retrieval missed — embedding-only with no hybrid/rerank, so the right doc is buried below top-k or lost in the middle &rarr; break 3: stale index — the doc changed but wasn't reindexed, or conflicting passages confuse the model &rarr; in all three the model is innocent; the fix is upstream, and you must <em>measure retrieval hit-rate</em>, not just answer quality.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ QUIZ ============ -->
+  <h2 class="sec" id="quiz">Retrieval practice — test the three modules</h2>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q1.</span> The key difference between Cursor's and Claude Code's codebase strategy is that…</p>
+      <button class="opt">Cursor reads files live with grep while Claude Code precomputes one big static embedding index</button>
+      <button class="opt">Both rely on the same persistent vector index and differ only in which LLM they each call</button>
+      <button class="opt">Claude Code caches every answer it gives while Cursor recomputes the answer from scratch each time</button>
+      <button class="opt">Cursor pre-indexes embeddings for semantic recall; Claude Code reads the live filesystem on demand</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q2.</span> A known downside of a pre-built embedding index for code is that…</p>
+      <button class="opt">It can go stale and miss exact identifiers, returning code that may no longer exist in the repo</button>
+      <button class="opt">It is unable to search files larger than a single screen of code without a special configuration</button>
+      <button class="opt">It always requires a paid GPU at query time and cannot be run on standard developer laptops</button>
+      <button class="opt">It can only index one programming language per repository and ignores all the other source files</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q3.</span> "Context fragmentation" in chunking refers to…</p>
+      <button class="opt">Storing chunks across many database shards so a single query must contact every shard at once</button>
+      <button class="opt">The model forgetting earlier chunks of a long conversation once newer turns push them out</button>
+      <button class="opt">A fact split across a chunk boundary so no single chunk is complete and retrieval misses it</button>
+      <button class="opt">Compressing each chunk so aggressively that its embedding vector no longer matches any query</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q4.</span> The five-stage RAG pipeline, in order, is…</p>
+      <button class="opt">Question &rarr; LLM &rarr; Retrieval &rarr; Context assembly &rarr; Answer returned to the calling user</button>
+      <button class="opt">Question &rarr; Retrieval &rarr; Context assembly &rarr; LLM &rarr; Answer returned to the calling user</button>
+      <button class="opt">Retrieval &rarr; Question &rarr; LLM &rarr; Context assembly &rarr; Answer returned to the calling user</button>
+      <button class="opt">Question &rarr; Context assembly &rarr; Retrieval &rarr; LLM &rarr; Answer returned to the calling user</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q5.</span> A RAG bot confidently gives a wrong answer. The most likely root cause is…</p>
+      <button class="opt">The base model simply lacks the reasoning ability and must be replaced by a far larger one</button>
+      <button class="opt">The token budget was exceeded so the API silently refused to generate any answer at all here</button>
+      <button class="opt">Retrieval surfaced the wrong passage or nothing, and the model answered from bad input anyway</button>
+      <button class="opt">The user phrased the question politely, which biased the model toward an agreeable wrong reply</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <!-- ============ INTERVIEW QUESTIONS ============ -->
+  <h2 class="sec" id="interview">Interview questions — Modules 1–3</h2>
+
+  <details class="iq">
+    <summary>M1 — Walk me through how a tool answers "where is auth handled?" in a 2M-token repo it can't fully load.</summary>
+    <div class="a">
+      <b>Hit these points:</b> it can't load the repo, so it discovers a relevant slice &rarr; file discovery (glob/tree for auth-ish paths), then symbol discovery (definitions/references of the auth functions), then dependency traversal (what they import/call) &rarr; assemble within budget, preferring signatures over full bodies to save tokens &rarr; two ways to do the discovery: Cursor's precomputed embedding index (semantic recall, may be stale) or Claude Code's live grep/glob/read (fresh, more round-trips) &rarr; same goal: surface the right symbols in budget; the strategy choice is a staleness-vs-latency trade-off.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M1 — When would you choose read-on-demand over a pre-built embedding index, and vice versa?</summary>
+    <div class="a">
+      <b>Hit these points:</b> read-on-demand when freshness and exact-identifier precision matter and the repo changes constantly — no index to maintain or to go stale &rarr; pre-index when recall speed across a huge repo matters and queries are fuzzy/semantic ("find the code that does X" before you know the name) &rarr; trade-offs: index = upfront + reindex cost, staleness risk, but cheap fast queries; read-on-demand = always current but pays latency and tokens per round-trip &rarr; senior answer: combine them — embeddings for semantic recall, lexical/live read to verify exact current code, reindex incrementally on change.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M2 — Explain chunk-size trade-offs and how you'd choose a chunking strategy for a codebase vs prose docs.</summary>
+    <div class="a">
+      <b>Hit these points:</b> too big = diluted/averaged embedding, imprecise hits, wasted tokens; too small = lost surrounding context and many fragments &rarr; the win is structure-aware splitting on natural boundaries plus modest overlap so boundary-spanning facts survive &rarr; for code: split on function/class boundaries so each chunk is a coherent unit; for prose: split on headings/sections &rarr; layer contextual chunking — prepend a short doc/section summary so each chunk self-describes (Anthropic Contextual Retrieval) &rarr; the test for any choice: is each chunk retrievable and complete on its own?
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M3 — Why is RAG usually preferable to fine-tuning for a knowledge assistant over changing internal docs?</summary>
+    <div class="a">
+      <b>Hit these points:</b> the data changes, and fine-tuning bakes a snapshot into weights that's stale at the next edit &rarr; RAG pulls current chunks per query, so it's fresh and you only reindex changed docs instead of retraining &rarr; RAG can cite the source chunk; weights can't tell you where an answer came from &rarr; cheaper and faster to operate, and avoids stuffing everything into a fixed window &rarr; fine-tuning still earns its place for changing <em>behavior/format/tone</em> or domain skills, not for serving volatile facts &rarr; the two compose: fine-tune for style, RAG for knowledge.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M3 — A team says "our RAG is bad, the model hallucinates." Diagnose this as the senior in the room.</summary>
+    <div class="a">
+      <b>Hit these points:</b> reframe: most "the LLM is dumb" bugs are retrieval bugs — garbage in, fluent garbage out &rarr; first instrument what was actually retrieved per failing query; teams measure the answer and never the recall &rarr; check the usual suspects: naive fixed-size chunking destroyed the fact, embedding-only retrieval missed exact terms, no reranking so the right doc sits below top-k (or is lost in the middle), or a stale index/conflicting passages &rarr; fixes map to Module 2: structure-aware + contextual chunking, hybrid (embeddings + BM25) + rerank, reindex on change &rarr; add a retrieval-quality eval (hit-rate / recall@k) as the gate, not end-answer vibes &rarr; only after retrieval is verified good is model capability the lever worth paying for.
+    </div>
+  </details>
+
+  <!-- ============ NAV ============ -->
+  <div class="nav">
+    <span style="color:var(--muted)">&#8592; <a href="../../index.html#grid">Learning Hub</a></span>
+    <span>Lesson 4: <a href="0004-memory-compression-and-failure-modes.html">Memory, Compression &amp; Failure Modes &rarr;</a></span>
+  </div>
+
+  <footer>
+    <p>Sources</p>
+    <ol style="padding-left:1.2rem;margin:.3rem 0">
+      <li id="s1">Anthropic, "Effective context engineering for AI agents" &mdash; anthropic.com/engineering. Context as a finite, curated resource; selection over dumping. Token figures illustrative.</li>
+      <li id="s2">Liu et al., 2023, "Lost in the Middle: How Language Models Use Long Contexts" &mdash; arXiv:2307.03172. Why buried / mid-context content is recalled poorly, so top-k order and reranking matter.</li>
+      <li id="s3">Cursor, documentation &mdash; cursor.com/docs. Codebase indexing via embeddings; semantic retrieval. Product specifics are version-dependent.</li>
+      <li id="s4">Anthropic, Claude Code documentation &mdash; docs.anthropic.com. Read-on-demand context model via live filesystem tools (grep / glob / read).</li>
+      <li id="s5">Anthropic, "Introducing Contextual Retrieval" &mdash; anthropic.com/news/contextual-retrieval. Chunk-level context loss; contextual chunks (prepend summary); hybrid embeddings + BM25 with reranking.</li>
+      <li id="s6">Lewis et al., 2020, "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks" &mdash; arXiv:2005.11401. The original RAG formulation: retrieve relevant passages, then generate grounded in them.</li>
+    </ol>
+  </footer>
+
+</div><!-- /wrap -->
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

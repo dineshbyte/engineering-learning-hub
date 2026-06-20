@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 8 · Embeddings, Indexing &amp; Cost</title>
+<meta name="description" content="Your bar: explain what an embedding actually is, how vector indexes (HNSW / IVF / PQ) trade recall for speed and memory, and how to model the real token and dollar cost of a retrieval pipeline.">
+<meta name="author" content="dineshbyte">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0008-embeddings-indexing-and-cost.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Engineering Learning Hub">
+<meta property="og:title" content="Lesson 8 · Embeddings, Indexing &amp; Cost · Engineering Learning Hub">
+<meta property="og:description" content="The machinery under semantic retrieval — embeddings, ANN indexes, ingestion pipelines — and what it costs.">
+<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0008-embeddings-indexing-and-cost.html">
+<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@dineshxbyte">
+<meta name="twitter:title" content="Lesson 8 · Embeddings, Indexing &amp; Cost">
+<meta name="twitter:description" content="Embeddings, vector index internals, and a worked cost model for the retrieval pipeline.">
+<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<style>
+  :root{--accent:var(--track-context)}
+
+  /* one-sentence decomposition chips */
+  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+  .chip b{color:var(--accent)}
+  .chip.c2 b{color:var(--track-rest)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
+
+  /* TOC as a grid */
+  .toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
+  .toc a{text-decoration:none; padding:.15rem 0}
+
+  /* level block */
+  .lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
+  .lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
+  .num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
+  .lvltop h2{margin:0; font-size:1.24rem; font-weight:700}
+  .tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
+
+  /* fact cards — labelled 2-col variant */
+  .facts{grid-template-columns:1fr 1fr}
+  .fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+  .fact.blue b{color:var(--track-rest)}
+
+  /* myth -> truth (2-col grid) */
+  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
+  .myth div{border-radius:6px; padding:.45rem .6rem}
+  .myth .m{background:color-mix(in srgb,var(--bad) 12%,transparent); border-left:3px solid var(--bad); color:var(--bad)}
+  .myth .t{background:color-mix(in srgb,var(--good) 14%,transparent); border-left:3px solid var(--good); color:var(--good)}
+
+  /* dark "memory rule" band */
+  .rule{font-size:.92rem; font-weight:600; background:var(--ink); color:var(--bg); border-radius:8px; padding:.55rem .85rem; margin:.7rem 0}
+  .rule span{color:var(--accent)}
+
+  /* memory-check disclosure */
+  details.mc{border:0; background:transparent; padding:0; margin:.5rem 0 0; font-size:.84rem}
+  details.mc summary{cursor:pointer; color:var(--good); font-weight:600; list-style:none}
+  details.mc summary::before{content:"\25B8 "}
+  details.mc[open] summary::before{content:"\25BE "}
+  details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
+  details.mc .ans{color:var(--muted)}
+
+  /* interview-question disclosure */
+  details.iq{border-left:3px solid var(--track-rest); font-size:.88rem}
+  details.iq summary{list-style:none}
+  details.iq summary::-webkit-details-marker{display:none}
+  details.iq summary::before{content:"\1F4AC "}
+  details.iq[open] summary{color:var(--track-rest)}
+  details.iq .a{margin-top:.45rem; font-size:.85rem; color:var(--ink); line-height:1.45}
+  details.iq .a b{color:var(--track-rest)}
+
+  /* footer nav row */
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
+
+  @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<!-- shared arrowheads -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
+  <marker id="arwM" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b5179e"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Learning Hub</a>
+    <span class="pn"><a href="0007-pre-retrieval-and-advanced-rag.html" title="Pre-retrieval &amp; Advanced RAG">&#8249; Prev</a><a href="0009-context-caching-ordering-and-security.html" title="Context Caching, Ordering &amp; Security">Next &#8250;</a></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Context Engineering</span></span>
+  </nav>
+
+  <div class="kicker">Lesson 8 · Principal Track · Senior &rarr; Staff</div>
+  <h1>Embeddings, Indexing &amp; <em>Cost</em></h1>
+  <p class="meta">~16 min · 3 modules · the machinery under semantic retrieval — and the token and dollar bill it runs up</p>
+
+  <div class="mission">
+    <strong>Your bar:</strong> explain what an embedding actually <em>is</em> and how model, dimensions, and similarity metric trade quality for cost; describe how an approximate-nearest-neighbour index (HNSW / IVF / PQ) buys speed by trading recall and memory; and model the real per-query token and dollar cost of a retrieval pipeline — knowing which levers move it. By the end you can answer: <b>given millions of chunks and a budget, how do you serve relevant context fast without re-indexing the world or blowing the bill?</b><sup><a href="#s1" id="r1">1</a></sup>
+  </div>
+
+  <p>This lesson is the engine room under Lesson 2's semantic search and Lesson 3's chunks. Each chip is one thing it makes permanent:</p>
+  <div class="chips">
+    <span class="chip">text becomes a <b>vector in meaning-space</b></span>
+    <span class="chip c2">an <b>ANN index</b> finds near vectors fast</span>
+    <span class="chip c3">ingestion is a <b>pipeline, not a script</b></span>
+    <span class="chip c4">and every step has a <b>token &amp; dollar cost</b></span>
+  </div>
+
+  <!-- ============ HERO ============ -->
+  <figure>
+    <svg viewBox="0 0 640 290" role="img" aria-label="Text is embedded into a vector, stored in an approximate-nearest-neighbour index, and queried; each stage carries a cost.">
+      <!-- text -->
+      <rect x="24" y="40" width="150" height="58" rx="10" fill="#efe7f0" stroke="#111110" stroke-width="1.5"/>
+      <text x="99" y="64" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">Chunk of text</text>
+      <text x="99" y="82" text-anchor="middle" font-size="9" fill="#6b675f">"reset the user token"</text>
+      <!-- embedder -->
+      <rect x="220" y="40" width="160" height="58" rx="10" fill="#f1eef2" stroke="#b5179e" stroke-width="2"/>
+      <text x="300" y="62" text-anchor="middle" font-size="11" font-weight="700" fill="#b5179e">Embedding model</text>
+      <text x="300" y="80" text-anchor="middle" font-size="9" fill="#6b675f">text &rarr; vector · costs tokens</text>
+      <!-- vector -->
+      <rect x="430" y="40" width="186" height="58" rx="10" fill="#eef2f7" stroke="#1f3a5a"/>
+      <text x="523" y="60" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">Vector</text>
+      <text x="523" y="78" text-anchor="middle" font-size="9" fill="#6b675f">[0.02, -0.41, … ] · 1536 dims</text>
+      <line x1="174" y1="69" x2="216" y2="69" stroke="#6b675f" marker-end="url(#arw)"/>
+      <line x1="380" y1="69" x2="426" y2="69" stroke="#b5179e" marker-end="url(#arwM)"/>
+
+      <!-- store -->
+      <rect x="430" y="140" width="186" height="64" rx="10" fill="#e9f3ec" stroke="#2f5d3a"/>
+      <text x="523" y="164" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">ANN index (vector store)</text>
+      <text x="523" y="182" text-anchor="middle" font-size="9" fill="#6b675f">millions of vectors · HNSW / IVF / PQ</text>
+      <text x="523" y="196" text-anchor="middle" font-size="9" fill="#6b675f">recall &harr; latency &harr; memory</text>
+      <line x1="523" y1="98" x2="523" y2="138" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+
+      <!-- query -->
+      <rect x="24" y="150" width="150" height="58" rx="10" fill="#efe7f0" stroke="#111110" stroke-width="1.5"/>
+      <text x="99" y="174" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">User query</text>
+      <text x="99" y="192" text-anchor="middle" font-size="9" fill="#6b675f">embedded the same way</text>
+      <line x1="174" y1="179" x2="426" y2="175" stroke="#6b675f" marker-end="url(#arw)"/>
+      <text x="300" y="168" text-anchor="middle" font-size="9" font-style="italic" fill="#6b675f">find the nearest vectors</text>
+
+      <!-- cost band -->
+      <rect x="24" y="240" width="592" height="34" rx="8" fill="#fbecec" stroke="#9a2417"/>
+      <text x="320" y="262" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a2417">Every arrow is a bill: embed tokens · store memory · search compute · then the LLM tokens downstream</text>
+    </svg>
+    <figcaption>Semantic retrieval isn't magic — it's three machines with three cost dials. <b>Embed</b> turns meaning into geometry; the <b>index</b> finds neighbours approximately; and the whole loop bills you in tokens, memory, and latency.<sup><a href="#s2" id="r1b">2</a></sup></figcaption>
+  </figure>
+
+  <nav class="toc">
+    <a href="#m1">1 · Embeddings deep-dive (model · dims · metric)</a>
+    <a href="#m2">2 · Vector index internals (ANN: HNSW · IVF · PQ)</a>
+    <a href="#m3">3 · Indexing pipelines, freshness &amp; cost</a>
+    <a href="#quiz">&#9733; Retrieval practice</a>
+    <a href="#interview">&#9733; Interview questions</a>
+  </nav>
+
+  <!-- ============ MODULE 1 ============ -->
+  <section class="lvl" id="m1">
+    <div class="lvltop"><span class="num">1</span><h2>Embeddings Deep-Dive</h2></div>
+    <p class="tagline">An embedding turns text into a point in <b>meaning-space</b>. Texts that mean similar things land close together; that closeness is what semantic search measures.<sup><a href="#s3" id="r2">3</a></sup></p>
+
+    <h3>What an embedding is: meaning becomes geometry</h3>
+    <figure>
+      <svg viewBox="0 0 600 250" role="img" aria-label="Phrases plotted as points; similar meanings cluster near each other while unrelated ones sit far away.">
+        <text x="300" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111110">Meaning-space (2-D sketch of a 1536-D space)</text>
+        <rect x="40" y="30" width="520" height="200" rx="8" fill="#ffffff" stroke="#111110" stroke-width="1.5"/>
+        <!-- cluster A: auth -->
+        <circle cx="150" cy="90" r="6" fill="#b5179e"/><text x="162" y="94" font-size="9.5" fill="#111110">"reset the user token"</text>
+        <circle cx="180" cy="120" r="6" fill="#b5179e"/><text x="192" y="124" font-size="9.5" fill="#111110">"log the user out"</text>
+        <circle cx="135" cy="135" r="6" fill="#b5179e"/><text x="147" y="139" font-size="9.5" fill="#111110">"revoke the session"</text>
+        <line x1="150" y1="90" x2="180" y2="120" stroke="#b5179e" stroke-dasharray="3 2"/>
+        <text x="120" y="70" font-size="9" font-style="italic" fill="#b5179e">near = similar meaning</text>
+        <!-- cluster B: billing -->
+        <circle cx="450" cy="170" r="6" fill="#2f5d3a"/><text x="338" y="174" text-anchor="end" font-size="9.5" fill="#111110">"charge the credit card"</text>
+        <circle cx="480" cy="195" r="6" fill="#2f5d3a"/><text x="368" y="199" text-anchor="end" font-size="9.5" fill="#111110">"issue a refund"</text>
+        <text x="470" y="150" text-anchor="middle" font-size="9" font-style="italic" fill="#2f5d3a">a different region</text>
+        <!-- distance arrow -->
+        <line x1="180" y1="120" x2="450" y2="170" stroke="#9a2417" stroke-dasharray="5 3" marker-end="url(#arwR)"/>
+        <text x="315" y="135" text-anchor="middle" font-size="9" font-weight="700" fill="#9a2417">far = unrelated</text>
+      </svg>
+      <figcaption>The embedding model learned to place "log the user out" beside "revoke the session" even though they share no keywords — that's why semantic search beats keyword match for paraphrase, and why the metric we use is <em>distance</em>, not string overlap.<sup><a href="#s3" id="r3">3</a></sup></figcaption>
+    </figure>
+
+    <h3>The four knobs you actually choose</h3>
+    <table>
+      <thead><tr><th>Knob</th><th>What it sets</th><th>Effect</th><th>Trade-off</th></tr></thead>
+      <tbody>
+        <tr><td><b>Model</b></td><td>General vs domain-specific vs multilingual</td><td>Decides what "similar" means for your data</td><td>Quality vs speed vs price; domain models win on jargon</td></tr>
+        <tr><td><b>Dimensions</b></td><td>Vector length (e.g. 384 · 768 · 1536 · 3072)</td><td>More dims capture more nuance</td><td>Bigger = more storage, RAM, and compute per query</td></tr>
+        <tr><td><b>Metric</b></td><td>Cosine · dot product · Euclidean</td><td>How "closeness" is scored</td><td>Cosine ignores magnitude; must match how the model was trained</td></tr>
+        <tr><td><b>What you embed</b></td><td>The chunk (granularity from Lesson 3)</td><td>Defines the unit of retrieval</td><td>Too big &rarr; averaged, diluted vector; too small &rarr; lost context</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Dimensions &amp; the similarity metric</h3>
+    <div class="facts">
+      <div class="fact"><b>Is</b> Dimensions are the length of the vector. A 3072-dim embedding has more axes to encode nuance than a 384-dim one — at 8&times; the storage and compute. <b>Matryoshka</b> embeddings are trained so you can truncate to fewer dims and keep most of the quality, trading dims for cost on demand.</div>
+      <div class="fact"><b>Why it exists</b> Cosine similarity scores the <em>angle</em> between vectors — direction, not magnitude — so a long document and a short one about the same topic still score as close. Normalize vectors to unit length and cosine and dot product agree; Euclidean then ranks the same way.</div>
+      <div class="fact blue"><b>Like (world)</b> A map: latitude/longitude are 2 dimensions placing every town. Add altitude and you separate towns that look adjacent on a flat map. More dimensions = more ways for two points to be "different."</div>
+      <div class="fact blue"><b>Like (code)</b> A feature vector for a recommender. You compare users by the angle between their preference vectors (cosine), not by how many items each rated (magnitude). Same math, same normalize-first habit.</div>
+    </div>
+
+    <h3>Chunk granularity decides embedding quality</h3>
+    <div class="myth">
+      <div class="m">&#10007; "Embed the whole document — one vector per file is simplest."</div>
+      <div class="t">&#10003; A vector is an <em>average</em> of its text's meaning. Embed a 5,000-word file and you get a blurry centroid that matches nothing precisely; chunk first (Lesson 3) so each vector means one thing.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; "Switching to a better embedding model is a config change."</div>
+      <div class="t">&#10003; It's a migration. Old and new vectors live in <em>different spaces</em> and can't be compared — you must re-embed the entire corpus and rebuild the index.</div>
+    </div>
+
+    <h3>Re-embedding is a real migration</h3>
+    <table>
+      <thead><tr><th>Change you make</th><th>Blast radius</th><th>Cost driver</th></tr></thead>
+      <tbody>
+        <tr><td>Tune the prompt / retrieval k</td><td>None — query-time only</td><td>Free; no re-index</td></tr>
+        <tr><td>Truncate Matryoshka dims</td><td>Re-index vectors (cheap re-store)</td><td>Storage + rebuild, no re-embed</td></tr>
+        <tr><td>Change the embedding model</td><td>Re-embed <em>every</em> chunk + rebuild index</td><td>Embed tokens for the whole corpus</td></tr>
+        <tr><td>Re-chunk the corpus</td><td>Re-embed + re-index everything</td><td>Embed tokens + pipeline run</td></tr>
+      </tbody>
+    </table>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> The <span>embedding model and the chunk are the lens</span>. Change the lens and you <span>re-index the world</span> — so choose both before you fill the store.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Why does cosine similarity ignore magnitude? <span class="ans">&rarr; it measures the angle between vectors, so topic (direction) matters, not document length</span></li>
+      <li>What do Matryoshka embeddings let you trade? <span class="ans">&rarr; dimensions for cost — truncate to fewer dims and keep most quality without re-embedding</span></li>
+      <li>Why is changing the embedding model a migration? <span class="ans">&rarr; new and old vectors are in different spaces; you must re-embed the whole corpus and rebuild the index</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>A teammate wants to bump the embedding model to the newest one "for a quick quality win." What do you flag?</summary>
+      <div class="a">
+        <b>Hit these points:</b> it's not a flag flip — old and new vectors are incomparable, so every chunk must be re-embedded and the index rebuilt &rarr; that's a corpus-wide embed-token bill plus pipeline time, and a cutover plan (dual-write / shadow index) so search isn't down mid-migration &rarr; quantify it: tokens-per-chunk &times; chunk count &times; price &rarr; validate the win with an eval set before committing, since "newest" isn't always better on <em>your</em> domain &rarr; consider Matryoshka truncation or a domain model as cheaper alternatives if the goal is quality-per-dollar.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ MODULE 2 ============ -->
+  <section class="lvl" id="m2">
+    <div class="lvltop"><span class="num">2</span><h2>Vector Index Internals (ANN)</h2></div>
+    <p class="tagline">Exact nearest-neighbour search compares the query to <b>every</b> vector — O(n) per query. At millions of vectors that's too slow, so we approximate: trade a little recall for a huge speed-up.<sup><a href="#s3" id="r4">3</a></sup></p>
+
+    <h3>Why approximate? Brute force doesn't scale</h3>
+    <figure>
+      <svg viewBox="0 0 600 200" role="img" aria-label="Exact search scans all vectors and is slow; approximate search probes a small region and is fast with slightly lower recall.">
+        <!-- exact -->
+        <text x="150" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">Exact k-NN — scan all n</text>
+        <rect x="30" y="30" width="240" height="60" rx="6" fill="#fbecec" stroke="#9a2417"/>
+        <circle cx="55" cy="50" r="4" fill="#6b675f"/><circle cx="80" cy="65" r="4" fill="#6b675f"/><circle cx="105" cy="48" r="4" fill="#6b675f"/><circle cx="130" cy="70" r="4" fill="#6b675f"/><circle cx="160" cy="52" r="4" fill="#6b675f"/><circle cx="190" cy="68" r="4" fill="#6b675f"/><circle cx="220" cy="50" r="4" fill="#6b675f"/><circle cx="245" cy="66" r="4" fill="#6b675f"/>
+        <text x="150" y="108" text-anchor="middle" font-size="9.5" fill="#9a2417">100% recall · O(n) · too slow at scale</text>
+        <!-- approx -->
+        <text x="450" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">ANN — probe a region</text>
+        <rect x="330" y="30" width="240" height="60" rx="6" fill="#e9f3ec" stroke="#2f5d3a"/>
+        <circle cx="355" cy="50" r="4" fill="#cfcac2"/><circle cx="380" cy="65" r="4" fill="#cfcac2"/><circle cx="405" cy="48" r="4" fill="#2f5d3a"/><circle cx="430" cy="70" r="4" fill="#2f5d3a"/><circle cx="460" cy="52" r="4" fill="#2f5d3a"/><circle cx="490" cy="68" r="4" fill="#cfcac2"/><circle cx="520" cy="50" r="4" fill="#cfcac2"/><circle cx="545" cy="66" r="4" fill="#cfcac2"/>
+        <rect x="395" y="40" width="78" height="40" rx="5" fill="none" stroke="#2f5d3a" stroke-dasharray="4 3"/>
+        <text x="450" y="108" text-anchor="middle" font-size="9.5" fill="#2f5d3a">~95% recall · sub-linear · scans a fraction</text>
+        <!-- verdict -->
+        <text x="300" y="150" text-anchor="middle" font-size="10.5" font-weight="700" fill="#111110">Give up a few percent recall &rarr; orders-of-magnitude faster queries</text>
+        <text x="300" y="172" text-anchor="middle" font-size="9" font-style="italic" fill="#6b675f">recall = fraction of the true top-k the index actually returns</text>
+      </svg>
+      <figcaption>ANN is a deliberate bargain: the "approximate" means it occasionally misses a true neighbour. For retrieval that's usually fine — a reranker (Lesson 2) cleans up the top, and 95% recall at 1ms beats 100% at 500ms.<sup><a href="#s3" id="r4b">3</a></sup></figcaption>
+    </figure>
+
+    <h3>The three index families</h3>
+    <table>
+      <thead><tr><th>Index</th><th>How it works</th><th>Strength</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td><b>HNSW</b> (graph)</td><td>Navigable small-world graph; greedily hop toward neighbours</td><td>Fast, high recall</td><td>Memory-heavy; slower to build</td></tr>
+        <tr><td><b>IVF</b> (cluster)</td><td>Partition space into cells; probe only the nearest few</td><td>Tunable speed via #probes</td><td>Recall dips if a neighbour is in an un-probed cell</td></tr>
+        <tr><td><b>PQ</b> (compress)</td><td>Product quantization: compress vectors to codes</td><td>Big memory savings</td><td>Lossy &rarr; lower recall; often paired as <b>IVF+PQ</b></td></tr>
+        <tr><td><b>Flat</b> (brute force)</td><td>Compare against all vectors exactly</td><td>Perfect recall, zero build</td><td>O(n) per query — only for small corpora</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The trade-off triangle &amp; metadata filtering</h3>
+    <figure>
+      <svg viewBox="0 0 600 220" role="img" aria-label="A triangle of recall, latency, and memory; tuning toward one corner pulls away from the others, with build time in the centre.">
+        <text x="300" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111110">You can't max all three — pick your corner</text>
+        <polygon points="300,40 120,180 480,180" fill="#f1eef2" stroke="#b5179e" stroke-width="1.5"/>
+        <circle cx="300" cy="40" r="5" fill="#2f5d3a"/><text x="300" y="32" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">Recall</text>
+        <circle cx="120" cy="180" r="5" fill="#1f3a5a"/><text x="110" y="198" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1f3a5a">Latency</text>
+        <circle cx="480" cy="180" r="5" fill="#9a2417"/><text x="490" y="198" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a2417">Memory</text>
+        <text x="300" y="130" text-anchor="middle" font-size="9.5" font-style="italic" fill="#b5179e">+ build time</text>
+        <text x="300" y="146" text-anchor="middle" font-size="8.5" fill="#6b675f">HNSW &rarr; recall+latency, costs memory · PQ &rarr; memory, costs recall</text>
+      </svg>
+      <figcaption>Every index is a point inside this triangle. HNSW buys recall and low latency by spending memory; PQ buys memory back by spending recall. <b>Metadata filtering</b> sits alongside: <em>pre-filter</em> scopes the search before ANN (e.g. by tenant or date), which is also a security boundary for Lesson 9; <em>post-filter</em> drops results after, and can return too few.<sup><a href="#s1" id="r5">1</a></sup></figcaption>
+    </figure>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> ANN is a family of data structures (graphs, partitions, compressed codes) that find <em>probably</em> the nearest vectors without scanning all of them. The control knobs (ef-search, n-probe) directly trade recall against latency.</div>
+      <div class="fact"><b>Why it exists</b> Vector similarity at scale is a high-dimensional search problem with no cheap exact index. ANN accepts a tiny, measurable recall loss to make queries sub-linear — the only way to serve millions of vectors in milliseconds.</div>
+      <div class="fact blue"><b>Like (world)</b> Finding the nearest coffee shop: you don't measure the distance to every shop in the city (exact). You look in your neighbourhood and the next one over (probe a region) — almost always right, far faster.</div>
+      <div class="fact blue"><b>Like (code)</b> A database index: a B-tree doesn't scan every row, it narrows the search. ANN is the same idea for "nearest by meaning" instead of "equals by key" — and like indexes, it has build and memory cost.</div>
+    </div>
+
+    <div class="myth">
+      <div class="m">&#10007; "Production AI always needs a dedicated vector database."</div>
+      <div class="t">&#10003; For a small corpus, brute-force or <code>pgvector</code> in your existing Postgres is fine and far simpler. Reach for a vector DB when scale, latency, or filtering demand it — not by default.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; "Post-filtering metadata is equivalent to pre-filtering."</div>
+      <div class="t">&#10003; Post-filter retrieves k, then drops non-matches — you can end up with too few results. Pre-filter scopes the search to the allowed set first; it's also the tenant-isolation hook.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> <span>ANN buys speed by approximating</span> — tune <span>recall vs latency vs memory</span>, and don't reach for a vector DB before you actually need one.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What does ANN trade away, and for what? <span class="ans">&rarr; a small amount of recall in exchange for sub-linear (much faster) queries</span></li>
+      <li>HNSW vs PQ in one line each? <span class="ans">&rarr; HNSW = graph, fast + high recall, memory-heavy; PQ = compressed vectors, low memory, lower recall</span></li>
+      <li>Why prefer pre-filter over post-filter? <span class="ans">&rarr; pre-filter scopes the search (right result count + tenant isolation); post-filter can leave too few results</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>Your vector search is fast but misses obviously relevant chunks for some queries. Where do you look?</summary>
+      <div class="a">
+        <b>Hit these points:</b> "fast but misses" smells like low recall from the ANN settings — raise ef-search / n-probe and re-measure recall against an exact baseline &rarr; check if PQ compression is too aggressive (lossy codes drop near-neighbours) and whether the index needs a rebuild after heavy upserts &rarr; verify metadata filtering isn't post-filtering away good hits, or scoping to the wrong tenant/date &rarr; confirm the query is embedded with the <em>same</em> model and normalization as the corpus &rarr; if recall is genuinely good and ranking is wrong, that's a reranker problem (Lesson 2), not the index.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ MODULE 3 ============ -->
+  <section class="lvl" id="m3">
+    <div class="lvltop"><span class="num">3</span><h2>Indexing Pipelines, Freshness &amp; Cost</h2></div>
+    <p class="tagline">Indexing is a <b>data pipeline that runs forever</b>, not a one-time script. Documents change, models change, and a stale index quietly serves yesterday's answer.<sup><a href="#s2" id="r6">2</a></sup></p>
+
+    <h3>The ingestion pipeline</h3>
+    <figure>
+      <svg viewBox="0 0 640 150" role="img" aria-label="Documents flow through load, parse, chunk, embed, and upsert into the vector store.">
+        <rect x="14" y="50" width="96" height="46" rx="8" fill="#efe7f0" stroke="#111110"/><text x="62" y="78" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">Load</text>
+        <rect x="140" y="50" width="96" height="46" rx="8" fill="#efe7f0" stroke="#111110"/><text x="188" y="78" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">Parse</text>
+        <rect x="266" y="50" width="96" height="46" rx="8" fill="#efe7f0" stroke="#111110"/><text x="314" y="78" text-anchor="middle" font-size="10" font-weight="700" fill="#111110">Chunk</text>
+        <rect x="392" y="50" width="96" height="46" rx="8" fill="#f1eef2" stroke="#b5179e" stroke-width="2"/><text x="440" y="72" text-anchor="middle" font-size="10" font-weight="700" fill="#b5179e">Embed</text><text x="440" y="86" text-anchor="middle" font-size="8" fill="#6b675f">costs tokens</text>
+        <rect x="518" y="50" width="108" height="46" rx="8" fill="#e9f3ec" stroke="#2f5d3a"/><text x="572" y="72" text-anchor="middle" font-size="10" font-weight="700" fill="#2f5d3a">Upsert</text><text x="572" y="86" text-anchor="middle" font-size="8" fill="#6b675f">to the store</text>
+        <line x1="110" y1="73" x2="138" y2="73" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="236" y1="73" x2="264" y2="73" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="362" y1="73" x2="390" y2="73" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="488" y1="73" x2="516" y2="73" stroke="#b5179e" marker-end="url(#arwM)"/>
+        <text x="320" y="28" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">Ingestion: source &rarr; vectors in the store</text>
+        <text x="320" y="124" text-anchor="middle" font-size="9" font-style="italic" fill="#6b675f">re-run incrementally as data changes — not once at launch</text>
+      </svg>
+      <figcaption>Five stages, one of which (embed) bills you per token. The pipeline must re-run on change — incrementally for edited docs, fully when the model or chunking strategy changes — or the store drifts out of sync with reality.<sup><a href="#s2" id="r6b">2</a></sup></figcaption>
+    </figure>
+
+    <h3>Freshness: a stale index is the "outdated context" failure</h3>
+    <table>
+      <thead><tr><th>Freshness need</th><th>Mechanism</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Edited / deleted docs</td><td>Incremental upsert · change-data-capture</td><td>Only re-embed what changed; delete removed chunks</td></tr>
+        <tr><td>New embedding model</td><td>Full re-embed + rebuild (Module 1)</td><td>Spaces are incompatible — no partial path</td></tr>
+        <tr><td>Volatile facts (prices, stock)</td><td>TTLs · prefer live structured fetch</td><td>Don't index data that's wrong minutes later</td></tr>
+        <tr><td>Stale chunk lingering</td><td>Index invalidation on source change</td><td>A stale index <em>is</em> Lesson 4's outdated-context bug</td></tr>
+      </tbody>
+    </table>
+    <div class="myth">
+      <div class="m">&#10007; "Index it once at launch and you're done."</div>
+      <div class="t">&#10003; Sources change constantly. Without incremental updates and invalidation, the store serves deleted docs and old prices — confident, fluent, wrong.</div>
+    </div>
+
+    <h3>Where the tokens and dollars go</h3>
+    <table>
+      <thead><tr><th>Cost line</th><th>Roughly equals</th><th>Lever to pull</th></tr></thead>
+      <tbody>
+        <tr><td><b>LLM generation</b></td><td>(input + output tokens) &times; price</td><td>Select fewer-but-better chunks; trim the prompt</td></tr>
+        <tr><td><b>Query embedding</b></td><td>query tokens &times; embed price</td><td>Cheaper / smaller embedding model</td></tr>
+        <tr><td><b>ANN search</b></td><td>index compute + latency</td><td>Tune recall vs latency; right index family</td></tr>
+        <tr><td><b>Rerank</b></td><td>top-n candidates &times; rerank price</td><td>Rerank only the top-n, not all candidates</td></tr>
+        <tr><td><b>Corpus embedding</b></td><td>corpus tokens &times; embed price (one-off / on re-index)</td><td>Batch (not real-time); avoid needless re-embeds</td></tr>
+      </tbody>
+    </table>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> Per-call cost &asymp; (input + output tokens) &times; model price, plus the embedding and ANN-search latency the retrieval step adds before the model ever runs. Tokens are the bill; latency is the user-facing tax.</div>
+      <div class="fact"><b>Why it exists</b> Most cost hides in the input side — stuffing the window with marginal chunks pays for tokens that don't improve the answer. Liu et al. show more isn't better; fewer-but-relevant beats more.<sup><a href="#s4" id="r7">4</a></sup></div>
+      <div class="fact blue"><b>Like (world)</b> A restaurant bill: the entrée (LLM tokens) dominates, but the sides (embed, rerank) add up. You cut the bill by ordering less of what you won't eat, not by switching restaurants.</div>
+      <div class="fact blue"><b>Like (code)</b> An N+1 query: the fix isn't a faster DB, it's fetching less, smarter. Prompt caching (Lesson 9) is the equivalent of memoizing the stable prefix so you stop paying for it every call.</div>
+    </div>
+
+    <div class="myth">
+      <div class="m">&#10007; "Stuff more context in — tokens are cheap and it can't hurt."</div>
+      <div class="t">&#10003; Tokens are the bill, and noise lowers accuracy (Lesson 1). Select less but better: cheaper, faster, <em>and</em> more accurate at once.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> <span>Indexing is a pipeline, not a script</span> — a stale index = wrong answers; <span>tokens are the bill</span>, so select less but better.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What are the five stages of the ingestion pipeline? <span class="ans">&rarr; load &rarr; parse &rarr; chunk &rarr; embed &rarr; upsert</span></li>
+      <li>How should you handle fast-changing facts like prices? <span class="ans">&rarr; TTLs and prefer live structured fetch — don't bake volatile data into the index</span></li>
+      <li>Name three levers to cut per-query cost. <span class="ans">&rarr; fewer/better chunks, rerank only top-n, cheaper embedding model (and prompt caching, batch embedding)</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>Your RAG feature's cost-per-query is 3&times; the budget. Walk through how you'd bring it down.</summary>
+      <div class="a">
+        <b>Hit these points:</b> first attribute the cost — break it into LLM input, LLM output, query embed, ANN search, rerank; the input tokens usually dominate &rarr; cut retrieved chunks to fewer-but-better (helps accuracy too) and trim the prompt; rerank only the top-n &rarr; cache the stable prefix with prompt caching (Lesson 9) so you stop re-paying for system prompt and tool defs &rarr; drop to a cheaper embedding model or truncated Matryoshka dims if quality holds on an eval set &rarr; batch corpus embedding instead of real-time &rarr; only then consider a smaller generation model. Measure each change against an eval set so you don't trade dollars for accuracy.
+      </div>
+    </details>
+
+    <details class="iq">
+      <summary>How do you keep an index fresh for a docs site that updates daily, with some live-changing fields?</summary>
+      <div class="a">
+        <b>Hit these points:</b> split by volatility — stable prose goes through incremental ingestion (CDC / re-embed only changed pages, delete removed ones) &rarr; fast-changing fields (price, availability) shouldn't be embedded at all; fetch them live via a structured tool at query time, or TTL them &rarr; wire invalidation so a source edit triggers re-chunk/re-embed of just that doc &rarr; on an embedding-model change, run a full re-embed behind a shadow index and cut over &rarr; monitor staleness (oldest-chunk age) as an SLO, because a stale index is the silent outdated-context failure from Lesson 4.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ QUIZ ============ -->
+  <h2 class="sec" id="quiz">Retrieval practice — test the three modules</h2>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q1.</span> An embedding is best described as…</p>
+      <button class="opt">A compressed copy of the original text the model can later decode back word for word</button>
+      <button class="opt">A keyword index that records which terms appear in a document for exact-match lookup</button>
+      <button class="opt">A vector placing the text in meaning-space, where nearby points have similar meaning</button>
+      <button class="opt">A cache of the model's previous answers keyed by the question that produced each one</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q2.</span> Cosine similarity is popular for embeddings because it…</p>
+      <button class="opt">Scores the angle between vectors, so topic matters and document length does not</button>
+      <button class="opt">Counts how many exact keywords two pieces of text happen to share in common</button>
+      <button class="opt">Always runs faster than every other distance metric on modern vector hardware</button>
+      <button class="opt">Returns the raw byte size difference between the two text strings being compared</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q3.</span> An approximate-nearest-neighbour (ANN) index exists primarily to…</p>
+      <button class="opt">Guarantee that the exact true top-k neighbours are returned on every single query</button>
+      <button class="opt">Compress the original documents so the raw text takes far less disk space overall</button>
+      <button class="opt">Translate queries between languages before the embedding model ever sees the text</button>
+      <button class="opt">Trade a little recall for sub-linear search so millions of vectors stay fast to query</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q4.</span> Switching to a different embedding model requires you to…</p>
+      <button class="opt">Only update a config value, since vectors from any model are directly comparable</button>
+      <button class="opt">Re-embed the entire corpus and rebuild the index, because the spaces differ</button>
+      <button class="opt">Re-rank existing results at query time without touching the stored vectors at all</button>
+      <button class="opt">Lower the similarity threshold so the old vectors keep matching the new queries</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q5.</span> The biggest lever on per-query cost in a RAG pipeline is usually to…</p>
+      <button class="opt">Buy faster GPUs so the approximate search step finishes a few milliseconds sooner</button>
+      <button class="opt">Increase the context window size so more retrieved chunks fit into a single call</button>
+      <button class="opt">Select fewer but better chunks, since input tokens usually dominate the total bill</button>
+      <button class="opt">Add a second reranker stage that re-scores every candidate the index returns each</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <!-- ============ INTERVIEW QUESTIONS ============ -->
+  <h2 class="sec" id="interview">Interview questions — Modules 1–3</h2>
+
+  <details class="iq">
+    <summary>M1 — Explain what an embedding is and why semantic search beats keyword match for paraphrases.</summary>
+    <div class="a">
+      <b>Hit these points:</b> an embedding maps text to a vector in a learned meaning-space; the model places semantically similar text close together &rarr; "log the user out" and "revoke the session" share no keywords yet land near each other, so distance (cosine) finds the match where lexical search misses &rarr; this is why dense retrieval (Karpukhin et al.) complements the BM25 lexical baseline rather than replacing it &rarr; the unit you embed is the chunk, and chunk granularity controls vector quality &rarr; the metric must match how the model was trained, and you normalize first.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M1 — How do dimensions, model choice, and Matryoshka embeddings let you trade quality for cost?</summary>
+    <div class="a">
+      <b>Hit these points:</b> more dimensions encode more nuance but cost proportionally more storage, RAM, and compute per query &rarr; model choice sets what "similar" means — domain models win on jargon, multilingual on mixed languages, at different speed/price points &rarr; Matryoshka embeddings are trained so you can truncate to fewer dims and keep most quality, trading dims for cost without re-embedding &rarr; the senior move is to pick model and dims against an eval set measuring quality-per-dollar, not to default to the biggest.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M2 — Compare HNSW, IVF, and PQ, and explain the recall / latency / memory triangle.</summary>
+    <div class="a">
+      <b>Hit these points:</b> HNSW is a navigable graph — fast and high recall but memory-heavy and slower to build &rarr; IVF partitions the space into cells and probes a few, so #probes tunes speed vs recall &rarr; PQ compresses vectors into codes for big memory savings at the cost of recall, often combined as IVF+PQ &rarr; the triangle: you can't maximize recall, latency, and memory at once (build time too) — every index is a chosen point &rarr; HNSW spends memory for recall+latency; PQ buys memory back by spending recall.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M2 — When would you NOT reach for a dedicated vector database, and why does pre-filter beat post-filter?</summary>
+    <div class="a">
+      <b>Hit these points:</b> for a small corpus, brute-force or pgvector in existing Postgres is simpler, cheaper to operate, and fast enough — don't add infrastructure before scale, latency, or filtering demand it &rarr; reach for a vector DB when n is large, p99 latency matters, or you need rich metadata filtering at scale &rarr; pre-filter scopes the ANN search to the allowed set first, giving the right result count and serving as tenant/security isolation (a Lesson 9 hook) &rarr; post-filter retrieves k then drops non-matches, so you can end up with too few results.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M3 — Model the cost of a RAG query and name the highest-leverage places to cut it.</summary>
+    <div class="a">
+      <b>Hit these points:</b> per-call cost &asymp; (input + output tokens) &times; price, plus query-embed and ANN-search latency before the model runs; input tokens usually dominate &rarr; highest leverage: select fewer-but-better chunks (also more accurate, per Liu et al.) and trim the prompt &rarr; rerank only the top-n, use a cheaper embedding model, batch corpus embedding &rarr; prompt caching (Lesson 9) stops re-paying for the stable prefix &rarr; validate every cut against an eval set so you don't trade accuracy for dollars.
+    </div>
+  </details>
+
+  <details class="iq">
+    <summary>M3 — Why is a stale index a correctness bug, and how do you keep one fresh?</summary>
+    <div class="a">
+      <b>Hit these points:</b> a stale index serves deleted docs and old facts as fluent, confident answers — it's exactly Lesson 4's outdated-context failure, just upstream &rarr; treat ingestion as a forever-running pipeline: incremental upserts / CDC for edits, deletes for removed chunks, invalidation on source change &rarr; don't index volatile fields — TTL them or fetch live via a structured tool &rarr; a model change forces a full re-embed behind a shadow index, then cutover &rarr; monitor oldest-chunk age as an SLO so staleness is observable, not silent.
+    </div>
+  </details>
+
+  <!-- ============ NAV ============ -->
+  <div class="nav">
+    <span style="color:var(--muted)">&#8592; <a href="../../index.html#grid">Learning Hub</a></span>
+    <span>Lesson 9: <a href="0009-context-caching-ordering-and-security.html">Context Caching, Ordering &amp; Security &rarr;</a></span>
+  </div>
+
+  <footer>
+    <p>Sources</p>
+    <ol style="padding-left:1.2rem;margin:.3rem 0">
+      <li id="s1">Anthropic, "Effective context engineering for AI agents" &mdash; anthropic.com/engineering. Context as a finite, curated resource; selection over dumping; cost of carrying marginal context.</li>
+      <li id="s2">Anthropic, "Introducing Contextual Retrieval" &mdash; anthropic.com/news/contextual-retrieval. Chunking, embeddings, and the ingestion pipeline that turns documents into retrievable vectors.</li>
+      <li id="s3">Karpukhin et al., 2020, "Dense Passage Retrieval for Open-Domain QA" &mdash; arXiv:2004.04906; contrast with Robertson &amp; Zaragoza, 2009, "BM25 and Beyond" (lexical baseline). Dense (embedding) retrieval; HNSW/IVF/PQ and cosine are standard ANN vocabulary. Numbers are illustrative at time of writing.</li>
+      <li id="s4">Liu et al., 2023, "Lost in the Middle: How Language Models Use Long Contexts" &mdash; arXiv:2307.03172. Why fewer-but-relevant context beats more — accuracy and cost both improve.</li>
+    </ol>
+  </footer>
+
+</div><!-- /wrap -->
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+</body>
+</html>

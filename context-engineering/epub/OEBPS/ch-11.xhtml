@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Context Architecture Review Checklist</title>
+<link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+
+
+<div class="wrap">
+  <div class="kicker">Reference · Context Engineering</div>
+  <h1>Context system — architecture-review checklist</h1>
+  <div class="sub">Take this into any AI design review · pairs with <a href="../lessons/0005-architecture-reviews-and-production-design.html">Lesson 5</a> &amp; the <a href="context-engineering-cheat-sheet.html">cheat sheet</a></div>
+
+  <div class="one"><strong>The one sentence:</strong> every AI assistant is a
+  <em>context strategy with a model attached</em> — name the strategy
+  (<em>pre-indexed</em> vs <em>read-on-demand</em> vs <em>none</em>) and you've already named its failure mode.</div>
+
+  <h2>Architecture-review checklist — the ten questions for any AI design</h2>
+  <div class="cols">
+    <ol class="rules">
+      <li>What's the <strong>context strategy</strong>? <span class="tag">pre-index · read-on-demand · none</span> — predicts cost shape &amp; failure mode.</li>
+      <li><strong>Recall and precision</strong> as separate stages — retrieve wide, then <strong>rerank</strong>? Is it <strong>hybrid</strong> (lexical + semantic)?</li>
+      <li><strong>Chunking</strong> strategy — split on meaning, <strong>overlap</strong>, per-chunk <strong>contextual</strong> prefix so a chunk stands alone?</li>
+      <li><strong>Index freshness / invalidation</strong> — invalidate on write, or stale-by-default? Fetch live for volatile data?</li>
+      <li>Is <strong>retrieval evaluated</strong> — recall@k / hit-rate on a labeled set — not just final answers ("vibes")?</li>
+    </ol>
+    <ol class="rules" start="6">
+      <li><strong>Token budget + compression</strong> for long sessions — summarize, prune, prioritize within the window?</li>
+      <li><strong>Observe the assembled context per call</strong> — log exactly what was sent, so a wrong answer is debuggable &amp; auditable?</li>
+      <li>Are all <strong>five failure modes</strong> covered? <span class="tag">missing · wrong · outdated · conflicting · excessive</span></li>
+      <li><strong>PII / compliance in retrieval</strong> — redaction, access control at the retrieve stage, injection defense (OWASP LLM)?</li>
+      <li><strong>Deterministic vs semantic retrieval matched to the data type</strong> — exact &#8594; structured query, fuzzy &#8594; hybrid + rerank?</li>
+    </ol>
+  </div>
+
+  <h2>Product teardown — name the strategy, the failure falls out</h2>
+  <table>
+    <tr><th>Product</th><th>Context strategy</th><th>Strengths</th><th>Weaknesses</th><th>Signature failure</th></tr>
+    <tr><td>Cursor</td><td>Pre-indexed repo embeddings + semantic retrieval (+ open files)</td><td>Fast recall across huge repos; finds code before you know the filename</td><td>Index staleness; embeddings miss exact identifiers</td><td>Retrieves a topically-similar but <em>wrong</em> file</td></tr>
+    <tr><td>Claude&#160;Code</td><td>Agentic read-on-demand via tools (grep / glob / read); no persistent index</td><td>Always fresh; precise; transparent about what it read</td><td>More tool round-trips &#8594; latency &amp; token cost; depends on good searches</td><td>Misses a file it never thought to grep</td></tr>
+    <tr><td>ChatGPT</td><td>Conversation history + optional retrieval / uploads / connectors / memory</td><td>Broad general capability; cross-session memory</td><td>Weak grounding in <em>your</em> live systems without connectors</td><td>Hallucinates when nothing was retrieved</td></tr>
+    <tr><td>GitHub&#160;Copilot</td><td>Open files + nearby code + (newer) repo / workspace indexing for chat</td><td>Very low-latency inline local context</td><td>Limited surrounding window; weaker whole-repo reasoning</td><td>Suggests plausible code that ignores a distant constraint</td></tr>
+  </table>
+  <p style="font-size:.72rem;color:var(--muted);font-family:ui-sans-serif,system-ui,sans-serif;margin:.1rem 0 0">Product specifics are version-dependent / at time of writing — review the <em>architecture</em>, not the version.</p>
+
+  <h2>Production design — match retrieval to the data type</h2>
+  <table>
+    <tr><th>Agent</th><th>Context strategy (matched to data)</th><th>Scalability</th><th>Cost</th><th>Reliability</th><th>Observability</th></tr>
+    <tr><td>Billing</td><td><span class="flag">MATCH</span> <em>Deterministic</em> structured query / SQL keyed by <code>account_id</code> — <strong>never fuzzy embeddings</strong></td><td>Cheap point lookups</td><td>Low tokens</td><td>No hallucinated numbers; quote only what was pulled, never synthesize</td><td>Log every assembled context + tool call for audit / disputes</td></tr>
+    <tr><td>Support</td><td>Hybrid over help-center KB + customer history (memory); rerank</td><td>KB grows; cache hot articles</td><td>Moderate</td><td>KB freshness; PII handling / compliance</td><td>Retrieval hit-rate; deflection/escalation; cite sources to user</td></tr>
+    <tr><td>Engineering</td><td>Codebase hybrid + structural retrieval and/or read-on-demand; tests as a grounding signal</td><td>Large repos; token-heavy</td><td>Token cost dominates</td><td>Ground in real code; run tests</td><td>Log which files / symbols loaded per task</td></tr>
+    <tr><td>Research</td><td>Multi-source web/doc retrieval, multi-step; compress intermediate findings; keep citations</td><td>Many calls / sources</td><td>High (fan-out)</td><td>Adversarial verification; dedupe conflicting sources</td><td>Source provenance per claim</td></tr>
+  </table>
+  <p style="font-size:.72rem;color:var(--muted);font-family:ui-sans-serif,system-ui,sans-serif;margin:.1rem 0 0">The senior reflex: exact &amp; financial &#8594; structured query; fuzzy &amp; textual &#8594; hybrid + rerank; volatile &#8594; fetch live; long-running &#8594; compress + remember.</p>
+
+  <h2>The five failure modes — symptom &#8594; cause &#8594; fix</h2>
+  <table>
+    <tr><th>Mode</th><th>Symptom</th><th>Root cause</th><th>Fix</th></tr>
+    <tr><td>Missing</td><td>"I don't have info on that" / vague answer</td><td>Relevant doc never retrieved (recall gap)</td><td>Improve recall: hybrid retrieval, better chunking, raise <em>k</em></td></tr>
+    <tr><td>Wrong</td><td>Confident answer about the wrong thing</td><td>Topically-similar but incorrect chunk ranked top</td><td>Add rerank; lexical signal for exact identifiers</td></tr>
+    <tr><td>Outdated</td><td>Answer reflects an old state of the world</td><td>Stale index / cached doc</td><td>Invalidate on write; or fetch live for volatile data</td></tr>
+    <tr><td>Conflicting</td><td>Inconsistent answers; arbitrary choice</td><td>Sources disagree; no resolution policy</td><td>Dedupe, prefer authoritative source, surface the conflict</td></tr>
+    <tr><td>Excessive</td><td>Slow, costly, "lost in the middle"</td><td>Too much low-signal context packed in</td><td>Tighten selection; rerank; compress; trim history</td></tr>
+  </table>
+
+  <div class="cols">
+    <div>
+      <h2>Where the failure enters the pipeline</h2>
+      <pre class="dgm">ingest -> chunk -> index -> retrieve
+        -> rerank -> assemble -> LLM -> log
+
+  MISSING      at retrieve   (recall gap)
+  WRONG        at rerank     (bad ranking)
+  OUTDATED     at index      (freshness)
+  CONFLICTING  at assemble   (no policy)
+  EXCESSIVE    at assemble   (over budget)
+
+Each stage gets its own metric.
+A wrong answer with the RIGHT context
+  = a reasoning bug.
+With the WRONG context
+  = a retrieval bug.  Separate them.</pre>
+    </div>
+    <div>
+      <h2><span class="flag">RED FLAGS</span> in a context architecture</h2>
+      <p style="font-size:.84rem;font-family:ui-sans-serif,system-ui,sans-serif">"Just use vector search for everything" · semantic search over <em>exact/financial</em> data (returns most-similar, i.e. confidently wrong) · pure embeddings with <em>no</em> lexical / rerank stage · an index with no invalidation (stale-by-default) · "we evaluate by trying it" — no labeled set, no recall@k · no compression plan for long sessions · the assembled context is <em>not</em> logged ("the wrong answer is undebuggable") · no PII redaction / access control at retrieve · tool/retrieved content trusted as instructions (injection) · <em>"we'll add observability later."</em></p>
+    </div>
+  </div>
+
+  <h2>Evaluation &amp; observability — what to probe <span class="tag">L6</span></h2>
+  <div class="one"><strong>The reflex:</strong> generation can only use what retrieval surfaced — so grade
+  <em>retrieval</em> and <em>the answer</em> separately, then trace every call to the failing half.</div>
+  <ul class="rules">
+    <li><strong>Is retrieval measured on its own?</strong> recall@k / hit-rate (did the right doc make the top-k <em>at all</em>) — <em>not</em> just end-answer quality. A high end-to-end score masks low recall on the hard slice; the model bluffs from parametric memory on easy queries.</li>
+    <li><strong>Reranker / order graded?</strong> precision@k, MRR, nDCG judge the <em>final order</em> on top of high recall — separate metric, separate stage.</li>
+    <li><strong>Answer half graded against the context?</strong> <em>faithfulness / groundedness</em> (every claim supported &#8594; catches hallucination), answer relevance, context precision/recall. A grounded answer over bad context is a <em>retrieval</em> bug; a hallucination over good context is a <em>generation</em> bug — don't fix the wrong half.</li>
+    <li><strong>Versioned golden set + offline regression in CI?</strong> query · relevant doc IDs · ideal answer, replayed pre-deploy to catch regressions before users do — not "we evaluate by trying it."</li>
+    <li><strong>Online signals tracked?</strong> thumbs up/down, deflection / escalation, citation-clicks, follow-up / rephrase rate — curated <em>back into</em> the golden set so the next offline run catches them.</li>
+    <li><strong>Is the assembled context logged &amp; traceable per call?</strong> query (+ any rewrite), retrieved IDs+scores, packed chunks, final answer — so "the bot was wrong" becomes "doc X wasn't retrieved." A wrong answer with the RIGHT context is a reasoning bug; with the WRONG context it's a retrieval bug.</li>
+    <li><strong>LLM-as-judge calibrated?</strong> if used to scale faithfulness/relevance grading — anchored to human labels on a sample, watched for judge bias (verbosity, position, self-preference). Use it to scale, not to define truth.</li>
+  </ul>
+
+  <h2>Pre-retrieval &amp; advanced RAG — decision points <span class="tag">L7</span></h2>
+  <table>
+    <tr><th>Probe</th><th>Reach for…</th><th>When it justifies the cost</th></tr>
+    <tr><td>Recall is low &#8212; is the raw query transformed <em>before</em> retrieval?</td><td>rewrite · multi-query · <strong>HyDE</strong> · decomposition · step-back · routing</td><td>The query is the worst search query you have; recall lost at retrieve can't be recovered by any reranker or bigger model. Cheapest place to fix recall.</td></tr>
+    <tr><td>Does the retrieval <em>structure</em> match the <em>question shape</em>?</td><td>local fact &#8594; <strong>small-to-big</strong> / parent-doc; large doc &#8594; hierarchical; ambiguous chunk &#8594; contextual; global theme &#8594; <strong>GraphRAG</strong></td><td>Flat top-k is a floor, not a ceiling. GraphRAG earns its keep only on theme-spanning questions; it's wasted complexity (build + keep-fresh) on "what is X?".</td></tr>
+    <tr><td>Multi-part question (e.g. "EU vs US refund policy")?</td><td>decomposition (split &#8594; retrieve each &#8594; combine)</td><td>One embedding averages two facts and matches neither; verify both regions' chunks appear in the assembled context.</td></tr>
+    <tr><td>Is an agentic / corrective loop used?</td><td>grade docs &#183; re-retrieve / web fallback &#183; critique the draft</td><td><span class="flag">ONLY</span> where correctness justifies the extra latency &amp; cost — retrieval becomes an action in a loop, not a one-shot step.</td></tr>
+  </table>
+  <p style="font-size:.72rem;color:var(--muted);font-family:ui-sans-serif,system-ui,sans-serif;margin:.1rem 0 0">Red flag: "a better reranker will fix our low recall" — reranking only reorders what was already retrieved; a doc never in the candidate set can't be surfaced. That's a pre-retrieval problem.</p>
+
+  <h2>Embeddings, indexing &amp; cost — what to probe <span class="tag">L8</span></h2>
+  <ul class="rules">
+    <li><strong>Is the ANN index choice justified?</strong> <code>HNSW</code> (graph — fast, high recall, memory-heavy) vs <code>IVF</code> (cluster — tune speed via #probes) vs <code>PQ</code> (compress — big memory savings, lossy &#8594; lower recall; often <code>IVF+PQ</code>) — picked against the <strong>recall &#8596; latency &#8596; memory</strong> triangle, not by default. Don't reach for a vector DB before you need one.</li>
+    <li><strong>Is index freshness / invalidation handled?</strong> incremental upserts / CDC on edit, deletes on removal, invalidation on source change. A stale index <em>is</em> the outdated-context failure (L4), just upstream — monitor oldest-chunk age as an SLO so staleness is observable, not silent.</li>
+    <li><strong>Is volatile data fetched live, not embedded?</strong> prices / availability change constantly &#8594; TTL or fetch via a structured tool at query time; never bake fast-changing fields into the index.</li>
+    <li><strong>Is a re-embedding plan in place?</strong> changing the embedding model = re-embed the whole corpus behind a shadow index + cutover (old and new vectors are incomparable) — quantify tokens-per-chunk &#215; chunk count &#215; price, validate the win on an eval set first.</li>
+    <li><strong>Cost levers identified &amp; measured?</strong> input tokens usually dominate &#8594; fewer-but-better chunks (also more accurate), trim the prompt, rerank only the <em>top-n</em>, cheaper / Matryoshka-truncated embedding model, batch corpus embedding, prompt caching of the stable prefix. Validate each cut against an eval set so you don't trade accuracy for dollars.</li>
+  </ul>
+
+  <h2>Caching, ordering &amp; security — what to probe <span class="tag">L9</span></h2>
+  <div class="one"><strong>The reflex:</strong> stable-first for caching, edges-first for attention,
+  <em>ACL-in-the-query</em> for security — the production context layer.</div>
+  <div class="cols">
+    <div>
+      <h3 style="font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:.6rem 0 .3rem;font-family:ui-sans-serif,system-ui,sans-serif">Cost &amp; ordering</h3>
+      <ul class="rules">
+        <li><strong>Prompt structured stable-first / volatile-last?</strong> system + tools + few-shots + static docs in one byte-stable prefix at the top (the prefix is the cache key); query, retrieved docs, timestamps, session IDs strictly after it. Any edit above a token busts the cache from there down.</li>
+        <li><strong>Ordering managed for lost-in-the-middle?</strong> attention is U-shaped — edges get read, the deep middle gets skimmed. Put the <strong>query last</strong>, the best retrieved doc at an <strong>edge</strong>, cap history / tool-output bloat. Caching and recency agree: the volatile query last satisfies both.</li>
+        <li><strong>Explicit delimiters?</strong> XML tags / headers so the model separates instructions from data from query — also shrinks the injection surface.</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="font-size:.78rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:.6rem 0 .3rem;font-family:ui-sans-serif,system-ui,sans-serif">Security &amp; multi-tenancy</h3>
+      <ul class="rules">
+        <li><strong>Retrieved content treated as untrusted?</strong> it is <em>data the model reads, never instructions it follows</em> — indirect prompt injection rides in through your own KB (even internal docs: pasted emails, scraped pages, uploads). Delimit it; filter output.</li>
+        <li><span class="flag">ACL IN THE QUERY</span> Multi-tenant access control enforced in the <strong>RETRIEVAL QUERY</strong> (pre-filter by <code>tenant_id</code> / ACL at the index), <strong>NOT</strong> via a prompt instruction. The prompt is not a security boundary — like SQL row-level security, authorization belongs in the WHERE clause, not a comment asking the query to behave. If another tenant's docs were retrieved, they're already in context.</li>
+        <li><strong>PII &amp; OWASP LLM Top 10 covered?</strong> injection (#1) &#183; sensitive-info disclosure (redaction, retention/residency limits, least-privilege retrieval) &#183; data exfiltration (constrain tool egress, least privilege).</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>VP / leadership review questions</h2>
+  <ul class="rules">
+    <li><strong>Build vs buy?</strong> Buy when the data is generic and the vendor's strategy fits; build when our differentiation <em>is</em> retrieval over proprietary data. The model is a commodity; the pipeline is the moat. <span class="tag">grounding in live systems</span></li>
+    <li><strong>Retrieval investment vs a model upgrade?</strong> Retrieval fixes compound across every feature; a model upgrade is a flat tax on every call. Better retrieval lifts accuracy, cuts cost, and reduces hallucination at once.</li>
+    <li><strong>How do we measure retrieval quality?</strong> recall@k + rerank precision on a labeled set; production hit-rate; deflection/escalation for support, audit-pass for billing — tracked <em>separately</em> from end-answer accuracy.</li>
+    <li><strong>Cost levers?</strong> Cost scales with tokens sent — tighter selection + rerank, compress long sessions, trim history, cache hot retrievals. Right context on a cheaper model often beats wrong context on the flagship.</li>
+    <li><strong>Risk &amp; compliance?</strong> PII in retrieved context &#8594; redaction + access control at retrieve; injection via poisoned content &#8594; guardrails before the model; auditability &#8594; log assembled context per call; finance &#8594; deterministic retrieval + no-synthesis rule.</li>
+    <li><strong>Upgrade the model, or fix retrieval?</strong> Instrument first — was the right context retrieved for the failing cases? If no &#8594; fix retrieval (cheaper, compounds). If yes and multi-step reasoning is the bottleneck &#8594; pay for model capability. Never upgrade to paper over a retrieval gap.</li>
+    <li><strong>How do we measure retrieval quality?</strong> recall@k / hit-rate on a versioned golden set, graded <em>separately</em> from the answer; reranker order via nDCG; production signals (deflection, citation-clicks, rephrase rate). If the only answer is "we try it," there is no measurement. <span class="tag">L6</span></li>
+    <li><strong>What's our eval / observability maturity?</strong> Is there an offline regression gate in CI, online signals fed back into the golden set, and a per-call trace of the assembled context — so any wrong answer is debuggable to a stage (retrieval vs generation)? "We'll add observability later" is the red flag.</li>
+    <li><strong>What's our multi-tenant data-isolation guarantee?</strong> Access control enforced in the <em>retrieval query</em> (scoped by <code>tenant_id</code> / ACL at the index), never via a prompt instruction — the prompt is not a security boundary. Plus injection defense on untrusted retrieved content and PII handling per OWASP LLM Top 10. <span class="flag">ACL in the query</span></li>
+  </ul>
+
+  <footer>
+    Name the context strategy &#8594; name the failure &#8594; match retrieval to the data type — the whole track in one reflex.
+    Pairs with the <a href="context-engineering-cheat-sheet.html">Context Engineering cheat sheet</a> and
+    <a href="../lessons/0005-architecture-reviews-and-production-design.html">Lesson 5 (the capstone)</a>.
+    Sources: Anthropic <a href="https://www.anthropic.com/engineering">engineering blog</a> &amp;
+    <a href="https://www.anthropic.com/news/contextual-retrieval">Contextual Retrieval</a> ·
+    <a href="https://arxiv.org/abs/2307.03172">Lost in the Middle</a> ·
+    <a href="https://owasp.org/www-project-top-10-for-large-language-model-applications/">OWASP LLM Top 10</a>.
+    Full list in <a href="../RESOURCES.md">RESOURCES.md</a>.
+  </footer>
+</div>
+</body>
+</html>
