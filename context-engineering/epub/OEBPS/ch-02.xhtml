@@ -7,10 +7,6 @@
 <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
 <body>
-
-<!-- shared arrowheads -->
-
-
 <div class="wrap">
   
 
@@ -101,11 +97,9 @@
       <li>What cheap context do you pack instead of full bodies? <span class="ans">&#8594; signatures &amp; docstrings of related code, plus structural links (imports, call sites)</span></li>
     </ul></div>
 
-    <div class="iq"><p class="qs"><b>Your code assistant keeps missing the actual buggy file. Where in the selection pipeline do you look first, and how do you prove it?</b></p>
-      <div class="a">
+    <div class="iq"><p class="qs"><b>Your code assistant keeps missing the actual buggy file. Where in the selection pipeline do you look first, and how do you prove it?</b></p><div class="a">
         <b>Hit these points:</b> instrument the pipeline per stage, don't guess &#8594; first check <b>candidate generation recall</b>: was the buggy file ever in the candidate set? if no, ranking/packing are irrelevant &#8594; if recall is the gap, add the missing signal — usually structural (imports/call sites) or lexical for an exact symbol the embedding model washed out &#8594; if recall is fine but the file ranked low, fix ranking / add a re-rank &#8594; if it ranked high but got dropped, it's a packing/budget problem &#8594; measure retrieval hit-rate as a first-class metric, not just end-answer quality.
-      </div>
-    </div>
+      </div></div>
   </section>
 
   <!-- ============ MODULE 2 ============ -->
@@ -184,64 +178,80 @@
       <li>Why can't a re-ranker save bad retrieval? <span class="ans">&#8594; it only re-scores the top-N it was given; a missed document never reaches it</span></li>
     </ul></div>
 
-    <div class="iq"><p class="qs"><b>Users complain semantic search returns &#8220;close but wrong&#8221; results and sometimes whiffs on exact error codes. What's your fix and why?</b></p>
-      <div class="a">
+    <div class="iq"><p class="qs"><b>Users complain semantic search returns &#8220;close but wrong&#8221; results and sometimes whiffs on exact error codes. What's your fix and why?</b></p><div class="a">
         <b>Hit these points:</b> name the root cause — embeddings score topical similarity, so they return plausible-but-wrong and wash out rare exact tokens like error codes &#8594; add <b>hybrid</b>: run BM25 alongside the vector search and fuse (RRF) so exact strings are caught by lexical and meaning by semantic &#8594; add a <b>cross-encoder re-rank</b> over the fused top-N to push the genuinely best result to the top (precision) &#8594; frame the split: hybrid fixes recall, re-rank fixes precision &#8594; verify with retrieval hit-rate on a labelled set, not just end-answer vibes; tune fusion weights against that set.
-      </div>
-    </div>
+      </div></div>
   </section>
 
   <!-- ============ QUIZ ============ -->
   <h2 class="sec" id="quiz">Retrieval practice — test the two modules</h2>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q1.</span> The three stages of the selection funnel, in order, are…</p><ol class="opts"><li class="opt">Embed the corpus, store the vectors, then stream the chunks straight into the model</li><li class="opt"><b>&#10003; Candidate generation (recall), then ranking (order), then selection and packing to budget</b></li><li class="opt">Re-rank the corpus, drop the duplicates, then summarise everything into one digest</li><li class="opt">Parse the schema, run the SQL query, then cache the response for the next caller</li></ol></div>
-  
+  </div>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q2.</span> If the buggy file is never returned by candidate generation, the result is…</p><ol class="opts"><li class="opt">Re-ranking promotes it because the cross-encoder reads the file body in detail</li><li class="opt">A larger context window includes it automatically once the budget is increased</li><li class="opt">The ranking stage recomputes the candidates and recovers the file on a retry</li><li class="opt"><b>&#10003; No downstream stage can find it — you cannot rank or pack what was never retrieved</b></li></ol></div>
-  
+  </div>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q3.</span> Lexical search (BM25) is the right tool, and semantic search the wrong one, when the query is…</p><ol class="opts"><li class="opt"><b>&#10003; An exact error code or function name where the literal string must match exactly</b></li><li class="opt">A vague description of a feeling the user has about how the product behaves today</li><li class="opt">A paraphrase that shares no words at all with the document that answers it best</li><li class="opt">A broad concept that appears across many documents written in different wordings</li></ol></div>
-  
+  </div>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q4.</span> The signature failure mode of semantic (vector) search is that it…</p><ol class="opts"><li class="opt">Cannot run at all unless the entire corpus first fits inside the context window</li><li class="opt">Refuses any query that contains a synonym of a word found in the document set</li><li class="opt"><b>&#10003; Returns plausible-but-wrong matches and struggles with rare exact tokens like IDs</b></li><li class="opt">Always returns the single oldest document because recency is never a factor</li></ol></div>
-  
+  </div>
 
-  
+  <div class="quiz">
     <div class="quiz-static"><p class="q"><span class="qn">Q5.</span> Re-ranking (a cross-encoder over the top-N) primarily buys you…</p><ol class="opts"><li class="opt">Recall, by widening the net so more candidate documents enter the first stage</li><li class="opt"><b>&#10003; Precision at the top, by re-scoring candidates jointly with the query in detail</b></li><li class="opt">Latency, because scoring query and document together is cheaper than BM25 alone</li><li class="opt">Recovery of missed documents the first-stage retriever never returned at all</li></ol></div>
+  </div>
+
+  <!-- ============ INTERVIEW ============ -->
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&#160;Design</b> = open design round (a different axis, not a harder level).</p>
   
 
-  <!-- ============ INTERVIEW QUESTIONS ============ -->
-  <h2 class="sec" id="interview">Interview questions — Modules 1–2</h2>
+    <div class="iq"><p class="qlevel"><b>Core</b></p><p class="qs"><b>Name the three stages of the selection pipeline, in order, and what each one does.</b></p><div class="a"><b>Hit these points:</b> <b>candidate generation</b> &#8594; cast a wide net to pull anything that might be relevant &#8594; <b>ranking</b> &#8594; score those candidates so the best ones rise &#8594; <b>selection / packing</b> &#8594; fit the top of the list into the token budget. The whole point is choosing the smallest set that still contains the answer when you can't send everything.</div></div>
 
-  <div class="iq"><p class="qs"><b>M1 — A system can't send the whole corpus. Walk through how it decides what to send.</b></p>
-    <div class="a">
-      <b>Hit these points:</b> the corpus dwarfs the window, so selection is mandatory, not optional &#8594; <b>candidate generation</b> casts a wide net optimizing recall (lexical + semantic) &#8594; <b>ranking</b> scores candidates by combined signals — lexical, semantic, structural, recency, authority &#8594; <b>selection/packing</b> fits the top-K into the token budget, including cheap structural context (signatures, docstrings, imports) instead of full bodies &#8594; assemble the window in budget &#8594; the binding constraint is usually recall: if generation misses the answer, nothing downstream can fix it.
-    </div>
-  </div>
+    <div class="iq"><p class="qlevel"><b>Core</b></p><p class="qs"><b>What does lexical / BM25 search actually match on, and what is it good at?</b></p><div class="a"><b>Hit these points:</b> it scores documents by overlap of the <b>exact terms</b>, weighted by term frequency and rarity (TF-IDF / BM25) &#8594; meaning plays no part, only the literal strings &#8594; strong on identifiers, error codes, function names, exact IDs &#8594; fast, cheap, interpretable, no model required — you can read why it matched.</div></div>
 
-  <div class="iq"><p class="qs"><b>M1 — &#8220;Relevant&#8221; differs by system. Contrast a billing platform, a code repo, and a docs portal.</b></p>
-    <div class="a">
-      <b>Hit these points:</b> relevance is defined by the question's intent, not one universal score &#8594; <b>billing</b>: the exact account/ledger records — lexical/ID match + authority; a &#8220;similar&#8221; account is actively harmful &#8594; <b>repo</b>: the right symbols plus their dependencies — semantic concept + structural call sites and imports &#8594; <b>docs</b>: the right article at the right version — semantic gated by recency/version + authority &#8594; the lesson: pick signals to match the domain's notion of relevance, and weight them accordingly.
-    </div>
-  </div>
+    <div class="iq"><p class="qlevel"><b>Core</b></p><p class="qs"><b>What does semantic / embedding search match on, and why use it?</b></p><div class="a"><b>Hit these points:</b> it encodes query and chunks into vectors and ranks by similarity (cosine over an ANN index) &#8594; matches on <b>meaning</b>, so synonyms and paraphrase still find the right passage even with zero shared words &#8594; exists because users rarely use the document's exact wording &#8594; robust to phrasing, weak on rare exact tokens.</div></div>
 
-  <div class="iq"><p class="qs"><b>M2 — Compare lexical, semantic, and hybrid search by purpose and failure mode.</b></p>
-    <div class="a">
-      <b>Hit these points:</b> <b>lexical (BM25)</b>: exact-term match, fast/cheap/interpretable, no model; fails on vocabulary mismatch (different words &#8594; total miss) &#8594; <b>semantic (vectors + ANN)</b>: matches meaning/synonyms; fails by returning plausible-but-wrong and missing rare exact tokens (IDs, error codes) &#8594; <b>hybrid</b>: run both, fuse via RRF or weighting; covers exact and meaning, fewer misses (Anthropic Contextual Retrieval pairs embeddings + BM25); costs more infra and weights to tune, still bounded by both stages' recall &#8594; default to hybrid for mixed query types.
-    </div>
-  </div>
+    <div class="iq"><p class="qlevel"><b>Core</b></p><p class="qs"><b>What is hybrid search, and what does fusion (e.g. RRF) do in it?</b></p><div class="a"><b>Hit these points:</b> run lexical and semantic <b>together</b>, then merge their two result lists into one ranking &#8594; <b>fusion</b> (Reciprocal Rank Fusion or a weighted blend) combines the per-engine ranks into a single ordered list &#8594; the reason: the two engines fail on opposite cases, so one usually catches what the other drops &#8594; gives you exact-match and meaning-match coverage at once.</div></div>
 
-  <div class="iq"><p class="qs"><b>M2 — Distinguish ranking from re-ranking. When is a cross-encoder worth its cost?</b></p>
-    <div class="a">
-      <b>Hit these points:</b> <b>ranking</b> = first stage, cheap score (BM25/cosine) over many candidates, optimizing recall — &#8220;don't miss it&#8221; &#8594; <b>re-ranking</b> = second stage, expensive cross-encoder that reads query + document jointly over the top-N, optimizing precision — &#8220;best at the top&#8221; &#8594; worth it when the final top-k that reaches the window must be high-precision and first-stage ordering is noisy &#8594; not worth it if recall is the real gap — it can't recover a missed doc &#8594; bound the cost by applying it only to top-N and caching; measure the precision lift on a labelled set before keeping it.
+    <div class="iq"><p class="qlevel"><b>Senior</b></p><p class="qs"><b>Users say semantic search returns &#8220;close but wrong&#8221; results and sometimes whiffs on exact error codes. What's your fix and why?</b></p><div class="a"><b>Hit these points:</b> name the root cause — embeddings score topical similarity, so they return plausible-but-wrong and wash out rare exact tokens like error codes &#8594; add <b>hybrid</b>: run BM25 alongside the vector search and fuse (RRF) so exact strings are caught by lexical and meaning by semantic &#8594; add a <b>cross-encoder re-rank</b> over the fused top-N to push the genuinely best result up (precision) &#8594; frame the split: hybrid fixes recall, re-rank fixes precision &#8594; verify with retrieval hit-rate on a labelled set, not end-answer vibes; tune fusion weights against that set.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Senior</b></p><p class="qs"><b>Your code assistant keeps missing the actual buggy file. Where in the pipeline do you look first, and how do you prove it?</b></p><div class="a"><b>Hit these points:</b> instrument per stage, don't guess &#8594; first check <b>candidate-generation recall</b>: was the buggy file ever in the candidate set? if no, ranking and packing are irrelevant &#8594; if recall is the gap, add the missing signal — usually structural (imports / call sites) or lexical for an exact symbol the embedding washed out &#8594; if recall is fine but it ranked low, fix ranking / add a re-rank &#8594; if it ranked high but got dropped, it's a packing/budget problem &#8594; track retrieval hit-rate as a first-class metric, not just end-answer quality.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Senior</b></p><p class="qs"><b>Distinguish ranking from re-ranking. When is a cross-encoder worth its cost, and when is it a waste?</b></p><div class="a"><b>Hit these points:</b> <b>ranking</b> = first stage, cheap score (BM25 / cosine) over many candidates, optimizing recall — &#8220;don't miss it&#8221; &#8594; <b>re-ranking</b> = second stage, expensive cross-encoder reading query + document jointly over the top-N, optimizing precision — &#8220;best at the top&#8221; &#8594; worth it when the final top-k reaching the window must be high-precision and first-stage ordering is noisy &#8594; a waste if recall is the real gap — it can't recover a missed doc &#8594; bound cost by running it on top-N only and caching; prove the precision lift on a labelled set before keeping it.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Senior</b></p><p class="qs"><b>Someone proposes &#8220;just embed everything and drop BM25 — embeddings are strictly better.&#8221; Push back.</b></p><div class="a"><b>Hit these points:</b> embeddings are <b>weak on exact tokens</b> — error codes, IDs, function names get washed into topical neighbours &#8594; for a query that <em>is</em> the literal string, meaning is irrelevant and lexical is exactly right &#8594; the two engines have opposite blind spots, so dropping BM25 trades one failure mode for another &#8594; hybrid keeps BM25 precisely for those cases; the small extra infra is cheaper than silently missing every ID lookup &#8594; decide with hit-rate on a query mix that includes exact-token queries, not a vibe.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Staff</b></p><p class="qs"><b>Design a retrieval strategy when you don't yet know the query mix — some lookups are exact IDs, some are vague conceptual questions, and the corpus keeps changing.</b></p><div class="a"><b>Hit these points:</b> start from <b>recall first</b>: a missed doc can't be ranked or packed, so over-invest stage 1 &#8594; default to <b>hybrid</b> (BM25 + vector, fused) so exact-token and conceptual queries are both covered without knowing the split up front &#8594; add a <b>cross-encoder re-rank</b> on the fused top-N for precision where it matters &#8594; layer signals the domain needs — structural for code, recency/version for changing docs, authority for canonical sources &#8594; keep re-indexing fresh as the corpus changes &#8594; instrument hit-rate by query type, learn the real mix, then tune fusion weights and decide where re-rank earns its latency.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Staff</b></p><p class="qs"><b>&#8220;Relevant&#8221; means different things per system. Contrast a billing platform, a code repo, and a docs portal — and say how that changes your retrieval.</b></p><div class="a"><b>Hit these points:</b> relevance is set by the question's intent, not one universal score &#8594; <b>billing</b>: the exact account / ledger rows — lexical/ID match + authority; a &#8220;similar&#8221; account is actively harmful &#8594; <b>repo</b>: the right symbols plus their dependencies — semantic concept + structural call sites and imports &#8594; <b>docs</b>: the right article at the right version — semantic gated by recency/version + authority &#8594; so you pick and weight signals to the domain's notion of relevance, rather than shipping one generic retriever everywhere.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>Staff</b></p><p class="qs"><b>You can raise recall (wider net) or precision (aggressive re-rank + tighter packing), but not both for free. How do you reason about the trade-off?</b></p><div class="a"><b>Hit these points:</b> the two failures cost differently — a recall miss means the answer never reaches the model (unrecoverable), a precision miss means noise the model must see past &#8594; so buy recall cheaply and wide in stage 1, then buy precision narrowly in stage 2 where it's affordable &#8594; watch the packing tension: more candidates raise recall but bury the right lines in the &#8220;lost in the middle&#8221; zone and cost more &#8594; tie the dial to the domain's cost of a miss (billing error vs a fuzzy docs answer) &#8594; measure both hit-rate and top-k precision on a labelled set and move the knob deliberately, not by feel.</div></div>
+
+    <div class="designrubric" data-level="design"><b>Design-round framework</b> — narrate retrieval design in this order so the interviewer hears recall-first thinking:
+      <ol>
+        <li>Clarify the query mix &amp; the cost of a miss (exact-ID lookups vs vague concepts; how bad is a wrong-but-plausible answer?).</li>
+        <li>Define &#8220;relevant&#8221; for this domain and pick signals (lexical, semantic, structural, recency, authority).</li>
+        <li>Stage 1 for recall: hybrid candidate generation (BM25 + vector) and how you fuse the lists.</li>
+        <li>Stage 2 for precision: whether a cross-encoder re-rank on the top-N earns its latency.</li>
+        <li>Packing within the token budget: top-k, full bodies vs signatures/docstrings, ordering.</li>
+        <li>Freshness &amp; failure modes: re-indexing the changing corpus, vocabulary mismatch, plausible-but-wrong.</li>
+        <li>Measure: retrieval hit-rate and top-k precision on a labelled set; tune weights against it.</li>
+      </ol>
     </div>
-  </div>
+
+    <div class="iq"><p class="qlevel"><b>System Design</b></p><p class="qs"><b>Design the retrieval layer for a documentation Q&amp;A bot over versioned, frequently-updated docs.</b></p><div class="a"><b>A strong answer covers:</b> the query mix is mostly conceptual &#8220;how do I…&#8221; questions, so semantic carries weight — but keep BM25 for exact API names and error strings &#8594; gate on <b>recency / version</b> so an old article doesn't beat the current one, and on <b>authority</b> for canonical pages &#8594; hybrid stage 1, fuse with RRF, re-rank the top-N for precision since users read only the first answer &#8594; pack the best article(s) within budget; prefer the right section over dumping whole pages &#8594; re-index on every doc change so freshness holds &#8594; call the failure modes: plausible-but-wrong from semantic, vocabulary mismatch from lexical &#8594; measure hit-rate on labelled questions, not end-answer vibes.</div></div>
+
+    <div class="iq"><p class="qlevel"><b>System Design</b></p><p class="qs"><b>Design retrieval for an internal-search feature across code, tickets, and wiki docs in one box.</b></p><div class="a"><b>A strong answer covers:</b> the corpus is heterogeneous, so &#8220;relevant&#8221; differs per source — code wants structural signals (imports, call sites) plus lexical for exact symbols; tickets/wiki lean semantic &#8594; run <b>hybrid</b> per source and fuse, or fuse across sources, so exact-token and conceptual queries both land &#8594; recall first: a missed file can't be ranked or packed &#8594; re-rank the fused top-N for precision; weight by recency where it matters (latest ticket, newest doc) and authority for canonical sources &#8594; pack within budget — signatures/docstrings for code, snippets for docs &#8594; keep indexes fresh as all three sources change &#8594; instrument hit-rate by source and query type, then tune fusion weights and decide where re-rank pays for its latency.</div></div>
 
   
+
+  <!-- ============ NAV ============ -->
   
 
   <footer>
@@ -256,8 +266,5 @@
   </footer>
 
 </div><!-- /wrap -->
-
-
-
 </body>
 </html>

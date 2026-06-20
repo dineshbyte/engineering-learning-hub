@@ -27,6 +27,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
 <link rel="stylesheet" href="../../assets/tokens.css">
 <link rel="stylesheet" href="../../assets/lesson.css">
+<link rel="stylesheet" href="../../assets/interview.css">
 <style>
   :root{--accent:var(--track-context)}
 
@@ -298,6 +299,106 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     </details>
   </section>
 
+  <!-- ============ INTERVIEW PANEL ============ -->
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
+
+  <div data-interview>
+    <details class="iq" data-level="core">
+      <summary>Name each product's context strategy: Cursor, Claude Code, ChatGPT, GitHub Copilot.</summary>
+      <div class="a">
+        <b>Hit these points:</b> <b>Cursor</b> = pre-indexed embeddings of the repo + semantic retrieval (plus open files) &rarr; <b>Claude Code</b> = agentic read-on-demand via tools (grep / glob / read), follows the dependency graph live, no persistent index &rarr; <b>ChatGPT</b> = conversation history + optional uploads / connectors / memory &rarr; <b>GitHub Copilot</b> = open files + nearby code, with newer repo/workspace indexing for chat &rarr; the frame: each is a <em>context strategy with a model attached</em>, and the strategy — not the model — is what you're naming.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>What is the pre-indexed &harr; read-on-demand spectrum, and where do those four products sit on it?</summary>
+      <div class="a">
+        <b>Hit these points:</b> the axis is <em>when</em> retrieval happens — precompute an index ahead of time vs search the live source per task &rarr; <b>pre-indexed (left)</b>: Cursor builds embeddings up front so retrieval is one fast lookup &rarr; <b>read-on-demand (right)</b>: Claude Code searches the live tree each task, always fresh &rarr; Copilot is local-window-plus-index (left-of-centre), ChatGPT is history/connectors which is "none-to-shallow" grounding &rarr; placing a product on the axis is the reviewer's first move because position predicts the failure mode.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Match each production agent to the retrieval its data type demands: billing, support, engineering, research.</summary>
+      <div class="a">
+        <b>Hit these points:</b> <b>billing</b> = exact/transactional &rarr; deterministic structured query (SQL keyed by <code>account_id</code>), never embeddings &rarr; <b>support</b> = fuzzy natural-language KB + customer history &rarr; hybrid + rerank, cite sources &rarr; <b>engineering</b> = structured code (imports, symbols, tests) &rarr; hybrid + structural retrieval or read-on-demand, run tests as a grounding signal &rarr; <b>research</b> = volatile, multi-source &rarr; fan-out web/doc retrieval, compress intermediate findings, keep provenance per claim &rarr; the rule underneath: match the retrieval mechanism to the data type.
+      </div>
+    </details>
+    <details class="iq" data-level="core">
+      <summary>Define agent, runtime, and RAG as you'd use them in a production-design review.</summary>
+      <div class="a">
+        <b>Hit these points:</b> an <b>agent</b> is an LLM that uses tools to act, not just generate text &rarr; the <b>runtime</b> is the orchestration layer around it — it wires tools, retrieval, memory, and the loop that feeds context in and reads results back &rarr; <b>RAG</b> is the pattern retrieve &rarr; assemble &rarr; LLM &rarr; answer, so the answer is grounded in fetched facts rather than the model's parametric memory &rarr; in a review these let you separate "what does the model see" (RAG/retrieve) from "what can it do" (agent/tools) from "who assembles it" (runtime).
+      </div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>Cursor and Claude Code use opposite strategies. Name each one's signature failure mode and why position on the spectrum causes it.</summary>
+      <div class="a">
+        <b>Hit these points:</b> <b>Cursor (pre-indexed)</b> fails by retrieving a topically-similar but <em>wrong</em> file — embeddings match meaning, not exact identifiers — and by serving a stale index after code changes &rarr; that's the structural tax of precompute: the index drifts from reality the moment the repo moves &rarr; <b>Claude Code (read-on-demand)</b> fails by missing a file it never thought to grep, and pays more tool round-trips &rarr; latency &amp; token cost &rarr; that's the tax of searching live: freshness is bought with hops and a dependence on a good search plan &rarr; neither is "better"; the review names <em>which</em> failure your use-case can't tolerate.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>Why is semantic embedding search the wrong retrieval for a billing agent, and what does the right design cost you?</summary>
+      <div class="a">
+        <b>Hit these points:</b> embeddings return the <em>most-similar</em> value, not the <em>correct</em> one — for a charge that means a confidently-wrong amount with no audit trail &rarr; financial data is exact, transactional, and disputable, so it needs a deterministic structured query keyed by <code>account_id</code>/invoice id &rarr; the design rule: the agent may quote only values it pulled, never synthesize a number &rarr; the cost you accept is less "magic" — you can't fuzzily match a vaguely-worded question to a row, so you invest in intent parsing and exact keys &rarr; and you must log the assembled context per call, which billing needs anyway for audit and dispute resolution.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>A research agent fans out across many sources. Which failure modes does that shape invite, and how do you defend each?</summary>
+      <div class="a">
+        <b>Hit these points:</b> <em>conflicting</em> — sources disagree and the model silently picks one &rarr; dedupe, prefer authoritative sources, surface the conflict rather than hide it &rarr; <em>outdated</em> — fetch live for volatile facts, don't lean on a stale cache &rarr; <em>excessive</em> — fan-out blows the budget and buries signal ("lost in the middle") &rarr; compress intermediate findings before assembly &rarr; cost: fan-out multiplies calls, so cap breadth and cache repeated lookups &rarr; reliability: adversarial verification of claims &rarr; observability: source provenance per claim so any sentence is traceable to where it came from.
+      </div>
+    </details>
+    <details class="iq" data-level="senior">
+      <summary>"We'll add observability later — ship the agent first." Push back like a reviewer.</summary>
+      <div class="a">
+        <b>Hit these points:</b> without logging the assembled context per call, a wrong answer is undebuggable — there's no stack trace pointing at "wrong document retrieved" &rarr; you can't tell a retrieval bug (wrong context in) from a reasoning bug (right context, bad answer), so you can't decide whether to fix retrieval or the model &rarr; for billing it's not optional: audit and dispute resolution legally require the trail &rarr; observability is a design property of the retrieve/assemble stages, not a follow-up sprint &rarr; minimum bar: log what was retrieved and assembled per call, plus retrieval hit-rate, before launch.
+      </div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>You're reviewing an unfamiliar vendor "AI assistant" with 20 minutes. What's your line of questioning, and what would make you walk away?</summary>
+      <div class="a">
+        <b>Hit these points:</b> first question is always "what's the context strategy — pre-indexed embeddings, read-on-demand tools, or just history?" — that one answer predicts strengths, cost shape, and failure mode &rarr; pre-indexed &rarr; probe index freshness/invalidation and exact-identifier recall &rarr; read-on-demand &rarr; probe round-trip latency and search-coverage gaps &rarr; history/none &rarr; ask what grounds it in <em>our</em> live systems &rarr; then: is retrieval hybrid + reranked to cover the embedding blind spot, and is retrieval <em>evaluated</em> (recall@k) not just answers? &rarr; walk away if there's no observability of assembled context and no answer on freshness — that's an undebuggable, stale-by-default system &rarr; frame throughout: I'm comparing retrieval architectures, not models.
+      </div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>Build vs buy: a VP asks whether to adopt a vendor assistant or build our own retrieval. Make the principal-level call.</summary>
+      <div class="a">
+        <b>Hit these points:</b> decide by where the differentiation lives — buy when the data is generic and the vendor's context strategy already fits the use-case; build when our edge <em>is</em> the retrieval over proprietary data the vendor can't reach &rarr; the model is a commodity any competitor can rent; the retrieval pipeline over our live systems is the moat &rarr; the pivot question: does off-the-shelf grounding actually reach our systems, or does it hallucinate without connectors? &rarr; sequence it: instrument the failing cases first — if the gap is retrieval coverage, no vendor model upgrade closes it &rarr; hybrid stance is common: buy the model/runtime, build the retrieval and evaluation that compound across every feature.
+      </div>
+    </details>
+    <details class="iq" data-level="staff">
+      <summary>Across billing, support, engineering, and research agents, where does retrieval investment actually pay off — and where would you NOT over-invest?</summary>
+      <div class="a">
+        <b>Hit these points:</b> investment compounds where wrong answers carry the highest business/compliance risk and where the data is yours — billing (audit/dispute exposure) and engineering (proprietary code) reward deep, exact retrieval &rarr; support rewards hybrid + rerank plus caching hot articles, because volume and deflection make small accuracy gains pay back fast &rarr; research rewards verification and provenance more than index sophistication, since freshness beats precompute on volatile sources &rarr; where <em>not</em> to over-invest: building a bespoke embedding stack for generic data a vendor already serves, or chasing a model upgrade (a flat tax on every call) to paper over a retrieval gap &rarr; the staff move: instrument, attribute failures by class, and put the build effort where it compounds across features rather than where it's merely fashionable.
+      </div>
+    </details>
+
+    <div class="designrubric" data-level="design">
+      <b>Design-round framework</b> — drive any production context-system prompt through these, out loud:
+      <ol>
+        <li>Clarify the data type first — exact/financial, fuzzy text, structural code, or volatile multi-source — because it dictates the retrieval mechanism.</li>
+        <li>Place it on the spectrum: pre-index (fast, can go stale) vs read-on-demand (fresh, more round-trips) vs fetch-live for volatile/exact data.</li>
+        <li>Retrieve: recall first — lexical (BM25) + semantic, hybrid — then rerank for precision; structured query where data is exact.</li>
+        <li>Assemble within budget; compress long runs; reserve fixed space for history and the answer.</li>
+        <li>Reliability &amp; guardrails: no-synthesis rule for exact data, adversarial verification for research, injection/PII defense before the model.</li>
+        <li>Cost &amp; scale: tokens are the bill — tighter selection, caching hot retrievals, cap fan-out.</li>
+        <li>Observability: log assembled context + tool calls per call; track retrieval hit-rate and the five failure modes separately from answer accuracy.</li>
+      </ol>
+    </div>
+    <details class="iq" data-level="design">
+      <summary>Design the context system for a billing assistant that quotes exact charges and also answers billing-policy questions.</summary>
+      <div class="a">
+        <b>A strong answer covers:</b> spot two data types in one product &rarr; <b>charges</b> are exact/transactional/auditable &rarr; deterministic SQL keyed by <code>account_id</code>/invoice id, never embeddings, because a semantic match returns the most-similar amount — a confidently-wrong number &rarr; <b>policy</b> is fuzzy natural-language text &rarr; hybrid retrieval + rerank over the help-center KB, with citations &rarr; one agent, two retrieval mechanisms matched to two data types &rarr; reliability rule: figures are quoted from a pulled record, never synthesized &rarr; guardrails: PII redaction and access control at the retrieve stage, injection defense on KB content &rarr; observability: log every assembled context + tool call for audit and dispute resolution &rarr; name the failure modes the naive "vector DB for everything" design invites: wrong (similar-not-correct amounts) and outdated (stale figures) &rarr; close with freshness: invalidate on write since balances and policies change.
+      </div>
+    </details>
+    <details class="iq" data-level="design">
+      <summary>Design the context system for a research agent that fans out across many sources and must produce a cited answer.</summary>
+      <div class="a">
+        <b>A strong answer covers:</b> the data is volatile and spread across many fresh sources, so fetch live rather than rely on a precomputed index &rarr; orchestration: a planner decomposes the question, fans out retrieval across web/docs/APIs, each sub-step returning candidates &rarr; recall wide then rerank per sub-question; dedupe near-identical sources &rarr; <b>compress</b> intermediate findings into a running summary so the budget survives the fan-out, but keep a citation handle on every retained fact &rarr; reliability: adversarial verification — cross-check claims against independent sources and surface conflicts instead of silently picking one &rarr; provenance per claim so the final answer is traceable sentence-by-sentence &rarr; cost is the dominant constraint — cap breadth, cache repeated lookups, and stop when marginal sources stop changing the answer &rarr; observability: log the source set, what each sub-step retrieved, and which claims survived verification &rarr; name the failure modes this shape invites: conflicting, outdated, excessive — and the defense for each.
+      </div>
+    </details>
+  </div>
+
   <!-- ============ CAPSTONE TOOLKIT ============ -->
   <h2 class="sec" id="toolkit">The Principal's toolkit — your 9 take-home deliverables</h2>
   <p class="tagline">Compact, visual revision artifacts. Skim them before a review or an interview; each one is a tool you keep.</p>
@@ -547,5 +648,6 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     });
   });
 </script>
+<script src="../../assets/interview.js" defer></script>
 </body>
 </html>
