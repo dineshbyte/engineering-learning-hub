@@ -7,6 +7,10 @@
 <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
 <body>
+
+<!-- shared arrowheads -->
+
+
 <div class="wrap">
   
 
@@ -15,7 +19,7 @@
   <p class="meta">~16 min · 3 modules · how real tools turn a giant repo into the right few tokens — and why retrieval, not the model, decides the answer</p>
 
   <div class="mission">
-    <strong>Your bar:</strong> explain how Cursor and Claude Code make sense of a repo too large for any window, why chunking exists and the precise way it fails, and how RAG works from first principles — then argue, with an interviewer pushing back, why <em>most "the LLM is dumb" bugs are retrieval bugs</em>. By the end you can answer: <b>given a 2M-token codebase and a 200k window, how does the system surface the right symbols — and where does that pipeline silently break?</b><sup><a href="#s1" id="r1">1</a></sup>
+    <strong>Your bar:</strong> explain how Cursor and Claude Code make sense of a repo too large for any window, why chunking exists and how it breaks, and how RAG works from first principles. Then argue, against an interviewer pushing back, why <em>most "the LLM is dumb" bugs are retrieval bugs</em>. By the end you can answer: <b>given a 2M-token codebase and a 200k window, how does the system surface the right symbols — and where does that pipeline silently break?</b><sup><a href="#s1" id="r1">1</a></sup>
   </div>
 
   <p>This lesson is the productization of Lesson 1's "context is the new database query." Three steps build the query engine:</p>
@@ -160,7 +164,7 @@
     <h3>The pipeline</h3>
     <figure>
       <img src="images/ch03-5.png" alt="diagram"/>
-      <figcaption>RAG = retrieval bolted onto generation. The model answers from <b>the retrieved chunks</b>, not its training weights — so it can cite, stay current, and use your private data. The whole answer rides on whether Retrieval pulled the right chunk.<sup><a href="#s6" id="r6">6</a></sup></figcaption>
+      <figcaption>RAG is retrieval wired in front of generation. The model answers from <b>the retrieved chunks</b> rather than its training weights, which is what lets it cite a source, stay current, and reach your private data. The whole answer rides on whether retrieval pulled the right chunk.<sup><a href="#s6" id="r6">6</a></sup></figcaption>
     </figure>
 
     <h3>Why RAG exists vs the alternatives</h3>
@@ -219,15 +223,25 @@
   <!-- ============ QUIZ ============ -->
   <h2 class="sec" id="quiz">Retrieval practice — test the three modules</h2>
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q1.</span> The key difference between Cursor's and Claude Code's codebase strategy is that…</p><ol class="opts"><li class="opt">Cursor reads files live with grep while Claude Code precomputes one big static embedding index</li><li class="opt">Both rely on the same persistent vector index and differ only in which LLM they each call</li><li class="opt">Claude Code caches every answer it gives while Cursor recomputes the answer from scratch each time</li><li class="opt"><b>&#10003; Cursor pre-indexes embeddings for semantic recall; Claude Code reads the live filesystem on demand</b></li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q1.</span> The key difference between Cursor's and Claude Code's codebase strategy is that…</p><ol class="opts"><li class="opt">Cursor reads files live with grep while Claude Code precomputes one big static embedding index</li><li class="opt">Both rely on the same persistent vector index and differ only in which LLM they each call</li><li class="opt">Claude Code caches every answer it gives while Cursor recomputes the answer from scratch each time</li><li class="opt"><b>&#10003; Cursor pre-indexes embeddings for semantic recall; Claude Code reads the live filesystem on demand</b></li></ol></div>
+  
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q2.</span> A known downside of a pre-built embedding index for code is that…</p><ol class="opts"><li class="opt"><b>&#10003; It can go stale and miss exact identifiers, returning code that may no longer exist in the repo</b></li><li class="opt">It is unable to search files larger than a single screen of code without a special configuration</li><li class="opt">It always requires a paid GPU at query time and cannot be run on standard developer laptops</li><li class="opt">It can only index one programming language per repository and ignores all the other source files</li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q2.</span> A known downside of a pre-built embedding index for code is that…</p><ol class="opts"><li class="opt"><b>&#10003; It can go stale and miss exact identifiers, returning code that may no longer exist in the repo</b></li><li class="opt">It is unable to search files larger than a single screen of code without a special configuration</li><li class="opt">It always requires a paid GPU at query time and cannot be run on standard developer laptops</li><li class="opt">It can only index one programming language per repository and ignores all the other source files</li></ol></div>
+  
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q3.</span> "Context fragmentation" in chunking refers to…</p><ol class="opts"><li class="opt">Storing chunks across many database shards so a single query must contact every shard at once</li><li class="opt">The model forgetting earlier chunks of a long conversation once newer turns push them out</li><li class="opt"><b>&#10003; A fact split across a chunk boundary so no single chunk is complete and retrieval misses it</b></li><li class="opt">Compressing each chunk so aggressively that its embedding vector no longer matches any query</li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q3.</span> "Context fragmentation" in chunking refers to…</p><ol class="opts"><li class="opt">Storing chunks across many database shards so a single query must contact every shard at once</li><li class="opt">The model forgetting earlier chunks of a long conversation once newer turns push them out</li><li class="opt"><b>&#10003; A fact split across a chunk boundary so no single chunk is complete and retrieval misses it</b></li><li class="opt">Compressing each chunk so aggressively that its embedding vector no longer matches any query</li></ol></div>
+  
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q4.</span> The five-stage RAG pipeline, in order, is…</p><ol class="opts"><li class="opt">Question &#8594; LLM &#8594; Retrieval &#8594; Context assembly &#8594; Answer returned to the calling user</li><li class="opt"><b>&#10003; Question &#8594; Retrieval &#8594; Context assembly &#8594; LLM &#8594; Answer returned to the calling user</b></li><li class="opt">Retrieval &#8594; Question &#8594; LLM &#8594; Context assembly &#8594; Answer returned to the calling user</li><li class="opt">Question &#8594; Context assembly &#8594; Retrieval &#8594; LLM &#8594; Answer returned to the calling user</li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q4.</span> The five-stage RAG pipeline, in order, is…</p><ol class="opts"><li class="opt">Question &#8594; LLM &#8594; Retrieval &#8594; Context assembly &#8594; Answer returned to the calling user</li><li class="opt"><b>&#10003; Question &#8594; Retrieval &#8594; Context assembly &#8594; LLM &#8594; Answer returned to the calling user</b></li><li class="opt">Retrieval &#8594; Question &#8594; LLM &#8594; Context assembly &#8594; Answer returned to the calling user</li><li class="opt">Question &#8594; Context assembly &#8594; Retrieval &#8594; LLM &#8594; Answer returned to the calling user</li></ol></div>
+  
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q5.</span> A RAG bot confidently gives a wrong answer. The most likely root cause is…</p><ol class="opts"><li class="opt">The base model simply lacks the reasoning ability and must be replaced by a far larger one</li><li class="opt">The token budget was exceeded so the API silently refused to generate any answer at all here</li><li class="opt"><b>&#10003; Retrieval surfaced the wrong passage or nothing, and the model answered from bad input anyway</b></li><li class="opt">The user phrased the question politely, which biased the model toward an agreeable wrong reply</li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q5.</span> A RAG bot confidently gives a wrong answer. The most likely root cause is…</p><ol class="opts"><li class="opt">The base model simply lacks the reasoning ability and must be replaced by a far larger one</li><li class="opt">The token budget was exceeded so the API silently refused to generate any answer at all here</li><li class="opt"><b>&#10003; Retrieval surfaced the wrong passage or nothing, and the model answered from bad input anyway</b></li><li class="opt">The user phrased the question politely, which biased the model toward an agreeable wrong reply</li></ol></div>
+  
 
   <!-- ============ INTERVIEW QUESTIONS ============ -->
   <h2 class="sec" id="interview">Interview questions — Modules 1–3</h2>
@@ -262,7 +276,7 @@
     </div>
   </div>
 
-  <!-- ============ NAV ============ -->
+  
   
 
   <footer>
@@ -277,6 +291,9 @@
     </ol>
   </footer>
 
-</div>
+</div><!-- /wrap -->
+
+
+
 </body>
 </html>

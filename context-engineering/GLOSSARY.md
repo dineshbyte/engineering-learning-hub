@@ -3,6 +3,8 @@
 Covers Lessons 1–9. Grouped by where each term first lands.
 
 ## Foundations (L1–2)
+- **LLM (large language model)** — the reasoning model itself: the brain. Fixed weights, no memory
+  between calls, no access to your data except what you place in its context window for that call.
 - **Context** — everything the model can see for a single call: system prompt + instructions +
   conversation history + retrieved data + tool definitions/results + the user's query. The model's
   *entire* world for that one inference. It has no other access to your data.
@@ -12,9 +14,9 @@ Covers Lessons 1–9. Grouped by where each term first lands.
   average). Limits, latency, and cost are all measured in tokens, not characters or lines.
 - **Working context** — the curated subset actually assembled into the window for *this* turn: the
   few things relevant right now, not everything that exists. The output of context engineering.
-- **Context engineering** — the discipline of deciding what to put in the window (and what to leave
-  out) so a fixed model produces the best possible answer. The selection/retrieval/compression/
-  assembly pipeline that runs *before* the model.
+- **Context engineering** — selecting, retrieving, compressing, and assembling the window before the
+  model runs. Decide what to put in the window (and what to leave out) so a fixed model produces the
+  best answer it can.
 - **Context assembly** — the step that packs selected/retrieved content (plus prompt, history,
   tools) into the final window, within budget, in an order the model uses well.
 - **Context-as-query** — the mental model: in classic software the query (SQL) fetches from the DB;
@@ -48,12 +50,12 @@ Covers Lessons 1–9. Grouped by where each term first lands.
 - **Context fragmentation** — a fact split across chunks so no single chunk is complete/retrievable.
 - **Contextual chunking/retrieval** — prepend a short doc/section-situating summary to each chunk
   before embedding (and index BM25 too) to cut retrieval failures.
-- **RAG (Retrieval-Augmented Generation)** — Question → Retrieval → Assembly → LLM → Answer. Grounds
-  the model in your private/current data; only as good as its retrieval.
+- **RAG (Retrieval-Augmented Generation)** — retrieve → assemble → LLM → answer. Grounds the model
+  in your private or current data; only as good as its retrieval.
 
 ## Memory, compression & failure modes (L4)
-- **Memory** — persisted state the system writes and recalls about an ongoing task/relationship
-  (derived facts, decisions). Reaches the model only via retrieval into context.
+- **Memory** — persisted state (derived facts, decisions) about an ongoing task or relationship.
+  Reachable only by retrieving it back into context — the model never reads it directly.
 - **Knowledge base** — the corpus of source documents/facts; usually read-only reference material.
 - **Compression** — fitting more useful signal into the budget via **summarization** (condense),
   **distillation** (extract salient facts), pruning redundancy, and **sliding windows** (recent

@@ -7,6 +7,10 @@
 <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
 <body>
+
+<!-- shared arrowheads -->
+
+
 <div class="wrap">
   
 
@@ -18,7 +22,7 @@
     <strong>Your bar:</strong> transform the raw query <em>before</em> you retrieve, match the retrieval <em>structure</em> to the shape of the question, and know exactly when to graduate from a static pipeline to a self-correcting agentic loop. By the end you can answer: <b>given a RAG system that retrieves the wrong thing, which lever — pre-retrieval, retrieval structure, or an agentic loop — do you pull, and what does each cost?</b><sup><a href="#s1" id="r1">1</a></sup>
   </div>
 
-  <p>Lesson 3 shipped the baseline RAG pipeline. This lesson is everything that turns that baseline into a system. Each chip is one lever:</p>
+  <p>Lesson 3 shipped the baseline RAG pipeline. This lesson covers the three changes that turn that baseline into a system. Each chip is one lever:</p>
   <div class="chips">
     <span class="chip">the raw query is a <b>bad search query</b></span>
     <span class="chip c2">so <b>transform it first</b> (rewrite · HyDE · decompose)</span>
@@ -43,12 +47,12 @@
   <!-- ============ MODULE 1 ============ -->
   <section class="lvl" id="m1">
     <div class="lvltop"><span class="num">1</span><h2>Query Transformation</h2></div>
-    <p class="tagline">The raw user query is often a <b>bad search query</b>: short, vague, full of pronouns, worded nothing like the documents that answer it. Fix it in a <b>pre-retrieval</b> stage — before it ever touches the index.</p>
+    <p class="tagline">The raw user query is often a <b>bad search query</b>: short, vague, full of pronouns, worded nothing like the documents that answer it. Fix it in a <b>pre-retrieval</b> stage, before it touches the index.</p>
 
     <h3>A stage that didn't exist in the baseline</h3>
     <figure>
       <img src="images/ch07-2.png" alt="diagram"/>
-      <figcaption>One vague query in, several precise queries (or a hypothetical answer) out. The model that answers is unchanged — you simply hand the index a far better search than the user typed.<sup><a href="#s2" id="r2">2</a></sup></figcaption>
+      <figcaption>One vague query in, several precise queries (or a hypothetical answer) out. The model that answers is unchanged; you hand the index a better search than the user typed.<sup><a href="#s2" id="r2">2</a></sup></figcaption>
     </figure>
 
     <h3>The pre-retrieval techniques, pinned down</h3>
@@ -104,7 +108,7 @@
   <!-- ============ MODULE 2 ============ -->
   <section class="lvl" id="m2">
     <div class="lvltop"><span class="num">2</span><h2>Advanced Retrieval Structures</h2></div>
-    <p class="tagline">Lesson 3's baseline was <b>flat chunk + top-k</b>: one embedding per chunk, return the nearest k. That's a floor, not a ceiling. The <em>shape</em> of the question should pick the <em>structure</em> of the retriever.</p>
+    <p class="tagline">Lesson 3's baseline was <b>flat chunk + top-k</b>: one embedding per chunk, return the nearest k. That's a floor. The <em>shape</em> of the question should pick the <em>structure</em> of the retriever.</p>
 
     <h3>Flat vs structured retrieval</h3>
     <figure>
@@ -169,7 +173,7 @@
   <!-- ============ MODULE 3 ============ -->
   <section class="lvl" id="m3">
     <div class="lvltop"><span class="num">3</span><h2>Agentic &amp; Self-Correcting RAG</h2></div>
-    <p class="tagline">Modules 1&#8211;2 still ran retrieval <em>once</em>, as a fixed step. The last shift is to make retrieval an <b>action inside a loop</b>: the model decides whether to retrieve, grades what it got, and critiques its own draft (callback to the ai-agents track and Lesson 3's read-on-demand).</p>
+    <p class="tagline">Modules 1&#8211;2 still ran retrieval <em>once</em>, as a fixed step. The last shift makes retrieval an <b>action inside a loop</b>: the model decides whether to retrieve, grades what it got, and critiques its own draft. This is the read-on-demand pattern from Lesson 3 and the ai-agents track.</p>
 
     <h3>The self-correcting loop</h3>
     <figure>
@@ -233,15 +237,25 @@
   <!-- ============ QUIZ ============ -->
   <h2 class="sec" id="quiz">Retrieval practice — test the three modules</h2>
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q1.</span> The core argument for pre-retrieval query transformation is that…</p><ol class="opts"><li class="opt">A larger context window removes the need to ever transform the user's raw query at all</li><li class="opt">The reranker can always recover any relevant document the retriever happened to miss</li><li class="opt"><b>&#10003; Recall lost at retrieval is unrecoverable downstream, so fix the query before the index</b></li><li class="opt">The model answers better when it is shown the user's exact wording with no changes</li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q1.</span> The core argument for pre-retrieval query transformation is that…</p><ol class="opts"><li class="opt">A larger context window removes the need to ever transform the user's raw query at all</li><li class="opt">The reranker can always recover any relevant document the retriever happened to miss</li><li class="opt"><b>&#10003; Recall lost at retrieval is unrecoverable downstream, so fix the query before the index</b></li><li class="opt">The model answers better when it is shown the user's exact wording with no changes</li></ol></div>
+  
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q2.</span> HyDE (Hypothetical Document Embeddings) works by…</p><ol class="opts"><li class="opt"><b>&#10003; Drafting a hypothetical answer and embedding that to bridge the query/document gap</b></li><li class="opt">Caching every prior answer and replaying it when a similar question is seen again</li><li class="opt">Splitting one compound question into several smaller sub-questions before retrieval</li><li class="opt">Ranking candidates with a cross-encoder after the first vector search has finished</li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q2.</span> HyDE (Hypothetical Document Embeddings) works by…</p><ol class="opts"><li class="opt"><b>&#10003; Drafting a hypothetical answer and embedding that to bridge the query/document gap</b></li><li class="opt">Caching every prior answer and replaying it when a similar question is seen again</li><li class="opt">Splitting one compound question into several smaller sub-questions before retrieval</li><li class="opt">Ranking candidates with a cross-encoder after the first vector search has finished</li></ol></div>
+  
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q3.</span> The "small-to-big" (parent-document) retriever gives you…</p><ol class="opts"><li class="opt">A way to store one document across many shards so each query hits every shard</li><li class="opt">A graph of entities whose community summaries answer corpus-wide theme questions</li><li class="opt">A lexical BM25 index bolted onto the vectors to catch exact keyword and ID matches</li><li class="opt"><b>&#10003; Precision of a small matched chunk plus the surrounding context of its larger parent</b></li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q3.</span> The "small-to-big" (parent-document) retriever gives you…</p><ol class="opts"><li class="opt">A way to store one document across many shards so each query hits every shard</li><li class="opt">A graph of entities whose community summaries answer corpus-wide theme questions</li><li class="opt">A lexical BM25 index bolted onto the vectors to catch exact keyword and ID matches</li><li class="opt"><b>&#10003; Precision of a small matched chunk plus the surrounding context of its larger parent</b></li></ol></div>
+  
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q4.</span> GraphRAG most clearly beats flat chunk + top-k when the question is…</p><ol class="opts"><li class="opt">A single local lookup such as "what is the configured retry limit for the job?"</li><li class="opt"><b>&#10003; A global "connect-the-dots" theme that no single chunk in the corpus contains</b></li><li class="opt">A latency-critical request that must return its answer in well under one second</li><li class="opt">A request that must be filtered by tenant and date before any vector search runs</li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q4.</span> GraphRAG most clearly beats flat chunk + top-k when the question is…</p><ol class="opts"><li class="opt">A single local lookup such as "what is the configured retry limit for the job?"</li><li class="opt"><b>&#10003; A global "connect-the-dots" theme that no single chunk in the corpus contains</b></li><li class="opt">A latency-critical request that must return its answer in well under one second</li><li class="opt">A request that must be filtered by tenant and date before any vector search runs</li></ol></div>
+  
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q5.</span> Corrective RAG (CRAG) differs from a static pipeline because it…</p><ol class="opts"><li class="opt">Embeds the question and returns the nearest k chunks exactly once with no checks</li><li class="opt">Fine-tunes the base model on retrieved documents so it memorizes them for later</li><li class="opt"><b>&#10003; Grades the retrieved docs and falls back or re-retrieves when their quality is low</b></li><li class="opt">Prepends a short situating summary to each chunk before it is embedded and indexed</li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q5.</span> Corrective RAG (CRAG) differs from a static pipeline because it…</p><ol class="opts"><li class="opt">Embeds the question and returns the nearest k chunks exactly once with no checks</li><li class="opt">Fine-tunes the base model on retrieved documents so it memorizes them for later</li><li class="opt"><b>&#10003; Grades the retrieved docs and falls back or re-retrieves when their quality is low</b></li><li class="opt">Prepends a short situating summary to each chunk before it is embedded and indexed</li></ol></div>
+  
 
   <!-- ============ INTERVIEW QUESTIONS ============ -->
   <h2 class="sec" id="interview">Interview questions — Modules 1–3</h2>
@@ -270,7 +284,7 @@
     </div>
   </div>
 
-  <!-- ============ NAV ============ -->
+  
   
 
   <footer>
@@ -282,6 +296,9 @@
     </ol>
   </footer>
 
-</div>
+</div><!-- /wrap -->
+
+
+
 </body>
 </html>

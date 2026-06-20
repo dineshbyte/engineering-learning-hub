@@ -7,6 +7,10 @@
 <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
 <body>
+
+<!-- shared arrowheads -->
+
+
 <div class="wrap">
   
 
@@ -18,7 +22,7 @@
     <strong>Your bar:</strong> structure a prompt so the model <em>reuses</em> a cached prefix instead of reprocessing it, order the window so the content that matters actually gets read, and defend a retrieval pipeline against an attacker who plants instructions in your knowledge base — or tries to read another tenant's documents. By the end you can answer the production question: <b>how do you make the same context pipeline cheaper, more accurate, and safe for many tenants at once?</b><sup><a href="#s1" id="r1">1</a></sup>
   </div>
 
-  <p>The whole production layer fits in one sentence. Each chip is one thing this lesson makes permanent:</p>
+  <p>The whole production layer fits in four moves. Each chip is one of them:</p>
   <div class="chips">
     <span class="chip">Put <b>stable content first</b> so the prefix caches</span>
     <span class="chip c2">order the window so the <b>edges get read</b></span>
@@ -99,7 +103,7 @@
   <!-- ============ MODULE 2 ============ -->
   <section class="lvl" id="m2">
     <div class="lvltop"><span class="num">2</span><h2>Context Assembly &amp; Ordering</h2></div>
-    <p class="tagline">Position is not neutral. Models attend most strongly to the <b>start</b> (primacy) and the <b>end</b> (recency) of the window, and weakest in the <b>middle</b> — so <em>where</em> you place a fact partly decides whether it's used at all.<sup><a href="#s3" id="r3">3</a></sup></p>
+    <p class="tagline">Position is not neutral. Models attend most strongly to the <b>start</b> (primacy) and the <b>end</b> (recency) of the window, and weakest in the <b>middle</b>, so <em>where</em> you place a fact partly decides whether it gets used.<sup><a href="#s3" id="r3">3</a></sup></p>
 
     <h3>Lost in the middle — attention is U-shaped</h3>
     <figure>
@@ -229,15 +233,25 @@
   <!-- ============ QUIZ ============ -->
   <h2 class="sec" id="quiz">Retrieval practice — test the three modules</h2>
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q1.</span> For prompt / KV caching to pay off, you should place…</p><ol class="opts"><li class="opt">The freshest per-query retrieved documents right at the very top of the input</li><li class="opt">A unique request timestamp first so each call is easy to trace in the logs</li><li class="opt"><b>&#10003; Stable content (system, tools, few-shots) first and the volatile query last</b></li><li class="opt">The user's question first so the model reads what it must answer earliest</li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q1.</span> For prompt / KV caching to pay off, you should place…</p><ol class="opts"><li class="opt">The freshest per-query retrieved documents right at the very top of the input</li><li class="opt">A unique request timestamp first so each call is easy to trace in the logs</li><li class="opt"><b>&#10003; Stable content (system, tools, few-shots) first and the volatile query last</b></li><li class="opt">The user's question first so the model reads what it must answer earliest</li></ol></div>
+  
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q2.</span> Changing a single token in the cached prefix will…</p><ol class="opts"><li class="opt"><b>&#10003; Bust the cache from that point on, so the rest is reprocessed at full cost</b></li><li class="opt">Have no effect at all because the cache matches on the suffix of the input</li><li class="opt">Speed up the call since the model now has slightly less text to read through</li><li class="opt">Only matter if the changed token sits inside the user's final question text</li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q2.</span> Changing a single token in the cached prefix will…</p><ol class="opts"><li class="opt"><b>&#10003; Bust the cache from that point on, so the rest is reprocessed at full cost</b></li><li class="opt">Have no effect at all because the cache matches on the suffix of the input</li><li class="opt">Speed up the call since the model now has slightly less text to read through</li><li class="opt">Only matter if the changed token sits inside the user's final question text</li></ol></div>
+  
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q3.</span> "Lost in the middle" means that, in a long window, the model…</p><ol class="opts"><li class="opt">Forgets the system prompt entirely once the conversation grows past a few turns</li><li class="opt">Refuses to read any document placed after the very first retrieved chunk of text</li><li class="opt">Charges extra tokens for content positioned anywhere near the center of the input</li><li class="opt"><b>&#10003; Attends most to the start and end, and skims content buried in the middle</b></li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q3.</span> "Lost in the middle" means that, in a long window, the model…</p><ol class="opts"><li class="opt">Forgets the system prompt entirely once the conversation grows past a few turns</li><li class="opt">Refuses to read any document placed after the very first retrieved chunk of text</li><li class="opt">Charges extra tokens for content positioned anywhere near the center of the input</li><li class="opt"><b>&#10003; Attends most to the start and end, and skims content buried in the middle</b></li></ol></div>
+  
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q4.</span> Do caching (stable-first) and recency (query-last) conflict in your layout?</p><ol class="opts"><li class="opt">Yes — you must abandon caching whenever you want the query read with recency</li><li class="opt"><b>&#10003; No — a volatile query last is both cache-friendly and in the recency zone</b></li><li class="opt">Yes — recency forces the system prompt to move down below the user question</li><li class="opt">No — because attention is uniform, so position never affects either concern</li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q4.</span> Do caching (stable-first) and recency (query-last) conflict in your layout?</p><ol class="opts"><li class="opt">Yes — you must abandon caching whenever you want the query read with recency</li><li class="opt"><b>&#10003; No — a volatile query last is both cache-friendly and in the recency zone</b></li><li class="opt">Yes — recency forces the system prompt to move down below the user question</li><li class="opt">No — because attention is uniform, so position never affects either concern</li></ol></div>
+  
 
-  <div class="quiz-static"><p class="q"><span class="qn">Q5.</span> The correct place to enforce per-tenant access control in a RAG system is…</p><ol class="opts"><li class="opt">A system-prompt rule telling the model to only answer about the user's own data</li><li class="opt">An output filter that redacts other tenants' records after the model responds</li><li class="opt"><b>&#10003; The retrieval query — pre-filter by tenant_id / ACL before anything reaches it</b></li><li class="opt">A reminder appended after each retrieved chunk asking it to respect ownership</li></ol></div>
+  
+    <div class="quiz-static"><p class="q"><span class="qn">Q5.</span> The correct place to enforce per-tenant access control in a RAG system is…</p><ol class="opts"><li class="opt">A system-prompt rule telling the model to only answer about the user's own data</li><li class="opt">An output filter that redacts other tenants' records after the model responds</li><li class="opt"><b>&#10003; The retrieval query — pre-filter by tenant_id / ACL before anything reaches it</b></li><li class="opt">A reminder appended after each retrieved chunk asking it to respect ownership</li></ol></div>
+  
 
   <!-- ============ INTERVIEW QUESTIONS ============ -->
   <h2 class="sec" id="interview">Interview questions — Modules 1–3</h2>
@@ -272,7 +286,7 @@
     </div>
   </div>
 
-  <!-- ============ NAV ============ -->
+  
   
 
   <footer>
@@ -285,6 +299,9 @@
     </ol>
   </footer>
 
-</div>
+</div><!-- /wrap -->
+
+
+
 </body>
 </html>
