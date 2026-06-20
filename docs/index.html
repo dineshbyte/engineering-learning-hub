@@ -173,7 +173,14 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; font-weight:800; color:var(--accent)}
   /* per-card progress (replaces the read-time line once a track is started) */
   .cprog{display:flex; flex-direction:column; gap:.34rem}
+  .ctop{display:flex; justify-content:space-between; align-items:center; gap:.5rem}
   .cstep{font-size:.73rem; font-weight:700; color:var(--accent)}
+  /* per-card reset — subtle, subordinate to the Continue CTA */
+  .creset{font:inherit; font-size:.68rem; font-weight:600; cursor:pointer; background:none; border:0;
+    color:var(--muted); padding:.1rem .25rem; border-radius:6px; line-height:1;
+    text-decoration:underline; text-underline-offset:2px; transition:color .12s, transform .08s}
+  .creset:hover{color:var(--accent)}
+  .creset:active{transform:scale(.96)}
   .cbar{height:.42rem; border-radius:99px; overflow:hidden;
     background:color-mix(in srgb, var(--accent) 18%, transparent)}
   .cfill{display:block; height:100%; border-radius:99px; background:var(--accent)}
@@ -716,6 +723,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       var slug=a.getAttribute('data-track'), resume=prog[slug];
       var tile=a.closest('.tile');
       if(slug && resume && tile){
+        var firstHref=a.getAttribute('href');           // original "Start" target (first lesson)
         a.setAttribute('href', resume);
         var lbl=a.querySelector('.start-label'); if(lbl) lbl.textContent='Continue';
         tile.classList.add('is-started');
@@ -723,13 +731,26 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
         var hrefs=[].slice.call(tile.querySelectorAll('.lchip')).map(function(l){return l.getAttribute('href');});
         var idx=hrefs.indexOf(resume), total=hrefs.length;
         var rt=tile.querySelector('.rtime');
-        if(idx>=0 && total){
-          var pct=Math.round((idx+1)/total*100);
-          var prog2=document.createElement('div'); prog2.className='cprog';
-          prog2.innerHTML='<span class="cstep">Lesson '+(idx+1)+' of '+total+'</span>'+
-            '<span class="cbar"><span class="cfill" style="width:'+pct+'%"></span></span>';
-          if(rt){ rt.replaceWith(prog2); } else { a.parentNode.insertBefore(prog2, a); }
-        } else if(rt){ rt.remove(); }
+        // in-progress block: step label + a Reset link, plus the bar when known
+        var prog2=document.createElement('div'); prog2.className='cprog';
+        var stepTxt=(idx>=0 && total) ? 'Lesson '+(idx+1)+' of '+total : 'In progress';
+        var barHtml=(idx>=0 && total)
+          ? '<span class="cbar"><span class="cfill" style="width:'+Math.round((idx+1)/total*100)+'%"></span></span>' : '';
+        prog2.innerHTML='<span class="ctop"><span class="cstep">'+stepTxt+'</span>'+
+          '<button class="creset" type="button" aria-label="Reset progress for this track">↻ Reset</button></span>'+barHtml;
+        if(rt){ rt.replaceWith(prog2); } else { a.parentNode.insertBefore(prog2, a); }
+        // Reset: clear this track's saved progress and revert the card to Start.
+        // Low-stakes + reversible (re-start recreates it), so no confirm dialog.
+        prog2.querySelector('.creset').addEventListener('click', function(e){
+          e.preventDefault(); e.stopPropagation();
+          var m=getProg(); delete m[slug];
+          try{ localStorage.setItem(PKEY, JSON.stringify(m)); if(last===slug) localStorage.removeItem('sd:last'); }catch(err){}
+          if(rt){ prog2.replaceWith(rt); } else if(prog2.parentNode){ prog2.parentNode.removeChild(prog2); }
+          tile.classList.remove('is-started');
+          a.setAttribute('href', firstHref);
+          if(lbl) lbl.textContent='Start';
+          if(window.gtag){ try{ window.gtag('event','progress_reset',{track:slug}); }catch(err){} }
+        });
         // float the most-recently-read track to the top of the grid
         if(slug===last && tile.parentNode){ tile.parentNode.insertBefore(tile, tile.parentNode.firstElementChild); }
       }
