@@ -107,5 +107,6 @@
         try { map = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { map = {}; }
         map[slug] = url;
         localStorage.setItem(KEY, JSON.stringify(map));
+        localStorage.setItem('sd:last', slug); // most-recent track for the hub resume banner
     } catch (e) { /* storage unavailable — ignore */ }
 })();
