@@ -325,6 +325,38 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   html[data-theme="dark"] .topbar{background:rgba(19,18,16,.82)}
   html[data-theme="dark"] a.epub{color:#15140f}
   @media print{.topbar,.themebtn,.search{display:none!important}}
+
+  /* ---- card detail sheet (dialog) ---- */
+  dialog.cardsheet{border:0; padding:0; margin:auto; max-width:520px; width:calc(100% - 2rem);
+    background:var(--card); color:var(--ink); border-radius:14px;
+    box-shadow:0 20px 60px rgba(0,0,0,.28)}
+  dialog.cardsheet::backdrop{background:rgba(0,0,0,.45)}
+  .cs-inner{padding:1.1rem 1.15rem 1.25rem; position:relative}
+  .cs-close{position:absolute; top:.55rem; right:.55rem; border:0; background:var(--chip); color:var(--ink);
+    width:2rem; height:2rem; border-radius:50%; font-size:.95rem; line-height:1; cursor:pointer}
+  .cs-close:hover{background:var(--line)}
+  .cs-name{font-weight:700; font-size:1.15rem; letter-spacing:-.01em; padding-right:2rem; line-height:1.15}
+  .cs-tag{font-size:.63rem; letter-spacing:.11em; text-transform:uppercase; color:var(--muted); margin-top:.12rem}
+  .cs-meta{font-size:.75rem; color:var(--muted); margin-top:.35rem}
+  .cs-lessons{list-style:none; margin:.9rem 0 0; padding:0; display:flex; flex-direction:column; gap:.6rem;
+    max-height:52vh; overflow:auto}
+  .cs-lessons li{display:flex; gap:.6rem; align-items:flex-start}
+  .cs-n{flex:none; min-width:1.6rem; height:1.6rem; padding:0 .35rem; border-radius:6px; display:grid;
+    place-items:center; font-size:.78rem; font-weight:700; background:var(--chip); color:var(--ink)}
+  a.cs-lt{text-decoration:none; color:var(--ink); font-weight:600; font-size:.9rem; line-height:1.25}
+  a.cs-lt:hover{color:var(--accent)}
+  .cs-d{display:block; font-weight:400; font-size:.8rem; color:var(--muted); margin-top:.14rem; line-height:1.4}
+  .cs-foot{display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; margin-top:1rem;
+    padding-top:.85rem; border-top:1px solid var(--line)}
+  dialog.cardsheet[open]{animation:cs-pop .16s ease-out}
+  @keyframes cs-pop{from{opacity:0; transform:translateY(8px) scale(.985)} to{opacity:1; transform:none}}
+  @media (max-width:640px){
+    dialog.cardsheet{inset:auto 0 0 0; margin:0; width:100%; max-width:none; border-radius:16px 16px 0 0}
+    dialog.cardsheet[open]{animation:cs-up .2s ease-out}
+    @keyframes cs-up{from{transform:translateY(100%)} to{transform:translateY(0)}}
+    .cs-lessons{max-height:60vh}
+  }
+  @media (prefers-reduced-motion:reduce){ dialog.cardsheet[open]{animation:none} }
 </style>
 <script src="assets/analytics.js" defer></script>
 </head>
@@ -608,6 +640,19 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 </div>
 
 <script src="assets/search-index.js"></script>
+<dialog id="cardsheet" class="cardsheet" aria-labelledby="cardsheet-title">
+  <div class="cs-inner">
+    <button class="cs-close" type="button" aria-label="Close">&#x2715;</button>
+    <div class="cs-head">
+      <div class="cs-name" id="cardsheet-title"></div>
+      <div class="cs-tag"></div>
+      <div class="cs-meta"></div>
+    </div>
+    <ol class="cs-lessons"></ol>
+    <div class="cs-foot"></div>
+  </div>
+</dialog>
+<script src="assets/card-detail.js"></script>
 <script>
   (function(){
     var q=document.getElementById('q'), grid=document.getElementById('grid'),
