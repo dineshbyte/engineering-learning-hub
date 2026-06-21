@@ -183,6 +183,18 @@
     ['.iqtab[data-tab]', function (el) { ev('interview_tab_select', { level: el.getAttribute('data-tab') }); }],
     ['.ltags .lt', function (el) { ev('tag_chip_click', { tag: txt(el) }); }],
     ['sup a[href^="#"]', function (el) { ev('footnote_click', { anchor: el.getAttribute('href') }); }],
+    ['.lesson-fb-btn[data-rating]', function (el) {
+      var box = el.closest('.lesson-fb');
+      if (box && box.classList.contains('voted')) return;       // one vote per reader
+      var rating = el.getAttribute('data-rating');
+      ev('lesson_feedback', { rating: rating, lesson_number: CTX.lesson_number });
+      if (box) box.classList.add('voted');
+      try {
+        var m = JSON.parse(localStorage.getItem('sd:fb') || '{}');
+        m[CTX.lesson_id || location.pathname] = rating;
+        localStorage.setItem('sd:fb', JSON.stringify(m));
+      } catch (e) { /* storage unavailable */ }
+    }],
     ['.qitem .opt', function (el) {
       var item = el.closest('.qitem');
       setTimeout(function () {
@@ -222,7 +234,14 @@
       clearTimeout(timer);
       timer = setTimeout(function () {
         var term = q.value.trim();
-        if (term.length >= 2) ev('search', { search_term: term });
+        if (term.length >= 2) {
+          // run() renders #results synchronously on 'input', so by this debounce we
+          // can tell whether the search returned anything.
+          var hasResults = !!document.querySelector('#results .ritem');
+          ev('search', { search_term: term, has_results: hasResults });
+          // unmet demand — the clearest signal of what content to write next
+          if (!hasResults) ev('search_no_results', { search_term: term });
+        }
       }, 600);
     });
   }
@@ -262,7 +281,7 @@
        lesson_complete → scrolled to ~90% (after real scrolling), OR clicked Next
      Each fires at most once per page load. */
   if (CTX.page_type === 'lesson') {
-    var readSent = false, doneSent = false, scrolled = false;
+    var readSent = false, doneSent = false, scrolled = false, depthSent = {};
 
     function scrollPct() {
       var h = document.documentElement;
@@ -280,12 +299,30 @@
       ev('lesson_complete', { lesson_number: CTX.lesson_number, trigger: trigger });
     }
 
+    // scroll-depth milestones — each fires once, to see WHERE in a post readers drop off
+    function markDepth(p) {
+      var pct = p * 100;
+      [25, 50, 75, 100].forEach(function (m) {
+        if (!depthSent[m] && pct >= m) { depthSent[m] = true; ev('scroll_depth', { percent: m, lesson_number: CTX.lesson_number }); }
+      });
+    }
+
     window.addEventListener('scroll', function () {
       scrolled = true;
       var p = scrollPct();
+      markDepth(p);
       if (p >= 0.75) markRead('scroll');
       if (p >= 0.90 && scrolled) markComplete('scroll');
     }, { passive: true });
+
+    // restore the "voted" state if this reader already rated this lesson
+    try {
+      var fbMap = JSON.parse(localStorage.getItem('sd:fb') || '{}');
+      if (fbMap[CTX.lesson_id || location.pathname]) {
+        var fbBox = document.querySelector('.lesson-fb');
+        if (fbBox) fbBox.classList.add('voted');
+      }
+    } catch (e) { /* storage unavailable */ }
 
     // time-based read fallback (long dwell, or pages too short to scroll)
     setTimeout(function () { markRead('time'); }, 30000);
