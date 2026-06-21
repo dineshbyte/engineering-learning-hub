@@ -121,12 +121,15 @@ def build():
 <script src="../assets/analytics.js" defer></script>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <div class="wrap">
 <nav id="hubbar">
   <a href="../index.html">← Engineering Vault</a>
   <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">\U0001f313</button><span style="color:var(--muted)">{name} · {word}</span></span>
 </nav>
+<main id="main" tabindex="-1">
 {body}
+</main>
 </div>
 </body>
 </html>

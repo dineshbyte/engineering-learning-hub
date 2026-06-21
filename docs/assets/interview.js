@@ -12,6 +12,7 @@
 (function () {
     var LABELS = {core: 'Core', senior: 'Senior', staff: 'Staff', design: 'System Design'};
     var ORDER = ['core', 'senior', 'staff', 'design'];
+    var uid = 0; // unique id seed so multiple interview blocks on one page don't collide
 
     function enhance(root) {
         var items = Array.prototype.slice.call(root.querySelectorAll(':scope > [data-level]'));
@@ -35,11 +36,16 @@
         tabs.setAttribute('aria-label', 'Interview level');
         panel.appendChild(tabs);
 
+        var gid = 'iq' + (++uid);
         var groups = {};
         levels.forEach(function (lv) {
             var g = document.createElement('div');
             g.className = 'iqgroup';
             g.setAttribute('data-group', lv);
+            g.id = gid + '-panel-' + lv;
+            g.setAttribute('role', 'tabpanel');
+            g.setAttribute('aria-labelledby', gid + '-tab-' + lv);
+            g.tabIndex = 0; // tabpanels are focusable per the WAI-ARIA tabs pattern
             byLevel[lv].forEach(function (el) {
                 g.appendChild(el);
             }); // moves the node
@@ -47,15 +53,32 @@
             panel.appendChild(g);
         });
 
-        function select(lv) {
+        function select(lv, focusTab) {
             Array.prototype.forEach.call(tabs.children, function (b) {
                 var on = b.getAttribute('data-tab') === lv;
                 b.classList.toggle('is-active', on);
                 b.setAttribute('aria-selected', on ? 'true' : 'false');
+                b.tabIndex = on ? 0 : -1; // roving tabindex: only the active tab is tabbable
+                if (on && focusTab) b.focus();
             });
             levels.forEach(function (l) {
                 groups[l].hidden = (l !== lv);
             });
+        }
+
+        // WAI-ARIA tabs keyboard contract: Left/Right (and Up/Down) move between
+        // tabs with wrap-around; Home/End jump to first/last. Activation follows focus.
+        function onKey(e) {
+            var cur = levels.indexOf(e.target.getAttribute('data-tab'));
+            if (cur < 0) return;
+            var next;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (cur + 1) % levels.length;
+            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (cur - 1 + levels.length) % levels.length;
+            else if (e.key === 'Home') next = 0;
+            else if (e.key === 'End') next = levels.length - 1;
+            else return;
+            e.preventDefault();
+            select(levels[next], true);
         }
 
         levels.forEach(function (lv) {
@@ -64,10 +87,14 @@
             b.className = 'iqtab' + (lv === 'design' ? ' design' : '');
             b.setAttribute('data-tab', lv);
             b.setAttribute('role', 'tab');
+            b.id = gid + '-tab-' + lv;
+            b.setAttribute('aria-controls', gid + '-panel-' + lv);
+            b.tabIndex = -1; // roving tabindex; select() promotes the active tab to 0
             b.textContent = LABELS[lv] || lv;
             b.addEventListener('click', function () {
                 select(lv);
             });
+            b.addEventListener('keydown', onKey);
             tabs.appendChild(b);
         });
 
