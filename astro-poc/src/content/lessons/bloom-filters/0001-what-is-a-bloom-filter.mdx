@@ -1,0 +1,505 @@
+---
+# ─── bloom-filters · Lesson 1 — the MDX-hybrid reference lesson ───────────────
+# FRONTMATTER = the full lesson contract (head + masthead + wayfinding) PLUS the
+# structured body data lifted out of the prose: the quiz, the 13 interview Q&A
+# (incl. the design rubric) and the footnote sources. Validated at build time by
+# the `lessons` collection schema (src/content.config.ts → src/schema/lesson.ts).
+# The FAQ JSON-LD is emitted by <Interview> from `interview` below — it must NOT
+# also be set on `jsonLd`, or the page would carry two FAQPage blobs.
+#
+# HTML-bearing strings (h1Html, interview q/a, rubric, sources.html) use YAML
+# folded block scalars (>-) so the embedded ", ', &, < and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'What Is a Bloom Filter? Explained Visually'
+description: >-
+    A Bloom filter trades certainty for space: "definitely not in the set" is guaranteed, "probably
+    in the set" is not. Learn the core asymmetry and how it works.
+keywords: 'bloom filter, bloom filters, data structures, false positive, probabilistic, sizing, lsm, cuckoo, counting, hash, membership'
+path: 'bloom-filters/lessons/0001-what-is-a-bloom-filter.html'
+ogImage: 'assets/og/bloom-filters.png'
+ogImageAlt: 'Bloom Filters · Engineering Vault learning track'
+accentVar: '--track-bloom'
+
+# —— masthead ——
+trackLabel: 'Bloom Filters · Foundation'
+kicker: 'Lesson 1 · Foundation'
+h1Html: 'A Bloom filter trades certainty for <em>space</em>'
+metaLine: '~7 min · visual-first · retrieval practice at the end'
+chips:
+    - 'Bloom filter'
+    - 'Bloom filters'
+    - 'Data structures'
+    - 'False positive'
+    - 'Probabilistic'
+
+# —— wayfinding ——
+next:
+    href: '0002-sizing-a-bloom-filter.html'
+    title: 'Sizing a Bloom filter'
+
+# —— routing (used only by the dynamic route) ——
+track: 'bloom-filters'
+number: '0001'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: 'Which kind of error can a standard Bloom filter make?'
+      correct: 0
+      options:
+          - 'It may say present when the item is absent'
+          - 'It may say absent when the item is present'
+          - 'It may be wrong in both possible directions'
+          - 'It is always exactly correct on membership'
+    - q: "Why can't a standard Bloom filter support delete?"
+      correct: 2
+      options:
+          - 'The hash functions cannot be run in reverse'
+          - 'Deletion is disabled to keep queries faster'
+          - 'A cleared bit may belong to another element'
+          - 'The bit array is stored in read-only memory'
+    - q: 'Optimal hash count for m bits and n items is…'
+      correct: 3
+      options:
+          - 'k = (n / m) × ln 2'
+          - 'k = m × n ÷ ln 2'
+          - 'k = (m + n) × ln 2'
+          - 'k = (m / n) × ln 2'
+    - q: 'A query returns "not present." What is true?'
+      correct: 1
+      options:
+          - 'The item may still be there in the set'
+          - 'The item is definitely not in the set'
+          - 'The item is probably in the set right'
+          - 'The result cannot be trusted at all now'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'What is a Bloom filter, in one sentence, and what does it store?'
+      a: >-
+          <b>Hit these points:</b> a space-efficient probabilistic set-membership structure &rarr; it
+          stores <em>no keys</em>, just one <code>m</code>-bit array &rarr; <code>add(x)</code> sets
+          the <code>k</code> bits that <code>x</code> hashes to; <code>contains(x)</code> reads those
+          <code>k</code> bits &rarr; the whole point is the asymmetry: it answers "definitely not
+          here" or "probably here," never the reverse &rarr; you trade exactness for a tiny,
+          controllable footprint.
+    - level: 'core'
+      q: 'Which error can a standard Bloom filter make — and which can it never make?'
+      a: >-
+          <b>Hit these points:</b> it can return a <b>false positive</b> — "probably present" for
+          something never added &rarr; it can <em>never</em> return a false negative — a "not present"
+          is certain &rarr; reason: a "no" requires at least one checked bit to be 0, which only
+          happens if the item was never inserted &rarr; "all k bits set" can be a coincidence from
+          <em>other</em> items, so "present" is only a probability &rarr; this is why a "no" is always
+          safe to act on.
+    - level: 'core'
+      q: 'Walk through what add and contains actually do at the bit level.'
+      a: >-
+          <b>Hit these points:</b> <code>add(x)</code>: run <code>k</code> independent hashes of
+          <code>x</code>, take each mod <code>m</code>, set those <code>k</code> bits to 1 (some may
+          already be 1) &rarr; <code>contains(x)</code>: hash the same way, read those <code>k</code>
+          bits &rarr; if <em>any</em> is 0 &rarr; "definitely absent"; if <em>all</em> are 1 &rarr;
+          "probably present" &rarr; no comparison against stored keys ever happens — there are none
+          &rarr; cost is <code>k</code> hashes and <code>k</code> bit-probes, independent of how many
+          items are in the set.
+    - level: 'core'
+      q: "Why can't a standard Bloom filter support delete?"
+      a: >-
+          <b>Hit these points:</b> bits are <em>shared</em> across items &rarr; clearing a bit to
+          "remove" <code>x</code> might un-set a bit that a still-present key <code>y</code> also
+          relies on &rarr; that would introduce false negatives, which breaks the one guarantee the
+          structure offers &rarr; so deletion is simply unsupported in the standard form &rarr; if you
+          need deletes, reach for a counting Bloom filter (bits &rarr; small counters) or a cuckoo
+          filter, or periodically rebuild from the live set.
+    - level: 'senior'
+      q: 'Where would you put a Bloom filter in a read-heavy database, and what does it buy you?'
+      a: >-
+          <b>Hit these points:</b> put a small per-segment filter in front of the on-disk lookup — in
+          an LSM store like RocksDB or Cassandra, one per SSTable &rarr; on a read, check the filter
+          first: a "not present" lets you <em>skip that disk/SSD read entirely</em> &rarr; because
+          there are no false negatives, you never skip a key that's actually there &rarr; it cuts read
+          amplification for absent keys, at the cost of a few bits of RAM per key and the occasional
+          wasted lookup on a false positive &rarr; size for ~1% FP (~10 bits/key, illustrative) and
+          rebuild/partition if it saturates as segments grow.
+    - level: 'senior'
+      q: '"Probably present" is useless — why bother if you still have to verify?'
+      a: >-
+          <b>Hit these points:</b> the value isn't in the "yes," it's in the <em>certain "no"</em>
+          &rarr; in workloads dominated by absent-key lookups, the filter eliminates the expensive
+          path for most queries with a cheap RAM check &rarr; only the small fraction that come back
+          "maybe" pay the real lookup, and even there the FP rate is bounded by design &rarr; so you
+          swap "every query hits disk/DB" for "only true hits plus a few-percent false positives hit
+          disk/DB" &rarr; the win scales with how often the answer is genuinely "not here."
+    - level: 'senior'
+      q: "What is the optimal hash count, and what's the catch with using too many hashes?"
+      a: >-
+          <b>Hit these points:</b> optimal <code>k = (m/n)&middot;ln 2</code>, which minimizes the FP
+          rate for a given array size &rarr; at that <code>k</code> the FP rate is about
+          <code>(0.5)<sup>k</sup></code> &rarr; intuition: too few hashes means too few independent
+          bits checked; too many hashes fills the array faster, so each query trips over more set bits
+          &rarr; there's a sweet spot — past it, adding hashes <em>raises</em> the FP rate <em>and</em>
+          costs more CPU per op &rarr; also: real hashes must be well-mixed and effectively
+          independent, or you fall short of the theoretical rate (double-hashing is the common cheap
+          trick).
+    - level: 'senior'
+      q: 'The textbook FP formula — what is it, and why call it an approximation, not a law?'
+      a: >-
+          <b>Hit these points:</b> FP rate &asymp; <code>(1&minus;e<sup>&minus;kn/m</sup>)<sup>k</sup></code>
+          &rarr; it assumes bit-set events are independent, which isn't strictly true — bits set by
+          different items are correlated &rarr; so it's an excellent estimate, slightly optimistic,
+          not an exact identity (NIST has a more precise analysis) &rarr; saying this out loud signals
+          you understand the model's assumptions, not just the formula &rarr; practically it's
+          accurate enough to size with, but don't treat the last decimal as gospel, and always add
+          headroom for hash quality and growth.
+    - level: 'staff'
+      q: 'Make the case for a Bloom filter over just caching, then steelman the opposite.'
+      a: >-
+          <b>For:</b> a Bloom filter answers "is it absent?" in a few bits/key with a certain "no," so
+          it kills the expensive path for misses at a fraction of a cache's memory; it doesn't store
+          values, so it stays tiny even for billions of keys. <b>Steelman against:</b> if your
+          workload is dominated by <em>hits</em>, the filter says "maybe" almost every time and buys
+          nothing; a cache that actually returns values would serve those hits. <b>Synthesis:</b>
+          Bloom for negative-lookup-heavy workloads (LSM reads, dedup, "have I seen this?"); a real
+          cache when repeated hits dominate — they're complementary, often layered (filter to skip
+          misses, cache to serve hits).
+    - level: 'staff'
+      q: >-
+          A teammate proposes a Bloom filter as the source of truth for "has this user already claimed
+          the coupon?" Where does this break?
+      a: >-
+          <b>Hit these points:</b> a false positive here means a legitimate user is wrongly told
+          "already claimed" — a correctness/UX defect, not a perf nuisance &rarr; the filter is only
+          safe as a <em>negative</em> filter: "no" &rarr; certainly not claimed, fast path; "maybe"
+          &rarr; must verify against the authoritative store &rarr; never let "maybe" become the final
+          answer for anything user-visible or money-touching &rarr; also flag: no deletes (can't
+          un-claim), and saturation drives the FP rate up silently over time &rarr; the principal
+          move: filter in front of an exact store, sized so the verify path is cheap, with a rebuild
+          plan — not the filter <em>as</em> the store.
+    - level: 'staff'
+      q: 'When would you NOT use a Bloom filter at all?'
+      a: >-
+          <b>Hit these points:</b> when false positives are unacceptable and you can't afford a verify
+          step — use an exact set/index &rarr; when you must <em>enumerate</em> or return the items —
+          the filter stores no keys, so it can't list anything &rarr; when the set is tiny (a few
+          thousand) — a plain hash set is smaller, exact, and supports deletes, so there's no win
+          &rarr; when the dominant query is a <em>hit</em> rather than a miss — "maybe" every time buys
+          nothing &rarr; the staff framing: a Bloom filter earns its keep only when negative answers
+          are common and a cheap, certain "no" removes real work.
+    - level: 'design'
+      q: 'Design a "have we already crawled this URL?" check for a web crawler seeing billions of URLs.'
+      a: >-
+          <b>A strong answer covers:</b> the workload is miss-heavy early and the cost of re-crawling
+          is real, so a Bloom filter as a <em>cheap negative filter</em> fits &rarr; "no" &rarr;
+          definitely unseen, schedule the crawl; "maybe" &rarr; check the authoritative
+          seen-set/store before crawling &rarr; size from a tolerable FP rate (a false positive just
+          skips a URL — acceptable if rare; numbers illustrative) and from the expected <code>n</code>
+          &rarr; <code>n</code> grows unboundedly, so use a <em>scalable</em> Bloom (chained layers) or
+          shard filters by URL hash so the FP rate stays capped &rarr; no deletes needed (URLs don't
+          un-crawl), so standard/scalable beats counting &rarr; instrument bits-set fraction and FP
+          rate to trigger a new layer before saturation &rarr; name the trade-off: a false positive
+          silently drops a page vs the memory of an exact set of billions of URLs.
+    - level: 'design'
+      q: 'Design a "weak / breached password" rejection check at signup using a Bloom filter.'
+      a: >-
+          <b>A strong answer covers:</b> goal — reject any password in a huge known-breached list
+          without shipping or querying the full list per request &rarr; load the breached set into a
+          Bloom filter: "maybe present" &rarr; reject (ask for another password); "definitely absent"
+          &rarr; allow &rarr; here the asymmetry flips in your favor: a false positive just makes a
+          user pick a different password (mildly annoying, safe); a false <em>negative</em> would let
+          a breached password through — and Bloom has none &rarr; size for a low FP rate so you rarely
+          over-reject (illustrative), from the known <code>n</code> of the breach corpus &rarr; the
+          set is static and rebuilt on corpus updates, so no deletes and a simple rebuild pipeline
+          &rarr; ship the filter to the edge/client for latency, since it stores no actual passwords
+          &rarr; name the trade-off: occasional over-rejection (false positive) vs the privacy/size
+          cost of querying or shipping the raw list.
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Design-round framework</b> — drive any "use a Bloom filter here" prompt through these, out
+    loud:
+rubric:
+    - 'Clarify the workload: how often is the answer "absent"? Hits vs misses ratio decides if a filter helps at all.'
+    - 'Pick the guarantee you need: a certain "no" (Bloom fits) vs an exact yes/no (needs a real index).'
+    - 'Size it: choose target FP <code>p</code>, count <code>n</code>, derive <code>m = &minus;(n&middot;ln p)/(ln 2)<sup>2</sup></code> and <code>k = log&#8322;(1/p)</code>.'
+    - 'Place it: in front of the expensive/authoritative path; "maybe" always falls through to verify.'
+    - 'Plan for growth: rebuild/shard/scalable variant before saturation pushes the FP rate up.'
+    - 'Handle deletes/churn: counting or cuckoo variant, or periodic rebuild from the live set.'
+    - 'Observe it: track measured FP rate, bits-set fraction, and verify-path hit rate, not just "it''s there."'
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          1. Bloom, B. H. (1970), "Space/Time Trade-offs in Hash Coding with Allowable Errors", CACM
+          13(7) — <a href="https://dl.acm.org/doi/10.1145/362686.362692">acm.org</a>.
+          <a href="#r1">↩</a>
+    - id: 's2'
+      html: >-
+          2. Mitzenmacher &amp; Broder, "Network Applications of Bloom Filters: A Survey" —
+          <a href="https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf">harvard.edu</a>.
+          <a href="#r2">↩</a>
+    - id: 's3'
+      html: >-
+          3. Christensen, Roginsky, Jimeno (NIST), "A New Analysis of the False-Positive Rate of a
+          Bloom Filter" — <a href="https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=903775">nist.gov</a>.
+          <a href="#r3">↩</a>
+    - id: 's4'
+      html: >-
+          4. RocksDB Wiki — Bloom Filter —
+          <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter">github.com</a>.
+          <a href="#r4">↩</a>
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import Rehearse from '../../../components/Rehearse.astro';
+import Steps from '../../../components/Steps.astro';
+import { Fig1, Fig2 } from '../../../components/figures/bloom-0001/index.ts';
+
+export const steps = [
+    { lab: 'Structure', big: '1 m-bit array', sub: 'no stored keys' },
+    { lab: 'add(x)', big: 'set k bits', sub: 'k hashes &#8594; k positions' },
+    { lab: 'query(x)', big: 'read k bits', sub: 'all 1? &#8595;' },
+];
+
+<div class="mission">
+    <strong>Why this, first.</strong> "A probabilistic set" earns nothing. Lead with the
+    <em>asymmetry</em>: "definitely not here" is certain, "probably here" is not.
+</div>
+
+## The picture: k hashes, one bit array
+
+<Fig1 />
+
+<Steps items={steps} />
+
+## The asymmetry is the whole point
+
+<Fig2 />
+
+<table>
+    <tr>
+        <th>Filter says&#8230;</th>
+        <th>What you actually know</th>
+        <th>Can it be wrong?</th>
+    </tr>
+    <tr>
+        <td>
+            <strong>Not present</strong>
+        </td>
+        <td>The item was never added</td>
+        <td>No &#8212; a negative is certain</td>
+    </tr>
+    <tr>
+        <td>
+            <strong>Present</strong>
+        </td>
+        <td>
+            The item is <em>probably</em> there
+        </td>
+        <td>Yes &#8212; a false positive</td>
+    </tr>
+</table>
+
+<p class="rule">
+    <strong>A Bloom filter never lies about absence; it only ever exaggerates presence.</strong>A
+    "no" lets you skip expensive work safely, every time.
+</p>
+
+## Three operations &#8212; and the one that's missing
+
+<table>
+    <tr>
+        <th>Operation</th>
+        <th>What it does</th>
+        <th>Wrong?</th>
+    </tr>
+    <tr>
+        <td>
+            <code>add(x)</code>
+        </td>
+        <td>Set the k bits that x hashes to</td>
+        <td>&#8212;</td>
+    </tr>
+    <tr>
+        <td>
+            <code>contains(x)</code>
+        </td>
+        <td>"no" if any bit is 0, else "probably"</td>
+        <td>FP only</td>
+    </tr>
+    <tr>
+        <td>
+            <code>delete(x)</code>
+        </td>
+        <td>
+            <strong>Not supported</strong> &#8212; bits are shared
+        </td>
+        <td>n/a</td>
+    </tr>
+</table>
+
+<p>
+    A <em>counting</em> Bloom filter swaps bits for small counters to allow deletes.
+    <sup>
+        <a href="#s2" id="r2">
+            2
+        </a>
+    </sup>
+</p>
+
+## The one piece of math to carry in
+
+<p class="meta">
+    Optimal k and the (0.5)<sup>k</sup> rate below are from the canonical survey.
+    <sup>
+        <a href="#s2" id="r2b">
+            2
+        </a>
+    </sup>
+</p>
+
+<div class="cards">
+    <div class="card">
+        <div class="v">
+            (1&#8722;e<sup>&#8722;kn/m</sup>)<sup>k</sup>
+        </div>
+        <div class="l">false-positive rate</div>
+    </div>
+    <div class="card">
+        <div class="v">k = (m/n)&#183;ln 2</div>
+        <div class="l">optimal hash count</div>
+    </div>
+    <div class="card">
+        <div class="v">
+            (0.5)<sup>k</sup>
+        </div>
+        <div class="l">FP rate at optimal k</div>
+    </div>
+</div>
+
+<table>
+    <tr>
+        <th>Bits per item (m/n)</th>
+        <th>Optimal k</th>
+        <th>&#8776; False-positive rate</th>
+    </tr>
+    <tr>
+        <td>8</td>
+        <td>6</td>
+        <td>~2%</td>
+    </tr>
+    <tr>
+        <td>10</td>
+        <td>7</td>
+        <td>~1%</td>
+    </tr>
+    <tr>
+        <td>16</td>
+        <td>11</td>
+        <td>~0.05%</td>
+    </tr>
+</table>
+
+<p>
+    That formula is an excellent approximation, not an exact law &#8212; worth saying out loud.
+    <sup>
+        <a href="#s3" id="r3">
+            3
+        </a>
+    </sup>
+    The headline: ~10 bits/item buys ~1% FP &#8212; a few bytes to skip a disk read, which is why
+    LSM-tree stores like RocksDB and Cassandra use them.
+    <sup>
+        <a href="#s4" id="r4">
+            4
+        </a>
+    </sup>
+</p>
+
+<hr class="note" />
+
+## Retrieval practice
+
+<p>Answer from memory &#8212; feedback is instant.</p>
+
+<Quiz items={frontmatter.quiz} id="quiz" />
+
+## Rehearse out loud
+
+<Rehearse
+    promptHtml={`Interviewer: <strong>"Where would you put a Bloom filter in a read-heavy database, and what does it buy you?"</strong> ~60 seconds, from memory &#8212; then reveal and compare.`}
+    placeholder="Your 60-second answer, from memory…"
+>
+    <p>
+        Put a small per-segment Bloom filter in front of the on-disk lookup &#8212; in an LSM-tree
+        store like RocksDB or Cassandra, one per SSTable. On a read, check the filter first: a "not
+        present" lets you <em>skip that disk/SSD read entirely</em>, and because there are no false
+        negatives you never skip a key that's actually there. It buys a large cut in read
+        amplification for absent keys, at the cost of a few bits of RAM per key and the occasional
+        wasted lookup on a false positive. I'd size it for ~1% FP (about 10 bits/key) and revisit if
+        the filter saturates as segments grow &#8212; at which point I'd rebuild or partition rather
+        than let the FP rate climb.
+    </p>
+    <p class="src">
+        <strong>Why this scores:</strong> leads with the asymmetry (no false negatives &#8594; safe
+        to skip), names a real system, and picks a sizing with a stated trade-off.
+    </p>
+</Rehearse>
+
+<div class="ask">
+    <strong>I'm your teacher &#8212; ask me anything.</strong> Want to go to Core next and size one
+    for a target FP rate, be grilled on why the FP rate climbs as the filter fills, or have your
+    rehearsal answer graded? Just say so.
+</div>
+
+### Primary source (read this next)
+
+<p>
+    📖{' '}
+    <a href="https://dl.acm.org/doi/10.1145/362686.362692">
+        <strong>
+            "Space/Time Trade-offs in Hash Coding with Allowable Errors" — Burton H. Bloom (1970)
+        </strong>
+    </a>
+    <sup>
+        <a href="#s1" id="r1c">
+            1
+        </a>
+    </sup>
+    . The original four-page paper; it frames the whole idea as trading a small, controllable error
+    for a large space saving.
+</p>
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+<div class="next">
+    <span>
+        📄 Keep handy:{' '}
+        <a href="../reference/bloom-filters-cheat-sheet.html">Bloom filters reference</a>
+    </span>
+    <span>
+        <em>
+            Next ▸{' '}
+            <a href="0002-sizing-a-bloom-filter.html">Lesson 2: Sizing a Bloom filter (Core)</a>
+        </em>
+    </span>
+</div>
+
+<Sources items={frontmatter.sources} />

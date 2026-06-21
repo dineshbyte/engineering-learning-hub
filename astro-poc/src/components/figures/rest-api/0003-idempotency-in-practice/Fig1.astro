@@ -1,0 +1,121 @@
+---
+/**
+ * rest-api/0003 · Figure 1 — "why the most-worth-retrying request is the most
+ * dangerous" (the retry → duplicate-order hero).
+ *
+ * Copied VERBATIM from docs/rest-api/lessons/0003-idempotency-in-practice.html
+ * (figure + svg + figcaption). It lives as an .astro component, NOT inline in the
+ * MDX, because MDX's JSX parser is unreliable with raw inline SVG that uses
+ * kebab-case attributes (text-anchor, font-size, stroke-width, marker-end, …).
+ *
+ * The source page defines its arrow markers (#arw, #arwR, …) ONCE in a global
+ * hidden <svg> in <body>; that shared SVG does not travel with an extracted
+ * figure, so the markers this figure references (#arw, #arwR) are inlined here in
+ * a local <defs> so the figure renders self-contained. Marker fills/ids are kept
+ * byte-for-byte to match the source DOM.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 660 150"
+        role="img"
+        aria-label="Retry danger: POST creates an order, the response is lost, the client retries, a duplicate order is created"
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+            <marker
+                id="arwR"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="330"
+                y="20"
+                text-anchor="middle"
+                font-size="12"
+                font-weight="700"
+                fill="#111110">WHY THE MOST-WORTH-RETRYING REQUEST IS THE MOST DANGEROUS</text
+            >
+            <rect x="8" y="42" width="150" height="54" rx="9" fill="#fff" stroke="#d8d4c8"></rect>
+            <text x="83" y="66" text-anchor="middle" font-size="11" font-weight="700"
+                >① POST /orders</text
+            >
+            <text x="83" y="83" text-anchor="middle" font-size="9" fill="#6b675f">client sends</text
+            >
+            <rect x="174" y="42" width="150" height="54" rx="9" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="249"
+                y="66"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#2f5d3a">② order created ✓</text
+            >
+            <text x="249" y="83" text-anchor="middle" font-size="9" fill="#6b675f"
+                >server commits</text
+            >
+            <rect
+                x="340"
+                y="42"
+                width="150"
+                height="54"
+                rx="9"
+                fill="#f7ecea"
+                stroke="#9a2417"
+                stroke-dasharray="4 3"></rect>
+            <text
+                x="415"
+                y="66"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#9a2417">③ 201 lost ✗</text
+            >
+            <text x="415" y="83" text-anchor="middle" font-size="9" fill="#6b675f"
+                >timeout / drop</text
+            >
+            <rect x="506" y="42" width="146" height="54" rx="9" fill="#f7ecea" stroke="#9a2417"
+            ></rect>
+            <text
+                x="579"
+                y="66"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#9a2417">④ retry → dupe 💥</text
+            >
+            <text x="579" y="83" text-anchor="middle" font-size="9" fill="#6b675f"
+                >2 orders · 2 charges</text
+            >
+            <line x1="158" y1="69" x2="174" y2="69" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <line x1="324" y1="69" x2="340" y2="69" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <line x1="490" y1="69" x2="506" y2="69" stroke="#9a2417" marker-end="url(#arwR)"></line>
+            <text x="330" y="122" text-anchor="middle" font-size="11" fill="#7a1f12"
+                >The client can't tell "succeeded but reply lost" from "failed" — so it does the
+                only sane thing: it retries.</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        Idempotency makes <strong>at-least-once delivery safe</strong>: a repeated request has the
+        same effect on state as a single one.
+    </figcaption>
+</figure>

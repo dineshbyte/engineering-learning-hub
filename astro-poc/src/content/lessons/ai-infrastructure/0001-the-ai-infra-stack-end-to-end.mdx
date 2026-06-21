@@ -1,0 +1,768 @@
+---
+# ─── ai-infrastructure · Lesson 1 — the AI infra stack, end-to-end ────────────
+# FRONTMATTER = the full lesson contract (head + masthead + wayfinding) PLUS the
+# structured body data lifted out of the prose: the 5-question quiz, the 12
+# LEVELED interview Q&A (4 core · 3 senior · 3 staff · 2 design, incl. the design
+# rubric) and the 5 footnote sources. Validated at build time by the `lessons`
+# collection schema (src/content.config.ts → src/schema/lesson.ts). The FAQ
+# JSON-LD is emitted by <Interview> from `interview` below — it must NOT also be
+# set on `jsonLd`, or the page would carry two FAQPage blobs.
+#
+# NOTE: the source page ALSO has three un-leveled <details class="iq"> (one per
+# module, M1/M2/M3) with NO data-level. The <Interview> component requires a
+# level, so those three are reproduced verbatim inline in the MDX body, not here.
+#
+# HTML-bearing strings (h1Html, interview q/a, rubric, sources.html) use YAML
+# folded block scalars (>-) so the embedded ", ', &, < and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'The AI Infra Stack End-to-End: Embeddings, Vector DBs & Serving'
+description: >-
+    Trace one request through the AI infra stack: text to embeddings to vector DB (HNSW/IVF) to
+    reranker to model gateway to inference server. Where latency, cost, and failure concentrate.
+keywords: 'embeddings, vector dbs, rerankers, model gateway, inference, ai infrastructure, hnsw, ivf, ann, cross-encoder, kv cache, batching, rag, retrieval, llm'
+path: 'ai-infrastructure/lessons/0001-the-ai-infra-stack-end-to-end.html'
+ogImage: 'assets/og/ai-infrastructure.png'
+ogImageAlt: 'AI Infrastructure · Engineering Vault learning track'
+accentVar: '--track-aiinfra'
+
+# —— masthead ——
+trackLabel: 'AI Infrastructure'
+kicker: 'Lesson 1 · AI Infrastructure · Core'
+h1Html: 'The AI Infra Stack, <em>End-to-End</em>'
+metaLine: '~14 min · 3 modules · the map of every hop one query takes from text to answer — and where latency, cost, and failure live'
+chips:
+    - 'Embeddings'
+    - 'Vector DBs'
+    - 'Rerankers'
+    - 'Model gateway'
+    - 'Inference'
+
+# —— routing (used only by the dynamic route) ——
+track: 'ai-infrastructure'
+number: '0001'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: 'In the standard RAG request path, the hops occur in which order?'
+      correct: 2
+      options:
+          - 'Reranker first, then embed the query, then run the vector search over the corpus'
+          - 'Inference server first, then gateway, then embed, then a vector similarity search'
+          - 'Embed the query, vector-DB ANN search, rerank top-K, gateway, then inference'
+          - 'Gateway first, then inference, then embedding, then a final reranking of results'
+    - q: 'Why do you pre-compute document embeddings once at ingest time?'
+      correct: 0
+      options:
+          - 'A bi-encoder embeds each doc alone, so the corpus indexes offline and queries stay cheap'
+          - 'Because embeddings expire quickly and must be refreshed before every single user query'
+          - 'So the reranker can skip the cross-encoder stage and score every pair at query time'
+          - 'To let the model gateway cache the vectors and avoid calling the inference server later'
+    - q: 'Exact k-NN search over a large embedding corpus does not scale because it…'
+      correct: 3
+      options:
+          - 'Loses recall as the corpus grows, so it misses most of the true nearest neighbors'
+          - 'Needs a graph index that becomes too large to hold in memory past a few thousand rows'
+          - 'Returns approximate results that drift further from correct with every new insert'
+          - 'Compares the query to every stored vector, making it O(n) per query at any size'
+    - q: 'Raising the HNSW ef (or IVF nprobe) search knob will…'
+      correct: 1
+      options:
+          - 'Shrink memory use and latency together while leaving the recall rate exactly the same'
+          - 'Raise recall by widening the search, at the cost of higher per-query latency and compute'
+          - 'Let the reranker recover documents the first-stage ANN search had already missed'
+          - 'Convert the approximate index back into an exact scan with perfect recall and no cost'
+    - q: "The model gateway is best described as the stack's…"
+      correct: 2
+      options:
+          - 'The component that turns query text into the dense vector used for similarity search'
+          - 'The GPU process that runs the forward pass and manages the KV cache during decoding'
+          - 'Cost and reliability chokepoint: auth, routing, rate limits, caching, and spend control'
+          - 'The cross-encoder that re-scores the candidate set returned by the vector database tier'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+# These are the LEVELED disclosures only (data-level on the source). The three
+# un-leveled per-module iq disclosures are inline in the body instead.
+interview:
+    - level: 'core'
+      q: 'Name the hops a query crosses from text to streamed answer, in order.'
+      a: >-
+          <b>Hit these points:</b> query text &rarr; <b>embedding model</b> (text becomes a vector)
+          &rarr; <b>vector DB</b> (ANN search returns the top-K candidates) &rarr; <b>reranker</b> (a
+          cross-encoder re-scores the top-K for precision) &rarr; <b>model gateway</b> (auth, routing,
+          rate limits, response cache) &rarr; <b>inference server</b> (KV cache + batching, the forward
+          pass) &rarr; tokens stream back &rarr; the first half decides <em>what</em> goes in the
+          prompt; the second half governs <em>how</em> it's served.
+    - level: 'core'
+      q: 'What is an embedding, and what does proximity in the vector space mean?'
+      a: >-
+          <b>Hit these points:</b> an embedding is a <b>dense vector that captures meaning</b> &rarr;
+          vectors that are close together represent similar things, so similarity becomes a <b>distance
+          computation</b> (cosine or dot product) &rarr; you pre-compute the corpus embeddings <b>once
+          at ingest</b> with a bi-encoder, then embed only the query at runtime &rarr; that's what lets
+          keyword-blind semantic search work: "car" and "automobile" land near each other even with no
+          shared tokens.
+    - level: 'core'
+      q: 'What does a vector database give you over a flat array of vectors plus a similarity loop?'
+      a: >-
+          <b>Hit these points:</b> <b>ANN indexing</b> for sub-linear search over millions of vectors
+          instead of a full O(n) scan &rarr; <b>metadata filtering</b> so you can constrain by
+          tenant_id, date, or type in the same query &rarr; <b>CRUD and incremental index
+          maintenance</b> so inserts/deletes don't force a rebuild &rarr; the <b>operational layer</b>:
+          sharding, replication, persistence, backups &rarr; the flat-array version is a fine prototype
+          but collapses on latency, freshness, and multi-tenancy as it grows.
+    - level: 'core'
+      q: 'Why is exact nearest-neighbor search a non-starter at scale, and what replaces it?'
+      a: >-
+          <b>Hit these points:</b> exact k-NN compares the query to <b>every</b> stored vector, so it's
+          <b>O(n) per query</b> &rarr; that's fine for a few hundred thousand vectors but fatal at
+          millions or billions at interactive latency &rarr; <b>ANN</b> (approximate nearest neighbor)
+          builds an index — a proximity graph (HNSW) or clusters (IVF) — that visits only a fraction of
+          the corpus &rarr; the trade is a small recall loss for large speed and memory wins &rarr; you
+          tune recall back with a search knob, accepting more latency.
+    - level: 'senior'
+      q: 'Where does latency concentrate in this stack, and how do you find the dominant hop?'
+      a: >-
+          <b>Hit these points:</b> instrument every hop with a span — embed, ANN search, rerank,
+          gateway, inference (queue + forward pass), response — and read per-hop <b>p95</b>, not just
+          the total &rarr; on most stacks the <b>inference forward pass</b> dominates because generation
+          is sequential and GPU-bound, with <b>queue-wait</b> next under load &rarr; ANN search is
+          usually single-digit ms unless you over-tuned recall; the reranker adds a fixed cost
+          proportional to candidate count &rarr; the gateway is a thin hop unless it's retrying or
+          failing over &rarr; the discipline: measure per-hop first — the hop you assume is slow rarely
+          is.
+    - level: 'senior'
+      q: 'Why is the model gateway the reliability and cost chokepoint, and what belongs in it?'
+      a: >-
+          <b>Hit these points:</b> every request to every model flows through it, so it's the single
+          place to <b>see and cap spend</b> and the single thing that can take the feature down &rarr;
+          it owns auth, per-tenant rate limits and quotas, <b>routing</b> across providers/tiers,
+          <b>retries with backoff and failover</b>, response caching, and cost accounting per request
+          &rarr; that makes it the natural place to enforce a budget and degrade gracefully when a
+          provider is down &rarr; it's also a blast-radius risk: it must be horizontally scalable and
+          stateless where possible, never a hidden single instance &rarr; it's the API-gateway pattern
+          applied to LLM traffic.
+    - level: 'senior'
+      q: 'A reranker can only re-order what vector search returned. Why does that constrain the whole pipeline?'
+      a: >-
+          <b>Hit these points:</b> retrieval is two stages — a cheap high-<b>recall</b> first stage (ANN
+          over embeddings) and an expensive high-<b>precision</b> second stage (the cross-encoder
+          reranker) &rarr; the reranker re-scores only the top-K it was handed, so if the right doc
+          isn't in that K, no reranking recovers it &rarr; recall is set by the first stage; precision
+          is improved by the second &rarr; so tune the first stage for recall (wider ANN search, larger
+          K), accept the latency, then let the reranker sharpen order &rarr; failure mode: a too-small K
+          or under-tuned ANN silently caps answer quality and reranking hides none of it.
+    - level: 'senior'
+      q: 'What is the KV cache, and why does it dominate GPU memory during inference?'
+      a: >-
+          <b>Hit these points:</b> during generation the model reuses the attention <b>key/value
+          tensors</b> for every token already processed, caching them instead of recomputing &rarr; the
+          KV cache grows with <b>sequence length</b> and <b>concurrent requests</b>, and at long
+          contexts it dwarfs the model weights as the memory consumer &rarr; fragmented or
+          over-allocated KV cache wastes GPU memory and caps how many requests you can batch, which caps
+          throughput &rarr; this is exactly what PagedAttention addresses — paging KV memory like an OS
+          pages RAM to cut fragmentation and pack more sequences &rarr; so KV-cache management is the
+          lever that sets serving throughput and cost per token.<sup><a href="#s5" id="r5">5</a></sup>
+    - level: 'staff'
+      q: "What does continuous (in-flight) batching buy you over static batching, and what's the trade?"
+      a: >-
+          <b>Hit these points:</b> GPUs are efficient on big matmuls, so one request at a time leaves
+          the hardware idle — batching fills it &rarr; <b>static</b> batching waits to assemble a fixed
+          batch and holds fast requests hostage to the slowest, hurting tail latency &rarr;
+          <b>continuous</b> batching schedules at the token step: it admits new requests and evicts
+          finished ones each iteration, keeping the GPU full and not blocking short requests behind long
+          ones &rarr; the trade is scheduler complexity and a <b>memory ceiling set by the KV cache</b>
+          — you can only batch as many sequences as KV memory holds &rarr; net: higher throughput and
+          steadier latency, which is why production inference servers default to it.<sup><a href="#s5" id="r5b">5</a></sup>
+    - level: 'staff'
+      q: 'The same retrieval corpus, but answer quality differs between two index configs. How do you reason about it before touching the model?'
+      a: >-
+          <b>Hit these points:</b> separate <b>recall</b> (did the right doc make the candidate set?)
+          from <b>precision</b> (was it ranked high enough to use?) &rarr; measure recall@k against a
+          labeled set for both configs — if the doc isn't in the top-K, it's a first-stage problem:
+          under-tuned ANN (<code>ef</code>/<code>nprobe</code> too low), too-small K, or chunking that
+          split the answer &rarr; if recall is fine but ranking is poor, it's the reranker or the
+          assembly order, not retrieval &rarr; only after retrieval is sound do you look at the prompt
+          or model &rarr; the principle: don't tune the expensive end of the pipeline to compensate for
+          a cheap-end recall gap — fix it where it's caused.
+    - level: 'staff'
+      q: >-
+          "We'll just add a bigger model and a longer context — that fixes quality." Tear this apart as
+          a system design.
+      a: >-
+          <b>Hit these points:</b> a bigger model and longer context don't fix a <b>retrieval</b> gap —
+          if the right doc never enters the window, no model size recovers it &rarr; longer context
+          inflates the <b>KV cache</b>, shrinking how many requests batch, raising latency and cost per
+          token at the inference server &rarr; a bigger model raises per-token cost and latency
+          everywhere, hitting the <b>gateway budget</b> hardest &rarr; the cheaper, higher-leverage
+          fixes live upstream: better embeddings/chunking for recall, a reranker for precision, response
+          caching for repeat queries &rarr; the framing: spend where the bottleneck is measured to be,
+          and the bottleneck is usually retrieval quality or serving throughput, not model capacity.
+    - level: 'design'
+      q: 'Design the request path for a multi-tenant RAG search feature: thousands of QPS over tens of millions of documents.'
+      a: >-
+          <b>A strong answer covers:</b> clarify scope first — QPS, corpus size, latency SLO, freshness,
+          tenant isolation, and the cost of a wrong vs slow answer &rarr; map the path: embed the query
+          (cache popular query embeddings), ANN search with a <b>tenant_id metadata pre-filter</b> so
+          isolation is enforced at the index, return top-K &rarr; rerank the top-K with a cross-encoder
+          sized to the latency budget &rarr; assemble prompt + passages and send through the <b>model
+          gateway</b> (auth, per-tenant rate limit, route, response-cache check before spending on
+          inference) &rarr; on a miss the inference server runs with KV-cache paging and continuous
+          batching, streaming tokens &rarr; name the bottlenecks: ANN recall-vs-latency, the gateway as
+          cost/reliability chokepoint, KV memory capping batch size &rarr; measure per-hop p95, cost per
+          query, recall@k, cache hit ratio; degrade gracefully when a provider fails.
+    - level: 'design'
+      q: 'Build-vs-buy: when do you reach for a dedicated vector DB versus pgvector in your existing Postgres?'
+      a: >-
+          <b>A strong answer covers:</b> start from the data, not the hype — if embeddings fit alongside
+          your OLTP data and retrieval volume is modest, <b>pgvector</b> keeps everything in one store
+          you already operate, back up, and join against, a real operational saving &rarr; reach for a
+          <b>dedicated vector DB</b> when scale or traffic breaks that: very large corpora needing
+          sharding, high QPS needing an independently scaled retrieval tier, advanced hybrid search and
+          reranking modules, or serverless cost models &rarr; the trade is operational surface — another
+          system to run, secure, and pay for, against Postgres's familiarity and weaker ANN tuning &rarr;
+          deciders: corpus size, QPS, freshness, metadata-filter complexity, team operational appetite
+          &rarr; default to the store you already run until a <b>measured</b> limit forces the move.<sup><a href="#s4" id="r4">4</a></sup>
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Design-round framework</b> — narrate the stack in request order so the interviewer hears each
+    hop's job, then its bottleneck:
+rubric:
+    - 'Clarify scope: QPS, corpus size, latency SLO, freshness, tenant isolation, and the cost of a wrong answer vs a slow one.'
+    - 'Retrieval half: embed the query (cache popular embeddings) &rarr; ANN search with a <em>tenant_id metadata pre-filter</em> &rarr; rerank the top-K with a cross-encoder sized to the budget.'
+    - 'Serving half: assemble prompt + passages &rarr; <em>model gateway</em> (auth, per-tenant rate limit, route, response-cache check) &rarr; inference server (KV-cache paging, continuous batching, streaming).'
+    - 'Name the bottleneck at each hop: ANN recall vs latency, gateway as cost/reliability chokepoint, KV memory capping batch size.'
+    - 'Build-vs-buy: pgvector vs a dedicated vector DB, hosted vs self-served inference — decide from measured scale, not preference.'
+    - 'Measure &amp; degrade: per-hop p95, cost per query, recall@k, cache hit ratio; graceful degradation when a provider fails.'
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+# Source page lists these as <ol><li id="sN">… with NO ↩ back-ref link; kept as-is.
+sources:
+    - id: 's1'
+      html: >-
+          Request-path framing follows the standard RAG retrieve &rarr; assemble &rarr; serve
+          architecture, grounded in vendor serving docs (vLLM &mdash; docs.vllm.ai) and provider API
+          docs (e.g. platform.openai.com/docs, docs.anthropic.com) rather than a single paper.
+    - id: 's2'
+      html: >-
+          Reimers &amp; Gurevych, 2019, "Sentence-BERT: Sentence Embeddings using Siamese
+          BERT-Networks." Bi-encoder architecture: pre-compute document embeddings once, compare
+          cheaply at query time. Khattab &amp; Zaharia, 2020, "ColBERT," covers the late-interaction
+          middle ground.
+    - id: 's3'
+      html: >-
+          Malkov &amp; Yashunin, 2016, "Efficient and robust approximate nearest neighbor search using
+          Hierarchical Navigable Small World graphs" &mdash; arXiv:1603.09320 (HNSW: <code>ef</code>/<code>M</code>
+          knobs). Johnson, Douze &amp; Jégou, 2017, "Billion-scale similarity search with GPUs" &mdash;
+          arXiv:1702.08734 (FAISS: IVF + product quantization, recall vs memory).
+    - id: 's4'
+      html: >-
+          pgvector documentation &mdash; github.com/pgvector/pgvector (exact + HNSW/IVFFlat in
+          Postgres). Pinecone documentation &mdash; docs.pinecone.io (managed serverless vector DB:
+          sharding, replication, metadata filtering) for the build-vs-buy framing. Product specifics
+          are version-dependent.
+    - id: 's5'
+      html: >-
+          Kwon et al., 2023, "Efficient Memory Management for Large Language Model Serving with
+          PagedAttention" &mdash; arXiv:2309.06180 (vLLM, SOSP '23). KV cache as the serving
+          bottleneck; continuous batching and OS-style paging for throughput. Throughput numbers are
+          hardware/model-specific; treat as illustrative.
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import MemoryCheck from '../../../components/MemoryCheck.astro';
+import {
+    Fig1,
+    Fig2,
+    Fig3,
+    Fig4,
+    Fig5,
+} from '../../../components/figures/ai-infrastructure/0001-the-ai-infra-stack-end-to-end/index.ts';
+
+{/* The three per-module memory-check disclosures. The source has one <details
+    class="mc"> per module (M1/M2/M3); each renders via its own <MemoryCheck>. */}
+export const mc1 = [
+{
+q: 'Name the hops in order.',
+a: 'text &rarr; embedding &rarr; vector DB (ANN) &rarr; reranker &rarr; model gateway &rarr; inference server &rarr; response cache',
+},
+{
+q: "Which half decides what's in the prompt vs how it's served?",
+a: 'embed/retrieve/rerank decide WHAT; gateway/inference decide HOW',
+},
+{
+q: 'Which hop usually dominates latency?',
+a: 'the inference forward pass (sequential, GPU-bound), with queue-wait next under load — but measure, don\'t assume',
+},
+];
+export const mc2 = [
+{
+q: 'What does proximity in embedding space mean?',
+a: 'semantic similarity — near vectors mean similar things, so similarity becomes a distance computation',
+},
+{
+q: 'Why is a bi-encoder used for first-stage retrieval?',
+a: 'it embeds each doc independently, so the corpus is pre-computed; query time is one embed + a cheap scan',
+},
+{
+q: 'What breaks if you change the embedding model?',
+a: 'query and corpus must match — a swap forces re-embedding and re-indexing the whole corpus',
+},
+];
+export const mc3 = [
+{
+q: "Why doesn't exact k-NN scale?",
+a: "it's O(n) per query — every query scans the whole corpus, which is fatal past a few hundred thousand vectors at interactive latency",
+},
+{
+q: 'What does the HNSW <code>ef</code> / IVF <code>nprobe</code> knob trade?',
+a: 'recall against latency — a wider search finds more true neighbors but costs more time',
+},
+{
+q: 'Can a reranker fix low first-stage recall?',
+a: 'no — it only re-orders the top-K it was given; a doc the ANN search missed is gone',
+},
+];
+
+<div class="mission">
+    <strong>Your bar:</strong> trace one user query through the whole stack —{' '}
+    <em>
+        text &rarr; embedding &rarr; vector DB &rarr; reranker &rarr; model gateway &rarr; inference
+        server
+    </em>{' '}
+    — and say, at each hop, what it does and where the <b>latency, cost, and failure</b>{' '}
+    concentrate. By the end you can answer the foundational interview question:{' '}
+    <b>
+        what actually happens to a request between "user hits enter" and "tokens stream back," and
+        which hop do you instrument first?
+    </b>
+    <sup>
+        <a href="#s1" id="r1">
+            1
+        </a>
+    </sup>
+</div>
+
+<p>The stack is one straight line. Every hop transforms the request and hands it on:</p>
+
+<div class="chips">
+    <span class="chip">
+        Text becomes a <b>vector</b> (embedding model)
+    </span>
+    <span class="chip c2">
+        the vector DB finds <b>near neighbors</b> via ANN
+    </span>
+    <span class="chip c3">
+        a reranker <b>sharpens precision</b> on the top-K
+    </span>
+    <span class="chip c4">
+        the gateway and inference server <b>serve the answer</b>
+    </span>
+</div>
+
+<Fig1 />
+
+<nav class="toc">
+    <a href="#m1">1 · The stack map (the request path)</a>
+    <a href="#m2">2 · Embeddings (text &rarr; vector)</a>
+    <a href="#m3">3 · Vector databases (ANN at scale)</a>
+    <a href="#quiz">★ Retrieval practice</a>
+    <a href="#interview">★ Interview questions</a>
+    <a href="#whats-next">★ Where this track goes</a>
+</nav>
+
+<section class="lvl" id="m1">
+    <div class="lvltop">
+        <span class="num">1</span>
+        <h2>The Stack Map</h2>
+    </div>
+    <p class="tagline">
+        The request path is a pipeline of single-purpose hops. Each one <b>transforms the request</b>
+        and hands it forward, and each one is where some specific kind of pain — latency, cost, or
+        failure — concentrates.
+    </p>
+
+    <h3>The hop-by-hop request path</h3>
+
+    <Fig2 />
+
+    <h3>What each hop does — and what it costs you</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Hop</th>
+                <th>Its one job</th>
+                <th>Where the pain lands</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>
+                    <b>Embedding model</b>
+                </td>
+                <td>Turn query text into a dense vector</td>
+                <td>A model/version swap re-indexes the whole corpus</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>Vector DB (ANN)</b>
+                </td>
+                <td>Return the top-K nearest vectors fast</td>
+                <td>Recall vs latency vs memory — the core ANN trade</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>Reranker</b>
+                </td>
+                <td>Re-score the top-K for precision</td>
+                <td>Fixed cost per candidate; cannot recover a missed doc</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>Model gateway</b>
+                </td>
+                <td>Auth, route, rate-limit, cache, account</td>
+                <td>Cost &amp; reliability chokepoint — the blast radius</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>Inference server</b>
+                </td>
+                <td>Run the GPU forward pass, stream tokens</td>
+                <td>KV-cache memory caps batch size, caps throughput</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> The AI infra stack is the chain of services a request crosses from raw text to
+            streamed answer: embed, retrieve (ANN), rerank, gateway, infer, cache.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> No single service does all of it well. Retrieval needs a vector index;
+            serving needs GPUs and a control plane. Splitting the work lets each tier scale and fail
+            independently.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> A library request: the catalog narrows millions of books to a shelf
+            (retrieval), a librarian picks the best few (rerank), and a reading room serves them
+            (inference). Each step has its own line and bottleneck.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> A classic web request path: DNS &rarr; LB &rarr; app &rarr; cache &rarr;
+            DB. You profile per hop and optimize the one that dominates p95 — same discipline here.
+        </div>
+    </div>
+
+    <div class="myth">
+        <div class="m">&#10007; "The LLM is the system — everything else is glue."</div>
+        <div class="t">
+            &#10003; The model is one hop. Most production latency, cost, and failure live in retrieval
+            and the serving control plane around it, not inside the model call.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">&#10007; "If it's slow, it's the model — make the prompt shorter."</div>
+        <div class="t">
+            &#10003; Instrument per hop first. The dominant cost is often queue-wait at the inference
+            server or an over-tuned ANN search, not the forward pass itself.
+        </div>
+    </div>
+
+    <div class="rule">
+        <span>&#128229; Memory rule:</span> The stack is a <span>pipeline of single-purpose hops</span>.
+        Retrieval picks <span>what</span>; serving governs <span>how</span> — instrument every hop
+        before you optimize one.
+    </div>
+
+    <MemoryCheck items={mc1} />
+
+    <details class="iq">
+        <summary>M1 — Walk me through what happens to one user query as it travels through a production RAG stack.</summary>
+        <div class="a">
+            <b>Hit these points:</b> the query text is embedded into a vector by an embedding model
+            &rarr; that vector hits the vector DB, which runs approximate nearest-neighbor (HNSW or IVF)
+            over millions of stored vectors to return a top-K candidate set &rarr; an optional reranker
+            (a cross-encoder) re-scores that small set jointly with the query for precision &rarr; the
+            chosen passages plus the prompt go to the model gateway, which authenticates, rate-limits,
+            routes, and may serve a response-cache hit &rarr; on a miss the inference server runs the
+            forward pass with KV cache and continuous batching, streaming tokens back &rarr; name where
+            each hop concentrates risk: ANN trades recall for latency, the gateway is the reliability
+            and cost chokepoint, and the inference server is GPU-bound on KV-cache memory and batch
+            occupancy.
+        </div>
+    </details>
+
+</section>
+
+<section class="lvl" id="m2">
+    <div class="lvltop">
+        <span class="num">2</span>
+        <h2>Embeddings</h2>
+    </div>
+    <p class="tagline">
+        An embedding is a <b>dense vector that captures meaning</b>: vectors close together mean
+        similar things. You compute them <b>once at ingest</b>, then similarity at query time is just a
+        distance computation.<sup><a href="#s2" id="r2">2</a></sup>
+    </p>
+
+    <h3>Bi-encoder: embed once, compare cheaply</h3>
+
+    <Fig3 />
+
+    <h3>Why pre-compute? The cost of the alternative</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Approach</th>
+                <th>When the work happens</th>
+                <th>Cost per query</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>
+                    <b>Bi-encoder (embed once)</b>
+                </td>
+                <td>Documents at ingest; query at search</td>
+                <td>Embed 1 query + a distance scan — cheap, scales</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>Cross-encoder (joint)</b>
+                </td>
+                <td>Every query&times;doc pair, at query time</td>
+                <td>O(corpus) forward passes — accurate but unscalable</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>Hybrid (this stack)</b>
+                </td>
+                <td>Bi-encoder first, cross-encoder on top-N</td>
+                <td>Cheap recall, then precision only where it pays</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> An embedding is a fixed-length dense vector representing a chunk of text such that
+            semantic similarity maps to vector proximity (cosine or dot product).
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> Keyword match misses meaning ("car" vs "automobile"). Embeddings let
+            you search by what text <em>means</em>, and reduce search to a fast distance computation.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> Placing books by topic on a map, not alphabetically. Once shelved by
+            meaning, finding "things like this one" is just looking nearby.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> A pre-built index vs a full table scan: you pay the indexing cost once at
+            write time so reads stay cheap. The embedding model is the index function.
+        </div>
+    </div>
+
+    <div class="myth">
+        <div class="m">&#10007; "More dimensions always means better retrieval."</div>
+        <div class="t">
+            &#10003; Dimensions cost storage, memory, and ANN latency at scale. Match the model's
+            dimension to your recall need and budget — bigger is not free and rarely linear in quality.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">&#10007; "I can swap the embedding model anytime."</div>
+        <div class="t">
+            &#10003; Query and corpus must share the same model. Swapping it means re-embedding and
+            re-indexing the entire corpus — a migration, not a config change.
+        </div>
+    </div>
+
+    <div class="rule">
+        <span>&#128229; Memory rule:</span> Embeddings turn <span>meaning into position</span>.
+        Pre-compute the corpus <span>once</span>; embed only the query at runtime — and never mix
+        embedding models across query and index.
+    </div>
+
+    <MemoryCheck items={mc2} />
+
+    <details class="iq">
+        <summary>M2 — What is an embedding, and why do you pre-compute them at ingest instead of at query time?</summary>
+        <div class="a">
+            <b>Hit these points:</b> an embedding is a dense vector that captures meaning, so vectors
+            close in the space mean similar things and similarity becomes a distance computation &rarr;
+            a bi-encoder embeds each document once, independently, so you can pre-compute and index the
+            whole corpus ahead of time &rarr; at query time you only embed the query and compare
+            vectors, which is cheap &rarr; the alternative, scoring every query-document pair jointly (a
+            cross-encoder), is far more accurate but O(corpus) per query and impossible to run over
+            millions of docs at interactive speed &rarr; so the architecture splits the work: cheap
+            pre-computed bi-encoder for first-stage retrieval, expensive cross-encoder only on the small
+            reranked top-N.
+        </div>
+    </details>
+
+    <p style="font-size:.84rem;margin-top:.8rem">
+        This track is the <b>infra/ops</b> view of embeddings — serving, indexing cost, and scale. For
+        the <em>context-engineering</em> angle (how embeddings shape what enters the prompt), see
+        <a href="../../context-engineering/lessons/0008-embeddings-indexing-and-cost.html">Embeddings, Vector Indexes (HNSW/IVF/PQ) &amp; Cost</a>, and for how you measure retrieval
+        quality, <a href="../../context-engineering/lessons/0006-retrieval-evaluation-and-observability.html">RAG Evaluation: recall@k, RAGAS &amp; Observability</a>.
+    </p>
+
+</section>
+
+<section class="lvl" id="m3">
+    <div class="lvltop">
+        <span class="num">3</span>
+        <h2>Vector Databases &amp; ANN</h2>
+    </div>
+    <p class="tagline">
+        A vector DB indexes embeddings for <b>approximate nearest-neighbor</b> search at scale. Exact
+        k-NN is O(n) per query and collapses; ANN trades a little recall for large speed and memory
+        wins.<sup><a href="#s3" id="r3">3</a></sup>
+    </p>
+
+    <h3>Exact vs approximate — why ANN exists</h3>
+
+    <Fig4 />
+
+    <h3>The two ANN families and their knobs</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Index</th>
+                <th>How it searches</th>
+                <th>The recall knob &amp; trade</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>
+                    <b>HNSW</b> (graph)
+                </td>
+                <td>Layered proximity graphs; greedy descent, logarithmic hops</td>
+                <td>
+                    <code>ef</code> &uarr; / <code>M</code> &uarr; raise recall; cost is latency + memory
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <b>IVF</b> (clustering)
+                </td>
+                <td>Partition into cells; probe only the nearest few</td>
+                <td>
+                    <code>nprobe</code> &uarr; raises recall; cost is latency, lighter on memory
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <b>Exact</b> (flat)
+                </td>
+                <td>Brute-force scan of all vectors</td>
+                <td>No knob — perfect recall, O(n), small corpora only</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>The one trade you always tune</h3>
+
+    <Fig5 />
+
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> A vector DB stores embeddings and serves ANN similarity search with metadata
+            filtering, CRUD, sharding, and replication — the serving substrate retrieval reads from.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> A flat array + brute-force similarity works as a demo but collapses on
+            latency, freshness, and multi-tenancy. A vector DB makes search sub-linear and operable.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> A library's card catalog: you don't walk every shelf, you follow an
+            index that jumps you near the right section — accepting it occasionally points you one shelf
+            off.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> A B-tree index on a SQL column: it converts a full scan into a guided
+            lookup. ANN is the same idea for high-dimensional vectors, but approximate by design.
+        </div>
+    </div>
+
+    <div class="myth">
+        <div class="m">&#10007; "ANN gives the same results as exact search, just faster."</div>
+        <div class="t">
+            &#10003; ANN is <em>approximate</em> — it can miss a true neighbor. You buy recall back with
+            the search knob, paying latency for it. Measure recall@k; don't assume it.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">&#10007; "I always need a dedicated vector database."</div>
+        <div class="t">
+            &#10003; If embeddings fit beside your OLTP data and volume is modest, pgvector in Postgres
+            keeps one store you already operate. Reach for a dedicated system when scale, QPS, or hybrid
+            search force it.
+        </div>
+    </div>
+
+    <div class="rule">
+        <span>&#128229; Memory rule:</span> A vector DB trades <span>a little recall</span> for
+        <span>large speed &amp; memory wins</span>. The search knob (<code>ef</code>/<code>nprobe</code>)
+        is the dial — and the reranker can only re-order what it returned.
+    </div>
+
+    <MemoryCheck items={mc3} />
+
+    <details class="iq">
+        <summary>M3 — Why can't you just run exact nearest-neighbor search over your embeddings, and what does ANN trade away?</summary>
+        <div class="a">
+            <b>Hit these points:</b> exact k-NN compares the query against every stored vector, so it is
+            O(n) per query and does not scale past a few hundred thousand vectors at interactive latency
+            &rarr; ANN indexes (HNSW, IVF) build a structure that searches only a fraction of the
+            corpus, turning O(n) into roughly logarithmic or cluster-bounded work &rarr; the trade is
+            recall: ANN may miss a true neighbor, so you tune a knob (HNSW <code>ef</code>, IVF
+            <code>nprobe</code>) that buys recall back at the cost of latency and compute &rarr; there is
+            no free lunch: higher recall means a wider search means more latency, and the reranker can
+            only re-order what the first stage returned, never recover a doc it missed.
+        </div>
+    </details>
+
+</section>
+
+<h2 class="sec" id="quiz">
+    Retrieval practice — test the three modules
+</h2>
+
+<Quiz items={frontmatter.quiz} />
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+<div class="nav" id="whats-next">
+    <span style="color:var(--muted)">
+        &#8592; <a href="../../index.html#grid">Engineering Vault</a>
+    </span>
+    <span style="color:var(--muted)">
+        Next: <em>Embeddings deep dive — models, dimensions &amp; cost</em> &mdash; coming soon
+    </span>
+</div>
+
+<Sources items={frontmatter.sources} />

@@ -1,0 +1,92 @@
+---
+/**
+ * watermarks-deep-dive · Figure 1 — the HERO "two clocks & the skew" banner.
+ *
+ * Copied VERBATIM from docs/streaming-event-driven/watermarks-deep-dive.html
+ * (figure + svg + figcaption). It lives as an .astro component, NOT inline in the
+ * MDX, because MDX's JSX parser is unreliable with raw inline SVG that uses
+ * kebab-case attributes (text-anchor, font-size, stroke-width, marker-end, …).
+ *
+ * The source page declared its arrowhead markers (#arw / #arwA / #arwG) ONCE in a
+ * hidden top-of-body <svg defs>. Because each figure is now an isolated component,
+ * the #arw marker this figure references via marker-end="url(#arw)" is inlined here
+ * in a local <defs> so it resolves standalone (verbatim from the source defs).
+ */
+---
+
+<figure style="margin-top:1.6rem">
+    <svg
+        viewBox="0 0 640 250"
+        role="img"
+        aria-label="Event time versus processing time. Events occur in event-time order but arrive out of order and late in processing time; the watermark is a moving lower bound chasing the diagonal of true completeness."
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="320"
+                y="22"
+                text-anchor="middle"
+                font-size="12"
+                font-weight="700"
+                fill="#111110">THE TWO CLOCKS — event time vs processing time</text
+            >
+            <!-- axes -->
+            <line x1="70" y1="200" x2="610" y2="200" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <line x1="70" y1="200" x2="70" y2="48" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <text x="610" y="222" text-anchor="end" font-size="10" fill="#6b675f"
+                >processing time (when you saw it) →</text
+            >
+            <text x="58" y="58" text-anchor="end" font-size="10" fill="#6b675f">event</text>
+            <text x="58" y="70" text-anchor="end" font-size="10" fill="#6b675f">time ↑</text>
+            <!-- ideal diagonal: perfect completeness -->
+            <line x1="70" y1="200" x2="560" y2="60" stroke="#1f3a5a" stroke-dasharray="5 3"></line>
+            <text x="470" y="86" font-size="9.5" fill="#1f3a5a"
+                >ideal: event time = processing time</text
+            >
+            <!-- watermark curve, lagging below the diagonal -->
+            <path
+                d="M 70 200 C 230 168, 330 150, 430 120 S 560 92, 580 86"
+                fill="none"
+                stroke="#7a1f12"
+                stroke-width="2"></path>
+            <text x="430" y="138" font-size="9.5" fill="#7a1f12" font-weight="700"
+                >watermark W (a lagging lower bound)</text
+            >
+            <!-- scattered events: out of order & late -->
+            <g fill="#2f5d3a">
+                <circle cx="150" cy="176" r="4"></circle><circle cx="200" cy="150" r="4"
+                ></circle><circle cx="240" cy="178" r="4"></circle>
+                <circle cx="300" cy="138" r="4"></circle><circle cx="350" cy="164" r="4"
+                ></circle><circle cx="410" cy="118" r="4"></circle>
+            </g>
+            <!-- a late straggler below the watermark -->
+            <circle cx="470" cy="156" r="5" fill="#9a2417"></circle>
+            <text x="478" y="160" font-size="9.5" fill="#9a2417"
+                >late! (below W → would be dropped)</text
+            >
+            <text x="150" y="166" font-size="9" fill="#2f5d3a"
+                >on-time events arrive scattered, out of order</text
+            >
+            <!-- skew bracket -->
+            <line x1="540" y1="74" x2="540" y2="98" stroke="#6b675f"></line>
+            <text x="548" y="90" font-size="9" fill="#6b675f">skew = how far W lags reality</text>
+        </g>
+    </svg>
+    <figcaption>
+        Memorise this banner. Events happen in event-time order but <em>arrive</em> out of order; the
+        watermark <code>W</code> is a moving lower bound chasing completeness — and the gap is <strong
+            >skew</strong
+        >.
+    </figcaption>
+</figure>

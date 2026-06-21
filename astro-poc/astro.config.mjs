@@ -1,5 +1,6 @@
 // @ts-check
-import {defineConfig} from 'astro/config';
+import { defineConfig } from 'astro/config';
+import mdx from '@astrojs/mdx';
 
 // ── Engineering Vault — Astro proof-of-concept config ────────────────────────
 // PROOF ONLY: outDir is ../dist so a build NEVER overwrites the live site in
@@ -17,6 +18,10 @@ export default defineConfig({
     base: '/engineering-learning-hub',
     outDir: '../dist',
     build: {
-        format: 'file'
+        format: 'file',
     },
+    // MDX is required by the lessons content collection (src/content/lessons/*.mdx).
+    // The lesson body is MDX (prose + tables + the figure/Quiz/Interview/Sources
+    // components); .astro pages still render fine alongside it.
+    integrations: [mdx()],
 });

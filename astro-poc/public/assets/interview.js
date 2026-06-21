@@ -126,22 +126,14 @@
         if (/\/(reference|interview)\//.test(path) || /readme\.html$/i.test(path)) return;
         var slug = null;
         for (var i = 0; i < SLUGS.length; i++) {
-            if (path.indexOf('/' + SLUGS[i] + '/') >= 0) {
-                slug = SLUGS[i];
-                break;
-            }
+            if (path.indexOf('/' + SLUGS[i] + '/') >= 0) { slug = SLUGS[i]; break; }
         }
         if (!slug) return;
         var url = path.slice(path.indexOf('/' + slug + '/') + 1); // hub-relative path
         var KEY = 'sd:progress', map = {};
-        try {
-            map = JSON.parse(localStorage.getItem(KEY)) || {};
-        } catch (e) {
-            map = {};
-        }
+        try { map = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { map = {}; }
         map[slug] = url;
         localStorage.setItem(KEY, JSON.stringify(map));
         localStorage.setItem('sd:last', slug); // most-recent track for the hub resume banner
-    } catch (e) { /* storage unavailable — ignore */
-    }
+    } catch (e) { /* storage unavailable — ignore */ }
 })();

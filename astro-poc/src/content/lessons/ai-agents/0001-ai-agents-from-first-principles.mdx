@@ -1,0 +1,1045 @@
+---
+# ─── ai-agents · Lesson 1 — AI Agents from first principles (MDX-hybrid) ───────
+# FRONTMATTER = the full lesson contract (head + masthead + wayfinding) PLUS the
+# structured body data lifted out of the prose: the 6-question quiz, the 13
+# leveled interview Q&A (incl. the design rubric), the 10 memory-check recall
+# disclosures, and the 4 footnote sources. Validated at build time by the
+# `lessons` collection schema (src/content.config.ts → src/schema/lesson.ts).
+# The FAQ JSON-LD is emitted by <Interview> from `interview` below — it must NOT
+# also be set on `jsonLd`, or the page would carry two FAQPage blobs.
+#
+# HTML-bearing strings (h1Html, interview q/a, rubric, sources.html, mc q/a) use
+# YAML folded block scalars (>-) so embedded ", ', &, <, > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'AI Agents Explained: LLMs, Tools, Loops & MCP'
+description: >-
+    AI agents from first principles: how LLMs, tools, the agent loop, planning, and MCP fit
+    together — build the full stack from memory and tell real capability from hype.
+keywords: 'ai agents, llms, tools, loops, mcp, agent loop, multi-agent, ai, agents, llm, tool, runtime, memory, claude'
+path: 'ai-agents/lessons/0001-ai-agents-from-first-principles.html'
+ogImage: 'assets/og/ai-agents.png'
+ogImageAlt: 'AI Agents · Engineering Vault learning track'
+accentVar: '--track-agents'
+
+# —— masthead ——
+trackLabel: 'AI Agents'
+kicker: 'Lesson 1 · The whole stack · visual edition'
+h1Html: 'AI Agents from first principles'
+metaLine: '~35 min · 10 levels · real use cases + interview questions · interactive recall'
+chips:
+    - 'AI agents'
+    - 'LLMs'
+    - 'Tools'
+    - 'Loops'
+    - 'MCP'
+
+# —— wayfinding ——
+next:
+    href: '0002-agent-runtime-and-context.html'
+    title: 'Agent Runtime, Context & Memory'
+
+# —— routing (used only by the dynamic route) ——
+track: 'ai-agents'
+number: '0001'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: 'Who executes a tool call?'
+      correct: 2
+      options:
+          - 'The LLM runs it internally and returns the value'
+          - "The MCP protocol executes it on the model's behalf"
+          - 'The runtime runs it; the model only emitted the request'
+          - 'The context window evaluates it as part of the prompt'
+    - q: '"The model remembers our last message" is wrong because…'
+      correct: 1
+      options:
+          - 'memory lives in the model weights and slowly decays'
+          - 'the runtime re-sends the history; the model is stateless'
+          - 'the context window caches messages between separate calls'
+          - 'long-term memory overwrites the short-term session state'
+    - q: 'The difference between a workflow and an agent is…'
+      correct: 3
+      options:
+          - 'an agent uses a larger and more capable language model'
+          - 'a workflow cannot call any external tools or services'
+          - 'an agent always runs several subagents while a workflow runs one'
+          - 'who writes the control flow — the developer, or the model'
+    - q: 'MCP exists primarily to…'
+      correct: 0
+      options:
+          - 'turn N×M bespoke integrations into N+M via one standard'
+          - 'make the language model run tools faster and in parallel'
+          - "give Anthropic's Claude exclusive access to private tools"
+          - 'replace the runtime so you no longer manage the loop'
+    - q: 'The agent loop is best compared to…'
+      correct: 2
+      options:
+          - 'a database transaction that commits or rolls back atomically'
+          - 'a load balancer spreading requests across many servers'
+          - 'a Kubernetes reconciliation loop driving toward desired state'
+          - 'a message queue buffering work between two services'
+    - q: 'Single vs multi-agent maps cleanly onto…'
+      correct: 1
+      options:
+          - 'synchronous versus asynchronous function invocation'
+          - 'a monolith versus a microservices architecture'
+          - 'a read replica versus a primary write database'
+          - 'vertical scaling versus horizontal pod autoscaling'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: "What is an LLM, and what are the three things it can't do on its own?"
+      a: >-
+          <b>Hit these points:</b> an LLM is a stateless text-prediction function &mdash; <code>f(text)
+          &rarr; text</code>, the reasoning model, the brain &rarr; it can't remember between calls,
+          can't act on the world, and holds no state &rarr; a chatbot only "remembers" because the
+          runtime re-sends the transcript every call.
+    - level: 'core'
+      q: 'Walk me through exactly what happens when an agent "uses a tool".'
+      a: >-
+          <b>Hit these points:</b> a tool is a callable capability &mdash; a typed function (name +
+          param schema) wrapping an API or function &rarr; the model only <em>emits a request</em>
+          (tool name + args), it never executes anything &rarr; the runtime runs the real function and
+          feeds the result back into the next call &rarr; red flag: "the LLM ran the SQL" &mdash; it
+          only asked.
+    - level: 'core'
+      q: 'Define an agent and its agent loop.'
+      a: >-
+          <b>Hit these points:</b> an agent is an LLM using tools to accomplish a goal &mdash; LLM +
+          tools + loop + goal &rarr; the loop is observe (last result) &rarr; decide (LLM picks next
+          step) &rarr; act (run a tool) &rarr; observe, repeating until the goal is met or a cap is hit
+          &rarr; same model as a bare LLM; what's added is structural, not IQ.
+    - level: 'core'
+      q: 'What is the agent runtime, and what is memory in this stack?'
+      a: >-
+          <b>Hit these points:</b> the runtime is the orchestration layer &mdash; ordinary code that
+          hosts the loop, holds state, calls the LLM, dispatches tools, enforces
+          retries/timeouts/max-steps/permissions &rarr; memory is persisted state the model can't see
+          until the runtime retrieves it back into the context window &rarr; short-term = the window
+          (RAM, re-sent each call); long-term = an external store, pulled in via RAG.
+    - level: 'senior'
+      q: 'When would you NOT build an agent, and ship a workflow instead? Name the trade-off.'
+      a: >-
+          <b>Hit these points:</b> a workflow is a developer-defined path; an agent is a
+          model-influenced path &rarr; if the steps are known and repeatable, write the workflow
+          &mdash; you buy predictability, lower cost, lower latency, easier debugging &rarr; reach for
+          an agent only when the path can't be predetermined and that flexibility is worth the autonomy
+          tax &rarr; the named trade-off: predictability/cost vs flexibility/autonomy &rarr; the middle
+          ground is an agentic workflow &mdash; a fixed path with a few model-chosen branches.
+    - level: 'senior'
+      q: 'Your agent occasionally loops forever and burns huge cost. Where do you fix it, and why is it not "the model"?'
+      a: >-
+          <b>Hit these points:</b> the fix lives in the runtime, not the model &mdash; max-steps,
+          timeouts, token budgets, and guardrails are the runtime's job &rarr; the stateless LLM can't
+          stop itself or host a loop; the layer that owns the loop owns the limits &rarr; blaming "the
+          model" misreads the architecture &rarr; add observability per turn so a runaway run is a
+          traced, capped event, not a surprise invoice.
+    - level: 'senior'
+      q: 'A team wants to add a second agent to "go faster." Talk them into it &mdash; or out of it.'
+      a: >-
+          <b>Hit these points:</b> same call as premature microservices &rarr; multi-agent costs
+          coordination, latency, partial-failure handling, and roughly 15&times; the tokens
+          (illustrative) &rarr; it only pays when the work is genuinely parallel and independent, or
+          one context/role can't cope &rarr; start single-agent (the monolith); split with evidence,
+          not vibes &rarr; "more agents" is not a capability, it's a bill.
+    - level: 'senior'
+      q: 'Explain MCP to a skeptical exec in one analogy, and name the problem it solves.'
+      a: >-
+          <b>Hit these points:</b> MCP is a protocol for exposing tools, resources, and prompts to AI
+          clients &mdash; "USB-C / JDBC for tools" &rarr; without it, every agent-to-tool pair is
+          bespoke glue: N&times;M integrations &rarr; expose a server once and any MCP client uses it
+          &rarr; N+M &rarr; a server exposes the capability, a client connects from the host app &rarr;
+          it is an open multi-vendor standard, not a Claude feature, and not the tool itself &mdash;
+          it's the way to reach tools.
+    - level: 'staff'
+      q: 'A vendor pitches "fully autonomous agentic AI." Place it on the workflow&harr;agent spectrum and name the trade-off the pitch bought.'
+      a: >-
+          <b>Hit these points:</b> strip the buzzword to the engine &mdash; what tools, what loop, what
+          guardrails? &rarr; "fully autonomous" sits at the far agent end: the model writes the path,
+          so they bought flexibility and paid in predictability, cost, latency, and debuggability
+          &rarr; ask what they gave up: can you reproduce a run, cap its spend, audit its actions?
+          &rarr; for most real tasks the right answer is further left &mdash; an agentic workflow with
+          autonomy only where the path truly can't be scripted &rarr; the senior read: autonomy is a
+          cost you justify per use case, not a feature you brag about.
+    - level: 'staff'
+      q: 'How does a "coding agent" differ from a "support agent" architecturally &mdash; and what does that tell you about every agent product?'
+      a: >-
+          <b>Hit these points:</b> architecturally they barely differ &mdash; same engine: LLM + loop +
+          runtime + memory &rarr; what changes is the tool registry, the system prompt, and the
+          guardrails &mdash; same employee, different job description &rarr; so "AI agent product" is
+          rarely a moat in the engine; the moat is the tools you wired, the data you retrieve, and the
+          guardrails you can stand behind &rarr; evaluate any pitch on those three, not on the model
+          name.
+    - level: 'staff'
+      q: 'Build vs buy: a team wants to adopt an off-the-shelf agent runtime/SDK instead of writing their own loop. How do you reason about it?'
+      a: >-
+          <b>Hit these points:</b> the loop itself is cheap to write; the hard, ongoing parts are state
+          handling, retries, tool dispatch, permissions, observability, and evals &mdash; that's what a
+          mature runtime buys you &rarr; buy when those are commodity and you want to spend your effort
+          on tools, prompts, and domain guardrails &rarr; build when your control, latency, security,
+          or audit requirements outgrow the SDK's seams &rarr; name the lock-in: how tools are defined,
+          how memory is wired, how you trace a run &rarr; the reversible move is to keep your tools and
+          guardrails portable and treat the runtime as swappable plumbing.
+    - level: 'design'
+      q: "Design a support agent that's safe to ship for a SaaS billing product."
+      a: >-
+          <b>A strong answer covers:</b> goal &mdash; resolve common billing questions and disputes,
+          escalate the rest &rarr; tools: look up invoice/payments (read), issue refund and adjust
+          subscription (write), notify customer, open a ticket &rarr; bounded loop in the runtime with
+          max-steps and timeouts &rarr; guardrails: refund caps, human approval above a threshold,
+          idempotent refunds so a retry never double-pays, full audit log, scoped permissions per tool
+          &rarr; per-case memory plus retrieval of the customer's history &rarr; a workflow for the
+          happy path with an agent escape-hatch for ambiguous disputes &rarr; eval on resolution rate
+          and a hard zero-tolerance metric for wrong-amount refunds. <em>Want to run this live? Ask me
+          to grade your whiteboard answer.</em>
+    - level: 'design'
+      q: 'Design an SRE incident-triage agent. What can it touch, and where does it stop?'
+      a: >-
+          <b>A strong answer covers:</b> goal &mdash; triage an alert, gather signal, propose (not
+          silently execute) remediation &rarr; tools: read metrics/logs/traces and recent deploys
+          (read-heavy), with write actions like rollback or scale gated behind explicit approval &rarr;
+          observe&rarr;decide&rarr;act loop &mdash; an intent-level reconciliation loop &mdash; capped
+          by max-steps so it can't thrash &rarr; guardrails: read-only by default, human-in-the-loop
+          for any production-mutating action, blast-radius limits, idempotent and reversible
+          operations, a full audit trail &rarr; memory of the current incident plus retrieval of
+          similar past incidents/runbooks &rarr; workflow for the known runbook steps, agent autonomy
+          only for the open-ended investigation &rarr; eval on time-to-diagnosis and false-action rate,
+          and design so the worst failure is a no-op, never an outage.
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Design-round framework</b> &mdash; for any "design an agent for role X," structure the answer
+    like this:
+rubric:
+    - >-
+        <b>Goal &amp; scope</b> &mdash; what the agent is responsible for, and the explicit line where
+        it must escalate to a human.
+    - >-
+        <b>Tools</b> &mdash; the callable capabilities it needs (read vs write), each with a scoped
+        permission boundary.
+    - >-
+        <b>Loop &amp; runtime</b> &mdash; observe&rarr;decide&rarr;act, with max-steps, timeouts, and
+        token budgets in the runtime.
+    - >-
+        <b>Guardrails</b> &mdash; approval thresholds, idempotency on writes, dry-run/rollback, and
+        hard limits on destructive actions.
+    - >-
+        <b>Memory</b> &mdash; per-task short-term context plus what's persisted to an external store
+        and retrieved back.
+    - >-
+        <b>Workflow vs agent</b> &mdash; script the common path, keep an agent escape-hatch only for
+        the messy cases.
+    - >-
+        <b>Observability &amp; eval</b> &mdash; per-run traces, an audit log of every action, and how
+        you'd measure success/regressions.
+
+# —— NOTE: this lesson's 10 per-level "memory check" disclosures are NOT in the
+# `mc` frontmatter field. The source has ten SEPARATE <details class="mc"> (one
+# per level), each with its own 3-item recall list, so — mirroring lesson 0004 —
+# they are ten local `export const mcN` arrays in the body rendered by ten
+# <MemoryCheck> calls, preserving one disclosure per level.
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          1. Anthropic, <em>Building effective agents</em> &mdash;
+          <a href="https://www.anthropic.com/engineering/building-effective-agents">anthropic.com/engineering</a>.
+          Augmented LLM; workflow-vs-agent. <a href="#r1">↩</a>
+    - id: 's2'
+      html: >-
+          2. Anthropic, <em>How we built our multi-agent research system</em> (Jun 2025) &mdash;
+          <a href="https://www.anthropic.com/engineering/multi-agent-research-system">anthropic.com/engineering</a>.
+          Orchestrator-worker; +90.2% at ~15× tokens. <a href="#r2">↩</a>
+    - id: 's3'
+      html: >-
+          3. <em>Model Context Protocol</em> &mdash;
+          <a href="https://modelcontextprotocol.io">modelcontextprotocol.io</a>. "USB-C for AI"; open
+          standard; servers &amp; clients. <a href="#r3">↩</a>
+    - id: 's4'
+      html: >-
+          4. Anthropic, <em>Claude Agent SDK</em> &mdash;
+          <a href="https://docs.claude.com/en/api/agent-sdk/overview">docs.claude.com</a>. A concrete
+          runtime. <a href="#r4">↩</a>
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import Rehearse from '../../../components/Rehearse.astro';
+import MemoryCheck from '../../../components/MemoryCheck.astro';
+import {
+    Fig1,
+    Fig2,
+    Fig3,
+    Fig4,
+    Fig5,
+    Fig6,
+    Fig7,
+    Fig8,
+    Fig9,
+    Fig10,
+    Fig11,
+} from '../../../components/figures/ai-agents/0001-ai-agents-from-first-principles/index.ts';
+
+{/* Per-level "Memory check" recall lists. The source has TEN separate
+
+<details class="mc"> (one per level), each with its own 3-item list — so they
+are kept as ten local arrays + ten <MemoryCheck> calls (mirroring lesson 0004),
+NOT a single flat `mc` frontmatter array. Answers omit the leading "→" arrow;
+<MemoryCheck> prepends it. */}
+export const mc1 = [
+{ q: 'What three things can an LLM <em>not</em> do alone?', a: 'remember, act, retain state' },
+{ q: "If it's stateless, how does a chatbot seem to remember?", a: 'the app resends the transcript' },
+{ q: 'Closest SWE primitive?', a: 'a pure stateless endpoint, not a database' },
+];
+export const mc2 = [
+{ q: 'Who executes a tool call?', a: 'the runtime, never the model' },
+{ q: 'What two things define a tool?', a: 'a name and a parameter schema' },
+{ q: 'Why is "the LLM ran the SQL" wrong?', a: 'it only requested; code ran it' },
+];
+export const mc3 = [
+{ q: 'Four ingredients of an agent?', a: 'LLM, tools, loop, goal' },
+{ q: 'Is it a better brain than an LLM?', a: 'no; structure was added, not IQ' },
+{ q: 'Why not hardcode the dispute steps?', a: 'the path depends on what you find' },
+];
+export const mc4 = [
+{ q: 'Four phases in order?', a: 'observe, think, act, repeat' },
+{ q: 'Where does the loop live?', a: 'in the runtime code, not the model' },
+{ q: 'What plays "desired state"?', a: 'the goal' },
+];
+export const mc5 = [
+{ q: "Three runtime jobs the LLM can't do?", a: 'hold state, run tools, enforce limits' },
+{ q: 'Laravel analogy mapping?', a: 'LLM = logic fn, runtime = framework+server+worker' },
+{ q: 'Agent loops forever — which layer failed?', a: 'the runtime (no max-steps)' },
+];
+export const mc6 = [
+{ q: 'Short-term vs long-term?', a: 'context window vs database' },
+{ q: "Why isn't a bigger window \"more memory\"?", a: 'still volatile, re-sent each call' },
+{ q: 'RAG in one backend line?', a: 'a query that pastes rows into the prompt' },
+];
+export const mc7 = [
+{ q: 'Who writes the control flow in each?', a: 'developer vs model' },
+{ q: 'What does a workflow buy you?', a: 'predictability, low cost, easy debugging' },
+{ q: 'Safe default, and why?', a: 'workflow; agents add cost + unpredictability' },
+];
+export const mc8 = [
+{ q: 'MCP turns N×M into ___?', a: 'N+M' },
+{ q: 'Agent vs GitHub integration — which is which?', a: 'agent=client, GitHub=server' },
+{ q: 'Is a tool the same as MCP?', a: 'no; MCP is the protocol to reach tools' },
+];
+export const mc9 = [
+{ q: 'Map both to an architecture you use daily.', a: 'monolith vs microservices' },
+{ q: 'Orchestrator vs subagent?', a: 'plans/delegates vs scoped worker' },
+{ q: 'The cost of multi-agent?', a: 'coordination + ~15× tokens' },
+];
+export const mc10 = [
+{ q: 'What changes vs stays between a coding and a billing agent?', a: 'tools+prompt change; engine same' },
+{ q: 'SRE loop in four words?', a: 'observe, diagnose, remediate, verify' },
+{ q: 'Three questions that cut through a pitch?', a: 'what tools? what loop? what guardrails?' },
+];
+
+<div class="mission">
+    <strong>Your bar:</strong> reconstruct the entire stack on a whiteboard from memory — to tell
+    real capability from hype in pitches and reviews. So every level is built to be{' '}
+    <em>seen and redrawn</em>, not read. Grounded in Anthropic's <em>Building effective agents</em>
+    <sup>
+        <a href="#s1" id="r1">
+            1
+        </a>
+    </sup>{' '}
+    and the MCP spec.
+    <sup>
+        <a href="#s3" id="r3">
+            3
+        </a>
+    </sup>
+</div>
+
+<p>One sentence holds the whole lesson. Each level just unpacks one chip of it:</p>
+<div class="chips">
+    <span class="chip">
+        An AI agent is a <b>stateless text-prediction function</b>
+    </span>
+    <span class="chip c2">
+        wrapped in a <b>loop</b>
+    </span>
+    <span class="chip c3">
+        given <b>tools and a goal</b>
+    </span>
+    <span class="chip c4">
+        run by <b>ordinary code</b>
+    </span>
+</div>
+
+<nav class="toc">
+    <a href="#l1">1 · LLM</a>
+    <a href="#l2">2 · Tool &amp; Tool calling</a>
+    <a href="#l3">3 · Agent</a>
+    <a href="#l4">4 · Agent loop</a>
+    <a href="#l5">5 · Runtime</a>
+    <a href="#l6">6 · Memory</a>
+    <a href="#l7">7 · Workflow vs Agent</a>
+    <a href="#l8">8 · MCP</a>
+    <a href="#l9">9 · Single vs Multi</a>
+    <a href="#l10">10 · Archetypes</a>
+    <a href="#usecases">★ Use cases</a>
+    <a href="#interview">★ Interview Qs</a>
+    <a href="#cheat">★ Cheat sheet</a>
+    <a href="#review">★ Review guides</a>
+</nav>
+
+{/* ============ HERO: the request path ============ */}
+
+<Fig1 />
+
+{/* ================= LEVEL 1 ================= */}
+
+<section class="lvl" id="l1">
+    <div class="lvltop">
+        <span class="num">1</span>
+        <h2>LLM — the brain in a jar</h2>
+    </div>
+    <p class="tagline">The only irreducible primitive. Everything else is plumbing around it.</p>
+    <Fig2 />
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> A stateless function: text in → predicted text out.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> Turn fuzzy natural-language intent into output with no hand-coded
+            rules.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> A genius consultant who read the whole internet but has total
+            amnesia — and can only talk.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> A pure <code>POST /predict</code> endpoint. A Lambda with no DB. RAM,
+            no disk.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "It looks things up / it remembers our chat"</div>
+        <div class="t">✓ It predicts tokens; the app re-sends history each call</div>
+    </div>
+    <div class="rule">
+        <span>🧠 Memory rule:</span> An LLM is a stateless text-prediction function — brain in a
+        jar, no memory, no hands.
+    </div>
+    <MemoryCheck items={mc1} />
+</section>
+
+{/* ================= LEVEL 2 ================= */}
+
+<section class="lvl" id="l2">
+    <div class="lvltop">
+        <span class="num">2</span>
+        <h2>Tool &amp; Tool calling — giving the brain hands</h2>
+    </div>
+    <p class="tagline">
+        Two ideas, one critical line: the model <em>requests</em>; your code <em>runs</em>.
+    </p>
+    <Fig3 />
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> A function the model may <em>request</em> (name + param schema); calling = it
+            asks, runtime executes.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> Bridge text-prediction to real side effects — read a DB, hit an
+            API, send mail — while keeping the model sandboxed.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> The amnesiac writes a <em>work order</em>; a runner does it and
+            brings back the result.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> An API endpoint with an OpenAPI schema; the model emits a typed RPC
+            your dispatcher routes.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "The LLM ran the SQL / executed the tool"</div>
+        <div class="t">✓ It only emitted a request — the runtime executed it</div>
+    </div>
+    <div class="rule">
+        <span>🛠️ Memory rule:</span> A tool is a typed function the model may request but never run;
+        calling is the model asking, your runtime doing.
+    </div>
+    <MemoryCheck items={mc2} />
+</section>
+
+{/* ================= LEVEL 3 ================= */}
+
+<section class="lvl" id="l3">
+    <div class="lvltop">
+        <span class="num">3</span>
+        <h2>Agent — brain + hands + a goal</h2>
+    </div>
+    <p class="tagline">
+        What you get when you let the model drive many tool calls toward an objective.
+    </p>
+    <Fig4 />
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> An LLM in a loop with tools + a goal; the model chooses which tools, in what
+            order, until done.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> You can't pre-script open-ended work; steps depend on results. The
+            agent decides the path at runtime.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> A capable employee handed an objective and systems access — no
+            script.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> A long-running worker that orchestrates service calls dynamically,
+            not a fixed cron job.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "An agent is a smarter / bigger model"</div>
+        <div class="t">✓ Same model — a loop + tools + a goal were added</div>
+    </div>
+    <div class="rule">
+        <span>🤖 Memory rule:</span> Agent = LLM + Tools + Loop + Goal — the model picks the path,
+        the loop keeps it moving.
+    </div>
+    <MemoryCheck items={mc3} />
+</section>
+
+{/* ================= LEVEL 4 ================= */}
+
+<section class="lvl" id="l4">
+    <div class="lvltop">
+        <span class="num">4</span>
+        <h2>Agent loop — Observe → Think → Act → Repeat</h2>
+    </div>
+    <p class="tagline">The heartbeat of every agent. You already run this loop in production.</p>
+    <Fig5 />
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> Observe state → Think (LLM picks next step) → Act (tool) → observe → repeat,
+            until goal or limit.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> The next action depends on the last result — you must react, not
+            pre-plan.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> Debugging an outage: symptom → hypothesis → try one thing → observe
+            → adjust.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> A K8s reconciliation loop / a REPL / an event loop.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "The loop runs inside the model / it plans all steps first"</div>
+        <div class="t">✓ The loop is code in the runtime; the model is called once per turn</div>
+    </div>
+    <div class="rule">
+        <span>🔁 Memory rule:</span> The agent loop is a reconciliation loop for intent: observe,
+        think, act, repeat until desired state.
+    </div>
+    <MemoryCheck items={mc4} />
+</section>
+
+{/* ================= LEVEL 5 ================= */}
+
+<section class="lvl" id="l5">
+    <div class="lvltop">
+        <span class="num">5</span>
+        <h2>Agent runtime — the app server around the brain</h2>
+    </div>
+    <p class="tagline">
+        Plain code that hosts the loop. The layer leaders skip — and where reliability lives.
+    </p>
+    <Fig6 />
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> The program running the loop: holds state, calls the LLM, runs tools, enforces
+            guardrails.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> The stateless LLM can't host a loop or stop itself; something must
+            — and it's code you own.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> The office around the employee: building, phones, badges, the
+            manager who says "stop".
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> <b>Laravel + web server + queue worker.</b> Claude Code, Cursor, the
+            Agent SDK are runtimes.
+            <sup>
+                <a href="#s4" id="r4">
+                    4
+                </a>
+            </sup>
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "The model manages its own memory &amp; limits"</div>
+        <div class="t">✓ The runtime re-sends history and enforces every limit</div>
+    </div>
+    <div class="rule">
+        <span>⚙️ Memory rule:</span> The runtime is the app server hosting the loop — it holds
+        state, runs tools, and enforces the guardrails the model can't.
+    </div>
+    <MemoryCheck items={mc5} />
+</section>
+
+{/* ================= LEVEL 6 ================= */}
+
+<section class="lvl" id="l6">
+    <div class="lvltop">
+        <span class="num">6</span>
+        <h2>Memory — because the brain forgets everything</h2>
+    </div>
+    <p class="tagline">
+        Not a model feature — a runtime discipline. It's just what gets re-injected.
+    </p>
+    <Fig7 />
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> Whatever the runtime puts back into the prompt. Short-term = context window;
+            long-term = external store.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> The model forgets between calls and the window is finite; relevant
+            info must be re-injected.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> The employee's notebook (today) + the company wiki (looked up on
+            demand).
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> Stateless HTTP + sessions + DB. Context = RAM payload; store = disk;
+            RAG = a query injecting rows.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "Bigger context window = memory"</div>
+        <div class="t">✓ That's more RAM per call; durable memory is the external store</div>
+    </div>
+    <div class="rule">
+        <span>💾 Memory rule:</span> The model is stateless; memory is what the runtime reloads into
+        the prompt — context is RAM, the store is disk.
+    </div>
+    <MemoryCheck items={mc6} />
+</section>
+
+{/* ================= LEVEL 7 ================= */}
+
+<section class="lvl" id="l7">
+    <div class="lvltop">
+        <span class="num">7</span>
+        <h2>Workflow vs Agent — who writes the if/else?</h2>
+    </div>
+    <p class="tagline">
+        The most important <em>decision</em> in the stack — and the one VPs over-engineer.
+    </p>
+    <Fig8 />
+    <table>
+        <tr>
+            <th>Dimension</th>
+            <th>Workflow</th>
+            <th>Agent</th>
+        </tr>
+        <tr>
+            <td>Controls flow</td>
+            <td>You (developer)</td>
+            <td>The model, at runtime</td>
+        </tr>
+        <tr>
+            <td>Predictability</td>
+            <td>High</td>
+            <td>Lower (path emerges)</td>
+        </tr>
+        <tr>
+            <td>Cost / latency</td>
+            <td>Low</td>
+            <td>Higher (many LLM calls)</td>
+        </tr>
+        <tr>
+            <td>Debuggability</td>
+            <td>Easy (fixed paths)</td>
+            <td>Harder (per-run traces)</td>
+        </tr>
+        <tr>
+            <td>Best for</td>
+            <td>Known, repeatable tasks</td>
+            <td>Open-ended, unpredictable tasks</td>
+        </tr>
+    </table>
+    <p class="tagline">
+        <b>Agentic workflow</b> = the middle: a fixed workflow with a few model-decided steps (a
+        runbook with "use your judgment here").
+    </p>
+    <div class="myth">
+        <div class="m">✗ "Agents are the advanced / better default"</div>
+        <div class="t">
+            ✓ Anthropic: start simple, use workflows, reach for agents only when flexibility pays
+            <sup>
+                <a href="#s1" id="r1b">
+                    1
+                </a>
+            </sup>
+        </div>
+    </div>
+    <div class="rule">
+        <span>🧭 Memory rule:</span> Workflow = you write the if/else; Agent = the model writes it;
+        choose by how predictable the path is.
+    </div>
+    <MemoryCheck items={mc7} />
+</section>
+
+{/* ================= LEVEL 8 ================= */}
+
+<section class="lvl" id="l8">
+    <div class="lvltop">
+        <span class="num">8</span>
+        <h2>MCP — USB-C for tools</h2>
+    </div>
+    <p class="tagline">One standard so you don't hand-write glue for every external system.</p>
+    <Fig9 />
+    <div class="facts">
+        <div class="fact">
+            <b>MCP</b> An open standard to discover &amp; call tools/data from external systems.
+            "USB-C for AI."
+            <sup>
+                <a href="#s3" id="r3b">
+                    3
+                </a>
+            </sup>
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> Kills the N×M bespoke-glue mess: expose a server once, any MCP
+            agent uses it → N+M.
+        </div>
+        <div class="fact blue">
+            <b>Server / Client</b> Server = exposes tools (device). Client = connects from the host
+            app (port).
+        </div>
+        <div class="fact blue">
+            <b>Tool registry</b> The catalog advertised to the model = service discovery for tools.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">
+            ✗ "MCP is a Claude feature / MCP <em>is</em> the tool"
+        </div>
+        <div class="t">
+            ✓ Open multi-vendor standard; it's the <em>protocol to reach</em> tools (≈ JDBC)
+        </div>
+    </div>
+    <div class="rule">
+        <span>🔌 Memory rule:</span> MCP is USB-C for tools — server = device, client = port,
+        registry = catalog of what's plugged in.
+    </div>
+    <MemoryCheck items={mc8} />
+</section>
+
+{/* ================= LEVEL 9 ================= */}
+
+<section class="lvl" id="l9">
+    <div class="lvltop">
+        <span class="num">9</span>
+        <h2>Single vs Multi-agent — monolith vs microservices</h2>
+    </div>
+    <p class="tagline">The same architecture call you've made a hundred times for services.</p>
+    <Fig10 />
+    <div class="facts">
+        <div class="fact">
+            <b>Single</b> One loop, one context, one tool registry, end to end. The monolith.
+        </div>
+        <div class="fact">
+            <b>Multi</b> Orchestrator plans &amp; delegates to worker subagents (own context+tools),
+            then synthesizes.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> Monolith vs microservices / map-reduce. Orchestrator = the
+            dispatcher.
+        </div>
+        <div class="fact blue">
+            <b>The cost</b> Coordination, latency, partial failure, observability — and ~15× tokens.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "More agents = better"</div>
+        <div class="t">
+            ✓ Premature-microservices trap; split only when one context/role can't cope
+        </div>
+    </div>
+    <div class="rule">
+        <span>🧩 Memory rule:</span> Single agent is a monolith; multi-agent is microservices —
+        split only when one context/role can't cope.
+    </div>
+    <MemoryCheck items={mc9} />
+</section>
+
+{/* ================= LEVEL 10 ================= */}
+
+<section class="lvl" id="l10">
+    <div class="lvltop">
+        <span class="num">10</span>
+        <h2>Archetypes — one engine, many job descriptions</h2>
+    </div>
+    <p class="tagline">
+        The payoff: every "AI agent product" is the same engine + a different toolset + a different
+        prompt.
+    </p>
+    <Fig11 />
+    <div class="myth">
+        <div class="m">✗ "Each agent type is different technology"</div>
+        <div class="t">✓ Identical architecture; only tools + instructions differ</div>
+    </div>
+    <div class="rule">
+        <span>👔 Memory rule:</span> Every archetype is the same engine + a different tool registry
+        + a different job description.
+    </div>
+    <MemoryCheck items={mc10} />
+</section>
+
+{/* ================= REAL USE CASES ================= */}
+
+<h2 class="sec" id="usecases">
+    Where each layer shows up — real use cases
+</h2>
+<p>
+    Grounding for your hype filter: the concept, a concrete place it's used, and the <em>shape</em>{' '}
+    it usually takes (workflow / agent / infra).
+</p>
+<table>
+    <tr>
+        <th>Concept</th>
+        <th>Real use case</th>
+        <th>Usual shape</th>
+    </tr>
+    <tr>
+        <td>LLM</td>
+        <td>Classify a ticket's intent · draft a reply · summarise a PR</td>
+        <td>single call</td>
+    </tr>
+    <tr>
+        <td>Tool calling</td>
+        <td>"Book 30 min with Sam Thursday" → model calls the calendar API</td>
+        <td>workflow / agent</td>
+    </tr>
+    <tr>
+        <td>Agent</td>
+        <td>Claude Code fixes a failing test across several files on its own</td>
+        <td>agent</td>
+    </tr>
+    <tr>
+        <td>Agent loop</td>
+        <td>Coding agent: edit → run tests → read failure → fix, until green</td>
+        <td>agent</td>
+    </tr>
+    <tr>
+        <td>Runtime</td>
+        <td>Claude Code · Cursor · the Agent SDK — the harness hosting the loop</td>
+        <td>infra</td>
+    </tr>
+    <tr>
+        <td>Memory</td>
+        <td>Support bot recalls a customer's past tickets via RAG over the help centre</td>
+        <td>workflow + store</td>
+    </tr>
+    <tr>
+        <td>Workflow vs agent</td>
+        <td>Fixed "RAG Q&amp;A over docs" pipeline vs open-ended "research this market"</td>
+        <td>both</td>
+    </tr>
+    <tr>
+        <td>MCP</td>
+        <td>Connect the agent to GitHub, Slack, and Postgres via MCP servers</td>
+        <td>integration</td>
+    </tr>
+    <tr>
+        <td>Single vs multi</td>
+        <td>One triage agent vs a "deep research" lead + parallel subagents</td>
+        <td>single / multi</td>
+    </tr>
+    <tr>
+        <td>Archetypes</td>
+        <td>SWE copilot · support copilot · SRE on-call copilot · billing automation</td>
+        <td>agent</td>
+    </tr>
+</table>
+<p class="tagline">
+    Pattern to notice: most <em>shipped</em> value is a <strong>workflow</strong> with one or two
+    tool calls; the loud demos are full agents. Your job in a review is to tell which one a pitch
+    actually needs.
+    <sup>
+        <a href="#s1" id="r1c">
+            1
+        </a>
+    </sup>
+</p>
+
+{/* ================= INTERACTIVE RECALL ================= */}
+
+<h2 class="sec" id="quiz">
+    Retrieval practice — mix the levels
+</h2>
+<p>
+    Reading builds <em>fluency</em> (feels familiar). Recall builds <em>storage</em> (lasts). Answer
+    from memory — instant feedback.
+</p>
+
+<Quiz items={frontmatter.quiz} id="quiz1" />
+
+<h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">
+    Reconstruct the stack from a blank page
+</h3>
+
+<Rehearse
+    promptHtml={`Write the ten levels in order, one line each, with nothing on screen. Then reveal and compare — gaps are your next drill.`}
+    placeholder="1. LLM = …  2. Tool = …  3. Agent = …  (keep going to 10, from memory)"
+>
+    <p>
+        <b>1</b> LLM stateless text→text · <b>2</b> Tool: model requests, runtime runs · <b>3</b>{' '}
+        Agent = LLM+tools+loop+goal ·<b>4</b> Loop: observe→think→act→repeat · <b>5</b> Runtime: app
+        server + guardrails · <b>6</b> Memory: runtime reloads (RAM vs disk) ·<b>7</b> Workflow vs
+        Agent: who writes the if/else · <b>8</b> MCP: USB-C; server/client/registry; N×M→N+M ·
+        <b>9</b> Single vs Multi: monolith vs microservices · <b>10</b> Archetypes: same engine +
+        different tools + job.
+    </p>
+</Rehearse>
+
+<div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Say <em>"grill me on the agent stack"</em>{' '}
+    for mixed no-clue questions, or drop a real product and I'll place it on the workflow↔agent
+    &amp; single↔multi spectrums with you. Want the next lesson — spaced, interleaved drills? Just
+    ask.
+</div>
+
+{/* ================= INTERVIEW PANEL ================= */}
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+{/* ================= CHEAT SHEET (compact) ================= */}
+
+<h2 class="sec" id="cheat">
+    ★ Cheat sheet — buzzword → engineering
+</h2>
+<div class="cheat">
+    <p style="margin-top:0">
+        <strong>Mental models:</strong> LLM = brain · Tool = hands · Agent = brain+hands+loop+goal ·
+        Runtime = the app server · Memory = what's reloaded · Workflow = you choose the path · Agent
+        = the model chooses · MCP = USB-C for tools · Single = monolith · Multi = microservices.
+    </p>
+    <h3>Translation table</h3>
+    <table>
+        <tr>
+            <th>Buzzword</th>
+            <th>What it actually is</th>
+        </tr>
+        <tr>
+            <td>Agentic / autonomous AI</td>
+            <td>An LLM in a while-loop with tools + a goal</td>
+        </tr>
+        <tr>
+            <td>Function calling / tools</td>
+            <td>Typed RPC the model requests, you execute</td>
+        </tr>
+        <tr>
+            <td>Orchestration framework</td>
+            <td>The runtime (app server for the loop)</td>
+        </tr>
+        <tr>
+            <td>Context window</td>
+            <td>Bounded RAM, re-sent every call</td>
+        </tr>
+        <tr>
+            <td>Memory / RAG</td>
+            <td>External store + a query injecting text into the prompt</td>
+        </tr>
+        <tr>
+            <td>Workflow / chain</td>
+            <td>A hardcoded pipeline / DAG you wrote</td>
+        </tr>
+        <tr>
+            <td>MCP</td>
+            <td>Standard tool interface (USB-C / JDBC); N×M → N+M</td>
+        </tr>
+        <tr>
+            <td>Multi-agent / swarm</td>
+            <td>Orchestrator-worker microservices for agents</td>
+        </tr>
+        <tr>
+            <td>Copilot / AI teammate</td>
+            <td>An archetype: the engine + one role's toolset</td>
+        </tr>
+    </table>
+    <h3>Three rules for the VP chair</h3>
+    <p style="margin-bottom:0">
+        ① Default to <strong>workflows</strong>; agents only when the path can't be predetermined. ②
+        Start <strong>single-agent</strong>; split like microservices — with evidence. ③ Judge any
+        pitch by: <strong>what tools? what loop? what guardrails?</strong>
+    </p>
+    <p style="margin-bottom:0">
+        📄 Full printable version →{' '}
+        <a href="../reference/agents-cheat-sheet.html">agents-cheat-sheet.html</a>
+    </p>
+</div>
+
+{/* ================= REVIEW GUIDES ================= */}
+
+<h2 class="sec" id="review">
+    ★ Review guides &amp; what to read next
+</h2>
+<div class="facts" style="grid-template-columns:1fr 1fr">
+    <div class="fact">
+        <b>5-min (weekly)</b> Don't re-read — recall. Say the one sentence; redraw the request path
+        + the loop from memory; recite the ten rules; translate three buzzwords blind.
+    </div>
+    <div class="fact">
+        <b>30-min (when stalled)</b> Blank-page reconstruct all ten levels; re-derive why each layer
+        forces the next; then place one real product (workflow/agent? single/multi? which archetype?
+        which tools?).
+    </div>
+</div>
+<p style="font-size:.9rem">
+    <strong>Read next, in order:</strong>①{' '}
+    <a href="https://www.anthropic.com/engineering/building-effective-agents">
+        Building effective agents — Anthropic
+    </a>{' '}
+    (Levels 1–7, read first) · ②{' '}
+    <a href="https://modelcontextprotocol.io">Model Context Protocol docs</a> (Level 8) · ③{' '}
+    <a href="https://www.anthropic.com/engineering/multi-agent-research-system">
+        Multi-agent research system — Anthropic
+    </a>{' '}
+    (Level 9) · ④ <a href="https://docs.claude.com/en/api/agent-sdk/overview">Claude Agent SDK</a>{' '}
+    (the loop as code). Full list → <a href="../RESOURCES.html">Resources</a>.
+</p>
+
+<p style="font-size:.9rem">
+    📖 <strong>Primary source:</strong>{' '}
+    <a href="https://www.anthropic.com/engineering/building-effective-agents">
+        "Building effective agents" — Anthropic Engineering
+    </a>{' '}
+    — the highest-trust grounding for this lesson.
+</p>
+
+<Sources items={frontmatter.sources} />

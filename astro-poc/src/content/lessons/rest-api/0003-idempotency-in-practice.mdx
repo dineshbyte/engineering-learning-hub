@@ -1,0 +1,417 @@
+---
+# ─── rest-api · Lesson 3 — Idempotency in practice (MDX-hybrid) ───────────────
+# FRONTMATTER = the full lesson contract (head + masthead + wayfinding) PLUS the
+# structured body data lifted out of the prose: the quiz, the 13 interview Q&A
+# (incl. the design rubric) and the footnote sources. Validated at build time by
+# the `lessons` collection schema (src/content.config.ts → src/schema/lesson.ts).
+# The FAQ JSON-LD is emitted by <Interview> from `interview` below — it must NOT
+# also be set on `jsonLd`, or the page would carry two FAQPage blobs.
+#
+# HTML-bearing strings (h1Html, interview q/a, rubric, sources.html) use YAML
+# folded block scalars (>-) so the embedded ", ', &, < and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'API Idempotency & Safe Retries'
+description: >-
+    API idempotency explained: how idempotency keys make POST retries safe, dedupe duplicate
+    requests, and survive network failures without double-charging in REST APIs.
+keywords: 'api idempotency, safe retries, status codes, http methods, rest, api, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors'
+path: 'rest-api/lessons/0003-idempotency-in-practice.html'
+ogImage: 'assets/og/rest-api.png'
+ogImageAlt: 'REST API · Engineering Vault learning track'
+accentVar: '--track-rest'
+
+# —— masthead ——
+trackLabel: 'REST API'
+kicker: 'Lesson 3 · Reliability · visual edition'
+h1Html: 'Idempotency in practice'
+metaLine: '~7 min · one diagram per idea · retrieval practice at the end'
+chips:
+    - 'API idempotency'
+    - 'Safe retries'
+    - 'Status codes'
+    - 'HTTP methods'
+    - 'REST'
+
+# —— wayfinding ——
+prev:
+    href: '0002-http-methods-and-status-codes.html'
+    title: 'HTTP methods & status codes (visual)'
+next:
+    href: '0004-resource-modeling-and-uri-design.html'
+    title: 'Resource modeling & URI design (visual)'
+
+# —— routing (used only by the dynamic route) ——
+track: 'rest-api'
+number: '0003'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: 'An operation is idempotent when repeating it…'
+      correct: 2
+      options:
+          - 'returns a byte-identical body on each separate call'
+          - 'runs faster after the first warm cached attempt'
+          - 'leaves the same server state as one single call'
+          - 'requires fresh client authentication on each retry'
+    - q: 'In the Idempotency-Key pattern, who generates the key?'
+      correct: 0
+      options:
+          - 'The client, one unique key per logical operation'
+          - 'The server, one fresh key per inbound request'
+          - 'The gateway, one shared key per active session'
+          - 'The database, one rolling key per stored record'
+    - q: 'Two in-flight requests share one key. The safe design…'
+      correct: 3
+      options:
+          - 'runs both and merges their two results afterward'
+          - 'drops one silently and returns nothing to it'
+          - 'lets each execute since the keys will collide'
+          - 'uses a unique constraint so one wins, one waits'
+    - q: 'Distributed systems realistically give you exactly-once…'
+      correct: 1
+      options:
+          - 'delivery, once a retry budget has been configured'
+          - 'effect, via at-least-once plus idempotent dedup'
+          - 'ordering, once every message carries a timestamp'
+          - 'routing, once each node shares a single key store'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'What does it mean for an operation to be idempotent?'
+      a: >-
+          <p>Making the same request <em>N</em> times has the <strong>same effect on server
+          state</strong> as making it once. The key word is <em>state</em>, not response: it's about
+          what's left behind, not what comes back.</p>
+    - level: 'core'
+      q: 'How do you make a non-idempotent <code>POST</code> safe to retry?'
+      a: >-
+          <p>Bolt on the <strong>Idempotency-Key pattern</strong>: the client sends a unique key per
+          logical operation in an <code>Idempotency-Key</code> header; the server stores key →
+          outcome on first execution and <em>replays</em> the stored response on any retry carrying
+          the same key. Stripe is the canonical implementation.</p>
+    - level: 'core'
+      q: 'Who generates the idempotency key, and why?'
+      a: >-
+          <p>The <strong>client</strong> — typically a <code>UUID v4</code>, one key per <em>logical
+          operation</em>, reused across every retry of that intent. Only the client knows that "this
+          retry" and "the first attempt" are the same intent; the server can't infer it from two
+          byte-identical requests.</p>
+    - level: 'core'
+      q: 'Should you apply idempotency keys to every endpoint?'
+      a: >-
+          <p>No — only to <strong>unsafe, non-idempotent</strong> operations: payments, order
+          creation, message sends, transfers. Reads and naturally idempotent writes
+          (<code>GET</code>, <code>PUT</code>, <code>DELETE</code>) don't need the machinery; adding
+          it everywhere is wasted storage and complexity.</p>
+    - level: 'senior'
+      q: 'Is "idempotent" the same as "returns the same response"?'
+      a: >-
+          <p>No — a classic trap. Idempotency is about <strong>effect on state</strong>, not the
+          response body or status. A repeated <code>DELETE</code> is idempotent even though the first
+          returns <code>204</code> and the second may return <code>404</code> — the resource is
+          absent either way. Likewise "no side effects" is wrong: a <code>GET</code> may still log or
+          update analytics.</p>
+    - level: 'senior'
+      q: 'Two requests arrive concurrently with the same key — what happens?'
+      a: >-
+          <p>They must <strong>not both execute</strong>. Guard the key with a <strong>unique
+          constraint</strong> or a lock: the first wins and writes; the loser either <em>waits</em>
+          for the in-flight result, or gets a <code>409 Conflict</code> ("operation in progress").
+          This concurrency case — not the header — is where the interview actually lives.</p>
+    - level: 'senior'
+      q: 'Why fold the key-write into the same transaction as the effect?'
+      a: >-
+          <p>So the effect and the record-of-the-effect commit <strong>atomically</strong>. If
+          they're separate, a crash between "did the work" and "saved the key" leaves you having
+          executed without a record — the next retry re-executes and duplicates. One transaction
+          makes "executed" and "remembered" inseparable.</p>
+    - level: 'senior'
+      q: 'Does idempotency give you exactly-once delivery?'
+      a: >-
+          <p>No — say this out loud, it's the differentiator. <strong>Exactly-once <em>delivery</em>
+          is impossible</strong> in a distributed system. Idempotency gives you exactly-once
+          <strong>effect</strong>: the network may deliver five times, but the operation takes effect
+          once. The equation: exactly-once effect = at-least-once delivery + idempotent processing
+          (dedup on the receiver).</p>
+    - level: 'staff'
+      q: 'Should the idempotency layer live in the gateway or the service?'
+      a: >-
+          <p>A gateway/middleware layer is clean for caching the stored response and short-circuiting
+          retries cheaply, but it can't atomically fold the key-write into the <em>business</em>
+          transaction. The strongest guarantee comes from writing the key in the <strong>same
+          transaction as the effect</strong>, which forces it into the service/data layer. Common
+          compromise: gateway handles fast-path replay and the concurrency gate, the service owns the
+          transactional write of key+effect. Name the trade-off rather than asserting one is
+          "correct."</p>
+    - level: 'staff'
+      q: 'The process crashes after the effect commits but before responding. What does the next retry see?'
+      a: >-
+          <p>If key+effect were written in <strong>one transaction</strong>, the retry hits a stored
+          key and replays the original response — correct. If they were separate and only the effect
+          committed, the retry sees a <em>miss</em> and re-executes — duplicate. This is exactly why
+          atomic key+effect persistence is the load-bearing detail, not an optimization.</p>
+    - level: 'staff'
+      q: 'What goes wrong if you cache the response but the original operation actually failed?'
+      a: >-
+          <p>You'd replay a failure forever, or — worse — cache a <code>5xx</code> and turn a
+          transient error into a permanent one. Best practice: only persist the key for
+          <strong>terminal outcomes</strong>; for in-flight or transient failures, leave the key open
+          (or store a "pending" state) so a legitimate retry can complete the operation rather than
+          being told it already failed.</p>
+    - level: 'design'
+      q: 'Design <code>POST /orders</code> so a flaky client can retry without creating duplicate orders.'
+      a: >-
+          <p><b>A strong answer covers:</b> the client mints an <code>Idempotency-Key</code> (UUID
+          v4) per logical order and sends it on every retry &rarr; the server keeps a durable
+          key&rarr;response store (status + body) with a TTL (~24h) and a request fingerprint so a key
+          can't be reused for a different order &rarr; the first request executes inside a transaction
+          that also writes the key under a unique constraint, making "executed" and "remembered"
+          atomic &rarr; a concurrent/retried request with the same key replays the stored response,
+          waits for the in-flight one, or gets a <code>409</code> — it must never re-execute &rarr;
+          persist the key only for terminal outcomes so a transient failure stays retryable &rarr;
+          scope keys per endpoint + per tenant &rarr; frame it precisely: this delivers exactly-once
+          <em>effect</em>, not exactly-once delivery; pair it client-side with bounded retries,
+          exponential backoff + jitter, and honor <code>Retry-After</code>.</p>
+    - level: 'design'
+      q: 'Design a message/event consumer that must not double-process a payment when the broker delivers at-least-once.'
+      a: >-
+          <p><b>A strong answer covers:</b> accept that exactly-once delivery is impossible (Two
+          Generals) — the design goal is exactly-once <em>effect</em> = at-least-once delivery +
+          idempotent processing &rarr; deduplicate on a stable event/operation id carried by the
+          message, recording processed ids with a TTL and skipping any already handled &rarr; fold the
+          dedup write and the business effect into one transaction (or use transactional offset
+          commits) so a crash between "did the work" and "recorded it" can't duplicate &rarr;
+          recognize the boundary: in-broker exactly-once stops the moment the effect crosses to an
+          external system (a charge, an email), where you're back to at-least-once + an idempotency
+          key &rarr; protect the downstream with backoff + jitter and a circuit breaker to prevent a
+          thundering herd &rarr; only mark terminal outcomes as processed so a transient failure can
+          be retried.</p>
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>REST design-round framework</b> — drive any "make this reliable / retry-safe" prompt through
+    these, out loud:
+rubric:
+    - 'Model resources &amp; URIs — prefer client-named resources (<code>PUT /orders/{id}</code>) so creation is naturally convergent.'
+    - 'Map methods &amp; status codes — idempotent verbs retry freely; non-idempotent <code>POST</code> needs explicit protection; <code>409</code> for "in progress".'
+    - 'Idempotency &amp; caching — client-generated <code>Idempotency-Key</code>, durable key&rarr;response store with TTL, request fingerprint, atomic key+effect write.'
+    - 'Pagination, filtering &amp; sorting — bounded result sets so retried reads stay cheap and deterministic.'
+    - 'AuthN/AuthZ — scope keys per endpoint + per account/tenant; bearer token per request; rate limits + <code>Retry-After</code>.'
+    - 'Versioning &amp; evolution — keep the idempotency contract stable across versions; additive changes only.'
+    - 'Errors &amp; failure modes — persist keys only for terminal outcomes; backoff + jitter + circuit breakers; exactly-once <em>effect</em>, not delivery.'
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          1. Stripe, <em>Idempotent requests</em> —
+          <a href="https://docs.stripe.com/api/idempotent_requests">docs.stripe.com</a>.
+          <a href="#r1">↩</a>
+    - id: 's2'
+      html: >-
+          2. RFC 9110, HTTP Semantics (method idempotency) —
+          <a href="https://www.rfc-editor.org/rfc/rfc9110.html">rfc-editor.org</a>.
+          <a href="#r2">↩</a>
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import Rehearse from '../../../components/Rehearse.astro';
+import {
+    Fig1,
+    Fig2,
+    Fig3,
+    Fig4,
+} from '../../../components/figures/rest-api/0003-idempotency-in-practice/index.ts';
+
+<div class="mission">
+    <strong>Why this, first.</strong> Idempotency is <em>the</em> reliability question in a senior
+    interview — usually arriving as "how do you make a retry safe?" Most candidates know the word;
+    few can design the mechanism. This lesson makes the mechanism something you can <em>draw</em>.
+</div>
+
+<div class="chips">
+    <span class="chip">
+        Networks are <b>unreliable</b>
+    </span>
+    <span class="chip">
+        so clients <b>retry</b>
+    </span>
+    <span class="chip">
+        so a naïve write <b>duplicates</b>
+    </span>
+    <span class="chip">
+        so you make repeats <b>harmless</b>
+    </span>
+</div>
+
+<Fig1 />
+
+## What "idempotent" actually means
+
+<p>
+    Idempotent = repeating the request leaves the <strong>same server state</strong> as doing it
+    once. Not "returns the same body" — <em>leaves the same state</em>. HTTP's method semantics
+    <sup>
+        <a href="#s2" id="r2">
+            2
+        </a>
+    </sup>
+    bake this in:
+</p>
+
+<Fig2 />
+
+<div class="myth">
+    <div class="m">✗ Myth: "idempotent means it returns the same response."</div>
+    <div class="t">
+        ✓ Truth: it leaves the same server <em>state</em> — the response may differ.
+    </div>
+</div>
+
+## The Idempotency-Key pattern
+
+<p>
+    For genuinely non-idempotent operations — create, charge, transfer — you bolt idempotency on.
+    Stripe is the canonical exemplar.
+    <sup>
+        <a href="#s1" id="r1">
+            1
+        </a>
+    </sup>
+</p>
+
+<Fig3 />
+
+<div class="steps">
+    <div class="step">
+        <b>1 · Client mints the key</b> One UUID per <em>logical</em> operation, sent as an
+        <code>Idempotency-Key</code> header; reused on every retry.
+    </div>
+    <div class="step">
+        <b>2 · Server stores key → response</b> On first sight, execute, then persist the key with
+        the status, body, and a request fingerprint.
+    </div>
+    <div class="step">
+        <b>3 · Retry replays</b> A second request with the same key returns the stored response — it
+        never re-executes.
+    </div>
+    <div class="step">
+        <b>4 · Mismatch is rejected</b> Same key + a different body errors out, so a key can't be
+        smuggled onto another operation.
+    </div>
+</div>
+
+<p class="pull">
+    <strong>The key belongs to the client, not the server.</strong> Only the client knows that "this
+    retry" and "that first attempt" are the same intent.
+</p>
+
+## Implement it like a senior
+
+<p>The header is the easy part. The interview lives in these four decisions:</p>
+
+<div class="facts">
+    <div class="fact">
+        <b>Where to store</b> A durable store, or Redis with a TTL. It must outlive one process and
+        survive the retry window.
+    </div>
+    <div class="fact">
+        <b>What to persist</b> Status code + response body + a fingerprint (hash) of the request, to
+        replay exactly and detect mismatch.
+    </div>
+    <div class="fact blue">
+        <b>Concurrency — the real test</b> Two in-flight requests, one key: a unique constraint or
+        lock lets one win and write; the other waits or gets <code>409</code>.
+    </div>
+    <div class="fact blue">
+        <b>Scope &amp; TTL</b> Scope keys per endpoint and per account; retain long enough to cover
+        real retry windows (Stripe ≈ 24h), short enough to bound storage.
+    </div>
+</div>
+
+## Idempotency ≠ exactly-once
+
+<Fig4 />
+
+<div class="rule">
+    <span>♻️ Memory rule:</span> Idempotency makes duplicate delivery harmless — the client owns the
+    key, the server stores key→response and replays it; you get exactly-once <em>effect</em>, never
+    exactly-once delivery.
+</div>
+
+## Retrieval practice
+
+<p>Close the lesson in your mind first, then answer from memory. Immediate feedback below.</p>
+
+<Quiz items={frontmatter.quiz} id="quiz" />
+
+## Rehearse the answer out loud
+
+<Rehearse
+    promptHtml={`Interviewer: <strong>"Design <code>POST /orders</code> so a flaky client can safely retry without duplicate orders."</strong> ~60 seconds, from memory &#8212; then reveal and compare.`}
+    placeholder="Your 60-second answer, from memory…"
+>
+    <p>
+        "The client generates an <strong>Idempotency-Key</strong> (UUID) per order attempt and sends
+        it as a header; every retry reuses it. The server keeps a{' '}
+        <strong>durable key→response store</strong> (status + body + request fingerprint) with a
+        TTL. The first request executes
+        <strong>inside a transaction</strong> that also writes the key under a{' '}
+        <strong>unique constraint</strong>; a concurrent or retried request with the same key
+        returns the stored response, waits, or gets a <code>409</code>. I validate the body matches
+        the original key, and I'd frame it precisely: this gives exactly-once{' '}
+        <strong>effect</strong>, not exactly-once delivery."
+    </p>
+</Rehearse>
+
+<div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Want me to walk the concurrency race step
+    by step, show exactly what the key-store row holds, or fire harder follow-ups (TTL tuning, where
+    this breaks under sharding)? Say the word.
+</div>
+
+### Primary source
+
+<p>
+    📖{' '}
+    <a href="https://docs.stripe.com/api/idempotent_requests">
+        <strong>"Idempotent requests" — Stripe API docs</strong>
+    </a>
+    : the canonical reference implementation. For method semantics,{' '}
+    <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC 9110</a>.
+</p>
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+<div class="next">
+    <span>
+        📄 Keep handy:{' '}
+        <a href="../reference/idempotency-and-retries.html">Idempotency &amp; Retries reference</a>
+    </span>
+    <span>
+        <a href="../lessons/0002-http-methods-and-status-codes.html">◂ Prev</a> ·{' '}
+        <a href="../lessons/0004-resource-modeling-and-uri-design.html">
+            <em>Next ▸ Lesson 4</em>
+        </a>
+    </span>
+</div>
+
+<Sources items={frontmatter.sources} />

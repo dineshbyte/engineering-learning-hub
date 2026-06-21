@@ -1,0 +1,151 @@
+---
+/**
+ * idempotency-keys-deep-dive · Figure 2 — the claim state machine (Level 1).
+ *
+ * Copied VERBATIM from docs/distributed-systems/idempotency-keys-deep-dive.html
+ * (figure + svg + figcaption). The source page declared its arrowhead markers
+ * (#arw / #arwA / #arwG) ONCE in a hidden top-of-body <svg defs>. Because each
+ * figure is now an isolated component, the three markers this figure references
+ * via marker-end="url(#…)" are inlined here in a local <defs> so they resolve
+ * standalone (verbatim from the source defs). Lives as an .astro component
+ * because raw inline SVG with kebab-case attrs is unreliable inside MDX.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 560 250"
+        role="img"
+        aria-label="The claim state machine: insert in_progress, on success do work then mark completed; on duplicate-key error branch on the existing status to return the saved response or a 409"
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+            <marker
+                id="arwA"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"></path></marker
+            >
+            <marker
+                id="arwG"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <rect
+                x="180"
+                y="12"
+                width="200"
+                height="42"
+                rx="9"
+                fill="#f1eee2"
+                stroke="#7a1f12"
+                stroke-width="1.5"></rect>
+            <text
+                x="280"
+                y="31"
+                text-anchor="middle"
+                font-size="11.5"
+                font-weight="700"
+                fill="#7a1f12">INSERT key, status=in_progress</text
+            >
+            <text x="280" y="46" text-anchor="middle" font-size="9" fill="#6b675f"
+                >UNIQUE constraint — exactly one wins</text
+            >
+            <!-- success branch -->
+            <path d="M 220 54 L 150 92" stroke="#2f5d3a" marker-end="url(#arwG)"></path>
+            <text x="118" y="78" font-size="9" fill="#2f5d3a" font-weight="700">insert OK</text>
+            <rect x="20" y="94" width="200" height="40" rx="8" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="120"
+                y="113"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#244a2e">you own it → do the work</text
+            >
+            <text x="120" y="127" text-anchor="middle" font-size="9" fill="#6b675f"
+                >then UPDATE status=completed + response</text
+            >
+            <rect x="20" y="148" width="200" height="32" rx="8" fill="#fff" stroke="#2f5d3a"></rect>
+            <text x="120" y="168" text-anchor="middle" font-size="10" fill="#244a2e"
+                >return 200 + saved response ✓</text
+            >
+            <path d="M 120 134 L 120 146" stroke="#2f5d3a" marker-end="url(#arwG)"></path>
+            <!-- failure branch -->
+            <path d="M 340 54 L 420 92" stroke="#9a2417" marker-end="url(#arwA)"></path>
+            <text x="430" y="78" font-size="9" fill="#9a2417" font-weight="700">duplicate key</text>
+            <rect x="340" y="94" width="210" height="34" rx="8" fill="#fff" stroke="#7a1f12"></rect>
+            <text x="445" y="115" text-anchor="middle" font-size="10" fill="#111110"
+                >someone claimed it → read row, branch</text
+            >
+            <rect x="336" y="146" width="100" height="44" rx="8" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="386"
+                y="165"
+                text-anchor="middle"
+                font-size="9.5"
+                font-weight="700"
+                fill="#244a2e">completed</text
+            >
+            <text x="386" y="180" text-anchor="middle" font-size="8.5" fill="#6b675f"
+                >replay saved resp</text
+            >
+            <rect x="448" y="146" width="104" height="44" rx="8" fill="#f7ecea" stroke="#9a2417"
+            ></rect>
+            <text
+                x="500"
+                y="165"
+                text-anchor="middle"
+                font-size="9.5"
+                font-weight="700"
+                fill="#7a2218">in_progress</text
+            >
+            <text x="500" y="180" text-anchor="middle" font-size="8.5" fill="#6b675f"
+                >return 409, retry</text
+            >
+            <path d="M 410 128 L 386 144" stroke="#6b675f" marker-end="url(#arw)"></path>
+            <path d="M 480 128 L 500 144" stroke="#6b675f" marker-end="url(#arw)"></path>
+            <!-- recovery note -->
+            <rect x="60" y="206" width="440" height="34" rx="8" fill="#fbfaf2" stroke="#d8d4c8"
+            ></rect>
+            <text
+                x="280"
+                y="221"
+                text-anchor="middle"
+                font-size="9.5"
+                fill="#7a1f12"
+                font-weight="700"
+                >⚠ crash while in_progress → a stuck row blocks all retries (permanent 409)</text
+            >
+            <text x="280" y="234" text-anchor="middle" font-size="9" fill="#6b675f"
+                >→ recovery lease: a locked_at timestamp lets an old in_progress row be reclaimed</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        The atomic <code>INSERT</code> is the linchpin. <code>SELECT … FOR UPDATE</code> or an advisory
+        lock work too, but unique-constraint insert is the simplest correct primitive.
+    </figcaption>
+</figure>

@@ -1,0 +1,1101 @@
+---
+/**
+ * index.astro — the Engineering Vault hub homepage.
+ *
+ * Composes the server-rendered hub (SiteHeader → Hero → WhatIsBand →
+ * FilterChips → SearchResults → TrackGrid → CardSheet → SiteFooter) inside the
+ * shared BaseLayout (which owns the <head>), in the SAME document order as the
+ * source of truth docs/index.html.
+ *
+ * The cards are rendered SERVER-SIDE from `tracks` (one source of truth). The
+ * trailing client IIFE from docs/index.html is ported here VERBATIM (search/run,
+ * keyboard nav, filter, progress→Continue, card sheet, NEW pill) so the
+ * analytics hooks + imperative ARIA updates are preserved — see the porting
+ * notes inline. window.SEARCH_INDEX and window.CARD_DETAIL are DERIVED from
+ * `tracks` below (no separate search-index.js / card-detail.js assets), so the
+ * data has exactly one source.
+ *
+ * The hub's page-specific CSS lives only in docs/index.html's inline <style>
+ * (NOT in tokens.css / lesson.css), so it is carried here as an `is:inline`
+ * <style> — emitted verbatim after BaseLayout's <head> links, so its rules
+ * (e.g. wrap{max-width:84rem}) win over lesson.css on source order.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import Hero from '../components/Hero.astro';
+import WhatIsBand from '../components/WhatIsBand.astro';
+import FilterChips from '../components/FilterChips.astro';
+import SearchResults from '../components/SearchResults.astro';
+import TrackGrid from '../components/TrackGrid.astro';
+import CardSheet from '../components/CardSheet.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { tracks } from '../data/tracks';
+
+// ── Head metadata ───────────────────────────────────────────────────────────
+// NOTE: use a RAW "&" (not "&amp;") here. BaseLayout interpolates these via
+// {title}/content={...}, and Astro HTML-escapes the value once — so a raw "&"
+// renders as "&amp;" in the markup (correct), whereas a pre-encoded "&amp;"
+// would double-encode to "&amp;amp;" and display the literal text "&amp;".
+const title = 'Engineering Vault — Public Notes on AI Systems, Architecture & System Design';
+const description =
+    'Engineering Vault — a public collection of engineering lessons, architecture reviews, AI systems notes, interview topics & production learnings. Built while learning, shared so others can learn.';
+const keywords =
+    'system design, ai engineering, distributed systems, context engineering, rest api, bloom filters, storage engines, transactions, streaming, interview preparation, senior staff interview, engineering vault, knowledge vault, learning in public';
+// Raw "&" for the same one-escape reason as title/description above.
+const ogImageAlt = 'Engineering Vault — visual system design & AI engineering, 15 tracks';
+
+// Homepage WebSite JSON-LD (verbatim from docs/index.html lines 36–47).
+const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Engineering Vault',
+    alternateName: ['Engineering Learning Hub', 'StackDepth'],
+    url: 'https://dineshbyte.github.io/engineering-learning-hub/',
+    description:
+        'Engineering Vault — visual-first engineering lessons across 15 tracks: AI agents, context engineering, AI evaluation, production AI architecture, AI security, AI infrastructure, domain agent design, advanced AI systems, distributed systems, storage, transactions, streaming, and REST APIs.',
+    author: {
+        '@type': 'Person',
+        name: 'dineshbyte',
+        url: 'https://github.com/dineshbyte',
+    },
+    license: 'https://opensource.org/licenses/MIT',
+};
+
+// ── Derive window.SEARCH_INDEX + window.CARD_DETAIL from `tracks` ────────────
+// ONE source of truth. The old page loaded prebuilt assets/search-index.js +
+// assets/card-detail.js; we rebuild equivalent shapes from the track data so
+// there is no second, drift-prone copy.
+//
+// SEARCH_INDEX entry shape the ported run() expects: {t, u, g, k, x}
+//   t = title (display), u = href, g = group/track name (plain, no entities),
+//   k = kind label rendered in .rkind ("Lesson" | "Reference"),
+//   x = lowercased searchable body blob (word-boundary matched in run()).
+// Entities (&amp;, &mdash;) are stripped for the searchable/display strings so
+// matching + the rendered .rt/.rg read as plain text (the old prebuilt index
+// also stored decoded text in t/g/x). NOTE: this derivation covers Lessons +
+// Reference pills only — the old prebuilt index ALSO carried interview pages and
+// full lesson-BODY text in `x`. See the integration note returned with this work.
+const decode = (s: string): string =>
+    s
+        .replace(/&amp;/g, '&')
+        .replace(/&mdash;/g, '—')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&#39;/g, "'")
+        .replace(/&quot;/g, '"');
+
+// Reference pill label → .rkind kind. The muted pills (md) are Glossary /
+// Resources / Roadmap; the rest are cheat/review/topic reference sheets.
+const refKind = (label: string): string => {
+    const l = decode(label).toLowerCase();
+    if (l.includes('glossary')) return 'Glossary';
+    if (l.includes('resources')) return 'Resources';
+    if (l.includes('roadmap')) return 'Roadmap';
+    return 'Reference';
+};
+
+// `c` = the track's CSS color var (e.g. "--track-rest"). The OLD script kept a
+// hardcoded TOK map keyed by short group names ("REST API"); that map had no
+// entry for the 6 newer AI-eng tracks and mismatched "REST API Mastery", so
+// those result rows fell back to --accent. Carrying the colorVar per entry keeps
+// ONE source (tracks) and gives every track the correct result-dot color.
+type SearchEntry = { t: string; u: string; g: string; k: string; x: string; c: string };
+
+const searchIndex: SearchEntry[] = [];
+for (const track of tracks) {
+    const group = decode(track.name);
+    for (const lesson of track.lessons) {
+        const t = decode(lesson.title);
+        const blurb = lesson.blurb ? decode(lesson.blurb) : '';
+        searchIndex.push({
+            t,
+            u: lesson.href,
+            g: group,
+            k: 'Lesson',
+            // x = group + title + blurb, lowercased (matches the old index's
+            // "title + description" body for entries without full-text scrape).
+            x: `${group} ${t} ${blurb}`.toLowerCase(),
+            c: track.colorVar,
+        });
+    }
+    for (const ref of track.references) {
+        const t = decode(ref.label);
+        searchIndex.push({
+            t,
+            u: ref.href,
+            g: group,
+            k: refKind(ref.label),
+            x: `${group} ${t}`.toLowerCase(),
+            c: track.colorVar,
+        });
+    }
+}
+
+// CARD_DETAIL: { lessonHref → blurb }. The bottom sheet (openSheet) reads this
+// to show a per-lesson blurb. Derived straight from lessons[].blurb (the 6
+// single-lesson AI-eng tracks have no blurb, so they're simply absent — same as
+// the old prebuilt map).
+const cardDetail: Record<string, string> = {};
+for (const track of tracks) {
+    for (const lesson of track.lessons) {
+        if (lesson.blurb) cardDetail[lesson.href] = lesson.blurb;
+    }
+}
+---
+
+<BaseLayout
+    title={title}
+    description={description}
+    keywords={keywords}
+    path="index.html"
+    ogType="website"
+    ogImage="assets/og-cover.png"
+    ogImageAlt={ogImageAlt}
+    jsonLd={jsonLd}
+    skipTarget="#grid"
+>
+    {
+        /* Hub page-specific CSS — lives ONLY here (not in tokens.css / lesson.css).
+        is:inline keeps it verbatim and emits it after BaseLayout's <head> links,
+        so .wrap{max-width:84rem} etc. win over lesson.css on source order. */
+    }
+    <style
+        is:inline
+        set:html={`
+  /* all colors come from assets/tokens.css — change them there, once */
+  *{box-sizing:border-box}
+  html{font-size:17px; scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5; -webkit-font-smoothing:antialiased}
+
+  /* top bar */
+  .topbar{position:sticky; top:0; z-index:50; display:flex; align-items:center; gap:1rem;
+    padding:.7rem clamp(1rem,4vw,2rem); background:rgba(245,245,242,.82);
+    -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); border-bottom:1px solid var(--line)}
+  .brand{margin:0; display:flex; align-items:center; gap:.5rem; font-weight:800; font-size:1rem; letter-spacing:-.01em}
+  .brand .logo{display:grid; place-items:center; width:1.7rem; height:1.7rem; border-radius:7px;
+    background:linear-gradient(135deg,#5b54e6,#0f8a7e); color:#fff; font-size:.9rem}
+  .search{margin-left:auto; flex:1; max-width:24rem}
+  .search input{width:100%; font:inherit; font-size:.86rem; padding:.5rem .85rem; color:var(--ink);
+    border:1px solid var(--line); border-radius:10px; background:var(--card)}
+  .search input:focus{outline:2px solid var(--accent); outline-offset:0}
+  .themebtn{cursor:pointer; background:var(--card); border:1px solid var(--line); border-radius:9px;
+    padding:.35rem .55rem; font-size:1rem; line-height:1; color:var(--ink)}
+  .themebtn:hover{background:var(--chip)}
+  .ghbtn{display:inline-flex; align-items:center; gap:.4rem; text-decoration:none; font-weight:700; font-size:.8rem;
+    color:#fff; background:#24292f; border:1px solid #24292f; border-radius:9px; padding:.42rem .72rem; white-space:nowrap}
+  .ghbtn:hover{background:#000}
+  html[data-theme="dark"] .ghbtn{background:var(--card); border-color:var(--line); color:var(--ink)}
+  html[data-theme="dark"] .ghbtn:hover{background:var(--chip)}
+  @media(max-width:640px){
+    .ghbtn .lbl{display:none}
+    /* one clean header row on phones: icon-only brand + inline search + star + theme.
+       The "Engineering Vault" wordmark is hidden (the logo carries the brand) to free up
+       width so the search fits in the header instead of wrapping to its own row. */
+    .topbar{gap:.5rem}
+    .brand{margin-right:0}
+    .brandname{display:none}
+    .search{flex:1; min-width:0; max-width:none; margin-left:.25rem}
+  }
+  /* NOTE: mobile overrides for grid/cards/filters live in the block at the END
+     of this stylesheet — they must come AFTER the base component rules below to
+     win on equal specificity. */
+
+  .wrap{max-width:84rem; margin:0 auto; padding:1.6rem clamp(1rem,4vw,2rem) 5rem}
+  /* hero / intro banner — full-bleed, shown on every viewport (incl. mobile) */
+  .hero{background:linear-gradient(120deg,#2c3a8f,#3d54c9 60%,#4658c8); color:#fff; text-align:center; padding:1.7rem clamp(1rem,4vw,2rem)}
+  .hero-in{max-width:60rem; margin:0 auto}
+  .hero-h{margin:0; font-size:clamp(1.05rem,2.4vw,1.35rem); font-weight:800; line-height:1.25; letter-spacing:-.01em}
+  .hero-sub{margin:.5rem 0 0; font-size:.88rem; opacity:.92}
+  .hero-motto{margin:.5rem 0 0; font-size:1rem; font-weight:700; color:#9fe7da; letter-spacing:.01em}
+  .hero-pick{margin:.5rem 0 0; font-size:.9rem; opacity:.96}
+  .hero-pick a{color:#fff; font-weight:700; text-decoration:underline; text-underline-offset:2px}
+  .hero-pick a:hover{opacity:.85}
+  /* hero "Browse the vault" scroll cue — white ghost pill on the indigo gradient
+     (hero is the same in both themes, so no theme-specific rule needed) */
+  .start-here-link{display:inline-flex; align-items:center; gap:.4rem; margin:.7rem 0 .15rem;
+    padding:.38rem .95rem; color:#fff; font-weight:700; font-size:.82rem; letter-spacing:.01em;
+    text-decoration:none; border:1.5px solid color-mix(in srgb,#fff 50%,transparent);
+    border-radius:999px; background:color-mix(in srgb,#fff 8%,transparent);
+    transition:background .15s, border-color .15s}
+  .start-here-link:hover{background:color-mix(in srgb,#fff 18%,transparent); border-color:#fff}
+  .start-here-link:focus-visible{outline:2px solid #fff; outline-offset:2px}
+  /* "what is this" band below the hero — subtle, on the page surface */
+  .whatis{padding:1.5rem clamp(1rem,4vw,2rem) .2rem; text-align:center}
+  .whatis-in{max-width:60rem; margin:0 auto}
+  .whatis-h{margin:0 auto; max-width:46rem; font-size:.96rem; line-height:1.55; color:var(--ink)}
+  .whatis-domains{display:flex; flex-wrap:wrap; justify-content:center; gap:.4rem; margin:.95rem 0 0}
+  .whatis-domains span{font-size:.74rem; font-weight:600; color:var(--muted); border:1px solid var(--line); background:var(--card); border-radius:20px; padding:.26rem .62rem}
+  .whatis-soon{margin:.95rem 0 0; font-size:.78rem; color:var(--muted)}
+  .whatis-soon b{color:var(--ink); font-weight:700}
+  /* footer closing CTA */
+  .fstart{border-top:1px solid var(--line); margin-top:1.4rem; padding-top:1.2rem; text-align:center; font-size:.9rem; color:var(--muted)}
+  .fdisc{margin:1.4rem 0 0; padding:1.2rem 1.4rem; text-align:left;
+    border:1px solid var(--line); border-radius:14px; background:var(--card);
+    font-size:.88rem; line-height:1.62; color:var(--muted)}
+  .fdisc h3{margin:0 0 .55rem; font-size:1rem; font-weight:700; color:var(--ink)}
+  .fdisc p{margin:.65rem 0 0; max-width:72ch}
+  .fdisc p:first-of-type{margin-top:0}
+  .fdisc a{color:var(--accent); font-weight:600; text-decoration:none}
+  .fdisc a:hover{text-decoration:underline}
+  .fstart a{color:var(--accent); font-weight:700; text-decoration:none}
+  .fstart a:hover{text-decoration:underline}
+
+  /* topic filter chips */
+  .filters{display:flex; flex-wrap:wrap; gap:.5rem; margin:1.3rem 0 .2rem}
+  .fchip{display:inline-flex; align-items:center; font:inherit; font-size:.8rem; font-weight:600;
+    cursor:pointer; color:var(--muted); background:var(--card); border:1px solid var(--line);
+    border-radius:20px; padding:.42rem .55rem .42rem .9rem;
+    transition:background .12s, color .12s, border-color .12s, transform .08s}
+  .fchip:hover{background:var(--chip); color:var(--ink)}
+  .fchip:active{transform:scale(.96)}
+  .fchip.is-active{background:var(--accent); color:#fff; border-color:var(--accent)}
+  html[data-theme="dark"] .fchip.is-active{color:#15140f}
+  /* count as a small circular badge */
+  .fcount{display:inline-flex; align-items:center; justify-content:center; margin-left:.45rem;
+    min-width:1.2rem; height:1.2rem; padding:0 .22rem; border-radius:999px; font-size:.66rem;
+    font-weight:700; line-height:1; background:var(--chip); color:var(--muted)}
+  .fchip:hover .fcount{background:var(--line)}
+  .fchip.is-active .fcount{background:var(--bg); color:var(--ink)}
+
+  /* focus-visible (keyboard) + :active (tap) interaction states */
+  a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px; border-radius:6px}
+  a.lchip:active{background:var(--chip)}
+  a.pill:active{background:var(--line)}
+  a.ritem:active{background:var(--chip)}
+  .themebtn:active, .ghbtn:active, .fpill:active, .soclink:active{transform:scale(.96)}
+
+  /* tile grid — real CSS grid: even columns, cards top-aligned in clean rows
+     (the old "columns" multicolumn packed unequal-height cards into ragged,
+     unbalanced columns that read as broken). */
+  /* align-items:stretch (default) → every card in a row is the same height, so
+     bottoms line up; .tfoot is pinned to the bottom (margin-top:auto) to absorb
+     the slack in shorter cards. */
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(22rem,1fr));
+    gap:1rem; align-items:stretch; margin-top:1.3rem}
+  .tile{background:var(--card); border:1px solid var(--line); border-left:3px solid var(--tc);
+    border-radius:14px; padding:1rem 1.1rem 1.05rem; display:flex; flex-direction:column; gap:.7rem;
+    margin:0; transition:box-shadow .15s, transform .15s}
+  .tile:hover{box-shadow:0 12px 34px rgba(0,0,0,.09); transform:translateY(-2px)}
+  .thead{display:flex; align-items:center; gap:.6rem}
+  .ico{flex:none; width:2.3rem; height:2.3rem; border-radius:10px; display:grid; place-items:center;
+    font-size:1.2rem; background:color-mix(in srgb, var(--tc) 16%, transparent)}
+  .tname{font-weight:700; font-size:1.06rem; letter-spacing:-.01em; line-height:1.1}
+  .ttag{font-size:.63rem; letter-spacing:.11em; text-transform:uppercase; color:var(--muted); margin-top:.12rem}
+  .cnt{margin-left:auto; align-self:flex-start; font-size:.7rem; font-weight:700; white-space:nowrap;
+    color:color-mix(in srgb, var(--tc) 70%, var(--ink));
+    background:color-mix(in srgb, var(--tc) 14%, transparent); padding:.22rem .55rem; border-radius:20px}
+  .tdesc{margin:0; font-size:.85rem; color:var(--muted); line-height:1.45}
+  /* per-card keyword tags (scannable + indexable text for SEO) */
+  .tags{display:flex; flex-wrap:wrap; gap:.3rem; margin:0}
+  .tag{font-size:.66rem; font-weight:600; white-space:nowrap;
+    color:color-mix(in srgb, var(--tg,var(--tc)) 70%, var(--ink));
+    background:color-mix(in srgb, var(--tg,var(--tc)) 15%, transparent);
+    border:1px solid color-mix(in srgb, var(--tg,var(--tc)) 34%, transparent);
+    border-radius:6px; padding:.13rem .42rem}
+  /* card tags use the brand indigo — --tg left unset, so it falls back to
+     --tc (= var(--accent)). One recognizable identity, no per-tag rainbow. */
+  /* Start CTA — brand accent (consistent across cards + the resume banner);
+     white text in light theme, dark text on the lighter dark-theme accent.
+     order:2 places it AFTER the footer pills so the button is the last element,
+     pinned to the card bottom → Start/Continue buttons align across every row. */
+  .start{order:-2; display:flex; align-items:center; justify-content:center; gap:.4rem; text-decoration:none;
+    font-size:.84rem; font-weight:700; color:#fff; background:var(--accent);
+    border-radius:9px; padding:.55rem .9rem; transition:filter .12s, transform .08s}
+  /* dark mode: dim the bright accent fill so the CTA isn't harsh on the eyes.
+     One rule covers Start (lavender) and Continue (green, via .is-started's
+     --accent override); light text stays legible on the muted fill. */
+  html[data-theme="dark"] .start{color:var(--ink);
+    background:color-mix(in srgb, var(--accent) 60%, var(--card))}
+  .start:hover{filter:brightness(1.06)}
+  .start:active{transform:scale(.99)}
+  /* estimated read time per track */
+  .rtime{display:flex; align-items:center; gap:.34rem; font-size:.73rem; color:var(--muted)}
+  .rtime::before{content:""; flex:none; width:.72rem; height:.72rem; border-radius:50%;
+    border:1.5px solid currentColor; box-shadow:inset 0 -.2rem 0 -.13rem currentColor}
+  /* started state: a resume glyph on the Continue button */
+  .tile.is-started .start::before{content:"\\21BB"; font-weight:700; margin-right:.15rem}
+  /* in-progress card: its own green "continue" accent (distinct from the indigo
+     "start" cards), applied to the eyebrow, ring, progress bar, and button */
+  .tile.is-started{--accent:var(--good); border-color:color-mix(in srgb, var(--accent) 45%, var(--line));
+    box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent)}
+  /* keep white-on-green Continue above AA in light theme */
+  html[data-theme="light"] .tile.is-started .start{background:color-mix(in srgb, var(--good) 86%, #000)}
+  .tile.is-started::before{content:"\\21BB  Continue where you left off"; order:-3;
+    font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; font-weight:800; color:var(--accent)}
+  /* per-card progress (replaces the read-time line once a track is started) */
+  .cprog{display:flex; flex-direction:column; gap:.34rem}
+  .ctop{display:flex; justify-content:space-between; align-items:center; gap:.5rem}
+  .cstep{font-size:.73rem; font-weight:700; color:var(--accent)}
+  /* per-card reset — subtle, subordinate to the Continue CTA */
+  .creset{font:inherit; font-size:.68rem; font-weight:600; cursor:pointer; background:none; border:0;
+    color:var(--muted); padding:.1rem .25rem; border-radius:6px; line-height:1;
+    text-decoration:underline; text-underline-offset:2px; transition:color .12s, transform .08s}
+  .creset:hover{color:var(--accent)}
+  .creset:active{transform:scale(.96)}
+  .cbar{height:.42rem; border-radius:99px; overflow:hidden;
+    background:color-mix(in srgb, var(--accent) 18%, transparent)}
+  .cfill{display:block; height:100%; border-radius:99px; background:var(--accent)}
+  .lessons{display:flex; flex-direction:column; gap:.18rem}
+  a.lchip{display:flex; align-items:center; gap:.55rem; text-decoration:none; color:var(--ink);
+    font-size:.85rem; padding:.32rem .4rem; border-radius:8px; transition:background .12s}
+  a.lchip:hover{background:var(--chip)}
+  a.lchip i{flex:none; font-style:normal; min-width:1.5rem; height:1.5rem; padding:0 .35rem; border-radius:6px;
+    display:grid; place-items:center; font-size:.72rem; font-weight:700; color:#fff; background:var(--tc)}
+  a.lchip span{line-height:1.2}
+  /* lesson list collapses into a native <details>: on mobile a tap-to-expand
+     summary keeps cards short; on desktop the summary is hidden and lessons
+     stay visible (the open attribute is synced to viewport by a small script). */
+  /* lesson list hidden from the card (kept in the DOM for SEO/crawlers);
+     the header Start button is the entry point into a track now */
+  .lwrap{display:none}
+  .lwrap > summary{list-style:none; cursor:pointer}
+  .lwrap > summary::-webkit-details-marker{display:none}
+  .lsum{display:flex; align-items:center; gap:.4rem; font-size:.8rem; font-weight:700; color:var(--tc);
+    padding:.45rem .6rem; border-radius:8px; user-select:none;
+    background:color-mix(in srgb, var(--tc) 9%, transparent); transition:background .12s}
+  .lsum::after{content:"\\25BE"; margin-left:auto; font-weight:400; transition:transform .15s}
+  .lwrap[open] .lsum::after{transform:rotate(180deg)}
+  .lwrap[open] > summary{margin-bottom:.3rem}
+  .lsum:hover{background:color-mix(in srgb, var(--tc) 16%, transparent)}
+  .lsum:active{background:color-mix(in srgb, var(--tc) 24%, transparent)}
+  .tfoot{margin-top:auto; display:flex; flex-wrap:wrap; gap:.4rem; padding-top:.7rem; border-top:1px solid var(--line)}
+  a.pill{font-size:.73rem; text-decoration:none; color:var(--ink); background:var(--chip);
+    border:1px solid transparent; border-radius:20px; padding:.3rem .62rem; transition:filter .12s, background .12s}
+  a.pill:hover{background:var(--line)}
+  a.pill.md{color:var(--ink); font-weight:500}
+  /* ── home redesign: name/tagline rows, START HERE badge, difficulty dots, next-lesson link ── */
+  .tmeta{min-width:0}
+  .tnamerow{display:flex; align-items:center; gap:.45rem; flex-wrap:wrap}
+  .ttagrow{display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; margin-top:.14rem}
+  .badge{font-size:.6rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap;
+    color:#7a5c00; background:#ffd84d; border:1px solid #e8b800; border-radius:20px; padding:.12rem .45rem}
+  html[data-theme="dark"] .badge{color:#171200; background:#e6c34a; border-color:#c9a52f}
+  .newpill{font-size:.6rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap;
+    color:#fff; background:var(--accent); border:1px solid var(--accent); border-radius:20px; padding:.12rem .45rem}
+  html[data-theme="dark"] .newpill{color:#15140f}
+  .lvl{display:inline-flex; align-items:center; gap:.3rem; font-size:.6rem; font-weight:700;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+  .lvl .dots{display:inline-flex; gap:.16rem}
+  .lvl .dots .d{width:.4rem; height:.4rem; border-radius:50%; background:currentColor; opacity:.28}
+  .lvl .dots .d.on{opacity:1; color:color-mix(in srgb, var(--tc) 80%, var(--ink))}
+  .cnext-wrap{font-size:.82rem; line-height:1.45; color:var(--muted)}
+  .cnext-lbl{font-weight:600}
+  a.cnext{text-decoration:none; font-weight:700; color:color-mix(in srgb, var(--tc) 78%, var(--ink))}
+  a.cnext:hover{text-decoration:underline}
+  /* bottom sheet: Start/Continue is the prominent last element (full-width final row) */
+  .cs-foot .start{order:0; flex-basis:100%; width:100%; margin-top:.15rem}
+  a.epub{font-size:.73rem; font-weight:700; text-decoration:none; color:#fff; background:var(--tc);
+    border-radius:20px; padding:.3rem .66rem; transition:opacity .12s}
+  a.epub:hover{opacity:.88}
+
+  .empty{display:none; text-align:center; color:var(--muted); padding:3rem 1rem; font-size:.95rem}
+
+  /* full-text search results (replaces the grid while searching) */
+  .results{display:none; margin-top:1.3rem}
+  .results .rhead{font-size:.78rem; color:var(--muted); margin:0 0 .7rem}
+  a.ritem{display:flex; align-items:center; gap:.7rem; text-decoration:none; color:var(--ink);
+    background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.6rem .8rem; margin:0 0 .5rem}
+  a.ritem:hover, a.ritem.sel{border-color:var(--rtc,var(--ink)); background:var(--chip)}
+  .ritem .rdot{flex:none; width:.62rem; height:.62rem; border-radius:50%; background:var(--rtc,#888)}
+  .ritem .rcol{display:flex; flex-direction:column; min-width:0}
+  .ritem .rt{font-weight:600; font-size:.92rem; line-height:1.25}
+  .ritem .rg{font-size:.7rem; color:var(--muted); margin-top:.08rem}
+  .ritem .rkind{margin-left:auto; flex:none; font-size:.62rem; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--muted); border:1px solid var(--line); border-radius:5px; padding:.12rem .4rem; white-space:nowrap}
+
+  /* no-results empty state — turns a dead end into the track catalog */
+  .nr{text-align:center; padding:1.6rem .2rem .4rem}
+  .nr-ic{width:3rem; height:3rem; margin:0 auto .6rem; display:grid; place-items:center; border-radius:50%;
+    background:color-mix(in srgb,var(--accent) 12%,transparent); color:var(--accent); font-size:1.4rem}
+  .nr-h{font-weight:700; font-size:1.05rem; margin:0 0 .25rem}
+  .nr-h b{color:var(--accent); word-break:break-word}
+  .nr-sub{color:var(--muted); font-size:.86rem; margin:0 auto 1.2rem; max-width:30rem}
+  .nr-sugg{display:flex; flex-wrap:wrap; justify-content:center; gap:.4rem; margin:0 0 1.7rem}
+  .nr-sugg button{font:inherit; font-size:.78rem; font-weight:600; cursor:pointer; color:var(--ink);
+    background:var(--chip); border:1px solid var(--line); border-radius:20px; padding:.34rem .72rem; transition:border-color .12s,color .12s}
+  .nr-sugg button:hover{border-color:var(--accent); color:var(--accent)}
+  .nr-cap{font-size:.64rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:700; margin:0 0 .8rem}
+  .nr-cats{display:grid; grid-template-columns:repeat(auto-fit,minmax(13rem,1fr)); gap:.8rem; text-align:left}
+  .nr-grp{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:.75rem .85rem}
+  .nr-glab{display:flex; justify-content:space-between; align-items:center; font-size:.64rem; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--muted); font-weight:700; margin:0 0 .5rem}
+  .nr-glab i{font-style:normal; background:var(--chip); border-radius:20px; padding:.05rem .5rem; color:var(--ink); letter-spacing:0}
+  .nr-trk{display:flex; align-items:center; gap:.55rem; text-decoration:none; color:var(--ink);
+    border-radius:8px; padding:.36rem .4rem; font-size:.88rem; font-weight:600}
+  .nr-trk:hover{background:var(--chip)}
+  .nr-trk .d{flex:none; width:.55rem; height:.55rem; border-radius:50%; background:var(--c,#888)}
+  .nr-trk em{margin-left:auto; flex:none; font-style:normal; font-size:.7rem; color:var(--muted); font-weight:600}
+
+  footer{margin-top:2.6rem; font-size:.78rem; color:var(--muted); border-top:1px solid var(--line); padding-top:1rem}
+  footer em{color:var(--ink); font-style:normal; font-weight:600}
+  .fcta{display:flex; flex-wrap:wrap; align-items:center; gap:.6rem 1rem; background:var(--card);
+    border:1px solid var(--line); border-radius:14px;
+    padding:1rem 1.2rem; margin:0 0 1.1rem; font-size:.92rem; color:var(--ink)}
+  .fcta .msg{flex:1; min-width:14rem}
+  .fpill{display:inline-flex; align-items:center; gap:.35rem; text-decoration:none; font-size:.8rem;
+    font-weight:600; color:var(--ink); background:var(--chip); border:1px solid var(--line);
+    border-radius:9px; padding:.42rem .72rem; white-space:nowrap}
+  .fpill:hover{border-color:var(--accent)}
+  footer .soc a{color:var(--track-agents); text-decoration:none; font-weight:600}
+
+  /* header social cluster (reachable on load) */
+  .soc-hdr{display:inline-flex; gap:.3rem; align-items:center}
+  .soclink{display:grid; place-items:center; min-width:1.7rem; height:1.7rem; padding:0 .42rem;
+    border:1px solid var(--line); border-radius:7px; background:var(--card); color:var(--ink);
+    text-decoration:none; font-size:.74rem; font-weight:800; line-height:1}
+  .soclink:hover{background:var(--chip); border-color:var(--accent)}
+
+  /* systematic 3-column footer */
+  .fgrid{display:grid; grid-template-columns:1.6fr 1fr 1fr; gap:1.6rem; align-items:start}
+  .fcol h4{margin:0 0 .55rem; font-size:.64rem; letter-spacing:.11em; text-transform:uppercase;
+    color:var(--muted); font-weight:700}
+  .fcol a{display:block; color:var(--ink); text-decoration:none; font-weight:600; padding:.16rem 0; font-size:.82rem}
+  .fcol a:hover{color:var(--accent)}
+  /* Connect column: social links inline, wrapping, centered */
+  .fconnect{text-align:center}
+  /* social links as icon pills so they clearly read as clickable */
+  .socrow{display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:.5rem; margin-top:.5rem}
+  .socrow a{display:inline-flex; align-items:center; gap:.4rem; padding:.4rem .75rem;
+    border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink);
+    font-weight:600; font-size:.82rem; text-decoration:none; transition:border-color .12s, color .12s}
+  .socrow a svg{width:15px; height:15px; flex:none}
+  .socrow a:hover{border-color:var(--accent); color:var(--accent)}
+  .socrow a:active{transform:scale(.97)}
+  .fbrand{display:flex; gap:.7rem; align-items:flex-start}
+  .fbrand img{border-radius:50%; border:1px solid var(--line); flex:none}
+  .fbrand .ftxt{font-size:.8rem; line-height:1.5}
+  .fbrand .ftxt b{color:var(--ink)}
+  @media(max-width:640px){
+    .wrap{padding-top:1rem}
+    /* filter chips scroll horizontally instead of wrapping */
+    .filters{flex-wrap:nowrap; overflow-x:auto; margin:1rem -.1rem .2rem; padding-bottom:.25rem; scrollbar-width:none}
+    .filters::-webkit-scrollbar{display:none}
+    .fchip{flex:none}
+    /* compact track cards so ~3 fit on small screens: drop the prose (kept in
+       the DOM for SEO) and lean on the header + keyword tags + Lessons toggle */
+    .grid{grid-template-columns:1fr; margin-top:1rem}
+    .tile{padding:.7rem .85rem .75rem; gap:.45rem}
+    .tdesc{font-size:.82rem}
+    .tags{gap:.28rem}
+    .tag{font-size:.64rem}
+    a.lchip{padding:.28rem .35rem; font-size:.82rem; gap:.45rem}
+    a.lchip i{min-width:1.3rem; height:1.3rem; font-size:.66rem}
+    .tfoot{gap:.35rem; padding-top:.6rem}
+    /* footer: single column, centered */
+    .fgrid{grid-template-columns:1fr; gap:1.4rem} .soc-hdr{display:none}
+    /* hide the Quick links column on mobile — the header/cards already cover it */
+    .fquick{display:none}
+    .fcol{text-align:center}
+    .fbrand{flex-direction:column; align-items:center; text-align:center}
+  }
+
+  /* dark theme — color tokens live in tokens.css; only component overrides here */
+  html[data-theme="dark"] .topbar{background:rgba(19,18,16,.82)}
+  html[data-theme="dark"] a.epub{color:#15140f}
+  @media print{.topbar,.themebtn,.search{display:none!important}}
+
+  /* ---- card detail sheet (dialog) ---- */
+  dialog.cardsheet{border:0; padding:0; margin:auto; max-width:520px; width:calc(100% - 2rem);
+    background:var(--card); color:var(--ink); border-radius:14px;
+    box-shadow:0 20px 60px rgba(0,0,0,.28)}
+  dialog.cardsheet::backdrop{background:rgba(0,0,0,.45)}
+  .cs-inner{padding:1.1rem 1.15rem 1.25rem; position:relative}
+  .cs-close{position:absolute; top:.55rem; right:.55rem; border:0; background:var(--chip); color:var(--ink);
+    width:2rem; height:2rem; border-radius:50%; font-size:.95rem; line-height:1; cursor:pointer}
+  .cs-close:hover{background:var(--line)}
+  .cs-name{font-weight:700; font-size:1.15rem; letter-spacing:-.01em; padding-right:2rem; line-height:1.15}
+  .cs-tag{font-size:.63rem; letter-spacing:.11em; text-transform:uppercase; color:var(--muted); margin-top:.12rem}
+  .cs-meta{font-size:.75rem; color:var(--muted); margin-top:.35rem}
+  .cs-lessons{list-style:none; margin:.9rem 0 0; padding:0; display:flex; flex-direction:column; gap:.6rem;
+    max-height:52vh; overflow:auto}
+  .cs-lessons li{display:flex; gap:.6rem; align-items:flex-start}
+  .cs-n{flex:none; min-width:1.6rem; height:1.6rem; padding:0 .35rem; border-radius:6px; display:grid;
+    place-items:center; font-size:.78rem; font-weight:700; background:var(--chip); color:var(--ink)}
+  a.cs-lt{text-decoration:none; color:var(--ink); font-weight:600; font-size:.9rem; line-height:1.25}
+  a.cs-lt:hover{color:var(--accent)}
+  .cs-d{display:block; font-weight:400; font-size:.8rem; color:var(--muted); margin-top:.14rem; line-height:1.4}
+  .cs-foot{display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; margin-top:1rem;
+    padding-top:.85rem; border-top:1px solid var(--line)}
+  dialog.cardsheet[open]{animation:cs-pop .16s ease-out}
+  @keyframes cs-pop{from{opacity:0; transform:translateY(8px) scale(.985)} to{opacity:1; transform:none}}
+  @media (max-width:640px){
+    dialog.cardsheet{inset:auto 0 0 0; margin:0; width:100%; max-width:none; border-radius:16px 16px 0 0}
+    dialog.cardsheet[open]{animation:cs-up .2s ease-out}
+    @keyframes cs-up{from{transform:translateY(100%)} to{transform:translateY(0)}}
+    .cs-lessons{max-height:60vh}
+  }
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    dialog.cardsheet[open]{animation:none}
+    *,*::before,*::after{animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important}
+  }
+`}
+    ></style>
+
+    <SiteHeader />
+    <Hero trackCount={tracks.length} />
+    <WhatIsBand />
+
+    <div class="wrap">
+        <FilterChips tracks={tracks} />
+        <SearchResults />
+        <TrackGrid tracks={tracks} />
+        <SiteFooter />
+    </div>
+
+    <CardSheet />
+
+    {
+        /* Derived data: ONE source (tracks). Emitted before the IIFE so window.*
+        are set when the script runs. is:inline keeps them un-bundled/global. */
+    }
+    <script
+        is:inline
+        set:html={`window.SEARCH_INDEX=${JSON.stringify(searchIndex)};window.CARD_DETAIL=${JSON.stringify(cardDetail)};`}
+    />
+
+    {
+        /* Ported client IIFE from docs/index.html — kept VERBATIM (search/run,
+        keyboard nav, filter, progress→Continue, NEW pill, card sheet) so the
+        analytics hooks + imperative ARIA stay intact. is:inline so it is NOT
+        bundled/deferred (it reads window.SEARCH_INDEX/CARD_DETAIL set above and
+        runs after the DOM it queries is in document order).
+
+        CHANGES vs the source IIFE (intentional, all flagged in comments below):
+        • REMOVED the .lvl difficulty-dots + ★ START HERE .badge injection — those
+          are now SERVER-RENDERED by TrackCard.astro; re-injecting would double them.
+        • REMOVED the `heroCount.textContent = tiles.length` write — Hero.astro now
+          renders #hero-count server-side. (The `heroCount` lookup is dropped.)
+        • Audit fix #1: the per-card Reset no longer calls window.gtag('progress_reset')
+          inline — analytics.js's delegated `button.creset` router fires it once.
+        • The dead p.empty#empty is NOT in the DOM (search uses renderEmpty into
+          #results); nothing references it, so it is omitted. */
+    }
+    <script is:inline>
+        (function () {
+            var q = document.getElementById('q'),
+                grid = document.getElementById('grid'),
+                results = document.getElementById('results'),
+                filters = document.getElementById('filters'),
+                idx = window.SEARCH_INDEX || [];
+            // (The old hardcoded TOK group→color map was removed: each
+            // SEARCH_INDEX entry now carries its track color in `d.c`, derived
+            // from tracks[].colorVar — see the frontmatter. This fixes the
+            // result-row dot color for REST + the 6 newer AI-eng tracks.)
+            function esc(s) {
+                return s.replace(/[&<>"']/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[
+                        c
+                    ];
+                });
+            }
+            function reEsc(s) {
+                return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+            function setStatus(msg) {
+                var s = document.getElementById('q-status');
+                if (s) s.textContent = msg;
+            }
+            function run() {
+                var raw = q.value.trim(),
+                    term = raw.toLowerCase();
+                if (!term) {
+                    results.style.display = 'none';
+                    results.innerHTML = '';
+                    grid.style.display = '';
+                    filters.style.display = '';
+                    q.setAttribute('aria-expanded', 'false');
+                    q.removeAttribute('aria-activedescendant');
+                    setStatus('');
+                    applyFilter();
+                    return;
+                }
+                // Word-boundary matching: a token must START a word in the title or body.
+                // (Plain substring made "rag" match "sto-rag-e" and rank Storage above RAG.)
+                var toks = term.split(/\s+/).filter(Boolean);
+                var pre = toks.map(function (t) {
+                    return new RegExp('\\b' + reEsc(t));
+                });
+                var whole = toks.map(function (t) {
+                    return new RegExp('\\b' + reEsc(t) + '\\b');
+                });
+                var hits = [];
+                idx.forEach(function (d) {
+                    var tl = d.t.toLowerCase(),
+                        xb = d.x,
+                        score = 0,
+                        ok = true;
+                    for (var i = 0; i < toks.length; i++) {
+                        var inT = pre[i].test(tl),
+                            inX = pre[i].test(xb);
+                        if (!inT && !inX) {
+                            ok = false;
+                            break;
+                        }
+                        if (inT) {
+                            score += 10;
+                            if (whole[i].test(tl)) score += 8;
+                        } // title hit, exact-word bonus
+                        if (inX) score += 2; // body hit
+                    }
+                    if (ok) hits.push({ d: d, s: score });
+                });
+                hits.sort(function (a, b) {
+                    return b.s - a.s || a.d.t.length - b.d.t.length;
+                });
+                // filter chips don't apply to search results — hide them so their track
+                // counts don't read as conflicting with the result count
+                grid.style.display = 'none';
+                filters.style.display = 'none';
+                results.style.display = 'block'; // '' would fall back to the .results{display:none} default
+                if (!hits.length) {
+                    results.innerHTML = renderEmpty(raw);
+                    q.setAttribute('aria-expanded', 'false');
+                    q.removeAttribute('aria-activedescendant');
+                    setStatus('No results for ' + raw);
+                    return;
+                }
+                var html =
+                    '<p class="rhead">' +
+                    hits.length +
+                    ' result' +
+                    (hits.length > 1 ? 's' : '') +
+                    '</p>';
+                hits.slice(0, 25).forEach(function (h, i) {
+                    var d = h.d,
+                        tk = d.c || '--accent'; // per-entry track color (was TOK[d.g])
+                    html +=
+                        '<a class="ritem' +
+                        (i === 0 ? ' sel' : '') +
+                        '" id="ropt' +
+                        i +
+                        '" role="option" aria-selected="' +
+                        (i === 0 ? 'true' : 'false') +
+                        '" href="' +
+                        d.u +
+                        '" style="--rtc:var(' +
+                        tk +
+                        ')">' +
+                        '<span class="rdot"></span><span class="rcol"><span class="rt">' +
+                        esc(d.t) +
+                        '</span>' +
+                        '<span class="rg">' +
+                        esc(d.g) +
+                        '</span></span><span class="rkind">' +
+                        d.k +
+                        '</span></a>';
+                });
+                results.innerHTML = html;
+                q.setAttribute('aria-expanded', 'true');
+                q.setAttribute('aria-activedescendant', 'ropt0');
+                setStatus(hits.length + ' result' + (hits.length > 1 ? 's' : '') + ' found');
+            }
+
+            /* Empty state: instead of a dead end, show the full catalog grouped by the
+               topic categories (read live from the track cards) plus a few popular
+               searches — so "no results" still tells the user what IS here. */
+            var CATS = [
+                { id: 'ai', label: 'AI & LLMs' },
+                { id: 'ai-eng', label: 'AI Engineering' },
+                { id: 'distributed', label: 'Distributed' },
+                { id: 'data', label: 'Data & storage' },
+                { id: 'design', label: 'APIs & design' },
+            ];
+            var SUGGEST = [
+                'RAG',
+                'Idempotency',
+                'Caching',
+                'Bloom filters',
+                'Auth',
+                'Pagination',
+                'Kafka',
+                'System design',
+            ];
+            function catalog() {
+                return [].slice.call(grid.querySelectorAll('.tile')).map(function (t) {
+                    var s = t.querySelector('.start'),
+                        nm = t.querySelector('.tname');
+                    return {
+                        name: nm ? nm.textContent : '',
+                        cat: t.getAttribute('data-cat'),
+                        href: s ? s.getAttribute('href') : '#',
+                        tc: t.style.getPropertyValue('--tc') || 'var(--accent)',
+                        lessons: t.querySelectorAll('.lchip').length,
+                    };
+                });
+            }
+            function renderEmpty(raw) {
+                var tracks = catalog();
+                var h =
+                    '<div class="nr"><div class="nr-ic" aria-hidden="true">🔍</div>' +
+                    '<p class="nr-h">No matches for <b>“' +
+                    esc(raw) +
+                    '”</b></p>' +
+                    '<p class="nr-sub">Nothing in the catalog matches that yet. Try a popular search, or jump into any of the ' +
+                    tracks.length +
+                    ' tracks below.</p>' +
+                    '<div class="nr-sugg">' +
+                    SUGGEST.map(function (s) {
+                        return (
+                            '<button type="button" data-q="' + esc(s) + '">' + esc(s) + '</button>'
+                        );
+                    }).join('') +
+                    '</div>' +
+                    '<p class="nr-cap">Browse all ' +
+                    tracks.length +
+                    ' tracks</p><div class="nr-cats">';
+                CATS.forEach(function (c) {
+                    var inCat = tracks.filter(function (t) {
+                        return t.cat === c.id;
+                    });
+                    if (!inCat.length) return;
+                    h +=
+                        '<div class="nr-grp"><div class="nr-glab">' +
+                        esc(c.label) +
+                        ' <i>' +
+                        inCat.length +
+                        '</i></div>' +
+                        inCat
+                            .map(function (t) {
+                                return (
+                                    '<a class="nr-trk" href="' +
+                                    esc(t.href) +
+                                    '" style="--c:' +
+                                    t.tc +
+                                    '">' +
+                                    '<span class="d"></span>' +
+                                    esc(t.name) +
+                                    '<em>' +
+                                    t.lessons +
+                                    ' lesson' +
+                                    (t.lessons === 1 ? '' : 's') +
+                                    '</em></a>'
+                                );
+                            })
+                            .join('') +
+                        '</div>';
+                });
+                return h + '</div></div>';
+            }
+            // popular-search chips re-run the search in place
+            results.addEventListener('click', function (e) {
+                var b = e.target.closest('.nr-sugg button');
+                if (!b) return;
+                q.value = b.getAttribute('data-q');
+                run();
+                q.focus();
+            });
+            function sel(items, n) {
+                items.forEach(function (it, j) {
+                    var on = j === n;
+                    it.classList.toggle('sel', on);
+                    it.setAttribute('aria-selected', on ? 'true' : 'false');
+                });
+                if (items[n]) {
+                    items[n].scrollIntoView({ block: 'nearest' });
+                    if (items[n].id) q.setAttribute('aria-activedescendant', items[n].id);
+                }
+            }
+            q.addEventListener('input', run);
+            q.addEventListener('keydown', function (e) {
+                var items = results.querySelectorAll('.ritem');
+                if (!items.length) return;
+                var cur = -1;
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].classList.contains('sel')) {
+                        cur = i;
+                        break;
+                    }
+                }
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    sel(items, Math.min(cur + 1, items.length - 1));
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    sel(items, Math.max(cur - 1, 0));
+                } else if (e.key === 'Enter') {
+                    if (cur >= 0) {
+                        e.preventDefault();
+                        window.location = items[cur].getAttribute('href');
+                    }
+                } else if (e.key === 'Escape') {
+                    q.value = '';
+                    run();
+                    q.blur();
+                }
+            });
+
+            /* topic filter: chips show/hide track cards by data-cat */
+            var chips = [].slice.call(document.querySelectorAll('.fchip')),
+                tiles = [].slice.call(grid.querySelectorAll('.tile')),
+                activeCat = 'all';
+            // NOTE: #hero-count is now SERVER-RENDERED by Hero.astro; the old
+            // `heroCount.textContent = tiles.length` write was removed.
+            function applyFilter() {
+                tiles.forEach(function (t) {
+                    t.style.display =
+                        activeCat === 'all' || t.getAttribute('data-cat') === activeCat
+                            ? ''
+                            : 'none';
+                });
+            }
+            chips.forEach(function (c) {
+                // NOTE: the .fcount badge is now SERVER-RENDERED by FilterChips.astro;
+                // the old runtime badge-append was removed (it would double the count).
+                var cat = c.getAttribute('data-cat');
+                c.addEventListener('click', function () {
+                    activeCat = cat;
+                    chips.forEach(function (x) {
+                        var on = x === c;
+                        x.classList.toggle('is-active', on);
+                        x.setAttribute('aria-pressed', on ? 'true' : 'false');
+                    });
+                    if (q.value) {
+                        q.value = '';
+                        results.style.display = 'none';
+                        results.innerHTML = '';
+                    }
+                    grid.style.display = '';
+                    applyFilter();
+                });
+            });
+
+            /* Start -> Continue + in-card progress. Started tracks (localStorage
+               'sd:progress', kept current by interview.js) turn the card into the
+               resume element: Continue button, a 'Lesson N of M' progress bar (in place
+               of the read-time line), an eyebrow label, and the card floats to the top. */
+            var PKEY = 'sd:progress';
+            function getProg() {
+                try {
+                    return JSON.parse(localStorage.getItem(PKEY)) || {};
+                } catch (e) {
+                    return {};
+                }
+            }
+            var prog = getProg();
+            var last = null;
+            try {
+                last = localStorage.getItem('sd:last');
+            } catch (e) {}
+            [].slice.call(document.querySelectorAll('.start')).forEach(function (a) {
+                var slug = a.getAttribute('data-track'),
+                    resume = prog[slug];
+                var tile = a.closest('.tile');
+                if (slug && resume && tile) {
+                    var firstHref = a.getAttribute('href'); // original "Start" target (first lesson)
+                    a.setAttribute('href', resume);
+                    var lbl = a.querySelector('.start-label');
+                    if (lbl) lbl.textContent = 'Continue';
+                    tile.classList.add('is-started');
+                    // progress: index of the resume lesson among this track's lessons
+                    var hrefs = [].slice.call(tile.querySelectorAll('.lchip')).map(function (l) {
+                        return l.getAttribute('href');
+                    });
+                    var idx = hrefs.indexOf(resume),
+                        total = hrefs.length;
+                    var rt = tile.querySelector('.rtime');
+                    // in-progress block: step label + a Reset link, plus the bar when known
+                    var prog2 = document.createElement('div');
+                    prog2.className = 'cprog';
+                    var stepTxt =
+                        idx >= 0 && total ? 'Lesson ' + (idx + 1) + ' of ' + total : 'In progress';
+                    var barHtml =
+                        idx >= 0 && total
+                            ? '<span class="cbar"><span class="cfill" style="width:' +
+                              Math.round(((idx + 1) / total) * 100) +
+                              '%"></span></span>'
+                            : '';
+                    prog2.innerHTML =
+                        '<span class="ctop"><span class="cstep">' +
+                        stepTxt +
+                        '</span>' +
+                        '<button class="creset" type="button" aria-label="Reset progress for this track">↻ Reset</button></span>' +
+                        barHtml;
+                    if (rt) {
+                        rt.replaceWith(prog2);
+                    } else {
+                        a.parentNode.insertBefore(prog2, a);
+                    }
+                    // Reset: clear this track's saved progress and revert the card to Start.
+                    // Low-stakes + reversible (re-start recreates it), so no confirm dialog.
+                    prog2.querySelector('.creset').addEventListener('click', function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var m = getProg();
+                        delete m[slug];
+                        try {
+                            localStorage.setItem(PKEY, JSON.stringify(m));
+                            if (last === slug) localStorage.removeItem('sd:last');
+                        } catch (err) {}
+                        if (rt) {
+                            prog2.replaceWith(rt);
+                        } else if (prog2.parentNode) {
+                            prog2.parentNode.removeChild(prog2);
+                        }
+                        tile.classList.remove('is-started');
+                        a.setAttribute('href', firstHref);
+                        if (lbl) lbl.textContent = 'Start';
+                        // Audit fix #1: progress_reset is fired ONCE by analytics.js's
+                        // delegated `button.creset` router. The old inline
+                        // window.gtag('event','progress_reset',…) here double-fired it,
+                        // so it was removed. Do NOT re-add a gtag call.
+                    });
+                }
+                a.addEventListener('click', function () {
+                    var m = getProg();
+                    if (slug && !m[slug]) {
+                        m[slug] = a.getAttribute('href');
+                        try {
+                            localStorage.setItem(PKEY, JSON.stringify(m));
+                        } catch (e) {}
+                    }
+                });
+            });
+
+            /* ---- home redesign: a 'Lesson 1 of N: <title>' quick-link for
+               not-yet-started tiles. NOTE: the .lvl difficulty dots and the
+               ★ START HERE .badge are now SERVER-RENDERED by TrackCard.astro, so
+               their old runtime injection was REMOVED here (it would double them). ---- */
+            [].slice.call(grid.querySelectorAll('.tile')).forEach(function (t) {
+                if (!t.classList.contains('is-started')) {
+                    var chips = t.querySelectorAll('.lchip');
+                    if (chips.length) {
+                        var first = chips[0],
+                            titleEl = first.querySelector('span');
+                        var w = document.createElement('div');
+                        w.className = 'cnext-wrap';
+                        var lbl = document.createElement('span');
+                        lbl.className = 'cnext-lbl';
+                        lbl.textContent = 'Lesson 1 of ' + chips.length + ': ';
+                        var a = document.createElement('a');
+                        a.className = 'cnext';
+                        a.href = first.getAttribute('href');
+                        a.textContent = (titleEl ? titleEl.textContent : '') + ' →';
+                        w.appendChild(lbl);
+                        w.appendChild(a);
+                        var rt = t.querySelector('.rtime');
+                        if (rt && rt.parentNode) {
+                            rt.parentNode.insertBefore(w, rt);
+                        } else {
+                            t.appendChild(w);
+                        }
+                    }
+                }
+            });
+
+            /* "NEW" pill — shows for NEW_DAYS after data-added, then auto-expires (date-driven, no manual cleanup) */
+            var NEW_DAYS = 21;
+            // compare calendar days in one frame so a same-day add reads age 0 for every
+            // viewer (Date.parse('YYYY-MM-DD') is UTC midnight, Date.now() is local — mixing
+            // them made the pill vanish for viewers west of UTC on the day a track shipped).
+            var _now = new Date(),
+                NEW_TODAY = Date.UTC(_now.getFullYear(), _now.getMonth(), _now.getDate());
+            [].slice.call(document.querySelectorAll('[data-added]')).forEach(function (el) {
+                var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(el.getAttribute('data-added') || '');
+                if (!m) {
+                    return;
+                }
+                var added = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+                var ageDays = Math.round((NEW_TODAY - added) / 86400000);
+                if (ageDays < 0 || ageDays >= NEW_DAYS) {
+                    return;
+                }
+                var p = document.createElement('span');
+                p.className = 'newpill';
+                p.textContent = 'NEW';
+                if (el.classList.contains('tile')) {
+                    var r = el.querySelector('.tnamerow');
+                    if (r) {
+                        r.appendChild(p);
+                    }
+                } else {
+                    el.insertBefore(p, el.firstChild);
+                }
+            });
+
+            /* ---- card detail sheet: tap a card (not Start / footer pills / Reset / next-lesson) to
+               preview every lesson with a blurb, plus the Start CTA and reference pills ---- */
+            var sheet = document.getElementById('cardsheet');
+            if (sheet && grid && typeof sheet.showModal === 'function') {
+                var csName = sheet.querySelector('.cs-name'),
+                    csTag = sheet.querySelector('.cs-tag'),
+                    csMeta = sheet.querySelector('.cs-meta'),
+                    csList = sheet.querySelector('.cs-lessons'),
+                    csFoot = sheet.querySelector('.cs-foot'),
+                    DETAIL = window.CARD_DETAIL || {};
+
+                function openSheet(tile) {
+                    var nm = tile.querySelector('.tname'),
+                        tg = tile.querySelector('.ttag'),
+                        cnt = tile.querySelector('.cnt'),
+                        rt = tile.querySelector('.rtime') || tile.querySelector('.cprog .cstep'),
+                        tc = tile.style.getPropertyValue('--tc') || 'var(--accent)';
+                    sheet.style.setProperty('--accent', tc);
+                    csName.textContent = nm ? nm.textContent : '';
+                    csTag.textContent = tg ? tg.textContent : '';
+                    csMeta.textContent = [
+                        cnt && cnt.textContent.trim(),
+                        rt && rt.textContent.trim(),
+                    ]
+                        .filter(Boolean)
+                        .join('  ·  ');
+
+                    csList.innerHTML = '';
+                    [].slice.call(tile.querySelectorAll('.lchip')).forEach(function (ch) {
+                        var href = ch.getAttribute('href'),
+                            num = ch.querySelector('i'),
+                            title = ch.querySelector('span');
+                        var li = document.createElement('li');
+                        var n = document.createElement('span');
+                        n.className = 'cs-n';
+                        n.textContent = num ? num.textContent : '';
+                        var col = document.createElement('div');
+                        var a = document.createElement('a');
+                        a.className = 'cs-lt';
+                        a.href = href;
+                        a.textContent = title ? title.textContent : href;
+                        col.appendChild(a);
+                        var blurb = DETAIL[href];
+                        if (blurb) {
+                            var d = document.createElement('span');
+                            d.className = 'cs-d';
+                            d.textContent = blurb;
+                            col.appendChild(d);
+                        }
+                        li.appendChild(n);
+                        li.appendChild(col);
+                        csList.appendChild(li);
+                    });
+
+                    csFoot.innerHTML = '';
+                    [].slice.call(tile.querySelectorAll('.tfoot a')).forEach(function (p) {
+                        csFoot.appendChild(p.cloneNode(true));
+                    });
+                    var start = tile.querySelector('.start');
+                    if (start) csFoot.appendChild(start.cloneNode(true)); // Start/Continue = prominent last element
+
+                    sheet.showModal();
+                }
+
+                grid.addEventListener('click', function (e) {
+                    if (e.target.closest('.start, .tfoot, .creset, .cnext')) return; // keep direct actions
+                    var tile = e.target.closest('.tile');
+                    if (!tile) return;
+                    e.preventDefault(); // cancel the <details> toggle
+                    openSheet(tile);
+                });
+                sheet.addEventListener('click', function (e) {
+                    if (e.target === sheet) sheet.close();
+                }); // backdrop
+                var closeBtn = sheet.querySelector('.cs-close');
+                if (closeBtn)
+                    closeBtn.addEventListener('click', function () {
+                        sheet.close();
+                    });
+            }
+        })();
+    </script>
+</BaseLayout>

@@ -1,0 +1,44 @@
+---
+/**
+ * Dynamic route that renders the `lessons` content collection.
+ *
+ * One built file per collection entry, at EXACTLY the entry's frontmatter
+ * `path` minus the trailing ".html" — because astro.config sets
+ * build.format:'file', a route param of "bloom-filters/lessons/0001-…" emits
+ * "bloom-filters/lessons/0001-….html", byte-identical to the live URL.
+ *
+ * The whole lesson chrome (head, hubbar, masthead, feedback, endnote, quiz +
+ * rehearse scripts) comes from LessonLayout; the MDX body (prose + figures +
+ * <Quiz>/<Interview>/<Sources>/<Rehearse>/<Steps>) is rendered via <Content/>.
+ *
+ * FAQ JSON-LD note: <Interview> emits the FAQPage from the interview array, so
+ * we deliberately do NOT forward a jsonLd to LessonLayout here (the schema has
+ * no jsonLd for this entry) — exactly one FAQPage blob ships.
+ */
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+import LessonLayout from '../layouts/LessonLayout.astro';
+
+export async function getStaticPaths() {
+    const lessons = await getCollection('lessons');
+    return lessons.map((entry) => ({
+        // strip the trailing ".html" — build.format:'file' re-adds it, so this
+        // maps the entry's canonical `path` to the identical output URL.
+        params: { slug: entry.data.path.replace(/\.html$/, '') },
+        props: { entry },
+    }));
+}
+
+type Props = { entry: CollectionEntry<'lessons'> };
+
+const { entry } = Astro.props as Props;
+const { Content } = await render(entry);
+
+// LessonLayout re-validates with lessonMetaSchema; pass the whole entry data
+// (the extra body fields are simply ignored by .parse()). The meta contract is a
+// subset of entry.data, so every field LessonLayout reads is present.
+const meta = entry.data;
+---
+
+<LessonLayout meta={meta}>
+    <Content />
+</LessonLayout>

@@ -1,0 +1,126 @@
+---
+/**
+ * context-engineering 0006 · Figure 1 — the hero "measure the two halves
+ * separately" (retrieval half · generation half · tracing underneath).
+ *
+ * Copied VERBATIM from
+ * docs/context-engineering/lessons/0006-retrieval-evaluation-and-observability.html
+ * (figure + svg + figcaption incl. the footnote <sup>). It lives as an .astro
+ * component, NOT inline in the MDX, because MDX's JSX parser is unreliable with
+ * raw inline SVG that uses kebab-case attributes (text-anchor, font-size,
+ * stroke-width, marker-end, …). In an .astro file the SVG is plain HTML, so it
+ * renders byte-for-byte.
+ *
+ * The source page defined the arrowhead markers ONCE in a shared <defs> block at
+ * the top of the document <body> (ids: arw, arwG, arwR, arwM). The MDX has no
+ * such shared block, so the markers this figure references (arw) are inlined into
+ * its own <defs>.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 640 270"
+        role="img"
+        aria-label="A pipeline split into a retrieval half and a generation half, each with its own metrics and a tracing layer underneath."
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+        </defs>
+        <text x="320" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111110"
+            >MEASURE THE TWO HALVES SEPARATELY</text
+        >
+        <!-- query -->
+        <rect x="26" y="36" width="92" height="40" rx="8" fill="#f1eef2" stroke="#b5179e"></rect>
+        <text x="72" y="61" text-anchor="middle" font-size="10.5" font-weight="700" fill="#111110"
+            >Query</text
+        >
+        <!-- retrieval half -->
+        <rect
+            x="146"
+            y="30"
+            width="200"
+            height="120"
+            rx="10"
+            fill="#eef2f7"
+            stroke="#1f3a5a"
+            stroke-width="1.5"></rect>
+        <text x="246" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a"
+            >Retrieval</text
+        >
+        <text x="246" y="70" text-anchor="middle" font-size="9" fill="#6b675f"
+            >did we even fetch the right doc?</text
+        >
+        <rect x="162" y="82" width="168" height="54" rx="6" fill="#ffffff" stroke="#1f3a5a"></rect>
+        <text x="246" y="100" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110"
+            >recall@k · precision@k</text
+        >
+        <text x="246" y="116" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110"
+            >MRR · nDCG</text
+        >
+        <text x="246" y="130" text-anchor="middle" font-size="8" font-style="italic" fill="#1f3a5a"
+            >if recall is bad, no model saves you</text
+        >
+        <!-- generation half -->
+        <rect
+            x="374"
+            y="30"
+            width="200"
+            height="120"
+            rx="10"
+            fill="#f6eef7"
+            stroke="#b5179e"
+            stroke-width="1.5"></rect>
+        <text x="474" y="50" text-anchor="middle" font-size="11" font-weight="700" fill="#b5179e"
+            >Generation</text
+        >
+        <text x="474" y="70" text-anchor="middle" font-size="9" fill="#6b675f"
+            >did the answer use it well?</text
+        >
+        <rect x="390" y="82" width="168" height="54" rx="6" fill="#ffffff" stroke="#b5179e"></rect>
+        <text x="474" y="100" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110"
+            >faithfulness · relevance</text
+        >
+        <text x="474" y="116" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110"
+            >context precision/recall</text
+        >
+        <text x="474" y="130" text-anchor="middle" font-size="8" font-style="italic" fill="#b5179e"
+            >grounded in the retrieved context?</text
+        >
+        <!-- flow arrows -->
+        <line x1="118" y1="56" x2="144" y2="56" stroke="#6b675f" marker-end="url(#arw)"></line>
+        <line x1="346" y1="90" x2="372" y2="90" stroke="#6b675f" marker-end="url(#arw)"></line>
+        <!-- tracing layer -->
+        <rect
+            x="146"
+            y="170"
+            width="428"
+            height="50"
+            rx="10"
+            fill="#efe7f0"
+            stroke="#111110"
+            stroke-dasharray="4 3"></rect>
+        <text x="360" y="190" text-anchor="middle" font-size="10.5" font-weight="700" fill="#111110"
+            >Tracing — log query · retrieved IDs+scores · packed chunks · answer</text
+        >
+        <text x="360" y="206" text-anchor="middle" font-size="9" fill="#6b675f"
+            >turns "the bot was wrong" into "doc X wasn't retrieved"</text
+        >
+        <line x1="246" y1="150" x2="246" y2="168" stroke="#6b675f" marker-end="url(#arw)"></line>
+        <line x1="474" y1="150" x2="474" y2="168" stroke="#6b675f" marker-end="url(#arw)"></line>
+    </svg>
+    <figcaption>
+        One number for the whole system hides where it broke. <b>Split the pipeline:</b> retrieval metrics
+        ask "did we fetch it?", answer metrics ask "did we use it?", and tracing underneath tells you
+        which half to fix.<sup><a href="#s1" id="r1b">1</a></sup>
+    </figcaption>
+</figure>

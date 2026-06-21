@@ -1,0 +1,933 @@
+---
+# ─── distributed-systems · Idempotency Keys — Deep Dive — MDX-hybrid lesson ────
+# FRONTMATTER = the full lesson contract (head + masthead + wayfinding) PLUS the
+# structured body data lifted out of the prose: the 6-question retrieval quiz, the
+# 13 leveled interview Q&A (incl. the design rubric) and the 4 footnote sources.
+# Validated at build time by the `lessons` collection schema
+# (src/content.config.ts → src/schema/lesson.ts). The FAQ JSON-LD is emitted by
+# <Interview> from `interview` below — it must NOT also be set on `jsonLd`.
+#
+# HTML-bearing strings (interview q/a, rubric, sources.html) use YAML folded block
+# scalars (>-) so the embedded ", ', &, < and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'Idempotency Keys & Exactly-Once Delivery'
+description: >-
+    Idempotency keys done right: dedupe retried requests, store and replay saved results safely,
+    handle concurrent and in-flight duplicates, and reach exactly-once delivery semantics.
+keywords: 'idempotency keys, exactly-once delivery, distributed systems, failure, time, consensus, raft, paxos, quorum, replication'
+path: 'distributed-systems/idempotency-keys-deep-dive.html'
+ogImage: 'assets/og/distributed-systems.png'
+ogImageAlt: 'Distributed Systems · Engineering Vault learning track'
+accentVar: '--track-distributed'
+
+# —— masthead ——
+trackLabel: 'Distributed Systems'
+kicker: 'Deep Dive · supplement to Book 1, Lesson 2 · visual edition'
+h1Html: 'Idempotency Keys — Deep Dive'
+metaLine: '~25 min · 5 levels · 3 diagrams + inline SVGs · interview Qs + interactive recall'
+chips:
+    - 'Idempotency keys'
+    - 'Exactly-once delivery'
+    - 'Distributed systems'
+    - 'Failure'
+    - 'Time'
+
+# —— wayfinding (source has only a Prev; Next is a disabled span) ——
+prev:
+    href: 'consensus-deep-dive.html'
+    title: 'Consensus — Deep Dive'
+
+# —— routing (used only by the dynamic route) ——
+track: 'distributed-systems'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: 'Two concurrent retries with the same key both double-execute when the server…'
+      correct: 0
+      options:
+          - 'reads the store, sees "not seen" in both, then each acts'
+          - 'inserts the key row first and branches on the unique error'
+          - 'returns a 409 conflict while the first request is running'
+          - 'compares the request fingerprint before doing any of the work'
+    - q: 'If the server crashes between doing the work and recording the result, the key fails to protect you unless those two steps are…'
+      correct: 1
+      options:
+          - 'executed by two separate threads for extra parallelism'
+          - 'atomic — committed together, or delegated to the downstream'
+          - 'retried automatically by the client with a fresh new key'
+          - 'logged to a file before the database transaction commits'
+    - q: 'A client reuses an idempotency key but with different parameters. A correct server should…'
+      correct: 2
+      options:
+          - "return the first request's saved response for the new one"
+          - 'execute the new request and overwrite the stored response'
+          - 'reject the request because the fingerprint no longer matches'
+          - 'generate a new key for the client and proceed with the call'
+    - q: 'A double charge occurs long after careful idempotency was deployed because…'
+      correct: 3
+      options:
+          - 'the unique constraint on the key table was briefly dropped'
+          - 'the client generated one shared key for several operations'
+          - 'the downstream API ignored the idempotency header it was sent'
+          - "a retry arrived after the key's retention window had expired"
+    - q: 'A crashed request leaves a stuck in_progress row. Without a fix, future retries…'
+      correct: 0
+      options:
+          - "are blocked forever with a permanent 409 until it's reclaimed by a lease"
+          - 'silently succeed because the unique constraint is now released'
+          - 'overwrite the row and re-execute, which is the desired behaviour'
+          - "fall back to the downstream API's idempotency automatically"
+    - q: '"Exactly-once" in a multi-service pipeline is correctly understood as…'
+      correct: 2
+      options:
+          - 'a guarantee one idempotency key provides across the whole chain'
+          - 'a property of a distributed transaction spanning every service'
+          - 'at-least-once delivery plus an idempotent / deduplicating endpoint per hop'
+          - 'exactly-once delivery enforced by the message broker itself'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'What is an idempotency key and what problem does it solve?'
+      a: >-
+          <b>Hit these points:</b> a client-generated unique token attached to a request so the
+          server can recognize a <em>retry</em> of the same logical operation rather than a new one
+          &rarr; it exists because a network call can time out after succeeding, so the client must be
+          able to safely retry without re-executing the effect &rarr; the server records the key on
+          first execution and, on any later request with the same key, replays the original result
+          instead of re-running the side effect &rarr; this turns a non-idempotent operation ("charge
+          $10", "create order") into one that's safe to retry &rarr; it is per-operation, per-store
+          dedup — not a delivery guarantee.
+    - level: 'core'
+      q: 'Beyond the key itself, what do you store in the idempotency record — and why is a bare key not enough?'
+      a: >-
+          <b>Hit these points:</b> the scoped claim <code>(account_id + key)</code>, a
+          <code>request_fingerprint</code> (hash of the params), a <code>status</code>
+          (in_progress/completed), the saved <code>response_code/body</code> to replay, and
+          <code>created_at/locked_at</code> for TTL + lease &rarr; a bare key can't catch the
+          same-key-different-body trap: the fingerprint lets you tell a genuine retry (params match →
+          replay) from a key-reuse bug (params differ → reject 400) instead of returning a
+          confidently-wrong cached result &rarr; the saved response lets a retry return the
+          <em>original</em> outcome verbatim &rarr; scoping by account prevents one tenant's key from
+          colliding with another's.
+    - level: 'core'
+      q: 'Why is "exactly-once delivery" impossible, and what''s the real guarantee?'
+      a: >-
+          <b>Hit these points:</b> an unacked send forces resend (risk duplicate) or no resend (risk
+          loss) — no third option; that's the Two Generals problem &rarr; so exactly-once
+          <em>delivery</em> over an unreliable network can't exist &rarr; the achievable guarantee is
+          at-least-once delivery + an idempotent (or deduplicating) endpoint = exactly-once
+          <em>effect</em> &rarr; the idempotency key is the most common way to make an endpoint that
+          idempotent &rarr; always pin down "exactly-once across <em>which</em> boundary?" — the
+          property is per receiver, not a magic end-to-end promise.
+    - level: 'core'
+      q: "Which operations don't need an idempotency key, and why?"
+      a: >-
+          <b>Hit these points:</b> operations that are <em>already</em> idempotent — an absolute write
+          <code>SET balance = 100</code>, <code>DELETE /orders/42</code>, "mark invoice paid", and in
+          general well-behaved <code>GET/PUT/DELETE</code> &rarr; re-applying them yields the same
+          state, so a retry is harmless and the extra machinery is just noise &rarr; keys are for the
+          <em>unsafe</em>, non-idempotent ops: relative mutations like "charge $10" or "create an
+          order" (which would duplicate) &rarr; the design instinct: prefer making the operation
+          naturally idempotent (absolute, not relative) before reaching for a key.
+    - level: 'senior'
+      q: 'Two retries with the same key hit two app servers at the same instant. Why does the naive design double-charge, and how do you fix it?'
+      a: >-
+          <b>Hit these points:</b> the naive design is <em>check-then-act</em>: both requests read the
+          store, both see "not seen" before either writes, so both proceed and charge — a classic race
+          &rarr; the fix is an <em>atomic claim</em>: a <code>UNIQUE(account_id, key)</code>
+          <code>INSERT … status=in_progress</code> performed <em>before</em> any work, so exactly one
+          racer wins the insert &rarr; the loser catches the unique-violation, reads the row, and
+          branches: <code>completed</code> → replay the saved response; <code>in_progress</code> →
+          return <code>409</code> (retry later) &rarr; alternatives: <code>SELECT … FOR UPDATE</code>
+          or an advisory lock &rarr; the principle: replace check-then-act with a single atomic
+          conditional write.
+    - level: 'senior'
+      q: "You've solved the race. The server still occasionally double-charges. Where's the remaining window?"
+      a: >-
+          <b>Hit these points:</b> a crash <em>between</em> performing the side effect and recording
+          the <code>completed</code> result — the effect happened, no completion record exists, so the
+          retry re-runs it &rarr; the fix: recording the result must be <em>atomic with the side
+          effect</em>, not a second step &rarr; for a local effect, wrap the business mutation and the
+          idempotency record in one DB transaction &rarr; red flag: "just save the key right after the
+          charge" — that's two operations a crash can tear apart, which is the dual-write problem in
+          miniature.
+    - level: 'senior'
+      q: "When can you wrap the side effect and the idempotency record in one transaction — and when can't you?"
+      a: >-
+          <b>Hit these points:</b> <b>Case A — local effect:</b> the business mutation and the
+          idempotency record live in the same database, so a single transaction commits both or
+          neither — clean and atomic &rarr; <b>Case B — external effect</b> (e.g. a Stripe charge): no
+          transaction can span your DB and a remote API — that's the dual-write problem — so you
+          <em>delegate</em> by passing your own key through to the downstream's idempotency mechanism
+          &rarr; if the downstream has no idempotency support, fall back to reconciliation: detect
+          duplicates after the fact and refund/compensate &rarr; the first question to ask of any
+          payment integration: "is this API idempotent, and how do I pass a key?"
+    - level: 'senior'
+      q: 'A request claims the key (in_progress) then the process crashes. What happens to future retries, and how do you prevent a permanent outage?'
+      a: >-
+          <b>Hit these points:</b> the orphaned <code>in_progress</code> row blocks every future retry
+          with a permanent <code>409</code> — the operation can never complete, a self-inflicted
+          outage on that key &rarr; prevention is a recovery lease: store <code>locked_at</code> and
+          treat an <code>in_progress</code> record older than a timeout as reclaimable, so a later
+          retry can take it over and resume &rarr; ideally pair with recovery points (Stripe's model)
+          so a retry resumes a half-finished request rather than restarting it blindly &rarr; the
+          lease timeout must exceed the operation's worst-case legit duration, or you'll reclaim a
+          still-running request and risk concurrent execution.
+    - level: 'staff'
+      q: "How do you choose the retention TTL, and what goes wrong if it's too short?"
+      a: >-
+          <b>Hit these points:</b> records can't live forever (storage growth), so they expire —
+          Stripe keeps keys ≈ 24h (illustrative) &rarr; after expiry the same key is treated as brand
+          new, so a <em>late</em> retry — a message stuck in a queue 25h, a long backoff, a DLQ
+          replayed days later — re-executes and double-charges &rarr; so the TTL must comfortably
+          exceed your worst-case <em>retry horizon</em>: max queue redelivery delay + retry-backoff
+          cap + DLQ replay window, with margin &rarr; derive it from those actual bounds, not a round
+          number &rarr; the staff framing: the TTL is a contract between your dedup window and every
+          retry source upstream — if any source can outlive the window, the guarantee is silently
+          void.
+    - level: 'staff'
+      q: 'A team says "we added idempotency keys, so the whole payment pipeline is exactly-once." Push back.'
+      a: >-
+          <b>Hit these points:</b> a key guards <em>one</em> operation against <em>one</em> store — it
+          is not a distributed-transaction substitute and gives no exactly-once across a chain of
+          services &rarr; three services in a row = three independent dedup guards, each with its own
+          key, store, and TTL; a gap in any one re-opens the duplicate window &rarr; the underlying
+          theorem: there is no exactly-once <em>delivery</em>; there is at-least-once delivery + an
+          idempotent/deduplicating endpoint = exactly-once effect, scoped per endpoint &rarr; also
+          name the TTL hole, the downstream-without-idempotency hole, and the dual-write hole &rarr;
+          the correct claim is "each step is individually idempotent," verified end to end — not "the
+          pipeline is exactly-once."
+    - level: 'staff'
+      q: 'Producer-side keys vs consumer-side dedup — how do you decide where to put the guarantee?'
+      a: >-
+          <b>Hit these points:</b> apply the end-to-end argument — put the guarantee at the layer that
+          actually has the knowledge to enforce it &rarr; producer-side idempotency keys work when the
+          caller can generate a stable key and the receiving service owns an atomic store to claim it
+          &rarr; but if the producer is external, non-idempotent, and offers no hook (you can't make it
+          send a stable key or pass one downstream), you can't fix it there — move dedup to the
+          <em>consumer</em>, which sees every delivery and can dedup on a natural business key or
+          content hash &rarr; trade-off: producer keys are precise but require cooperation; consumer
+          dedup is robust to uncooperative producers but needs a good dedup key and a window sized to
+          redelivery &rarr; the staff move: choose by who holds the stable identifier and atomic
+          store, not by habit.
+    - level: 'design'
+      q: 'Design an idempotent payment API: charge a customer exactly once despite client retries.'
+      a: >-
+          <b>A strong answer covers:</b> the client generates an idempotency key per logical charge and
+          sends it on every retry of that charge &rarr; on receipt, atomically claim the key with
+          <code>INSERT … UNIQUE(account_id, key) status=in_progress</code> <em>before</em> doing work;
+          the unique constraint makes exactly one concurrent racer win &rarr; store a request
+          fingerprint and reject same-key-different-body with 400 &rarr; perform the charge, then record
+          <code>completed</code> + the response <em>atomically with the effect</em>: one DB transaction
+          for a local ledger, or pass the key through to the payment processor's own idempotency for an
+          external charge (dual-write → delegate) &rarr; on a duplicate request, branch on status:
+          completed → replay the saved response, in_progress → 409 &rarr; add a recovery lease so a
+          crashed in_progress row is reclaimable, not a permanent 409 &rarr; set the TTL to exceed the
+          worst-case retry horizon so a late retry can't re-charge &rarr; for the external leg with no
+          idempotency support, add reconciliation (detect + refund) &rarr; name the trade-off: strong
+          dedup needs a stable client key and an atomic store; without them you fall back to
+          consumer-side reconciliation.
+    - level: 'design'
+      q: 'Design exactly-once consumption from an at-least-once message queue (e.g. payments off Kafka/SQS).'
+      a: >-
+          <b>A strong answer covers:</b> accept that the broker is at-least-once, so the consumer must
+          be idempotent — there is no exactly-once delivery to lean on &rarr; pick a stable dedup key:
+          a producer-supplied message/event ID, else a content hash or a natural business key &rarr; on
+          each message, atomically claim that key in a dedup store before applying the effect (unique
+          insert / conditional write), so reprocessing a redelivered message is a no-op replay &rarr;
+          make "apply the effect" and "mark the message processed" atomic — same transaction for a
+          local DB sink, or delegate to the sink's idempotency for an external one — so a crash between
+          them doesn't double-apply &rarr; only ack/commit the offset <em>after</em> the effect is
+          durably recorded; an ack-before-effect crash loses the message &rarr; size the dedup window
+          (TTL) to exceed max redelivery delay + DLQ replay window, or duplicates slip through after
+          expiry &rarr; handle poison messages with a DLQ and bounded retries with backoff + jitter
+          &rarr; name the trade-off: a large dedup window costs storage but is the only thing that
+          closes the late-redelivery hole, and the dedup store itself must be at least as
+          available/consistent as the effect it guards.
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Design-round framework</b> — drive any idempotency / safe-retry prompt through these, out
+    loud:
+rubric:
+    - 'Clarify: which operations are non-idempotent? can the client generate a stable key? local vs external effect?'
+    - 'Atomic claim: <code>UNIQUE(account_id, key)</code> insert before any work — replace check-then-act.'
+    - 'Atomic completion: record the result in the same transaction as the effect (or delegate downstream).'
+    - 'Record contents: status, request fingerprint, saved response, locked_at/created_at.'
+    - 'Crash recovery: lease/timeout to reclaim stuck in_progress rows; recovery points to resume.'
+    - 'TTL: size the dedup window to exceed the worst-case retry horizon (queue + backoff + DLQ).'
+    - 'Scope &amp; failure modes: same-key-different-body → 400; downstream without idempotency → reconciliation; where does dedup live (producer vs consumer)?'
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          1. Kleppmann, <em>Designing Data-Intensive Applications</em>, ch. 8 ("The Trouble with
+          Distributed Systems") &amp; ch. 11 — idempotence, deduplication, exactly-once semantics.
+          <a href="#r1">↩</a>
+    - id: 's2'
+      html: >-
+          2. Stripe, <em>Designing robust and predictable APIs with idempotency</em> (Brandur Leach)
+          &amp; the Stripe API idempotency docs — unique-key + <code>in_progress</code>/<code>409</code>,
+          recovery points, request-fingerprint rejection, 24-hour retention. <a href="#r2">↩</a>
+    - id: 's3'
+      html: >-
+          3. AWS Builders' Library / API design guides — idempotency tokens for safe retries.
+    - id: 's4'
+      html: >-
+          4. Book 1, Lesson 2 (at-least-once + idempotency) and Book 2 (the outbox, atomic writes, the
+          dual-write problem) — the foundations this builds on.
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import Rehearse from '../../../components/Rehearse.astro';
+import MemoryCheck from '../../../components/MemoryCheck.astro';
+import {
+    Fig1,
+    Fig2,
+    Fig3,
+    Fig4,
+    Fig5,
+    Fig6,
+} from '../../../components/figures/distributed-systems/idempotency-keys-deep-dive/index.ts';
+
+export const mc1 = [
+    {
+        q: 'Why does check-then-act double-execute?',
+        a: 'both racers read "not seen" before either writes',
+    },
+    {
+        q: 'What makes the claim atomic?',
+        a: 'a UNIQUE-constraint INSERT (or FOR UPDATE / advisory lock)',
+    },
+    {
+        q: 'What does the loser return for an in-progress sibling?',
+        a: '409 Conflict, not a second execution',
+    },
+    {
+        q: 'What rescues a crashed in_progress row?',
+        a: 'a locked_at lease / timeout that reclaims it',
+    },
+];
+
+export const mc2 = [
+    {
+        q: "What's the crash window the race fix doesn't cover?",
+        a: 'work done, but result never recorded',
+    },
+    {
+        q: 'Case A solution in one phrase?',
+        a: 'business write + idempotency record in one transaction',
+    },
+    {
+        q: "Why can't Case B use a transaction?",
+        a: 'no txn spans your DB and an external API (dual-write)',
+    },
+    {
+        q: 'The fallback when downstream has no idempotency?',
+        a: 'reconciliation: detect and refund the double',
+    },
+];
+
+export const mc3 = [
+    { q: 'What bug does the fingerprint catch?', a: 'key reuse for a different request body' },
+    { q: 'Match vs differ → what does the server do?', a: 'apply §1 logic vs reject with 400' },
+    {
+        q: 'Why scope the key per (account, endpoint)?',
+        a: 'avoid cross-tenant collisions; bound the keyspace',
+    },
+    { q: 'Why store response_body?', a: 'to replay the identical answer on a retry-after-success' },
+];
+
+export const mc4 = [
+    { q: 'Two classic generation bugs?', a: 'fresh key per attempt; one key across different ops' },
+    { q: "Which HTTP verbs don't need a key?", a: 'GET, PUT, DELETE — already idempotent' },
+    {
+        q: 'What makes a late retry double-charge?',
+        a: 'it arrives after TTL expiry; key treated as new',
+    },
+    {
+        q: 'How do you pick the TTL?',
+        a: 'from actual redelivery/backoff/DLQ bounds, not a round number',
+    },
+];
+
+export const mc5 = [
+    { q: 'How many boundaries does one key cover?', a: 'exactly one op against one store' },
+    { q: 'When can you skip the key?', a: 'when the operation is already idempotent' },
+    {
+        q: "Producer can't be made safe — where does dedup move?",
+        a: 'to the consumer/receiver (dedup store)',
+    },
+    { q: 'Exactly-once decomposes into…?', a: 'at-least-once delivery + idempotent endpoint' },
+];
+
+<div class="mission">
+    <strong>Your bar:</strong> the happy path is two lines — "seen this key? return the saved
+    result; new? do the work and save it." It is correct and it hides <em>every</em> hard part. Get
+    any of the four edges wrong and you <strong>double-charge a customer.</strong> This goes to the
+    floor. Grounded in Stripe's idempotency design
+    <sup>
+        <a href="#s2" id="r2">
+            2
+        </a>
+    </sup>
+    and Kleppmann's <em>DDIA</em> ch.&nbsp;8 &amp; 11.
+    <sup>
+        <a href="#s1" id="r1">
+            1
+        </a>
+    </sup>
+</div>
+
+<p>One sentence holds the whole deep dive. Each level unpacks one chip of it:</p>
+
+<div class="chips">
+    <span class="chip">
+        An idempotency key works only if you <b>claim it atomically</b>
+    </span>
+    <span class="chip c2">
+        record the result <b>atomically with the effect</b>
+    </span>
+    <span class="chip c3">
+        <b>fingerprint</b> the request body
+    </span>
+    <span class="chip c4">
+        and <b>retain longer than you retry</b>
+    </span>
+</div>
+
+<nav class="toc">
+    <a href="#l1">1 · The race (atomic claim)</a>
+    <a href="#l2">2 · Atomicity with the effect</a>
+    <a href="#l3">3 · What to store · fingerprint</a>
+    <a href="#l4">4 · Lifecycle · TTL hazard</a>
+    <a href="#l5">5 · Where keys stop helping</a>
+    <a href="#bigpic">★ Exactly-once = AL1 + dedup</a>
+    <a href="#interview">★ Interview Qs</a>
+    <a href="#quiz">★ Retrieval quiz</a>
+    <a href="#cheat">★ Cheat sheet</a>
+    <a href="#review">★ Review guide</a>
+</nav>
+
+{/* ============ HERO: where the happy path hides the work ============ */}
+
+<Fig1 />
+
+{/* ================= LEVEL 1 ================= */}
+
+<section class="lvl" id="l1">
+    <div class="lvltop">
+        <span class="num">1</span>
+        <h2>The race — two retries, one key</h2>
+    </div>
+    <p class="tagline">
+        The oldest bug in the book: <em>check-then-act</em> across two actors is never safe.
+    </p>
+    <figure>
+        <img
+            src="diagrams/ik-01-race.png"
+            alt='The idempotency-key race. Naive check-then-act lets two concurrent retries both see "not seen" and both execute — a double charge. The fix makes claiming the key atomic: the first INSERT wins, and the loser sees an in-progress or completed record.'
+        />
+        <figcaption>
+            <strong>The idempotency-key race.</strong> Naive check-then-act lets two concurrent
+            retries both see "not seen" and both execute — a double charge. The fix makes claiming
+            the key atomic: the first INSERT wins, and the loser sees an in-progress or completed
+            record.
+        </figcaption>
+    </figure>
+    <p class="tagline">
+        The fix turns "check, then act" into "act (claim) atomically, then branch" — an{' '}
+        <code>INSERT</code> into a table with <code>UNIQUE(account_id, idempotency_key)</code> and a{' '}
+        <code>status</code> column:
+    </p>
+    <Fig2 />
+    <div class="facts">
+        <div class="fact">
+            <b>The bug</b> Check-then-act: both retries read the store, both see "not seen" (neither
+            wrote yet), both charge. The key bought nothing.
+        </div>
+        <div class="fact">
+            <b>The fix</b> <code>INSERT … status=in_progress</code> <em>before</em> any work. The
+            unique constraint guarantees exactly one racer wins the claim.
+        </div>
+        <div class="fact blue">
+            <b>The loser branches</b> <code>completed</code> → return the saved response ·{' '}
+            <code>in_progress</code> → <code>409 Conflict</code> ("in flight, retry shortly") —
+            exactly Stripe's behaviour.
+            <sup>
+                <a href="#s2" id="r2b">
+                    2
+                </a>
+            </sup>
+        </div>
+        <div class="fact blue">
+            <b>Recovery path</b> A crash mid-claim leaves a stuck <code>in_progress</code> row. A{' '}
+            <code>locked_at</code> lease lets an old one be reclaimed (Stripe's recovery points).
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "Just check the store, then do the work if it's new"</div>
+        <div class="t">
+            ✓ Two concurrent retries both pass the check — claim atomically with a unique INSERT
+        </div>
+    </div>
+    <div class="rule">
+        <span>🏁 Memory rule:</span> Don't check-then-act — claim the key atomically; the first
+        INSERT wins, the loser returns the saved result or a 409.
+    </div>
+    <MemoryCheck items={mc1} />
+</section>
+
+{/* ================= LEVEL 2 ================= */}
+
+<section class="lvl" id="l2">
+    <div class="lvltop">
+        <span class="num">2</span>
+        <h2>
+            Atomicity — record the result <em>with</em> the side effect
+        </h2>
+    </div>
+    <p class="tagline">
+        Solve the race and a deeper crash window remains: do the work → <em>(crash)</em> → never
+        record it.
+    </p>
+    <figure>
+        <img
+            src="diagrams/ik-02-atomicity.png"
+            alt="Atomicity, two cases. When the side effect is in your own database, wrap the business write and the idempotency record in ONE transaction. When it's an external call, you can't — so delegate idempotency to the downstream API by passing the key through."
+        />
+        <figcaption>
+            <strong>Atomicity, two cases.</strong> When the side effect is in your own database,
+            wrap the business write and the idempotency record in ONE transaction. When it's an
+            external call, you can't — so delegate idempotency to the downstream API by passing the
+            key through.
+        </figcaption>
+    </figure>
+    <div class="rule">
+        <span>⚛️ The lesson:</span> Recording "this key is done, here is the result" must be atomic
+        with the side effect itself. If a crash can tear them apart, the key does not protect you.
+    </div>
+    <Fig3 />
+    <div class="facts">
+        <div class="fact">
+            <b>Case A · local</b> Wrap the business mutation + the idempotency record in{' '}
+            <em>one</em> transaction. A mid-way crash leaves it uncommitted; the retry re-runs from
+            scratch — Book 2's all-or-nothing.
+        </div>
+        <div class="fact">
+            <b>Case B · external</b> You can't make a network call atomic with a local write (the
+            dual-write problem). So delegate: pass your key through to the downstream's idempotency
+            mechanism.
+        </div>
+        <div class="fact blue">
+            <b>The boundary rule</b> Make the thing at the boundary idempotent, because you can't
+            wrap it in your transaction. Stripe's <code>Idempotency-Key</code> header is exactly
+            this.
+        </div>
+        <div class="fact blue">
+            <b>No downstream support?</b> You're forced into reconciliation — detect and refund the
+            double. Hence "is this API idempotent?" is the first question a senior asks of any
+            payment/messaging integration.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "Do the work, then save the key in a second step"</div>
+        <div class="t">
+            ✓ A crash between them re-executes — record must commit atomically WITH the effect (or
+            be delegated)
+        </div>
+    </div>
+    <div class="rule">
+        <span>⚛️ Memory rule:</span> Where the effect lives decides everything — local effect → one
+        transaction; external effect → delegate idempotency to the downstream.
+    </div>
+    <MemoryCheck items={mc2} />
+</section>
+
+{/* ================= LEVEL 3 ================= */}
+
+<section class="lvl" id="l3">
+    <div class="lvltop">
+        <span class="num">3</span>
+        <h2>What to store — and the same-key-different-body trap</h2>
+    </div>
+    <p class="tagline">
+        A key alone is not enough state. Without a fingerprint, keys return{' '}
+        <em>confidently wrong</em> results.
+    </p>
+    <table>
+        <tr>
+            <th>Field</th>
+            <th>Why it's there</th>
+        </tr>
+        <tr>
+            <td>
+                <code>idempotency_key</code> + <code>account_id</code>
+            </td>
+            <td>the unique claim — scoped, never global</td>
+        </tr>
+        <tr>
+            <td>
+                <code>request_fingerprint</code>
+            </td>
+            <td>a hash of the request parameters (the trap-catcher)</td>
+        </tr>
+        <tr>
+            <td>
+                <code>status</code>
+            </td>
+            <td>
+                <code>in_progress</code> / <code>completed</code> — the §1 state machine
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <code>response_code</code>, <code>response_body</code>
+            </td>
+            <td>the saved result to replay</td>
+        </tr>
+        <tr>
+            <td>
+                <code>locked_at</code>, <code>created_at</code>
+            </td>
+            <td>recovery lease (§1) and TTL (§4)</td>
+        </tr>
+    </table>
+    <Fig4 />
+    <div class="facts">
+        <div class="fact">
+            <b>The trap</b> Client reuses a key for a <em>different</em> request (new
+            amount/recipient). The naive server returns the <em>first</em> response — confidently
+            wrong.
+        </div>
+        <div class="fact">
+            <b>The catch</b> Store <code>hash(params)</code>. On every repeat, compare. Match →
+            genuine retry. Differ → reject with <code>400</code>.
+        </div>
+        <div class="fact blue">
+            <b>Scope, not global</b> The claim is <code>(account_id, key)</code> — scoped to avoid
+            cross-tenant collisions and bound the keyspace you store.
+        </div>
+        <div class="fact blue">
+            <b>Replay payload</b> Save <code>response_code</code> + <code>response_body</code> so a
+            retry-after-success replays the identical answer, byte for byte.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "Same key → always return the saved response"</div>
+        <div class="t">
+            ✓ Only if the request fingerprint matches; a differing body is a client bug — reject it
+        </div>
+    </div>
+    <div class="rule">
+        <span>🧾 Memory rule:</span> Fingerprint the body — one key names one operation; same key +
+        different params is a contract violation, not a retry.
+    </div>
+    <MemoryCheck items={mc3} />
+</section>
+
+{/* ================= LEVEL 4 ================= */}
+
+<section class="lvl" id="l4">
+    <div class="lvltop">
+        <span class="num">4</span>
+        <h2>The key's lifecycle — scope, generation, and the TTL hazard</h2>
+    </div>
+    <p class="tagline">
+        Pull it together as a lifecycle and two more decisions surface: how keys are generated, and
+        how long they live.
+    </p>
+    <figure>
+        <img
+            src="diagrams/ik-03-key-lifecycle.png"
+            alt="The idempotency-key lifecycle. The client generates one key per logical operation and reuses it on retries. The server claims it, executes, and stores the result for a retention window — after which the same key is treated as brand new, which is a hazard if a retry arrives late."
+        />
+        <figcaption>
+            <strong>The idempotency-key lifecycle.</strong> The client generates one key per logical
+            operation and reuses it on retries. The server claims it, executes, and stores the
+            result for a retention window — after which the same key is treated as brand new, which
+            is a hazard if a retry arrives late.
+        </figcaption>
+    </figure>
+    <Fig5 />
+    <div class="facts">
+        <div class="fact">
+            <b>Generation</b> One key per <em>logical operation</em> (a UUID), reused on every
+            retry. A fresh key per attempt defeats dedup entirely.
+        </div>
+        <div class="fact">
+            <b>Scope</b> Per <code>(account, endpoint)</code>, never global — avoids cross-tenant
+            collisions and bounds storage.
+        </div>
+        <div class="fact blue">
+            <b>Only for unsafe ops</b> Keys are for <code>POST</code>-style creates and charges.{' '}
+            <code>GET</code>/<code>PUT</code>/<code>DELETE</code> are already idempotent — a key
+            there is noise.
+        </div>
+        <div class="fact blue">
+            <b>The TTL hazard</b> After the window expires the same key is brand new. A retry
+            arriving late (queue stuck 25h, long backoff) re-executes — a double charge.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">
+            ✗ "Generate a fresh idempotency key on each retry" / "any 24h TTL is fine"
+        </div>
+        <div class="t">
+            ✓ Same key across retries; retention must comfortably exceed your worst-case retry
+            horizon
+        </div>
+    </div>
+    <div class="rule">
+        <span>⏳ Memory rule:</span> One key per operation, reused on retries, scoped per account —
+        and retain it longer than your slowest possible retry.
+    </div>
+    <MemoryCheck items={mc4} />
+</section>
+
+{/* ================= LEVEL 5 ================= */}
+
+<section class="lvl" id="l5">
+    <div class="lvltop">
+        <span class="num">5</span>
+        <h2>Where idempotency keys stop helping</h2>
+    </div>
+    <p class="tagline">They are not magic. Knowing the edges is the senior part.</p>
+    <Fig6 />
+    <div class="facts">
+        <div class="fact">
+            <b>One op, one store</b> A key makes <em>one</em> call safe against <em>one</em> system.
+            Not a distributed-transaction substitute; no exactly-once across a chain — each hop
+            needs its own key/dedup.
+        </div>
+        <div class="fact">
+            <b>Already idempotent?</b> <code>SET balance = 100</code>,{' '}
+            <code>DELETE /orders/42</code>, "mark invoice paid" are naturally repeat-safe. Don't add
+            machinery where the property already exists.
+        </div>
+        <div class="fact blue">
+            <b>Producer can't be safe → dedupe at the consumer</b> If the effect is non-idempotent,
+            external, and downstream offers no hook, move the guarantee to the receiver: process
+            each event id once.
+        </div>
+        <div class="fact blue">
+            <b>The unifying truth</b> Exactly-once is always built as at-least-once <em>plus</em> an
+            idempotent/deduplicating endpoint — the key is the most common way to be that endpoint.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "An idempotency key gives me exactly-once across my whole pipeline"</div>
+        <div class="t">
+            ✓ It guards one boundary; a chain of three services is three places to get it right
+        </div>
+    </div>
+    <div class="rule">
+        <span>🧭 Memory rule:</span> Claim atomically, record atomically with the effect,
+        fingerprint the request, retain longer than you retry — and the key only protects the one
+        boundary it guards.
+    </div>
+    <MemoryCheck items={mc5} />
+</section>
+
+{/* ================= BIG PICTURE ================= */}
+
+<h2 class="sec" id="bigpic">
+    The one idea behind all four edges
+</h2>
+
+<p>
+    Reading builds <em>fluency</em>; recall builds <em>storage</em>. Before the quiz, fix the spine.
+    Every edge is the same discipline applied at a different point in the request's life:
+</p>
+
+<table>
+    <tr>
+        <th>Edge</th>
+        <th>The failure if you skip it</th>
+        <th>The discipline</th>
+    </tr>
+    <tr>
+        <td>① Race</td>
+        <td>Two retries both pass the check → double charge</td>
+        <td>Claim atomically (unique INSERT)</td>
+    </tr>
+    <tr>
+        <td>② Atomicity</td>
+        <td>Crash between work and record → re-execute</td>
+        <td>Record WITH the effect (one txn / delegate)</td>
+    </tr>
+    <tr>
+        <td>③ Fingerprint</td>
+        <td>Same key, new body → confidently wrong result</td>
+        <td>Hash the body; reject mismatch with 400</td>
+    </tr>
+    <tr>
+        <td>④ TTL</td>
+        <td>Late retry after expiry → key gone → re-execute</td>
+        <td>Retain longer than your worst retry horizon</td>
+    </tr>
+    <tr>
+        <td>⑤ Scope of help</td>
+        <td>Assuming one key = exactly-once everywhere</td>
+        <td>One boundary only; dedup each hop / the consumer</td>
+    </tr>
+</table>
+
+{/* ================= INTERACTIVE RECALL ================= */}
+
+<h2 class="sec" id="quiz">
+    Retrieval practice — mix the levels
+</h2>
+
+<p>Answer from memory — instant feedback. These mirror the source's self-check, reshuffled.</p>
+
+<Quiz items={frontmatter.quiz} id="quiz1" />
+
+<h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">
+    Reconstruct the four edges from a blank page
+</h3>
+
+<Rehearse
+    promptHtml={`Write the four edges in request order, one line each, with nothing on screen. Then reveal and compare — gaps are your next drill.`}
+    placeholder="① Race = …  ② Atomicity = …  ③ Fingerprint = …  ④ TTL = …  (then: where keys stop helping)"
+>
+    <p>
+        <b>①</b> Race: don't check-then-act — claim atomically with a UNIQUE INSERT; loser returns
+        saved result or 409; lease reclaims a crashed in_progress · <b>②</b> Atomicity: record the
+        result WITH the effect — one txn for a local effect, delegate to the downstream for an
+        external one · <b>③</b> Fingerprint: hash the body; same key + different params → reject
+        400, never replay a wrong result · <b>④</b> TTL: one key per op reused on retries, scoped
+        per account; retain longer than your worst retry horizon · <b>★</b> A key guards one
+        boundary; exactly-once = at-least-once + an idempotent endpoint per hop.
+    </p>
+</Rehearse>
+
+<div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Say <em>"grill me on idempotency keys"</em>{' '}
+    for mixed no-clue questions, or drop a real payment/messaging design and I'll walk the four
+    edges with you and find the double-charge. Want the next deep dive — the outbox pattern, or
+    exactly-once in Kafka? Just ask.
+</div>
+
+{/* ================= INTERVIEW QUESTIONS ================= */}
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+{/* ================= CHEAT SHEET ================= */}
+
+<h2 class="sec" id="cheat">
+    ★ Cheat sheet — the four edges → the discipline
+</h2>
+
+<div class="cheat">
+    <p style="margin-top:0">
+        <strong>Mental model:</strong> the happy path ("seen the key? replay; new? do + save") is
+        correct and hides everything. Production correctness ={' '}
+        <strong>
+            claim atomically · record with the effect · fingerprint the body · retain &gt; retry
+        </strong>{' '}
+        — and remember the key guards one boundary.
+    </p>
+    <h3>Translation table</h3>
+    <table>
+        <tr>
+            <th>Symptom in prod</th>
+            <th>Root cause</th>
+        </tr>
+        <tr>
+            <td>Double charge under concurrent retries</td>
+            <td>check-then-act — needs an atomic claim (unique INSERT)</td>
+        </tr>
+        <tr>
+            <td>Double charge after a crash</td>
+            <td>result recorded separately from the effect — make it one txn / delegate</td>
+        </tr>
+        <tr>
+            <td>Retries hang on 409 forever</td>
+            <td>stuck in_progress row — add a locked_at recovery lease</td>
+        </tr>
+        <tr>
+            <td>Confidently-wrong cached response</td>
+            <td>no request fingerprint — hash the body, reject mismatch with 400</td>
+        </tr>
+        <tr>
+            <td>Double charge weeks later</td>
+            <td>TTL shorter than the worst-case retry horizon</td>
+        </tr>
+        <tr>
+            <td>Still not exactly-once end-to-end</td>
+            <td>a key guards one hop — dedup every hop / the consumer</td>
+        </tr>
+    </table>
+    <h3>Three questions for the design review</h3>
+    <p style="margin-bottom:0">
+        ① Where does the side effect live — <strong>local (one txn)</strong> or{' '}
+        <strong>external (delegate the key)</strong>? ② Is the retention window longer than the{' '}
+        <strong>slowest possible retry</strong>? ③ Is this even non-idempotent, or are we adding
+        machinery to a <code>DELETE</code>?
+    </p>
+</div>
+
+{/* ================= REVIEW GUIDE ================= */}
+
+<h2 class="sec" id="review">
+    ★ Review guide &amp; what to read next
+</h2>
+
+<div class="facts" style="grid-template-columns:1fr 1fr">
+    <div class="fact">
+        <b>5-min (weekly)</b> Don't re-read — recall. Name the four edges in request order; for
+        each, say the failure and the discipline; recite "exactly-once = at-least-once + idempotent
+        endpoint."
+    </div>
+    <div class="fact">
+        <b>30-min (when stalled)</b> Blank-page redraw the claim state machine and the two atomicity
+        cases; then take one real integration and answer: local or external effect? TTL vs retry
+        horizon? which hops still need dedup?
+    </div>
+</div>
+
+<p style="font-size:.9rem">
+    <strong>Read next, in order:</strong>①{' '}
+    <a href="https://stripe.com/blog/idempotency">
+        Stripe — Designing robust and predictable APIs with idempotency (Brandur Leach)
+    </a>{' '}
+    (the canonical write-up) · ②{' '}
+    <a href="https://martin.kleppmann.com/2017/05/02/distributed-systems-and-elliptic-curve-cryptography.html">
+        DDIA — Kleppmann, ch. 8 &amp; 11
+    </a>{' '}
+    (idempotence, dedup, exactly-once) · ③{' '}
+    <a href="https://aws.amazon.com/builders-library/">AWS Builders' Library</a> (idempotency tokens
+    for safe retries).
+</p>
+
+<div class="nav">
+    <span>
+        📄 Supplement to <em>Book 1, Lesson 2</em> · builds on <em>Book 2</em> (outbox, atomic
+        writes, dual-write)
+    </span>
+    <span>
+        <em>Next ▸ the outbox pattern (ask me to build it)</em>
+    </span>
+</div>
+
+<Sources items={frontmatter.sources} />

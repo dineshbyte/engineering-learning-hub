@@ -1,0 +1,657 @@
+---
+# ─── rest-api · Lesson 11 — Mock interview: design an API ──────────────────────
+# FRONTMATTER = the full lesson contract (head + masthead + wayfinding) PLUS the
+# structured body data lifted out of the prose: the 13 interview Q&A (4 core, 4
+# senior, 3 staff, 2 design) + the design-round rubric, and the footnote sources.
+# Validated at build time by the `lessons` collection schema
+# (src/content.config.ts → src/schema/lesson.ts). The FAQ JSON-LD is emitted by
+# <Interview> from `interview` below — it must NOT also be set on `jsonLd`.
+#
+# This page has NO retrieval-practice quiz and NO memory-check, so those arrays
+# are omitted (they default to []). The "Now you — three prompts to rehearse"
+# blocks become three <Rehearse> widgets in the body; the REST-style .steps /
+# .step content blocks and .facts stat grid are reproduced as raw HTML in the
+# body (they are NOT the arrow-flow <Steps> shape, which is lab/big/sub).
+#
+# HTML-bearing strings (h1Html, interview q/a, rubric, sources.html) use YAML
+# folded block scalars (>-) so the embedded ", ', &, < and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'REST API Design Mock Interview'
+description: >-
+    A REST API design mock interview walkthrough: scope the problem, model resources and URIs, pick
+    status codes, and handle auth, pagination, idempotency, and errors live.
+keywords: 'rest api design, status codes, http methods, rest, api, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors, rate'
+path: 'rest-api/lessons/0011-mock-interview-whiteboard-design.html'
+ogImage: 'assets/og/rest-api.png'
+ogImageAlt: 'REST API · Engineering Vault learning track'
+accentVar: '--track-rest'
+
+# —— masthead ——
+trackLabel: 'REST API'
+kicker: 'Lesson 11 · Mock interview · visual edition'
+h1Html: 'Mock interview: design an API'
+metaLine: '~12 min · the framework as a flowchart · live whiteboard rehearsal at the end'
+chips:
+    - 'REST API design'
+    - 'Status codes'
+    - 'HTTP methods'
+    - 'REST'
+    - 'API'
+
+# —— wayfinding (end of the track — no next) ——
+prev:
+    href: '0010-async-and-long-running-operations.html'
+    title: 'Async & long-running operations (visual)'
+
+# —— routing (used only by the dynamic route) ——
+track: 'rest-api'
+number: '0011'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'What is a "design X''s API" round actually testing?'
+      a: >-
+          <p>Not whether you produce <em>the</em> answer — there isn't one. It grades
+          <strong>structure</strong> (did you clarify before designing?), <strong>breadth</strong>
+          (writes got idempotency, reads got pagination, you named object-level auth), and
+          <strong>judgment</strong> (you named a trade-off and what changes at 100×). It's a 45-minute
+          integration exam over every prior topic at once, not a quiz on one.</p>
+    - level: 'core'
+      q: 'What should you do <em>first</em> in a design round, before any endpoint?'
+      a: >-
+          <p>Clarify requirements and constraints — clients, scale, read/write ratio, consistency
+          needs, auth model, SLAs. <strong>Diagnose, then design.</strong> The resource model falls
+          out of the questions you ask; the endpoints fall out of the resource model. Drawing URIs
+          before clarifying is the classic junior tell.</p>
+    - level: 'core'
+      q: "What's the winning arc of a design answer in one phrase?"
+      a: >-
+          <p><strong>Diagnose, design, defend.</strong> Clarify constraints first, walk the resource
+          model and endpoints with a reason attached to each choice, then close with a trade-off and
+          what changes at scale. A candidate who narrates a clear checklist and the <em>why</em> beats
+          one who free-associates brilliant fragments.</p>
+    - level: 'core'
+      q: 'For any "design X" prompt, what two things must every <em>list</em> endpoint have?'
+      a: >-
+          <p><strong>Pagination</strong> (cursor-based at scale, with a bounded/hard-capped page size)
+          and a <strong>filter/sort contract</strong>. An unbounded list is a latency and memory
+          landmine. Reaching for these on every collection without being prompted is a fast breadth
+          signal — the mirror of reaching for idempotency on every unsafe write.</p>
+    - level: 'senior'
+      q: "What's the single biggest mistake candidates make in this round?"
+      a: >-
+          <p>Starting to type endpoints. <strong>Don't design — diagnose, then design.</strong> The
+          first five minutes are requirements and constraints. The endpoints fall out of the resource
+          model; the resource model falls out of the questions you asked. Leading with verbs before
+          you know the clients, scale, and consistency needs signals junior.</p>
+    - level: 'senior'
+      q: 'Walk the 11-step framework from memory.'
+      a: >-
+          <p>(1) Clarify requirements/constraints; (2) resource model &amp; URIs; (3) endpoints —
+          methods + status codes; (4) idempotency on unsafe writes; (5) collections —
+          pagination/filter/sort; (6) caching &amp; concurrency (ETag/If-Match); (7) versioning &amp;
+          evolution; (8) authN/authZ + object-level (BOLA); (9) errors, rate limiting, observability;
+          (10) async/webhooks where needed; (11) trade-offs &amp; "what changes at 100×." Name the
+          step, make the one decision that matters, signal you know the rest is there.</p>
+    - level: 'senior'
+      q: 'How do you communicate a trade-off so it reads as "senior"?'
+      a: >-
+          <p>State the option, <strong>pick a side</strong>, attach the reason, and name when you'd
+          decide differently: <em>"That's a deliberate trade-off because X; at 100× I'd revisit it
+          because Y."</em> Defaulting silently (offset pagination, no idempotency) reads junior;
+          choosing and defending reads senior. Other tells: <em>"it's at-least-once, so the consumer
+          must be idempotent,"</em> <em>"I care about p99, not the mean,"</em> <em>"exactly-once
+          effect, not exactly-once delivery."</em></p>
+    - level: 'senior'
+      q: 'Cursor vs offset pagination — defend your default.'
+      a: >-
+          <p>Default to <strong>cursor (keyset)</strong> at any real scale: deep pages stay cheap (no
+          <code>OFFSET N</code> scan) and stable under concurrent inserts/deletes — offset skips or
+          repeats rows when the set shifts. Offset is fine only for small, slow-changing,
+          jump-to-page-N UIs. Always cap page size. The senior tell is naming <em>stability under
+          writes</em>, not just performance.</p>
+    - level: 'staff'
+      q: 'The interviewer twists a constraint mid-answer ("now there are 10M third-party clients"). How do you respond?'
+      a: >-
+          <p>Don't restart. Re-anchor to the framework and say what <em>changes</em>: untrusted third
+          parties tighten authZ (object-level checks, scoped tokens), force strict versioning +
+          deprecation discipline, demand per-tenant rate limits and abuse controls, and push you
+          toward HATEOAS/discoverability so you can evolve URLs without redeploying their code. Naming
+          the deltas — rather than re-drawing — is the signal that you understand which decisions are
+          constraint-sensitive.</p>
+    - level: 'staff'
+      q: 'Consistency vs availability — how does CAP show up in API design?'
+      a: >-
+          <p>Decide <em>per resource/operation</em>, not globally. Money, inventory, and bookings need
+          <strong>strong consistency</strong> on the write path — refuse or fail
+          (<code>409</code>/<code>503</code>) rather than risk a double-charge or oversell. Feeds,
+          counts, search, and history can be <strong>eventually consistent</strong> and stay
+          available. Make it visible in the contract: an explicit <code>status</code>/<code>pending</code>
+          state, a "may be stale" note, read-your-writes only where it's promised. The senior move is
+          naming which path is which and why.</p>
+    - level: 'staff'
+      q: '"What changes at 100×?" — how do you answer this generically?'
+      a: >-
+          <p>Walk the bottlenecks in order: <strong>hot partitions / keys</strong> (a whale tenant or
+          merchant — protect with per-entity caps), <strong>reads</strong> move to replicas + caching
+          tiers + CDN, <strong>writes</strong> get sharded (and cursors must stay stable across
+          shards), <strong>async work</strong> goes behind durable queues with back-pressure and DLQs,
+          and the <strong>synchronous critical path</strong> gets kept narrow and wrapped in circuit
+          breakers. Close with what you'd <em>measure</em> (p99 per route) to know when to act. This
+          step is the headline senior signal.</p>
+    - level: 'design'
+      q: 'Design the API for a payments service — charge a card, refund, list transactions.'
+      a: >-
+          <ul>
+          <li><b>A strong answer covers:</b> <strong>clarify first</strong> — untrusted merchant
+          callers, write-heavy money path / read-heavy history, charges strongly consistent &amp;
+          exactly-once from the caller's view, server-to-server auth, "never double-charge."</li>
+          <li><strong>Resources:</strong> <code>Charge</code>, <code>Refund</code> (sub-resource of a
+          charge), <code>Customer</code>, <code>PaymentMethod</code>; money as integer minor units +
+          currency, never floats.</li>
+          <li><strong>Endpoints:</strong> <code>POST /v1/charges</code> &rarr; <code>201</code> sync /
+          <code>202</code> async capture; <code>POST /v1/charges/{id}/refunds</code> &rarr;
+          <code>201</code> (<code>422</code> over captured total, <code>409</code> if fully refunded);
+          <code>GET /v1/charges?customer=&amp;limit=</code> cursor-paginated.</li>
+          <li><strong>Idempotency — the headline:</strong> <code>Idempotency-Key</code> on every
+          charge/refund, key&rarr;result stored ~24h; a replay returns the original response.</li>
+          <li><strong>Auth + object-level:</strong> OAuth2 client-credentials, scopes like
+          <code>charges:write</code>; verify this account owns <code>{id}</code> or return
+          <code>404</code> (don't leak existence); RFC 9457 errors; per-account <code>429</code> with
+          limit headers.</li>
+          <li><strong>Async + at 100×:</strong> async capture &rarr; <code>202</code> + HMAC-signed
+          at-least-once <code>charge.succeeded</code> webhook (consumer dedups); shard
+          idempotency/charge stores by account, watch hot merchants, replica for list reads, queue +
+          DLQ behind webhooks, circuit-break the card-network path.</li>
+          </ul>
+    - level: 'design'
+      q: 'Design the API for a hotel / room booking system — search, hold, book, cancel.'
+      a: >-
+          <ul>
+          <li><b>A strong answer covers:</b> <strong>clarify</strong> — inventory is scarce and
+          contended; double-booking is the cardinal sin; consistency over availability on the book
+          path.</li>
+          <li><strong>Hold as a first-class resource:</strong> <code>POST /holds</code> reserves a
+          room with a short <strong>TTL</strong> (e.g. 10 min) &rarr; <code>201</code> + expiry,
+          decrementing inventory atomically. Separating hold from book is the senior move.</li>
+          <li><strong>Book:</strong> <code>POST /bookings</code> {hold_id} &rarr; <code>201</code>,
+          <strong>idempotent</strong> via <code>Idempotency-Key</code> so a retried payment doesn't
+          book twice; <code>409</code> if the hold expired.</li>
+          <li><strong>Concurrency:</strong> optimistic concurrency (<code>If-Match</code>/version) on
+          the inventory row so two simultaneous holds can't both win; loser gets
+          <code>412</code>/<code>409</code>.</li>
+          <li><strong>Search/cancel:</strong> <code>GET /rooms?dates=&amp;guests=&amp;limit=</code>
+          cursor-paginated, cacheable; <code>POST /bookings/{id}/cancel</code> enforces a
+          refund-by-time policy and releases inventory.</li>
+          <li><strong>At 100×:</strong> sweep stale holds via a queue, partition inventory by
+          property/date, guard thundering herds on hot dates; object-level checks so callers only
+          touch their own bookings.</li>
+          </ul>
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>The 11-step API-design framework</b> &mdash; run it in order, out loud, in any whiteboard round
+    (diagnose &rarr; design &rarr; defend):
+rubric:
+    - 'Clarify requirements &amp; constraints: clients (1st vs 3rd-party), scale &amp; read/write ratio, consistency, auth, SLA &mdash; pin before drawing.'
+    - 'Model resources &amp; URIs: name the nouns, ownership, shallow hierarchy &mdash; the data model is the design.'
+    - 'Map methods + precise status codes: 201 vs 202, 200 vs 204, 409 vs 422.'
+    - 'Idempotency on unsafe writes: <code>Idempotency-Key</code> + dedup store on money/create <code>POST</code>s.'
+    - 'Collections: cursor pagination, a filter/sort contract, bounded page sizes on every list.'
+    - 'Caching &amp; concurrency: <code>ETag</code>+<code>Cache-Control</code> on reads, <code>If-Match</code> on mutables to stop lost updates.'
+    - 'Versioning &amp; evolution + authN/authZ with object-level (BOLA) checks on every access.'
+    - 'Errors, rate limits, observability: RFC 9457 problem+json, <code>429</code> + limit headers, request/trace IDs.'
+    - 'Async / webhooks where it matters: <code>202</code> + status resource, signed at-least-once webhooks.'
+    - 'Trade-offs &amp; "what changes at 100×": hot partitions, caching tiers, replicas, sharded cursors, queues + DLQ, back-pressure.'
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          1. Jin, Sahni &amp; Shevat, <em>Designing Web APIs</em> (O'Reilly) —
+          <a href="https://www.oreilly.com/library/view/-/9781492026914">oreilly.com</a>.
+    - id: 's2'
+      html: >-
+          2. Microsoft, <em>Web API design best practices</em> —
+          <a href="https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design">learn.microsoft.com</a>.
+    - id: 's3'
+      html: >-
+          3. Google, <em>API Improvement Proposals (AIP)</em> —
+          <a href="https://google.aip.dev/">google.aip.dev</a>.
+---
+
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import Rehearse from '../../../components/Rehearse.astro';
+import {
+    Fig1,
+    Fig2,
+    Fig3,
+} from '../../../components/figures/rest-api/0011-mock-interview-whiteboard-design/index.ts';
+
+{/* Shared SVG marker defs the three figures reference via url(#arw) / url(#arwA) / url(#arwR). */}
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+        <marker
+            id="arw"
+            viewBox="0 0 10 10"
+            refX="8.5"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+        >
+            <path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path>
+        </marker>
+        <marker
+            id="arwA"
+            viewBox="0 0 10 10"
+            refX="8.5"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+        >
+            <path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"></path>
+        </marker>
+        <marker
+            id="arwG"
+            viewBox="0 0 10 10"
+            refX="8.5"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+        >
+            <path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path>
+        </marker>
+        <marker
+            id="arwR"
+            viewBox="0 0 10 10"
+            refX="8.5"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+        >
+            <path d="M0,0 L10,5 L0,10 z" fill="#9a2417"></path>
+        </marker>
+    </defs>
+</svg>
+
+<div class="mission">
+    <strong>This is the real test.</strong> A senior "design X's API" round isn't a quiz on one
+    topic — it's a 45-minute integration exam. In one prompt the interviewer watches you balance
+    <em>resource design, reliability, security, performance, and async</em> at once, then pivot when
+    they twist a constraint. The fast way to flunk is to start typing endpoints. This lesson gives
+    you a <strong>repeatable framework</strong> you can <em>draw</em>, one fully worked example, and
+    three prompts to rehearse live.
+</div>
+
+<div class="chips">
+    <span class="chip">
+        There's <b>no one answer</b>
+    </span>
+    <span class="chip">
+        they grade your <b>structure</b>
+    </span>
+    <span class="chip">
+        so run a <b>checklist</b>
+    </span>
+    <span class="chip">
+        and narrate the <b>why</b>
+    </span>
+</div>
+
+<h2 class="sec">The senior API-design framework</h2>
+
+<p>
+    Run these steps <em>in order, out loud</em> in any whiteboard round. The endpoints fall out of
+    the resource model; the resource model falls out of the questions you ask. Lead with the
+    questions and the rest writes itself.
+</p>
+
+<Fig1 />
+
+<div class="steps">
+    <div class="step">
+        <b>1 · Clarify</b> Clients (1st vs 3rd-party)? Scale &amp; read/write ratio? Consistency,
+        auth, SLA, latency budget? Pin before drawing.
+    </div>
+    <div class="step">
+        <b>2 · Resources &amp; URIs</b> Name the nouns, their ownership, the hierarchy. The data
+        model
+        <em>is</em> the design; verbs come second.
+    </div>
+    <div class="step">
+        <b>3 · Methods + codes</b> Each operation to the right method and precise code: 201 vs 202,
+        200 vs 204, 409 vs 422.
+    </div>
+    <div class="step">
+        <b>4 · Writes are safe</b> Money/create <code>POST</code>s carry an{' '}
+        <code>Idempotency-Key</code>+ dedup store so retries never double-fire.
+    </div>
+    <div class="step">
+        <b>5 · Collections</b> Cursor pagination, a filter/sort contract, bounded page sizes on
+        every list endpoint.
+    </div>
+    <div class="step">
+        <b>6 · Cache &amp; concurrency</b> <code>ETag</code>+<code>Cache-Control</code> on reads;
+        <code>If-Match</code> on mutables to stop lost updates.
+    </div>
+    <div class="step">
+        <b>7 · Versioning</b> A strategy, a definition of "breaking", and a stated deprecation path.
+    </div>
+    <div class="step">
+        <b>8 · Auth + BOLA</b> Authenticate, authorize per-scope, check <em>object-level</em>{' '}
+        ownership on every access.
+    </div>
+    <div class="step">
+        <b>9 · Errors &amp; limits</b> RFC 9457 problem+json, <code>429</code> with limit headers,
+        request IDs into logs/traces.
+    </div>
+    <div class="step">
+        <b>10 · Async / webhooks</b> Long work returns <code>202</code> + status resource; results
+        via signed, at-least-once webhooks.
+    </div>
+    <div class="step">
+        <b>11 · 100× trade-offs</b> Name what you'd revisit at scale: hot partitions, caching tiers,
+        sharded cursors, back-pressure.
+    </div>
+    <div class="step">
+        <b>The arc</b> Diagnose → design → defend. A clear checklist narrated aloud beats brilliant
+        free-association.
+    </div>
+</div>
+
+<p class="pull">
+    <strong>Don't design — diagnose, then design.</strong> The first five minutes are requirements
+    and constraints. The endpoints fall out of the resource model; the resource model falls out of
+    the questions you asked.
+</p>
+
+<h2 class="sec">What separates junior from senior</h2>
+
+<p>
+    Interviewers grade three things, not the "right" answer. Here is the rubric they carry in their
+    head.
+</p>
+
+<Fig2 />
+
+<div class="myth">
+    <div class="m">✗ Myth: "the best answer lists the most endpoints, fastest."</div>
+    <div class="t">
+        ✓ Truth: the best answer clarifies, covers all five dimensions, and attaches a reason to
+        each choice.
+    </div>
+</div>
+
+<h2 class="sec">Worked example — a payments service API</h2>
+
+<p>
+    <strong>Prompt:</strong>{' '}
+    <em>"Design the API for a payments service — charge a card, refund, list transactions."</em> A
+    strong answer stays tight: a sentence per step, real endpoints, the
+    <em>why</em> attached to each call. Start from the resource sketch.
+</p>
+
+<Fig3 />
+
+<div class="facts">
+    <div class="fact">
+        <b>Idempotency · the headline</b> Every <code>POST /charges</code> and{' '}
+        <code>POST /refunds</code>
+        needs an <code>Idempotency-Key</code>; store key→result ~24h. Non-negotiable on a money
+        path.
+    </div>
+    <div class="fact">
+        <b>Collections</b> <code>?customer=&amp;limit=&amp;starting_after=</code> — opaque cursor
+        (stable under inserts), filter by customer/status/created, hard-cap <code>limit</code> at
+        100.
+    </div>
+    <div class="fact">
+        <b>Cache &amp; concurrency</b> Settled charges get long-lived <code>Cache-Control</code>+
+        <code>ETag</code>; mutable metadata needs <code>If-Match</code> → <code>412</code> on a
+        stale tag.
+    </div>
+    <div class="fact blue">
+        <b>Versioning</b> Path <code>/v1</code> for the coarse boundary + a date-pinned version
+        header per account (the Stripe model) for fine-grained, non-breaking evolution.
+    </div>
+    <div class="fact blue">
+        <b>Auth + BOLA</b> OAuth2 client-credentials, scopes like <code>charges:write</code>;
+        object-level check that this token owns{' '}
+        <code>
+            {'{'}id{'}'}
+        </code>{' '}
+        — else <code>404</code> (not
+        <code>403</code>, no leak).
+    </div>
+    <div class="fact blue">
+        <b>Errors, limits, async</b> RFC 9457 problem+json with a <code>trace_id</code>; per-account
+        token bucket → <code>429</code>; async capture returns <code>202</code> + an HMAC-signed,
+        at-least-once <code>charge.succeeded</code> webhook.
+    </div>
+</div>
+
+<p class="src">
+    <strong>Why this scores:</strong> it clarified first, covered all five dimensions (design,
+    reliability, security, performance, async) without being told to, attached a reason to each
+    choice, and finished with scale trade-offs. <strong>At 100×</strong>: shard idempotency/charge
+    stores by account, watch hot merchants (per-account caps protect neighbors), move list reads to
+    a replica, put webhooks behind a durable queue with retry/back-off + a dead-letter, and
+    ring-fence the synchronous charge path with circuit breakers around the card network.
+</p>
+
+<div class="rule">
+    <span>🎤 Memory rule:</span> Diagnose, then design, then defend — clarify before drawing, give
+    writes idempotency and reads pagination, check object-level ownership everywhere, and close on
+    what changes at 100×.
+</div>
+
+<h2 class="sec">Now you — three prompts to rehearse</h2>
+
+<p>
+    Run the framework yourself. For each prompt, write your answer from memory (don't peek), then
+    reveal a senior-approach sketch and compare against your structure — did you hit clarify,
+    resource model, idempotent writes, paginated reads, auth/BOLA, and async where it mattered?
+</p>
+
+### Prompt 1 — URL shortener
+
+<Rehearse
+    promptHtml={`<strong>"Design the API for a URL shortener — create short links, redirect, analytics."</strong>`}
+    placeholder="Walk the 11 steps from memory…"
+>
+    <ul>
+        <li>
+            <strong>Clarify:</strong> read-dominated (redirects ≫ creates), public reads but authed
+            creates, custom-alias support, latency-critical redirect path.
+        </li>
+        <li>
+            <strong>Resources &amp; writes:</strong> <code>POST /links</code> {'{'}url,
+            custom_alias?{'}'}→ <code>201</code>; make it <strong>idempotent</strong> by{' '}
+            <code>Idempotency-Key</code> (or by hashing the long URL) so retries don't mint
+            duplicate codes.
+        </li>
+        <li>
+            <strong>Redirect semantics:</strong>{' '}
+            <code>
+                GET /{'{'}code{'}'}
+            </code>{' '}
+            → <strong>301</strong>
+            for permanent/SEO vs <strong>302</strong> when you must count every hit or may re-point;
+            note 301 is cached aggressively so analytics suffer — a deliberate trade-off.
+        </li>
+        <li>
+            <strong>Analytics:</strong>{' '}
+            <code>
+                GET /links/{'{'}code{'}'}/stats
+            </code>{' '}
+            with
+            <strong>cursor pagination</strong> over click events; counts are eventually consistent,
+            aggregated async off a click stream, not on the hot redirect path.
+        </li>
+        <li>
+            <strong>Protect it:</strong> rate-limit creates per key (<code>429</code>), auth +
+            object-level ownership on stats and delete, and cache redirects hard at the edge.
+        </li>
+        <li>
+            <strong>At 100×:</strong> precompute codes from a key-gen service to avoid write
+            contention; the redirect is a cache lookup, not a DB hit.
+        </li>
+    </ul>
+</Rehearse>
+
+### Prompt 2 — Hotel / room booking
+
+<Rehearse
+    promptHtml={`<strong>"Design the API for a hotel/room booking system — search, hold, book, cancel."</strong>`}
+    placeholder="Walk the 11 steps from memory…"
+>
+    <ul>
+        <li>
+            <strong>Clarify:</strong> inventory is scarce and contended — double-booking is the
+            cardinal sin; consistency over availability on the book path.
+        </li>
+        <li>
+            <strong>Hold as a first-class resource:</strong> <code>POST /holds</code> reserves a
+            room with a short <strong>TTL</strong> (e.g. 10 min) → <code>201</code> with expiry;
+            decrements available inventory atomically. This is the senior move — separate hold from
+            book.
+        </li>
+        <li>
+            <strong>Booking:</strong> <code>POST /bookings</code> {'{'}hold_id{'}'} →{' '}
+            <code>201</code>,<strong>idempotent</strong> via <code>Idempotency-Key</code> so a
+            retried payment doesn't book twice; <code>409</code> if the hold expired.
+        </li>
+        <li>
+            <strong>Concurrency:</strong> <strong>optimistic concurrency</strong> (version/
+            <code>If-Match</code>) on the inventory row so two simultaneous holds can't both win;
+            loser gets
+            <code>412</code>/<code>409</code>.
+        </li>
+        <li>
+            <strong>Search &amp; cancel:</strong>{' '}
+            <code>GET /rooms?dates=&amp;guests=&amp;limit=</code>
+            cursor-paginated and cacheable;{' '}
+            <code>
+                POST /bookings/{'{'}id{'}'}/cancel
+            </code>{' '}
+            enforcing a<strong>cancellation policy</strong> (refund tier by time-to-checkin) and
+            releasing inventory.
+        </li>
+        <li>
+            <strong>At 100×:</strong> expire stale holds via a sweeper/queue, partition inventory by
+            property/date, and guard against thundering herds on popular dates.
+        </li>
+    </ul>
+</Rehearse>
+
+### Prompt 3 — File storage (Dropbox-like)
+
+<Rehearse
+    promptHtml={`<strong>"Design the API for a file storage service like Dropbox — upload large files, share, list, versions."</strong>`}
+    placeholder="Walk the 11 steps from memory…"
+>
+    <ul>
+        <li>
+            <strong>Clarify:</strong> files can be huge (GBs), uploads must survive flaky networks,
+            sharing needs fine-grained access; bytes go to object storage, metadata to the API.
+        </li>
+        <li>
+            <strong>Large uploads:</strong> <strong>resumable/multipart</strong> —{' '}
+            <code>POST /uploads</code>
+            opens an <strong>upload session</strong> → <code>202</code> + session URL; client PUTs
+            chunks, then{' '}
+            <code>
+                POST /uploads/{'{'}id{'}'}/complete
+            </code>
+            . Decouples bytes from metadata and lets retries resume.
+        </li>
+        <li>
+            <strong>Content addressing:</strong> identify blobs by content hash so identical files
+            dedup and uploads are naturally <strong>idempotent</strong>; <code>If-Match</code>/ETag
+            on metadata mutations.
+        </li>
+        <li>
+            <strong>Sharing:</strong> <strong>signed URLs</strong> (time-boxed, scoped) for direct
+            download/upload to object storage, plus permission resources for collaborator access;
+            object-level checks throughout (BOLA).
+        </li>
+        <li>
+            <strong>List &amp; versions:</strong>{' '}
+            <code>
+                GET /folders/{'{'}id{'}'}/files?limit=&amp;cursor=
+            </code>
+            cursor-paginated; <strong>versions as a sub-resource</strong>
+            <code>
+                GET /files/{'{'}id{'}'}/versions
+            </code>{' '}
+            with restore.
+        </li>
+        <li>
+            <strong>At 100×:</strong> push transfer to a CDN/object store via signed URLs (the API
+            never proxies bytes), shard metadata, and fan out share/notification events through
+            webhooks.
+        </li>
+    </ul>
+</Rehearse>
+
+<div class="ask">
+    <strong>I'm your interviewer — let's run it for real.</strong> Pick any of the three prompts
+    above, type your full answer, and paste it into the chat. I'll grade it the way a senior panel
+    would — score your structure, breadth, and judgment — and then fire the follow-ups they'd fire:
+    "what happens on a retry?", "how do you stop user A reading user B's resource?", "what breaks at
+    100×?". Want a fourth, harder prompt? Just ask.
+</div>
+
+### Primary source (read this next)
+
+<p>
+    📖{' '}
+    <a href="https://www.oreilly.com/library/view/-/9781492026914">
+        <strong>
+            <em>Designing Web APIs</em> (O'Reilly)
+        </strong>
+    </a>{' '}
+    — the single best end-to-end treatment of the decisions this framework walks. Then
+    <strong>study Stripe's API as the worked exemplar</strong>: it is the cleanest public model of
+    idempotency keys, cursor pagination, dated versioning, signed webhooks, and problem-style errors
+    all in one product — read its reference like a design textbook.
+</p>
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+<div class="next">
+    <span>
+        📄 Keep handy:{' '}
+        <a href="../reference/api-design-interview-framework.html">
+            Senior API design interview framework
+        </a>
+    </span>
+    <span>
+        <a href="../lessons/0010-async-and-long-running-operations.html">◂ Prev</a> ·{' '}
+        <em>End of the track</em>
+    </span>
+</div>
+
+<Sources items={frontmatter.sources} />

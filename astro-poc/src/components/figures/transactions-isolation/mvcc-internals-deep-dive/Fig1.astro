@@ -1,0 +1,188 @@
+---
+/**
+ * mvcc-internals-deep-dive · Figure 1 — the HERO version-chain banner.
+ *
+ * Copied VERBATIM from
+ * docs/transactions-isolation/mvcc-internals-deep-dive.html (figure + svg +
+ * figcaption). Lives as an .astro component, NOT inline in the MDX, because
+ * MDX's JSX parser is unreliable with raw inline SVG that uses kebab-case attrs
+ * (text-anchor, font-size, stroke-width, marker-end, stroke-dasharray, …).
+ * In an .astro file the SVG is plain HTML, so it renders byte-for-byte.
+ *
+ * The source page defines the arrowhead markers once in a top-of-body
+ * <svg defs> (#arw grey, #arwA red, #arwG green). This figure references all
+ * three, so they are inlined here in a local <defs> (verbatim from that defs
+ * block) so the marker-end="url(#…)" references resolve standalone.
+ */
+---
+
+<figure style="margin-top:1.6rem">
+    <svg
+        viewBox="0 0 640 230"
+        role="img"
+        aria-label="One logical row is a chain of physical versions; an UPDATE stamps the old version's xmax and inserts a new tuple with a fresh xmin; a snapshot picks the version it is allowed to see"
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+            <marker
+                id="arwA"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"></path></marker
+            >
+            <marker
+                id="arwG"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="320"
+                y="24"
+                text-anchor="middle"
+                font-size="12"
+                font-weight="700"
+                fill="#111110">ONE LOGICAL ROW = A CHAIN OF PHYSICAL VERSIONS</text
+            >
+            <!-- v1 -->
+            <rect
+                x="24"
+                y="52"
+                width="160"
+                height="64"
+                rx="9"
+                fill="#f7ecea"
+                stroke="#9a2417"
+                stroke-width="1.5"></rect>
+            <text
+                x="104"
+                y="72"
+                text-anchor="middle"
+                font-size="11.5"
+                font-weight="700"
+                fill="#9a2417">v1 balance=100</text
+            >
+            <text x="104" y="90" text-anchor="middle" font-size="10" fill="#6b675f"
+                >xmin=10 (created)</text
+            >
+            <text x="104" y="105" text-anchor="middle" font-size="10" fill="#9a2417"
+                >xmax=20 → DEAD</text
+            >
+            <!-- v2 -->
+            <rect
+                x="240"
+                y="52"
+                width="160"
+                height="64"
+                rx="9"
+                fill="#fff"
+                stroke="#1f3a5a"
+                stroke-width="1.5"></rect>
+            <text
+                x="320"
+                y="72"
+                text-anchor="middle"
+                font-size="11.5"
+                font-weight="700"
+                fill="#1f3a5a">v2 balance=90</text
+            >
+            <text x="320" y="90" text-anchor="middle" font-size="10" fill="#6b675f"
+                >xmin=20 (created)</text
+            >
+            <text x="320" y="105" text-anchor="middle" font-size="10" fill="#6b675f"
+                >xmax=30 → superseded</text
+            >
+            <!-- v3 -->
+            <rect
+                x="456"
+                y="52"
+                width="160"
+                height="64"
+                rx="9"
+                fill="#eef5ee"
+                stroke="#2f5d3a"
+                stroke-width="1.5"></rect>
+            <text
+                x="536"
+                y="72"
+                text-anchor="middle"
+                font-size="11.5"
+                font-weight="700"
+                fill="#2f5d3a">v3 balance=70</text
+            >
+            <text x="536" y="90" text-anchor="middle" font-size="10" fill="#6b675f"
+                >xmin=30 (created)</text
+            >
+            <text x="536" y="105" text-anchor="middle" font-size="10" fill="#2f5d3a"
+                >xmax=0 → LIVE</text
+            >
+            <!-- chain arrows -->
+            <line x1="184" y1="84" x2="238" y2="84" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <line x1="400" y1="84" x2="454" y2="84" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <text x="211" y="76" text-anchor="middle" font-size="9" fill="#6b675f">UPDATE</text>
+            <text x="427" y="76" text-anchor="middle" font-size="9" fill="#6b675f">UPDATE</text>
+            <!-- snapshot pointers -->
+            <rect x="40" y="170" width="220" height="40" rx="8" fill="#fbfaf2" stroke="#7a1f12"
+            ></rect>
+            <text
+                x="150"
+                y="186"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#7a1f12">Txn started @ xid 25</text
+            >
+            <text x="150" y="200" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >sees v2 (20 done, 30 not yet)</text
+            >
+            <path
+                d="M 150 168 C 200 145, 300 130, 320 118"
+                fill="none"
+                stroke="#7a1f12"
+                stroke-dasharray="4 3"
+                marker-end="url(#arwA)"></path>
+            <rect x="380" y="170" width="220" height="40" rx="8" fill="#fbfaf2" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="490"
+                y="186"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#2f5d3a">Txn started @ xid 35</text
+            >
+            <text x="490" y="200" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >sees v3 (30 done)</text
+            >
+            <path
+                d="M 490 168 C 520 145, 540 130, 536 118"
+                fill="none"
+                stroke="#2f5d3a"
+                stroke-dasharray="4 3"
+                marker-end="url(#arwG)"></path>
+        </g>
+    </svg>
+    <figcaption>
+        Memorise this banner. Two readers, same row, <em>different versions</em> — the whole of snapshot
+        isolation is just <code>xmin</code>/<code>xmax</code> + "did that xid commit before me?"
+    </figcaption>
+</figure>

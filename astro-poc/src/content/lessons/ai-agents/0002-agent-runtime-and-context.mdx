@@ -1,0 +1,566 @@
+---
+# ─── ai-agents · Lesson 2 — Agent Runtime, Context Engineering & Memory ───────
+# Converted from docs/ai-agents/lessons/0002-agent-runtime-and-context.html into
+# the MDX-hybrid lesson pattern (mirrors bloom-filters/0001). FRONTMATTER carries
+# the full lesson contract (head + masthead + wayfinding) PLUS the structured body
+# data lifted out of the prose: the 5-question quiz, the 13 LEVELLED interview Q&A
+# (incl. the design rubric), the three per-module memory-check banks, and the four
+# footnote sources. Validated at build time by the `lessons` collection schema
+# (src/content.config.ts → src/schema/lesson.ts). The FAQ JSON-LD is emitted by
+# <Interview> from `interview` below — it must NOT also be set on `jsonLd`.
+#
+# NOTE: the source page ALSO has six UN-LEVELLED <details class="iq"> previews
+# embedded inside the three module sections (no data-level). The <Interview>
+# component requires levels, so those six are reproduced verbatim in the MDX body
+# (not in this frontmatter). Only the 13 levelled disclosures from the dedicated
+# `#interview` panel feed <Interview>.
+#
+# HTML-bearing strings use YAML folded block scalars (>-) so embedded ", ', &, <
+# and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'Agent Runtime, Context Engineering & Memory'
+description: >-
+    Your bar: explain to an interviewer how an agent runtime orchestrates an LLM loop, why context
+    engineering often matters more than model choice, and how the…
+keywords: 'agent runtime, context engineering, memory, agent loop, multi-agent, ai, agents, llm, tool, runtime, mcp, claude, cursor, production'
+path: 'ai-agents/lessons/0002-agent-runtime-and-context.html'
+ogImage: 'assets/og/ai-agents.png'
+ogImageAlt: 'AI Agents · Engineering Vault learning track'
+accentVar: '--track-agents'
+
+# —— masthead ——
+trackLabel: 'AI Agents'
+kicker: 'Lesson 2 · Stage 2: Internals · visual edition'
+h1Html: 'Agent Runtime, Context &amp; Memory'
+metaLine: '~30 min · 3 modules · runtime internals + context engineering + memory systems'
+chips:
+    - 'Agent runtime'
+    - 'Context engineering'
+    - 'Memory'
+    - 'Agent loop'
+    - 'Multi-agent'
+
+# —— wayfinding ——
+prev:
+    href: '0001-ai-agents-from-first-principles.html'
+    title: 'AI Agents from first principles'
+next:
+    href: '0003-how-coding-agents-work.html'
+    title: 'How Coding Agents Work'
+
+# —— routing (used only by the dynamic route) ——
+track: 'ai-agents'
+number: '0002'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: "The runtime's relationship to the LLM is most like…"
+      correct: 2
+      options:
+          - 'A database that the LLM queries directly to find answers to questions'
+          - 'A load balancer distributing LLM requests across multiple model replicas'
+          - 'A kernel that orchestrates a CPU — the LLM computes, the runtime runs the process'
+          - 'A caching layer that stores and replays previous LLM responses for reuse'
+    - q: 'Context management matters because…'
+      correct: 1
+      options:
+          - 'Larger context windows always improve answer quality regardless of content selected'
+          - 'The LLM can only reason about what it receives — wrong content in means wrong answer out'
+          - 'Token limits only matter for cost accounting, not for answer quality or relevance'
+          - 'Retrieval is only needed for very large codebases, not for standard conversational agents'
+    - q: 'Short-term memory in an agent system is…'
+      correct: 3
+      options:
+          - 'A Redis cache that is shared and persisted across all concurrent agent sessions'
+          - 'The vector store that holds embedded documents for semantic similarity retrieval'
+          - 'The structured database that stores user preferences and facts across many sessions'
+          - 'The conversation history in the current context window — gone when the session resets'
+    - q: "An agent's runtime prevents infinite loops by…"
+      correct: 0
+      options:
+          - 'Enforcing a max iteration cap and token budget, halting and returning an error when exceeded'
+          - 'Asking the LLM to self-assess after each turn whether it is stuck in a loop'
+          - 'Caching all LLM responses and detecting identical repeated outputs automatically'
+          - 'Delegating all loop management to the MCP server connection layer and its timeouts'
+    - q: "The main difference between Cursor's and Claude Code's context approach is…"
+      correct: 2
+      options:
+          - 'Cursor uses a significantly larger context window than Claude Code for every single request'
+          - 'Claude Code pre-indexes the entire repo at startup; Cursor reads files on demand when asked'
+          - 'Cursor pre-indexes the repo via embeddings; Claude Code reads files on demand via tools'
+          - 'Both use identical retrieval strategies but differ only in their UI and default model selection'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'What is an agent runtime, and name the things it does that the LLM cannot do for itself?'
+      a: >-
+          <b>Hit these points:</b> the runtime is the orchestration layer wrapping a stateless LLM in
+          a loop &rarr; it reads the model's output and parses any tool-call block &rarr; executes the
+          real tool (file, API, DB) and feeds the result back &rarr; manages conversation state across
+          turns &rarr; enforces retries/backoff, loop caps, token budget, timeouts and cost ceilings
+          &rarr; the LLM only predicts text — it can't call tools, keep state, retry, or stop itself,
+          so every one of those jobs is runtime code, not model behaviour.
+    - level: 'core'
+      q: 'Define the context window and explain what competes for it on a single agent call.'
+      a: >-
+          <b>Hit these points:</b> the context window is a fixed token budget the model accepts per
+          call — a hard ceiling, the same for everyone on that model &rarr; everything shares that one
+          budget: the system prompt, the tool/function definitions (grow with #tools), the
+          conversation history (grows every turn — the quiet eater), the retrieved data you pull in,
+          and the space reserved for the model's own answer &rarr; only what's left after the overhead
+          is yours for useful context &rarr; so window size isn't the real constraint — what you choose
+          to spend it on is.
+    - level: 'core'
+      q: 'Name the three memory tiers and what each one is for.'
+      a: >-
+          <b>Hit these points:</b> <b>short-term</b> = the conversation history living in the context
+          window — like RAM, gone on reset &rarr; <b>working</b> = the task scratchpad/plan: current
+          notes, intermediate results, in-flight tool outputs &rarr; <b>long-term</b> = a persisted
+          knowledge store that survives across sessions and is retrieved on demand &rarr; the
+          through-line: the LLM remembers nothing between calls, so each tier is just a different place
+          state is stored and a different cost to read it back into the window.
+    - level: 'core'
+      q: >-
+          Define memory in an agent system — why is "the agent remembers" a misleading phrase?
+      a: >-
+          <b>Hit these points:</b> memory is persisted state that lives <em>outside</em> the model and
+          is only "known" if the runtime retrieves it back into the context window &rarr; the LLM is a
+          stateless pure function — it recalls nothing from past calls on its own &rarr; so "the agent
+          remembers a past conversation" really means "something stored a fact and something retrieved
+          it into this call" &rarr; if it wasn't stored and re-injected, it does not exist to the model
+          &rarr; the phrase hides the two steps (store, retrieve) where the real engineering — and the
+          real bugs — live.
+    - level: 'senior'
+      q: 'Walk me through the lifecycle of one agent loop iteration from the moment the LLM returns output.'
+      a: >-
+          <b>Hit these points:</b> LLM returns text with a tool-call block &rarr; runtime parses it and
+          extracts tool name + args &rarr; validates the tool name against the allowed list and
+          validates the arg schema &rarr; executes the real function (file read, API call, DB query)
+          &rarr; captures output or error &rarr; appends a <code>[tool_result]</code> message to the
+          conversation history &rarr; calls the LLM again with updated context &rarr; repeat until the
+          LLM returns a final answer (no tool call) or a guardrail (max-steps, budget, timeout) trips
+          and the runtime halts.
+    - level: 'senior'
+      q: 'Why is context management often a bigger lever than which model you pick?'
+      a: >-
+          <b>Hit these points:</b> the model can only reason over what it's given — the right document
+          missing means a wrong answer at any model size &rarr; right context on a smaller model
+          routinely beats wrong context on the flagship, and costs less &rarr; cost and latency scale
+          with tokens sent, so context selection is also your primary cost lever &rarr; context
+          failures are silent: the model never says "you gave me the wrong files," it just answers
+          confidently from what it has &rarr; a model upgrade is a flat tax on every call; better
+          retrieval is an asset that compounds across features.
+    - level: 'senior'
+      q: 'What belongs in long-term memory and what should never go there?'
+      a: >-
+          <b>Hit these points:</b> store <em>derived, structured facts</em> — a customer's
+          preferences, settled decisions, durable entities keyed for lookup &rarr; don't dump raw
+          conversation transcripts: noisy, expensive to search, and they bury the one fact that
+          mattered &rarr; don't store redundant or stale facts — version/timestamp so they can be
+          pruned &rarr; keep volatile, high-stakes data (current balance, plan, open-ticket status) as
+          live look-ups, not stale embeddings &rarr; avoid PII unless you genuinely need it and have a
+          compliant retention policy &rarr; rule of thumb: persist the conclusion, not the
+          conversation.
+    - level: 'senior'
+      q: >-
+          "A bigger context window means we don't need context engineering anymore." Where does that
+          break?
+      a: >-
+          <b>Hit these points:</b> a bigger window raises the ceiling, not the relevance — selection
+          still decides what the model reasons over &rarr; real corpora (a multi-million-token
+          monorepo) still exceed any window, so you're choosing a subset regardless &rarr; cost and
+          latency scale with tokens sent, so a 5&times; bigger context is roughly a 5&times; bigger
+          bill on every call (illustrative) &rarr; long-context recall is uneven — facts in the middle
+          get lost while start and end are over-weighted &rarr; irrelevant tokens dilute attention and
+          degrade the answer; they're not free padding &rarr; the fix is a better working context, not
+          more raw capacity.
+    - level: 'staff'
+      q: "Design the runtime guardrails so an agent can't loop forever or burn $500 on one task."
+      a: >-
+          <b>Hit these points:</b> layer independent limits so no single failure is unbounded: a loop
+          cap (max iterations per session) &rarr; a per-turn token budget so one call can't blow up
+          &rarr; a per-session cumulative cost ceiling tracked in real dollars, checked before every
+          model call, that hard-stops when crossed &rarr; a wall-clock timeout on the whole session
+          &rarr; circuit breakers on tool failures (max retries + exponential backoff, then abort
+          instead of retrying forever) &rarr; loop-detection on repeated identical tool calls/outputs
+          &rarr; human-in-the-loop interrupts that pause before high-cost or irreversible actions
+          &rarr; make every limit observable and alarmed, and fail closed — halt with a clear error
+          rather than silently continuing.
+    - level: 'staff'
+      q: 'Design memory for an agent that must keep meaningful state across sessions and across many users.'
+      a: >-
+          <b>Hit these points:</b> separate the tiers by durability and backend — short-term in the
+          live message list, working in fast scratch state (in-process/Redis), long-term in a persisted
+          store &rarr; for cross-session state, write <em>derived facts</em> keyed by a stable id
+          (user/account), not raw transcripts &rarr; scope every read and write to the authenticated
+          user so one account can never retrieve another's memory &rarr; choose the store by access
+          pattern: relational/key-value for exact keyed facts, a vector store for fuzzy semantic
+          recall, and live look-ups for volatile data &rarr; define a write policy (what gets promoted
+          to long-term, and when) and a retention/versioning policy so stale facts are pruned &rarr; on
+          session start, retrieve the small relevant set and inject it as a compact structured block,
+          never the whole history &rarr; instrument it: measure "had-the-right-fact" rate, and budget
+          the slice of the window memory may consume.
+    - level: 'staff'
+      q: 'Answers are wrong. A teammate wants to spend the quarter upgrading the model. Make the principal-level call.'
+      a: >-
+          <b>Hit these points:</b> don't decide by opinion — instrument the failing cases and attribute
+          them by class: was the needed fact even in the context, or was it present and the model still
+          failed? &rarr; control test: hand-feed the correct context to the same model; if it now
+          answers, the defect was retrieval, not reasoning, and a bigger model just reasons better over
+          the wrong input &rarr; in most products retrieval/context is the dominant cause, so a model
+          swap pays a flat per-token tax while leaving the real bug in place &rarr; frame the
+          trade-off: model upgrade = recurring cost, one-time bump any competitor can also rent;
+          retrieval + memory investment = an asset you own that compounds &rarr; sequence it — fix and
+          evaluate context first, then pay for model capability only once data shows reasoning is the
+          binding constraint, with a clear before/after metric and a kill criterion.
+    - level: 'design'
+      q: >-
+          Design the runtime + context strategy for a long-running production agent that may run for
+          hours over a 2M-token codebase with a 200k window.
+      a: >-
+          <b>A strong answer covers:</b> the loop is the spine — parse output, validate tool calls
+          against an allow-list, execute, append <code>[tool_result]</code>, re-call until done or a
+          guardrail trips &rarr; because a long run is unbounded by default, every limit must be
+          explicit: loop cap, per-turn token budget, a cumulative session cost ceiling in real dollars
+          checked before each call, a wall-clock timeout, tool retries with backoff, and loop-detection
+          on repeated identical calls &rarr; you can show ~10% of the repo at most, so context
+          selection is the product: retrieve by exact symbol match + semantic similarity, walk the
+          import/dependency graph for structure, re-rank, then pack signatures/docstrings over full
+          bodies with the query-named files first &rarr; reserve fixed budget for history and the
+          answer, and compress or summarize old turns as the run grows so history doesn't crowd out
+          fresh context &rarr; checkpoint progress (a durable plan/scratchpad) so a long task survives
+          a restart &rarr; instrument assembled context + token/cost spend per call, alarm on ceilings,
+          and fail closed with a clear halt rather than silently continuing &rarr; name the trade-off:
+          pre-indexed embeddings (fast, can go stale) vs read-on-demand (fresh, more round-trips).
+    - level: 'design'
+      q: >-
+          Design the memory architecture for a customer-support agent that must recall prior
+          interactions across sessions under a fixed token budget.
+      a: >-
+          <b>A strong answer covers:</b> map the three tiers to backends — short-term is the live
+          conversation in the window; working is the in-flight task state (current ticket, steps
+          taken); long-term is a persisted store of derived facts (preferences, past resolutions,
+          entitlements) keyed by <code>customer_id</code> &rarr; never persist raw transcripts to
+          long-term: write structured, derived facts so retrieval is cheap and precise &rarr; partition
+          the window into fixed slices (system prompt &amp; policy, retrieved facts, recent history,
+          current question, reserved answer) so no source starves the others &rarr; on session start,
+          look up the customer's facts by id and inject a compact structured block; pull volatile,
+          exact data (current plan, open tickets, balance) live rather than from stale storage &rarr;
+          define the write policy: after an interaction, promote new durable facts to long-term,
+          version/timestamp them, and prune stale ones &rarr; scope every read/write to the
+          authenticated customer so you never leak another account's memory &rarr; observability:
+          measure "had-the-right-fact" rate and retrieval hit-rate, not just CSAT &rarr; failure modes:
+          missing fact &rarr; ask or escalate rather than hallucinate; conflicting KB vs customer fact
+          &rarr; prefer the customer-specific one; budget overflow &rarr; drop lowest-ranked history
+          before identity/policy &rarr; name the trade-off: pre-stored facts (fast, can lag) vs live
+          look-ups (fresh, exact, more latency), plus the privacy line that history is always retrieved
+          per-customer.
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Design-round framework</b> — drive any agent runtime/memory/context prompt through these, out
+    loud:
+rubric:
+    - 'Clarify scope: task length, autonomy level, tool surface, latency &amp; cost budget, and the blast radius of a wrong action.'
+    - 'Runtime loop: how a turn flows (parse &rarr; validate &rarr; execute tool &rarr; append result &rarr; re-call) and the stop conditions.'
+    - 'Guardrails: loop cap, per-turn token budget, session cost ceiling, wall-clock timeout, tool retries/backoff, human-in-the-loop gates.'
+    - "Context strategy: how the working context is selected, ranked, assembled and compressed within the budget; what's reserved for the answer."
+    - 'Memory tiers: what lives short-term vs working vs long-term, the backend for each, and the write/retention policy.'
+    - 'Freshness &amp; correctness: live look-ups for volatile/exact data; index invalidation; per-user scoping for isolation.'
+    - 'Observability &amp; failure modes: log assembled context + cost per call; alarm on limits; define behaviour for missing/stale/conflicting state and budget overflow.'
+
+# —— per-module memory-check banks (rendered by three <MemoryCheck> blocks) ——
+mcRuntime:
+    - q: 'Name four responsibilities the runtime has that the LLM cannot do.'
+      a: 'loop orchestration, tool execution, retry/backoff, cost/safety limits'
+    - q: 'What does the LLM actually emit when it "calls a tool"?'
+      a: 'structured text (tool name + args); the runtime executes the real call'
+    - q: 'Closest SWE analogy for the runtime?'
+      a: 'web server + queue worker + middleware — not just "a function"'
+mcContext:
+    - q: "Why can't a coding agent just send the entire repo to the LLM?"
+      a: 'token limit; and even if it fit, irrelevant tokens dilute attention and multiply cost'
+    - q: 'Name three stages in context assembly.'
+      a: 'retrieve (search), rank (score relevance), assemble (pack into window), compress (summarize if needed)'
+    - q: 'Why does context quality often beat model quality?'
+      a: "a weaker model with the right context out-performs a stronger model with noise — the model can't reason about what it wasn't given"
+mcMemory:
+    - q: 'What happens to short-term memory when a conversation is reset?'
+      a: "it's gone — it only existed in the context window"
+    - q: 'Name a production backend for each memory tier.'
+      a: 'short-term: in-memory message list; working: Redis / in-process state; long-term: vector DB (Pinecone/pgvector), SQL DB, key-value store'
+    - q: 'What should NOT be stored in long-term memory?'
+      a: 'raw conversation transcripts (noisy, expensive to search); redundant/stale facts; PII unless required and compliant'
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          1. Anthropic, "Building effective agents" — anthropic.com/engineering. Runtime
+          responsibilities, tool use patterns. <a href="#r1">↩</a>
+    - id: 's2'
+      html: >-
+          2. Anthropic, Claude Code documentation — docs.anthropic.com. Read-on-demand context model.
+          <a href="#r2">↩</a>
+    - id: 's3'
+      html: >-
+          3. Cursor, documentation — cursor.com/docs. Codebase indexing and retrieval.
+          <a href="#r3">↩</a>
+    - id: 's4'
+      html: >-
+          4. Anthropic, "Multi-agent research system" — anthropic.com/engineering. Memory and context
+          patterns in production agents. <a href="#r4">↩</a>
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import MemoryCheck from '../../../components/MemoryCheck.astro';
+import {
+    Fig1,
+    Fig2,
+    Fig3,
+    Fig4,
+} from '../../../components/figures/ai-agents/0002-agent-runtime-and-context/index.ts';
+
+<div class="mission">
+    <strong>Your bar:</strong> explain to an interviewer how an agent runtime orchestrates an LLM
+    loop, why context engineering often matters more than model choice, and how the three memory
+    tiers map to production storage systems.
+    <sup>
+        <a href="#s1" id="r1">
+            1
+        </a>
+    </sup>
+</div>
+
+<p>One sentence holds all three modules. Each module unpacks one chip:</p>
+
+<div class="chips">
+    <span class="chip">
+        An agent is a stateless LLM <b>run by a runtime</b>
+    </span>
+    <span class="chip c2">
+        that manages <b>context carefully</b>
+    </span>
+    <span class="chip c3">
+        and stores state in <b>three memory tiers</b>
+    </span>
+    <span class="chip c4">
+        because the LLM itself <b>remembers nothing</b>
+    </span>
+</div>
+
+<nav class="toc">
+    <a href="#m1">1 · Agent Runtime</a>
+    <a href="#m2">2 · Context Management</a>
+    <a href="#m3">3 · Memory</a>
+</nav>
+
+{/* ============ MODULE M1: AGENT RUNTIME ============ */}
+{/* Each module is kept as ONE <section class="lvl" id="mN"> (matching the source
+DOM) so the .lvl top-border divider renders once per module. The figure
+components and the per-module <MemoryCheck> are nested inside the section,
+exactly where the source places them. The two un-levelled <details class="iq">
+previews carry NO data-level, so the <Interview> component (which requires
+levels) cannot render them — they are reproduced verbatim inside the section. */}
+
+<section class="lvl" id="m1">
+    <div class="lvltop"><span class="num">1</span><h2>Agent Runtime — the OS around the LLM</h2></div>
+    <p class="tagline">The LLM is stateless. Someone has to run the loop, manage tools, and know when to stop. That's the runtime.</p>
+
+    <Fig1 />
+
+    <div class="facts">
+        <div class="fact"><b>Is</b> Orchestration code that wraps an LLM in a loop — reads output, executes tools, feeds results back, repeats until done or halted.</div>
+        <div class="fact"><b>Why it exists</b> The LLM is a stateless pure function. It can't call tools, maintain state, retry failures, or stop itself. The runtime supplies all of that.</div>
+        <div class="fact blue"><b>Like (world)</b> The office around a brilliant but absent-minded consultant. The consultant (LLM) only answers questions. The office (runtime) books the meetings, delivers results, tracks budget, and fires the consultant if they go over hours.</div>
+        <div class="fact blue"><b>Like (code)</b> Laravel + php-fpm + Horizon (queue worker) combined. The LLM is one handler function. The runtime is the web server + queue + retry policy + middleware chain around it.<sup><a href="#s1" id="r1b">1</a></sup></div>
+    </div>
+
+    <div class="myth">
+        <div class="m">✗ "The LLM decides when to stop and what tools to call"</div>
+        <div class="t">✓ The LLM <em>requests</em> a tool call as text output; the runtime decides whether to execute it, execute it safely, and when the loop is done</div>
+    </div>
+
+    <div class="rule"><span>🏗️ Memory rule:</span> Runtime = Agent OS. The LLM is a CPU instruction set — powerful but inert. The runtime is the kernel that actually runs the process.</div>
+
+    <MemoryCheck items={frontmatter.mcRuntime} />
+
+    <Fig2 />
+
+    <details class="iq">
+        <summary>Walk me through the lifecycle of one agent loop iteration from the moment the LLM returns output.</summary>
+        <div class="a">
+            <b>Hit these points:</b> LLM returns text with a tool-call block &rarr; runtime parses the output and extracts tool name + args &rarr; validates tool name against the allowed list and validates arg schema &rarr; executes the real function (file read, API call, DB query) &rarr; captures output or error &rarr; appends a <code>[tool_result]</code> message to the conversation history &rarr; calls LLM again with updated context &rarr; repeat until the LLM returns a final answer (no tool call) or max-steps is exceeded and the runtime halts.
+        </div>
+    </details>
+
+    <details class="iq">
+        <summary>How does a runtime prevent an agent from running forever or spending $500?</summary>
+        <div class="a">
+            <b>Hit these points:</b> loop cap (max iterations per session) &rarr; token budget per turn so no single call exceeds limits &rarr; wall-clock timeout on the entire session &rarr; per-session cost tracking with a hard ceiling &rarr; circuit breakers on tool failures (max retries + exponential backoff before aborting) &rarr; human-in-the-loop interrupt hooks that pause execution and request confirmation before high-risk or high-cost actions.
+        </div>
+    </details>
+
+</section>
+
+{/* ============ MODULE M2: CONTEXT MANAGEMENT ============ */}
+
+<section class="lvl" id="m2">
+    <div class="lvltop"><span class="num">2</span><h2>Context Management — the RAM budget</h2></div>
+    <p class="tagline">A 200k-token window sounds huge. A real codebase is millions of tokens. Every coding agent is fighting this constraint every call.</p>
+
+    <Fig3 />
+
+    <div class="facts">
+        <div class="fact"><b>Is</b> The process of deciding what text to put in the limited context window before each LLM call — selecting, ranking, and assembling the most relevant content from a larger source.</div>
+        <div class="fact"><b>Why it exists</b> LLMs have a fixed token budget per call. A real codebase, conversation history, docs, and tool outputs together vastly exceed it. Something must choose what fits.</div>
+        <div class="fact blue"><b>Like (world)</b> A consultant's pre-meeting briefing pack. You can't hand them 10,000 pages — someone curates the 20 most relevant pages. Wrong curation = wrong advice.</div>
+        <div class="fact blue"><b>Like (code)</b> Redis working set vs full database. The context window is L1 cache. The codebase is the full DB. Context selection is the query + cache-fill strategy.<sup><a href="#s2" id="r2">2</a></sup></div>
+    </div>
+
+    <div class="myth">
+        <div class="m">✗ "A bigger context window means you don't need context engineering"</div>
+        <div class="t">✓ Bigger windows reduce pressure but don't eliminate it; irrelevant tokens dilute attention and raise cost — curation still wins</div>
+    </div>
+
+    <div class="rule"><span>📐 Memory rule:</span> Context window = RAM. You can't load the whole disk into RAM. Context engineering is the query that decides what loads.</div>
+
+    <MemoryCheck items={frontmatter.mcContext} />
+
+    <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:.9rem;margin:1.2rem 0 .3rem;font-weight:600">How Cursor vs Claude Code handle context limits<sup><a href="#s3" id="r3">3</a></sup><sup><a href="#s2" id="r2b">2</a></sup></h3>
+
+    <table>
+    <thead>
+        <tr>
+            <th>Approach</th>
+            <th>Cursor</th>
+            <th>Claude Code</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Indexing</td>
+            <td>Embeds entire repo at open time</td>
+            <td>No upfront index — reads on demand</td>
+        </tr>
+        <tr>
+            <td>Retrieval</td>
+            <td>Semantic similarity search on embeddings</td>
+            <td>File read + grep + directory scan via tools</td>
+        </tr>
+        <tr>
+            <td>Context assembly</td>
+            <td>Auto-assembled from index results</td>
+            <td>Agent explicitly reads files it decides are relevant</td>
+        </tr>
+        <tr>
+            <td>Strength</td>
+            <td>Fast on large repos, always fresh relevant snippet</td>
+            <td>Precise — agent reads exactly what matters for the task</td>
+        </tr>
+        <tr>
+            <td>Weakness</td>
+            <td>Embedding quality can miss structural/logical relationships</td>
+            <td>Slower start; reads more tokens to understand project layout</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <details class="iq">
+        <summary>Why is context management often more important than the model itself?</summary>
+        <div class="a">
+            <b>Hit these points:</b> The model can only reason about what it's given — wrong or irrelevant context produces wrong answers regardless of model capability. <b>Right context with a smaller model often beats wrong context with the best model.</b> Budget is also a direct function of tokens sent — context selection is the primary cost lever. Finally, context errors are silent: the model doesn't say "you gave me the wrong files" — it just answers incorrectly based on what it received.
+        </div>
+    </details>
+
+    <details class="iq">
+        <summary>You are building a coding agent. The codebase is 2M tokens but your window is 200k. What is your retrieval strategy?</summary>
+        <div class="a">
+            <b>Hit these points:</b> embed + similarity search for relevant files by function/class/symbol name &rarr; supplement with structural context (file tree, import graph, dependency map) &rarr; prioritize files the user's query mentions by name — exact matches first &rarr; compress large files by showing only function signatures and docstrings, not bodies &rarr; reserve a fixed token budget for tool outputs and conversation history and enforce it &rarr; track what you've loaded to avoid refetching &rarr; instrument retrieval quality so you can measure and improve hit rate over time.
+        </div>
+    </details>
+
+</section>
+
+{/* ============ MODULE M3: MEMORY ============ */}
+
+<section class="lvl" id="m3">
+    <div class="lvltop"><span class="num">3</span><h2>Memory — because the LLM forgets everything</h2></div>
+    <p class="tagline">The LLM has no memory. Every durable fact must be stored somewhere else and retrieved deliberately.</p>
+
+    <Fig4 />
+
+    <div class="facts">
+        <div class="fact"><b>Is</b> The set of mechanisms an agent uses to store and retrieve information across turns — conversation history (short-term), task scratchpad (working), and a knowledge store (long-term) that persists across sessions.</div>
+        <div class="fact"><b>Why it exists</b> The LLM itself remembers nothing between calls. Every fact the agent needs across more than one turn must be explicitly stored and fed back in.</div>
+        <div class="fact blue"><b>Like (world)</b> Human memory: RAM (what you're thinking right now) + notepad (notes from this meeting) + company wiki (facts that outlive this meeting and are shared).</div>
+        <div class="fact blue"><b>Like (code)</b> In-process variables (short-term) + Redis scratchpad (working) + PostgreSQL / vector store (long-term). Each tier has different latency, durability, and query model.</div>
+    </div>
+
+    <div class="myth">
+        <div class="m">✗ "An agent 'knows' things from past conversations"</div>
+        <div class="t">✓ An agent knows what the runtime injects into the context window. Past facts only appear if explicitly retrieved from long-term storage and included.</div>
+    </div>
+
+    <div class="rule"><span>🗄️ Memory rule:</span> LLM = stateless function. Memory = what the runtime injects. Nothing is remembered unless something stored it and something retrieved it.</div>
+
+    <MemoryCheck items={frontmatter.mcMemory} />
+
+    <details class="iq">
+        <summary>Your support agent needs to remember a customer's product preferences across sessions. What memory tier handles this and what's your storage/retrieval design?</summary>
+        <div class="a">
+            <b>Hit these points:</b> long-term memory — persists across sessions by definition &rarr; store as <b>structured facts</b> in a relational DB keyed by <code>customer_id</code> (not raw transcripts) &rarr; retrieve by <code>customer_id</code> lookup at session start and inject into the system prompt as a short, structured block &rarr; update after each interaction where a new preference is expressed — write a derived fact, not the full transcript &rarr; version or timestamp facts so stale data can be pruned &rarr; avoid PII in long-term store unless you have a compliant data-retention policy for it.
+        </div>
+    </details>
+
+    <details class="iq">
+        <summary>What's the difference between working memory and context window?</summary>
+        <div class="a">
+            <b>Hit these points:</b> <b>Context window</b> is the physical token budget passed to the LLM each call — it's a technical constraint of the model API. <b>Working memory</b> is a higher-level concept: the scratchpad state the agent maintains for the current task — plans, intermediate results, tool outputs in progress. Working memory is often what fills the context window for a given turn, but short-term history and long-term retrieved facts also compete for that same budget. The distinction matters: context window is the constraint; working memory is one category of content that consumes it.
+        </div>
+    </details>
+
+</section>
+
+{/* ============ QUIZ ============ */}
+
+<h2 class="sec" id="quiz">
+    Retrieval practice — test the three modules
+</h2>
+
+<Quiz items={frontmatter.quiz} />
+
+{/* ============ INTERVIEW PANEL — level tabs ============ */}
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+{/* ============ NAV ============ */}
+
+<div class="nav">
+    <span style="color:var(--muted)">
+        ← Lesson 1: <a href="0001-ai-agents-from-first-principles.html">The whole stack</a>
+    </span>
+    <span>
+        Lesson 3: <a href="0003-how-coding-agents-work.html">Coding Agents in Depth →</a>
+    </span>
+</div>
+
+<Sources items={frontmatter.sources} />

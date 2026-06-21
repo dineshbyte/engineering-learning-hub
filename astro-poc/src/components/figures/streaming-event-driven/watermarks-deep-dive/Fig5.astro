@@ -1,0 +1,140 @@
+---
+/**
+ * watermarks-deep-dive · Figure 5 — Level 5: a window's lifetime (allowed lateness
+ * → state GC → side output) plus the completeness/latency/cost trade-off triangle.
+ *
+ * Copied VERBATIM from docs/streaming-event-driven/watermarks-deep-dive.html
+ * (figure + svg + figcaption). Lives as an .astro component for the same reason as
+ * Fig1: raw inline SVG with kebab-case attributes is unreliable inside MDX. This
+ * figure references the #arw and #arwA arrowhead markers (declared once in the
+ * source's hidden top-of-body defs); they are inlined here in a local <defs>
+ * (verbatim fills) so the figure resolves standalone.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 600 200"
+        role="img"
+        aria-label="A timeline showing window-end, then the allowed-lateness horizon during which late firings update the result, then state garbage-collection after which truly-late events go to a side output. Plus a triangle of the three-way trade-off between completeness, latency and cost."
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+            <marker
+                id="arwA"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <!-- lifecycle timeline -->
+            <line x1="20" y1="56" x2="380" y2="56" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <text
+                x="200"
+                y="20"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#111110">A WINDOW'S LIFETIME</text
+            >
+            <line x1="120" y1="44" x2="120" y2="68" stroke="#7a1f12"></line><text
+                x="120"
+                y="38"
+                text-anchor="middle"
+                font-size="9"
+                fill="#7a1f12">W passes end</text
+            >
+            <line x1="280" y1="44" x2="280" y2="68" stroke="#9a2417"></line><text
+                x="280"
+                y="38"
+                text-anchor="middle"
+                font-size="9"
+                fill="#9a2417">state GC'd</text
+            >
+            <rect x="120" y="60" width="160" height="20" rx="4" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text x="200" y="74" text-anchor="middle" font-size="9" fill="#244a2e"
+                >allowedLateness → late firings update result</text
+            >
+            <text x="60" y="74" text-anchor="middle" font-size="9" fill="#6b675f">on-time</text>
+            <text x="200" y="98" text-anchor="middle" font-size="9" fill="#9a2417"
+                >after GC → truly late → side output / dead-letter (never silently)</text
+            >
+            <line
+                x1="280"
+                y1="84"
+                x2="330"
+                y2="96"
+                stroke="#9a2417"
+                stroke-dasharray="3 2"
+                marker-end="url(#arwA)"></line>
+            <rect x="332" y="88" width="58" height="22" rx="5" fill="#f7ecea" stroke="#9a2417"
+            ></rect><text x="361" y="103" text-anchor="middle" font-size="8.5" fill="#7a2218"
+                >side out</text
+            >
+            <!-- trade-off triangle -->
+            <text
+                x="500"
+                y="20"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#111110">THREE DIALS</text
+            >
+            <polygon
+                points="500,40 430,150 570,150"
+                fill="#fbfaf2"
+                stroke="#7a1f12"
+                stroke-width="1.5"></polygon>
+            <text
+                x="500"
+                y="34"
+                text-anchor="middle"
+                font-size="9.5"
+                font-weight="700"
+                fill="#2f5d3a">completeness</text
+            >
+            <text
+                x="424"
+                y="164"
+                text-anchor="middle"
+                font-size="9.5"
+                font-weight="700"
+                fill="#1f3a5a">latency</text
+            >
+            <text
+                x="576"
+                y="164"
+                text-anchor="middle"
+                font-size="9.5"
+                font-weight="700"
+                fill="#8a5a00">cost</text
+            >
+            <text x="500" y="118" text-anchor="middle" font-size="8.5" fill="#6b675f"
+                >pick two,</text
+            >
+            <text x="500" y="130" text-anchor="middle" font-size="8.5" fill="#6b675f"
+                >pay the third</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        After <code>W</code> passes window-end, state is kept for <code>allowedLateness</code>; late
+        events re-fire within it. Past the horizon, state is GC'd and truly-late events route to a
+        side output.
+    </figcaption>
+</figure>

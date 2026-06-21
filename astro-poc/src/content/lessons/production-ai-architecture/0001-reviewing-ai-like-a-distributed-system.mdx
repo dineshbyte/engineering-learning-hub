@@ -1,0 +1,630 @@
+---
+# ─── production-ai-architecture · Lesson 1 — MDX-hybrid lesson ────────────────
+# FRONTMATTER = the full lesson contract (head + masthead + wayfinding) PLUS the
+# structured body data lifted out of the prose: the 5-question quiz, the 12
+# leveled interview Q&A (incl. the design rubric) and the 5 footnote sources.
+# Validated at build time by the `lessons` collection schema.
+# The FAQ JSON-LD is emitted by <Interview> from `interview` below — it must NOT
+# also be set on `jsonLd`.
+#
+# HTML-bearing strings (h1Html, interview q/a, rubric, sources.html) use YAML
+# folded block scalars (>-) so embedded ", ', &, < and > need NO escaping.
+#
+# NOTE: the three per-module recap disclosures (<details class="iq"> with NO
+# data-level, one inside each module) are un-leveled, so they are reproduced
+# VERBATIM in the MDX body rather than routed through <Interview> (which requires
+# a level on every item). Likewise the three per-module <details class="mc">
+# memory checks render via three separate <MemoryCheck> calls in the body.
+
+# —— SEO / <head> ——
+title: 'Reviewing an AI Feature Like a Distributed System'
+description: >-
+    Review an AI feature the way you review any production service: reliability, scalability,
+    observability — with one new variable, non-determinism, changing every lens.
+keywords: 'reliability, scalability, observability, cost control, failure modes, distributed systems, non-determinism, llm, token budget, slo, error budget, graceful degradation, latency, tail latency, opentelemetry'
+path: 'production-ai-architecture/lessons/0001-reviewing-ai-like-a-distributed-system.html'
+ogImage: 'assets/og/production-ai-architecture.png'
+ogImageAlt: 'Production AI Architecture · Engineering Vault learning track'
+accentVar: '--track-prodai'
+
+# —— masthead ——
+trackLabel: 'Production AI Architecture'
+kicker: 'Lesson 1 · Production AI Architecture · Senior'
+h1Html: 'Reviewing an AI Feature Like a <em>Distributed System</em>'
+metaLine: '~14 min · 3 modules · the repeatable review that turns "we added AI" into a design you can defend'
+chips:
+    - 'Reliability'
+    - 'Scalability'
+    - 'Observability'
+    - 'Cost control'
+    - 'Failure modes'
+
+# —— routing (used only by the dynamic route) ——
+track: 'production-ai-architecture'
+number: '0001'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: 'What is the single new variable an AI feature adds over a normal remote-dependency service?'
+      correct: 2
+      options:
+          - 'It requires far more compute, so the only real change is provisioning bigger machines'
+          - 'It always responds slower, so latency budgets simply need to be set much higher'
+          - 'The dependency is non-deterministic, so the same input can return a wrong output'
+          - 'It cannot be cached at all, so every single request must be recomputed from scratch'
+    - q: 'An AI endpoint returns 200 with a confident but wrong answer. How does the reliability lens treat it?'
+      correct: 0
+      options:
+          - 'As an outage on the quality axis — availability looks fine but the user was harmed'
+          - 'As a healthy response, because returning a 200 status proves the system is reliable'
+          - 'As a capacity event, since wrong answers are caused only by hitting the token limit'
+          - 'As a billing problem, because correctness is purely a function of how much you spend'
+    - q: 'Your AI traffic is unchanged but requests start getting throttled. What is the binding constraint?'
+      correct: 3
+      options:
+          - 'Your own CPU is pegged, so adding more application pods will immediately resolve it'
+          - 'The database connection pool is exhausted by the volume of writes from the feature'
+          - 'The network egress quota was hit, which only ever affects outbound file transfers'
+          - "A provider token rate limit you don't control — more pods won't raise that ceiling"
+    - q: 'What does AI observability require that classic logs, metrics, and traces do not cover?'
+      correct: 1
+      options:
+          - 'A faster dashboard refresh rate so operators notice latency spikes a little sooner'
+          - 'A quality signal scoring whether the output was correct, grounded, and safe to ship'
+          - 'A second copy of every metric stored in a different region for disaster recovery'
+          - 'A larger log retention window so old request logs are kept for a much longer time'
+    - q: 'The model is rate-limited at peak. What is the right reliability response?'
+      correct: 2
+      options:
+          - 'Hold every request open and wait, since a late correct answer is always acceptable'
+          - 'Retry the same call immediately and repeatedly until the provider finally accepts it'
+          - 'Degrade gracefully — fall back to a faster model, shorten context, or decline honestly'
+          - 'Return a confident guess so the latency dashboard and health check both stay green'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'Why is an AI feature "just a distributed system," and what''s the one thing that''s different?'
+      a: >-
+          <b>Hit these points:</b> it's a service calling a <b>remote, rate-limited, occasionally-down
+          dependency</b> — so the model call gets the same treatment as any flaky API: timeouts,
+          retries with backoff, circuit breakers, back-pressure &rarr; the one new variable is
+          <b>non-determinism</b>: the same input can return a different, sometimes wrong, output &rarr;
+          that's the delta you spend review time on; the rest of reliability theory is <b>inherited,
+          not reinvented</b> &rarr; so the review is "run the usual lenses, then ask what
+          non-determinism does to each."
+    - level: 'core'
+      q: 'What does "reliability" mean for an AI feature, and why isn''t "200 OK" enough?'
+      a: >-
+          <b>Hit these points:</b> reliability for AI = the probability of a <b>useful, correct-enough
+          answer within budget</b> under real load and partial failure — not "the process is up" &rarr;
+          a model that returns a confident wrong answer, hangs for 30s, or is rate-limited is an
+          <b>outage to the user</b> even though the endpoint is healthy &rarr; so you carry two axes:
+          <b>availability/latency</b> and <b>quality</b> &rarr; set an SLO on both and degrade
+          gracefully — fallback model, shorter context, cached answer, or an honest decline — instead
+          of hanging or shipping a wrong answer.
+    - level: 'core'
+      q: "What's the capacity unit for an AI feature, and where's the ceiling?"
+      a: >-
+          <b>Hit these points:</b> the unit is the <b>token</b> (input + output), not the request — you
+          provision and bill in tokens the way you provision CPU and bill in RPS &rarr; the ceiling is
+          usually a <b>provider rate limit</b> (tokens/min) you don't control, not your own pool &rarr;
+          per-request cost and latency <b>scale with length</b>, so a few long-output requests can
+          dominate &rarr; if self-hosted, the bottleneck is <b>KV-cache memory</b>, which grows with
+          context length &times; concurrency &rarr; so capacity planning is queueing + admission
+          control against an upstream limit.
+    - level: 'core'
+      q: 'Name the fourth observability axis AI adds beyond logs, metrics, and traces.'
+      a: >-
+          <b>Hit these points:</b> a <b>quality / eval signal</b> — was the output correct, grounded,
+          and safe &rarr; scored offline on a <b>golden set</b> and sampled online from production
+          &rarr; classic signals go green while the model is confidently wrong, so without a quality
+          axis you can't detect a bad answer &rarr; pair it with <b>auditability</b>: reconstruct the
+          prompt, context, model+version, tools, and output for a given request id &rarr; standardize
+          spans on the <b>OpenTelemetry GenAI conventions</b> so telemetry isn't vendor-locked.
+    - level: 'senior'
+      q: "Your AI feature's p99 latency is 9s and users are abandoning. Where do you look first?"
+      a: >-
+          <b>Hit these points:</b> pull the <b>trace</b> for slow requests and decompose end-to-end
+          latency: retrieval, prompt assembly, model time-to-first-token, generation time, tool calls
+          &rarr; most AI tail latency is <b>generation time</b>, which scales with output length, so
+          check whether slow requests just produce more tokens — then cap or <b>stream</b> output
+          &rarr; separate provider-side latency (queueing behind a rate limit, a slow model version)
+          from your own; the OTel GenAI span attributes tell you which &rarr; a long-output request
+          behind a shared limit creates <b>head-of-line blocking</b> for everyone — add admission
+          control and per-tenant budgets &rarr; mitigate: stream so time-to-first-token is the felt
+          latency, hard-cap generation, fall back to a faster model near the limit.
+    - level: 'senior'
+      q: "Name three failure modes an AI dependency adds that a normal HTTP dependency doesn't, and contain each."
+      a: >-
+          <b>Hit these points:</b> one — <b>silent wrong answer</b> (hallucination): the call succeeds,
+          the answer is confidently wrong; contain with grounding/citations, an eval/guardrail check,
+          and surfacing uncertainty &rarr; two — <b>provider rate-limit / throttle</b>: traffic
+          unchanged but a global or neighbor limit hit; contain with client-side rate limiting,
+          backoff, queueing, and a fallback model &rarr; three — <b>model-version drift</b>: the
+          provider updates the model and behavior regresses; contain by pinning the version where
+          possible and monitoring the quality signal &rarr; bonus — latency cliff from long outputs and
+          cost blowup from runaway tokens; contain with output caps and per-tenant budgets &rarr;
+          theme: these are <b>partial-failure modes</b> — apply the usual
+          timeout/retry/circuit-breaker discipline plus a quality gate.
+    - level: 'senior'
+      q: 'Why does the same input sometimes give a different output, and what does that change about review?'
+      a: >-
+          <b>Hit these points:</b> the model <b>samples</b> from a probability distribution over next
+          tokens, so identical input can yield different output; provider-side model updates, sampling
+          temperature, and floating-point non-determinism add variance &rarr; this is the one variable
+          a normal service lacks, and it bends every lens: you can't assert exact-match in a test, a
+          retry won't return the same answer, and a passing eval can <b>regress silently</b> after a
+          version bump &rarr; so review adds: pin the model version, test on distributions and
+          <b>graded evals</b> not exact strings, and treat output quality as a monitored, drift-prone
+          signal &rarr; everything else is a normal distributed system.
+    - level: 'senior'
+      q: 'You inherit an AI feature with no SLOs. Define a reliability target and an error budget.'
+      a: >-
+          <b>Hit these points:</b> pick SLIs on <b>both axes</b> — availability/latency (fraction
+          answered within a latency budget, e.g. p95 under N seconds) and <b>quality</b> (fraction
+          graded correct-enough on a sampled/golden set) &rarr; set SLO targets per axis from product
+          tolerance: a code assistant tolerates more wrong-but-cheap than a medical summarizer &rarr;
+          the <b>error budget</b> is the allowed miss on each; burning availability means too
+          slow/throttled, burning quality means the model regressed or retrieval degraded &rarr; alert
+          on <b>budget burn rate</b>, not raw errors, and tie release/throttle decisions to remaining
+          budget &rarr; the trap: measuring only availability — a feature can be 100% available and 40%
+          wrong, which the user experiences as broken.
+    - level: 'staff'
+      q: "Walk me through how you'd review a proposed AI feature the way you review any new service."
+      a: >-
+          <b>Hit these points:</b> it <b>IS</b> a distributed system — a call to a remote,
+          rate-limited, occasionally-down dependency — so run the usual lenses: reliability,
+          scalability, availability, observability, cost, failure modes &rarr; add exactly one new
+          variable: the dependency is <b>non-deterministic</b>, so the same input can return a
+          different, sometimes wrong, output &rarr; that bends every lens — reliability now includes
+          "correct-enough" not just "returned 200"; capacity is tokens/sec against a provider rate
+          limit, not RPS against your pool; observability needs a quality axis &rarr; name the new
+          dependencies: <b>provider availability and token cost</b> are now in your critical path and
+          on your bill &rarr; close with the VP's question: what happens when the model is slow, wrong,
+          rate-limited, or down — and can you see it.
+    - level: 'staff'
+      q: 'A team says "it''s just an API call to the model, treat it like any other microservice." Where''s that right, where does it break?'
+      a: >-
+          <b>Hit these points:</b> right — it <b>is</b> a remote dependency, so timeouts, retries with
+          backoff, circuit breakers, bulkheads, idempotency, and back-pressure apply unchanged; don't
+          reinvent reliability theory &rarr; where it breaks — the dependency is <b>non-deterministic</b>
+          and can fail by being <b>wrong, not just down</b>, so a 200 with a confident hallucination
+          passes every classic health check while harming the user &rarr; capacity is a <b>token
+          budget</b> against a provider rate limit you don't own, not RPS against your pool, so
+          saturation looks like throttling and latency cliffs, not CPU &rarr; observability needs a
+          <b>quality axis</b> and per-request auditability a stateless microservice never needed &rarr;
+          so: same skeleton, three deltas — correctness as reliability, tokens as capacity, quality as
+          a monitored signal.
+    - level: 'design'
+      q: 'Run a full architecture review of a proposed customer-facing AI summarization feature.'
+      a: >-
+          <b>A strong answer covers:</b> frame it as a distributed system with a <b>non-deterministic
+          remote dependency</b>, then run the lenses in priority order &rarr; scope and blast radius:
+          who sees it, cost of a wrong vs slow vs down answer, is the model in the critical path or can
+          it be async &rarr; reliability: SLOs on availability <b>and</b> quality, a
+          graceful-degradation ladder, timeouts/retries/circuit breaker around the provider &rarr;
+          scalability: capacity in tokens/sec against the provider limit, queueing and admission
+          control, output caps, per-tenant budgets, KV-cache limits if self-hosted &rarr; observability:
+          OTel GenAI traces, latency/cost/token metrics, an eval signal for quality, request-level
+          auditability &rarr; failure modes: hallucination, rate-limit, version drift, latency cliff,
+          cost blowup — each with a containment &rarr; cost: tokens/request, caching, model tiering,
+          kill switch &rarr; close on what a VP asks: what happens when it's slow, wrong, throttled, or
+          down, and can you see it and roll back.
+    - level: 'design'
+      q: 'Stress-test this: "a single shared model gateway in front of every team''s AI feature, primary provider only, retry-on-error." Where does it hurt at scale?'
+      a: >-
+          <b>A strong answer covers:</b> the gateway shape is right — one place for auth, metering,
+          telemetry, and policy — but the stated config concentrates risk &rarr; <b>single provider, no
+          fallback</b> makes the provider a hard dependency: a regional outage or a global rate-limit
+          event takes down every team at once, so add a fallback model and degrade rather than fail
+          &rarr; <b>naive retry-on-error</b> amplifies a throttle into a retry storm and burns the
+          shared rate limit; use bounded retries with jittered backoff, a circuit breaker, and shed
+          load before the upstream limit &rarr; a shared limit with <b>no per-tenant budget</b> means
+          one team's long-output batch starves everyone (noisy neighbor / head-of-line blocking); add
+          per-tenant token budgets and admission control &rarr; retrying a <b>non-deterministic</b>
+          call may return a different answer, so retries must be safe/idempotent at the feature level
+          &rarr; observability and a per-tenant <b>kill switch</b> are mandatory because the blast
+          radius is now everyone &rarr; net: keep the gateway, add fallback, back-pressure, per-tenant
+          budgets, and isolation.
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Design-round framework</b> — narrate an AI-feature review in this order so the interviewer hears
+    "distributed system first, then the deltas":
+rubric:
+    - >-
+        Frame it: a service calling a <em>remote, rate-limited, non-deterministic</em> dependency — run
+        the usual lenses, then ask what non-determinism does to each.
+    - >-
+        Scope &amp; blast radius: who sees it, cost of a wrong vs slow vs down answer, is the model in
+        the critical path or can it be async / advisory?
+    - >-
+        Reliability: SLOs on <em>availability AND quality</em>; graceful-degradation ladder (fallback
+        model &rarr; shorter context &rarr; cached/templated &rarr; honest decline); timeouts / retries
+        / circuit breaker around the provider.
+    - >-
+        Scalability: capacity in <em>tokens/sec</em> against the provider rate limit; queueing,
+        admission control, output caps, per-tenant budgets; KV-cache limits if self-hosted.
+    - >-
+        Observability: OTel GenAI traces, latency / cost / token metrics, an <em>eval signal</em> for
+        quality, request-level auditability.
+    - >-
+        Failure modes: hallucination, rate-limit, version drift, latency cliff, cost blowup — each with
+        a containment.
+    - >-
+        Cost &amp; control: tokens/request, caching, model tiering, per-tenant metering, and a kill
+        switch — then close on the VP's question.
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          Kleppmann, M., 2017, "Designing Data-Intensive Applications" (DDIA), O'Reilly. Reliability /
+          scalability / maintainability framing and partial-failure discipline (retries, back-pressure,
+          idempotency) ported onto an AI runtime.
+    - id: 's2'
+      html: >-
+          Google, "Site Reliability Engineering" (the SRE Book) &mdash; sre.google/books. SLI / SLO /
+          error budgets, graceful degradation, load shedding. AI inherits this reliability vocabulary
+          rather than getting a new one.
+    - id: 's3'
+      html: >-
+          AWS, "Well-Architected Framework: Generative AI Lens" &mdash;
+          docs.aws.amazon.com/wellarchitected/latest/generative-ai-lens. Reviews a GenAI workload
+          across the six pillars; performance/cost framing for token-based capacity. Numbers
+          illustrative.
+    - id: 's4'
+      html: >-
+          OpenTelemetry, "GenAI semantic conventions" &mdash; opentelemetry.io/docs/specs/semconv/gen-ai.
+          Standard span attributes (model name, token counts, tool calls); prompt/completion content
+          capture is opt-in. Conventions still evolving &mdash; verify exact attribute names against the
+          current spec.
+    - id: 's5'
+      html: >-
+          OWASP, "Top 10 for LLM Applications" &mdash; owasp.org; and NIST, "AI Risk Management
+          Framework (AI RMF 1.0, NIST AI 100-1, 2023)" &mdash;
+          nist.gov/itl/ai-risk-management-framework. Production threat model and GOVERN / MAP / MEASURE
+          / MANAGE functions behind treating the provider as a governed dependency.
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import MemoryCheck from '../../../components/MemoryCheck.astro';
+import {
+    Defs,
+    Fig1,
+    Fig2,
+    Fig3,
+    Fig4,
+    Fig5,
+} from '../../../components/figures/production-ai-architecture/0001-reviewing-ai-like-a-distributed-system/index.ts';
+
+<Defs />
+
+<div class="mission">
+    <strong>Your bar:</strong> walk into a design review for an AI feature and run it through the
+    <em>same</em> lenses you'd run on any production service — reliability, scalability,
+    availability, observability, cost, failure modes — then name the <b>one new variable</b> AI
+    adds,
+    <b>non-determinism</b>, and show exactly how it bends each lens. By the end you can answer the
+    question a VP actually asks:{' '}
+    <b>what happens when the model is slow, wrong, rate-limited, or down — and can you see it?</b>
+    <sup>
+        <a href="#s1" id="r1">
+            1
+        </a>
+    </sup>
+</div>
+
+<p>
+    An AI feature is not a new kind of system. It's a service calling a remote dependency. Four
+    moves frame the review:
+</p>
+
+<div class="chips">
+    <span class="chip">
+        it's a <b>distributed system</b> — run the usual lenses
+    </span>
+    <span class="chip c2">
+        the dependency is <b>non-deterministic</b> — the one new variable
+    </span>
+    <span class="chip c3">
+        capacity is a <b>token budget</b>, not RPS
+    </span>
+    <span class="chip c4">
+        reliability now includes <b>"correct-enough,"</b> not just "200 OK"
+    </span>
+</div>
+
+<Fig1 />
+
+<nav class="toc">
+    <a href="#m1">1 · Reliability (correct-enough, not just up)</a>
+    <a href="#m2">2 · Scalability (tokens, not requests)</a>
+    <a href="#m3">3 · Observability (+ a quality axis)</a>
+    <a href="#quiz">★ Retrieval practice</a>
+    <a href="#interview">★ Interview questions</a>
+    <a href="#interview">★ The VP's questions</a>
+</nav>
+
+<section class="lvl" id="m1">
+    <div class="lvltop">
+        <span class="num">1</span>
+        <h2>Reliability</h2>
+    </div>
+    <p class="tagline">
+        For a normal service, reliable means "it responded, within budget." For an AI feature you
+        carry a <b>second axis</b>: was the response <b>correct-enough</b>? A confident wrong answer is
+        an outage the health check never sees.<sup><a href="#s2" id="r2">2</a></sup>
+    </p>
+
+    <h3>Two axes, not one — availability AND quality</h3>
+    <Fig2 />
+
+    <h3>The graceful-degradation ladder — shed quality before availability</h3>
+    <Fig3 />
+
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> Reliability for AI = the probability of a useful, correct-enough answer within
+            budget, under real load and partial failure. Two axes: availability/latency and quality.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> The model can be "up" yet slow, rate-limited, or confidently wrong.
+            Each of those is an outage to the user even though the endpoint returns 200.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> A specialist who's always at their desk but sometimes gives wrong
+            advice. "Available" isn't the bar; "reliably useful" is.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> SRE's SLI/SLO/error-budget discipline — but you spend a budget on two
+            axes, latency and correctness, not one.
+        </div>
+    </div>
+
+    <div class="myth">
+        <div class="m">&#10007; "The model endpoint is up and returning 200, so the feature is reliable."</div>
+        <div class="t">&#10003; A 200 with a confident wrong answer passes every health check and still harms the user. Reliability needs a quality axis the health check can't see.</div>
+    </div>
+    <div class="myth">
+        <div class="m">&#10007; "If the provider is slow, we just wait — better a late right answer than none."</div>
+        <div class="t">&#10003; A 30s hang is an outage. Degrade gracefully: fall back to a faster model, shorten context, serve a cached answer, or decline honestly.</div>
+    </div>
+
+    <div class="rule">
+        <span>&#128229; Memory rule:</span> Reliable AI means <span>useful and correct-enough, within
+        budget</span> — not "the model is up." Set an SLO on <span>quality</span>, not just
+        availability.
+    </div>
+
+    <MemoryCheck
+        items={[
+            { q: 'What are the two axes of AI reliability?', a: 'availability/latency (responded in budget) and quality (correct-enough)' },
+            { q: 'Why is "200 OK" insufficient?', a: 'a fast, confident wrong answer passes the health check but harms the user — quality is invisible to availability monitoring' },
+            { q: "What's the degradation ladder?", a: 'fallback model &rarr; shorter context &rarr; cached/templated answer &rarr; honest decline — shed quality before availability' },
+        ]}
+    />
+
+    <details class="iq">
+        <summary>M1 — What does "reliability" mean for an AI feature, and why isn't "200 OK" enough?</summary>
+        <div class="a">
+            <b>Hit these points:</b> reliability for AI = the probability of a useful, correct-enough answer within budget under real load and partial failure — not "the model process is up" &rarr; a model that returns a confident wrong answer, or hangs for 30s, or is rate-limited, is an outage to the user even though the endpoint is technically healthy &rarr; so you carry two axes: availability (did it respond in budget) and quality (was the response correct/grounded/safe) &rarr; set an SLO on both, spend an error budget against both, and degrade gracefully — shorter context, cheaper fallback model, cached/templated answer, or an honest "can't do that right now" — rather than hanging or shipping a wrong answer.
+        </div>
+    </details>
+
+</section>
+
+<section class="lvl" id="m2">
+    <div class="lvltop">
+        <span class="num">2</span>
+        <h2>Scalability</h2>
+    </div>
+    <p class="tagline">
+        A normal service scales in <b>requests per second</b> against your own pool. An AI feature
+        scales in <b>tokens per second</b> against a <b>provider rate limit you don't control</b> — and
+        the cost of one request grows with how much it reads and writes.<sup><a href="#s3" id="r3">3</a></sup>
+    </p>
+
+    <h3>The capacity unit is the token, and the ceiling is upstream</h3>
+    <Fig4 />
+
+    <h3>What changes vs a normal stateless service</h3>
+    <table>
+        <thead>
+            <tr><th>Dimension</th><th>Normal service</th><th>AI feature</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><b>Capacity unit</b></td><td>Requests / sec</td><td>Tokens / sec (input + output)</td></tr>
+            <tr><td><b>The ceiling</b></td><td>Your own pool / CPU</td><td>A provider rate limit you don't control</td></tr>
+            <tr><td><b>Per-request cost</b></td><td>Roughly flat</td><td>Scales with input + output length</td></tr>
+            <tr><td><b>Self-hosted bottleneck</b></td><td>CPU / connections</td><td>KV-cache memory (context len &times; concurrency)</td></tr>
+            <tr><td><b>Saturation symptom</b></td><td>CPU pegged, queue grows</td><td>Provider throttling, latency cliff</td></tr>
+        </tbody>
+    </table>
+
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> Inference capacity planning = sizing for tokens/sec and concurrent requests
+            against a provider rate limit (or self-hosted GPU memory), with queueing, batching, and
+            admission control.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> The binding constraint moved off your box. You bill and provision in
+            tokens; the upstream limit and output length, not your CPU, decide when you saturate.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> A toll booth with a fixed cars-per-minute throughput. You can't widen
+            it; you meter who enters and queue the rest so nobody gridlocks.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> A bounded connection pool against a downstream you don't own — admission
+            control and back-pressure keep one fat query from starving the rest.
+        </div>
+    </div>
+
+    <div class="myth">
+        <div class="m">&#10007; "We'll just autoscale our pods if AI traffic grows."</div>
+        <div class="t">&#10003; More pods don't raise the provider's token limit. Past the upstream ceiling you must queue, shed, batch, or fall back — scaling your tier does nothing.</div>
+    </div>
+    <div class="myth">
+        <div class="m">&#10007; "Every AI request costs about the same, so capacity is just RPS."</div>
+        <div class="t">&#10003; Cost and latency scale with input + output length. A few long-context, long-output requests can consume the budget and block many short ones.</div>
+    </div>
+
+    <div class="rule">
+        <span>&#128229; Memory rule:</span> Provision and bill in <span>tokens, not requests</span>; the
+        ceiling is an <span>upstream limit you don't own</span>. Add admission control before the wall,
+        not after the cliff.
+    </div>
+
+    <MemoryCheck
+        items={[
+            { q: "What's the capacity unit for an AI feature?", a: 'the token (input + output) against a provider rate limit, not RPS against your own pool' },
+            { q: "Why won't autoscaling pods fix saturation?", a: "the ceiling is the provider's token limit, not your CPU; more pods don't raise it — you must queue, shed, batch, or fall back" },
+            { q: "What's the self-hosted bottleneck?", a: 'KV-cache memory, which grows with context length &times; concurrency — long-context requests starve short ones' },
+        ]}
+    />
+
+    <details class="iq">
+        <summary>M2 — How is capacity planning different for an AI feature than for a normal stateless service?</summary>
+        <div class="a">
+            <b>Hit these points:</b> the capacity unit is the token, not the request — you provision and bill in input+output tokens the way you provision CPU and bill in RPS &rarr; the ceiling is usually a provider rate limit (tokens/min) you don't control, not your own thread pool &rarr; on self-hosted GPUs the binding constraint is KV-cache memory, which grows with context length &times; concurrency, so a few long-context requests can starve many short ones &rarr; a long output costs latency and money linearly, and queueing plus admission control decide whether you degrade gracefully or fall off a latency cliff &rarr; model it as a queue with a token budget and a hard upstream limit, and add load shedding before you hit it.
+        </div>
+    </details>
+
+</section>
+
+<section class="lvl" id="m3">
+    <div class="lvltop">
+        <span class="num">3</span>
+        <h2>Observability</h2>
+    </div>
+    <p class="tagline">
+        Logs, metrics, and traces still apply — but AI adds a <b>fourth axis classic systems don't
+        have</b>: a <b>quality signal</b> (was the output correct, grounded, safe?). And you must be
+        able to reconstruct, after the fact, exactly what one request saw and did.<sup><a href="#s4" id="r4">4</a></sup>
+    </p>
+
+    <h3>Three signals + a quality axis + auditability</h3>
+    <Fig5 />
+
+    <h3>Why this lens is heavier for AI</h3>
+    <table>
+        <thead>
+            <tr><th>Question to answer</th><th>Normal service</th><th>AI feature</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><b>Is it up / fast?</b></td><td>Metrics + traces</td><td>Same — plus token &amp; cost metrics</td></tr>
+            <tr><td><b>Was it correct?</b></td><td>Mostly implied by 200</td><td>A separate eval/quality signal — the new axis</td></tr>
+            <tr><td><b>What did it do &amp; why?</b></td><td>Request log</td><td>Full call tree: prompt, context, model+version, tools</td></tr>
+            <tr><td><b>Did behavior drift?</b></td><td>Rare (you ship code)</td><td>Common — provider can update the model under you</td></tr>
+        </tbody>
+    </table>
+
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> AI observability = answering "what did the system do and why" from telemetry
+            across the trace/span call tree, an eval signal for quality, and cost/usage —
+            logs/metrics/traces plus a quality axis.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> The output can be wrong while every classic signal looks green.
+            Without a quality signal and per-request auditability you can't detect or debug a wrong
+            answer.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> A flight recorder: you don't just log that the plane landed — you can
+            replay every input and decision to explain a bad outcome afterward.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> Distributed tracing with a correctness assertion bolted on — the span
+            tree shows what ran; the eval shows whether the result was right.
+        </div>
+    </div>
+
+    <div class="myth">
+        <div class="m">&#10007; "We have latency and error dashboards, so the AI feature is observable."</div>
+        <div class="t">&#10003; Those go green while the model is confidently wrong. You need a quality/eval signal and the ability to reconstruct what one request saw and did.</div>
+    </div>
+    <div class="myth">
+        <div class="m">&#10007; "We'll log everything, including full prompts and completions, by default."</div>
+        <div class="t">&#10003; Prompt/completion content carries PII and cost weight, so capturing it is opt-in and governed. Capture structured attributes by default, raw content deliberately.</div>
+    </div>
+
+    <div class="rule">
+        <span>&#128229; Memory rule:</span> Logs, metrics, traces <span>plus a quality axis</span>. If
+        you can't reconstruct what a request saw and <span>whether it was right</span>, it isn't
+        observable.
+    </div>
+
+    <MemoryCheck
+        items={[
+            { q: "What's the fourth axis AI adds?", a: 'a quality/eval signal — was the output correct, grounded, safe — scored offline on a golden set and sampled online' },
+            { q: 'What must auditability let you reconstruct?', a: 'the prompt, retrieved context, model+version, tool calls, and output for a given request id, retained' },
+            { q: 'Why prefer OpenTelemetry GenAI conventions?', a: 'a standard attribute set (model, token counts, tool calls) keeps telemetry from being vendor-locked' },
+        ]}
+    />
+
+    <details class="iq">
+        <summary>M3 — What's the minimum observability you'd require before letting an AI feature into production?</summary>
+        <div class="a">
+            <b>Hit these points:</b> classic three signals plus a fourth axis &rarr; traces: the full agent-loop call tree — model calls, retrievals, tool calls, latency, token counts per span, ideally on the OpenTelemetry GenAI conventions so you're not vendor-locked &rarr; metrics: latency (with tails), error and rate-limit rates, tokens/request, cost/request &rarr; the quality axis: an eval signal scoring whether output was correct, grounded, and safe, offline on a golden set and sampled online &rarr; auditability: reconstruct exactly what a request saw and did — prompt, retrieved context, model+version, tool calls, output — tied to a request id and retained &rarr; if you can't answer "what did it do for ticket #4471 and was it right," you're not ready.
+        </div>
+    </details>
+
+</section>
+
+<div class="rule" style="background:var(--card);color:var(--ink);border:1px solid var(--line)">
+    <span style="color:var(--accent)">&#9733; Principal-engineer view:</span> Resist the urge to
+    invent "AI architecture." You already own the playbook — SLOs, error budgets, graceful
+    degradation, back-pressure, tracing. Run it. Then spend your scrutiny on the{' '}
+    <b>three deltas non-determinism creates</b>: correctness becomes part of reliability, tokens
+    become the capacity unit, and output quality becomes a monitored signal that can drift. The
+    provider and its token bill are now in your critical path — review them like any other hard
+    dependency, with a fallback and a kill switch.
+    <sup>
+        <a href="#s5" id="r5">
+            5
+        </a>
+    </sup>
+</div>
+
+<p style="font-size:.86rem;color:var(--muted);margin-top:1.4rem">
+    This review is the methodology the whole track runs on. For where these concerns land inside a
+    multi-agent runtime, see{' '}
+    <a href="../../ai-agents/lessons/0004-agent-systems-and-production.html">
+        AI Agents · Lesson 4 — Agent systems &amp; production
+    </a>
+    ; for the context-pipeline review angle, see
+    <a href="../../context-engineering/lessons/0005-architecture-reviews-and-production-design.html">
+        Context Engineering · Lesson 5 — Architecture reviews &amp; production design
+    </a>
+    . This track is the dedicated production-review methodology.
+</p>
+
+<h2 class="sec" id="quiz">
+    Retrieval practice — test the three lenses
+</h2>
+
+<Quiz items={frontmatter.quiz} />
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+<Sources items={frontmatter.sources} />

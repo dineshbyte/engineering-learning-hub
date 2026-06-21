@@ -1,0 +1,505 @@
+---
+# ─── rest-api · Lesson 8 — Authentication & Authorization (MDX-hybrid) ─────────
+# FRONTMATTER = the full lesson contract (head + masthead + wayfinding) PLUS the
+# structured body data lifted out of the prose: the quiz, the 12 interview Q&A
+# (incl. the design rubric) and the footnote sources. Validated at build time by
+# the `lessons` collection schema (src/content.config.ts → src/schema/lesson.ts).
+# The FAQ JSON-LD is emitted by <Interview> from `interview` below — it must NOT
+# also be set on `jsonLd`, or the page would carry two FAQPage blobs.
+#
+# HTML-bearing strings (h1Html, interview q/a, rubric, sources.html) use YAML
+# folded block scalars (>-) so the embedded ", ', &, < and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'API Authentication & Authorization (OAuth2/JWT)'
+description: >-
+    API authentication and authorization: AuthN vs AuthZ, OAuth2 flows, JWT vs opaque tokens, scopes
+    and RBAC, and securing REST endpoints against common attacks.
+keywords: 'api authentication, authorization, status codes, http methods, rest, api, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors'
+path: 'rest-api/lessons/0008-authentication-and-authorization.html'
+ogImage: 'assets/og/rest-api.png'
+ogImageAlt: 'REST API · Engineering Vault learning track'
+accentVar: '--track-rest'
+
+# —— masthead ——
+trackLabel: 'REST API'
+kicker: 'Lesson 8 · Auth · visual edition'
+h1Html: 'Authentication &amp; authorization'
+metaLine: '~7 min · one diagram per idea · retrieval practice at the end'
+chips:
+    - 'API authentication'
+    - 'Authorization'
+    - 'Status codes'
+    - 'HTTP methods'
+    - 'REST'
+
+# —— wayfinding ——
+prev:
+    href: '0007-caching-and-conditional-requests.html'
+    title: 'Caching & conditional requests (visual)'
+next:
+    href: '0009-error-design-rate-limiting-observability.html'
+    title: 'Errors, rate limiting & observability (visual)'
+
+# —— routing (used only by the dynamic route) ——
+track: 'rest-api'
+number: '0008'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: "An authenticated user requests another tenant's record and is refused. Correct status?"
+      correct: 2
+      options:
+          - '401 Unauthorized, since their token has now expired'
+          - '429 Too Many, since the request rate was exceeded'
+          - '403 Forbidden, since identity is known but not allowed'
+          - '404 Not Found, since the record id was invalid here'
+    - q: 'Which statement about OAuth 2.0 and OIDC is correct?'
+      correct: 1
+      options:
+          - 'OAuth2 alone authenticates a user from its access token'
+          - "OIDC adds an identity layer over OAuth2's delegated authz"
+          - 'OIDC replaces OAuth2 entirely for machine-to-machine flows'
+          - 'OAuth2 encrypts the token payload so secrets ride inside'
+    - q: "A JWT's chief weakness versus a server-side session is that it…"
+      correct: 3
+      options:
+          - 'cannot ever be validated without a shared central store'
+          - 'leaks its full payload because each claim is encrypted'
+          - 'forces sticky routing of a user onto one single node'
+          - 'is hard to revoke before its own expiry time arrives'
+    - q: 'The right defense against BOLA on GET /accounts/{id} is to…'
+      correct: 0
+      options:
+          - "verify the caller's tenant actually owns that exact object"
+          - 'swap the integer id for a long unguessable random value'
+          - 'require a fresh login on each separate account lookup hit'
+          - 'cache the account record so repeated reads stay much faster'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'Define authentication vs authorization.'
+      a: >-
+          <p><strong>Authentication (AuthN)</strong> answers <em>"who are you?"</em> — proving
+          identity from a credential. <strong>Authorization (AuthZ)</strong> answers <em>"what may
+          you do?"</em> — deciding whether a <em>known</em> principal may perform <em>this</em>
+          action on <em>this</em> resource. AuthN happens first; AuthZ runs on every protected
+          operation after.</p>
+    - level: 'core'
+      q: 'Which status code maps to a missing/invalid credential vs an authenticated-but-not-permitted request?'
+      a: >-
+          <p>Missing or invalid credential → <code>401 Unauthorized</code> (a historical misnomer;
+          it really means <em>unauthenticated</em>). Known principal who isn't permitted →
+          <code>403 Forbidden</code>.</p>
+    - level: 'core'
+      q: 'Is OAuth2 an authentication protocol?'
+      a: >-
+          <p>No. OAuth 2.0 is a <strong>delegated authorization</strong> framework: it lets a user
+          grant an app scoped access to their resources without sharing a password. Treating an
+          OAuth access token as proof of <em>identity</em> is a classic gotcha — the access token is
+          for the resource server, not for identifying the user to the app.</p>
+    - level: 'core'
+      q: 'What is the #1 risk on the OWASP API Top 10 (2023)?'
+      a: >-
+          <p><strong>API1: BOLA — Broken Object Level Authorization.</strong> The endpoint confirms
+          you're authenticated (and maybe role-permitted) but never checks you own the
+          <em>specific</em> object, so changing an id returns someone else's data. It's #1 because
+          it's pervasive and high-impact.</p>
+    - level: 'senior'
+      q: 'What problem does PKCE solve, and how?'
+      a: >-
+          <p>It protects <strong>public clients</strong> (SPAs, mobile apps that can't keep a
+          secret) against <strong>authorization-code interception</strong>. The client generates a
+          random <code>code_verifier</code>, sends its hash (<code>code_challenge</code>) on the auth
+          request, and must present the original verifier at token exchange. An intercepted code is
+          useless without the verifier, binding the code to the requester.</p>
+    - level: 'senior'
+      q: 'What is the <code>aud</code> (audience) claim and why must a resource server check it?'
+      a: >-
+          <p><code>aud</code> names the <strong>intended recipient(s)</strong> of the token. A
+          resource server must verify the token was issued <em>for it</em> — otherwise a token
+          minted for service A could be <strong>replayed against service B</strong> (the "confused
+          deputy"). Audience-checking is what stops one service's token from being a skeleton key for
+          another.</p>
+    - level: 'senior'
+      q: 'What is object-level authorization and why is it the one that bites?'
+      a: >-
+          <p>It verifies the authenticated principal may act on <strong>this specific object</strong>,
+          not merely that they're authenticated or role-permitted. It bites because RBAC/ABAC answer
+          "can this <em>kind</em> of user do this <em>kind</em> of thing" but not "does <em>this</em>
+          user own <em>this</em> record." Skipping it is OWASP API #1 — <strong>BOLA</strong> — the
+          most common API breach.</p>
+    - level: 'senior'
+      q: 'What is the chief weakness of a JWT versus a server-side session?'
+      a: >-
+          <p><strong>Revocation.</strong> A self-contained token is valid until <code>exp</code>, no
+          matter what — there's no row to delete. A server-side session is the opposite: trivial to
+          revoke (delete it), but <strong>stateful</strong> (needs a shared store or sticky
+          sessions). The design tension is <em>pure statelessness vs instant logout</em>.</p>
+    - level: 'staff'
+      q: 'Explain the <code>alg: none</code> and algorithm-confusion attacks.'
+      a: >-
+          <p><strong><code>alg: none</code>:</strong> attacker sets the header algorithm to
+          <code>none</code> and strips the signature; a naive verifier that trusts the header accepts
+          an unsigned token. <strong>Algorithm confusion (RS256→HS256):</strong> the server expects
+          an RSA-signed token (verify with the <em>public</em> key) but the attacker sends an
+          <code>HS256</code> token signed with that <em>public key as the HMAC secret</em>; a library
+          that picks the algorithm from the header validates it. Defense: <strong>pin the expected
+          algorithm(s) server-side</strong> and never let the token's header choose how it's
+          verified.</p>
+    - level: 'staff'
+      q: 'mTLS vs signed JWTs for service-to-service auth — how do you choose?'
+      a: >-
+          <p><strong>mTLS</strong> authenticates the <em>connection</em> at the transport layer —
+          strong, sender-bound, great inside a service mesh, but it tells you <em>which service</em>
+          connected, not <em>on whose behalf</em>. <strong>Signed JWTs</strong> carry
+          application-level claims (caller, scopes, end-user context, audience) and survive proxy
+          hops, but are bearer by default (replayable if leaked). Mature systems combine them:
+          <strong>mTLS for channel identity + a JWT for fine-grained, propagated authZ
+          context</strong>.</p>
+    - level: 'staff'
+      q: 'How do you keep authorization consistent across dozens of microservices?'
+      a: >-
+          <p>Externalize policy: a <strong>centralized decision model</strong> (e.g. a policy engine
+          / OPA-style PDP, or a relationship-based system à la Google Zanzibar for object-level
+          checks) with services as enforcement points. Propagate identity and scopes via signed
+          tokens, version policies, and test them. The anti-pattern is ad-hoc <code>if</code> checks
+          copy-pasted per service — they drift, and one missed check is a BOLA.</p>
+    - level: 'design'
+      q: 'Design end-to-end authentication and authorization for a multi-tenant SaaS API serving both end users and partner backends.'
+      a: >-
+          <p><b>A strong answer covers:</b> separate the actors first — interactive users vs
+          machine-to-machine partners have different grants &rarr; standardize on
+          <strong>OAuth2</strong>: end users via <strong>Authorization Code + PKCE</strong> with
+          <strong>OIDC</strong> for identity (an <code>id_token</code> with <code>sub</code>/<code>email</code>),
+          partner backends via <strong>Client Credentials</strong> or <strong>mTLS</strong> with no
+          user in the loop &rarr; issue <strong>short-lived signed JWT access tokens + rotating
+          refresh tokens</strong>; sign with RS256/ES256 and publish a JWKS so every resource server
+          validates locally without holding signing power — preserving REST statelessness &rarr; on
+          every request, validate signature, <strong>pin the algorithm</strong> (reject
+          <code>alg: none</code>/confusion), and check <code>iss</code>, <code>aud</code> (audience
+          is you, to stop confused-deputy replay), and <code>exp</code>/<code>nbf</code> &rarr;
+          authorization in layers: <strong>scopes</strong> for coarse "what the token may do,"
+          role/attribute checks, and critically the <strong>per-object tenant/owner check</strong>
+          derived from the token (<code>WHERE id=:id AND tenant_id=:tokenTenant</code>) enforced in a
+          shared data layer so no endpoint can forget — this is what shuts down BOLA, the #1 OWASP
+          API risk &rarr; revocation: short expiry for the common case + a denylist/introspection for
+          emergency logout, family revocation on refresh-token reuse, JWKS <code>kid</code> rotation
+          if a key leaks &rarr; hygiene: TLS everywhere including internal hops, tokens only in
+          headers, secrets rotated, no PII in the JWT &rarr; name the trade-off: stateless JWTs scale
+          out but make instant revocation hard, which the short-expiry + denylist combo resolves at
+          the cost of a little state.</p>
+    - level: 'design'
+      q: 'Design the authorization model and OWASP-API-Top-10 defenses for a public REST API exposing per-user resources by id.'
+      a: >-
+          <p><b>A strong answer covers:</b> start from the threat model — APIs expose object ids
+          directly and are hit programmatically, so authorization (not injection) is the dominant
+          breach class &rarr; authenticate with bearer tokens over TLS, but treat authentication as
+          table stakes; the work is authorization &rarr; defend <strong>API1 BOLA</strong> with a
+          per-object owner/tenant check on every access, derived from the token, in a shared
+          data-access layer; make clear that unguessable UUIDs are obscurity, not a control &rarr;
+          defend <strong>API3 BOPLA</strong> with explicit allow-lists for readable and writable
+          fields — never bind request bodies straight onto the model (mass assignment like
+          <code>"isAdmin":true</code>) and never over-return (<code>passwordHash</code>, others'
+          PII) &rarr; defend <strong>API5 BFLA</strong> by denying by default and enforcing
+          role/permission per function including non-GET methods, so a user can't reach admin routes
+          by guessing a path or swapping a verb &rarr; defend <strong>API4 Unrestricted Resource
+          Consumption</strong> with rate limiting (<code>429</code> + <code>Retry-After</code>),
+          pagination caps, payload-size/timeout/query-complexity limits, and per-principal quotas
+          (also stops financial DoS) &rarr; defend <strong>API2 Broken Authentication</strong> with
+          strict token validation (pin <code>alg</code>, check <code>iss</code>/<code>aud</code>/<code>exp</code>),
+          login rate limiting + MFA, short token lifetimes &rarr; if the API fetches user-supplied
+          URLs, defend <strong>API7 SSRF</strong> by allow-listing destinations, blocking
+          private/link-local ranges, and resolve-then-validate against DNS rebinding &rarr;
+          cross-cutting: return safe errors (no stack traces / SQL), audit-log authorization
+          decisions, and add automated cross-tenant / privilege-escalation tests &rarr; name the
+          trade-off: centralizing policy (a PDP / Zanzibar-style relationship model) keeps checks
+          consistent across services but adds a dependency vs fast-but-drift-prone per-service
+          <code>if</code> checks.</p>
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Design-round framework</b> — drive any API auth prompt through these, out loud:
+rubric:
+    - 'Clarify actors &amp; trust boundaries: end users (web/mobile/SPA) vs machine clients (partner backends, services), single- vs multi-tenant, regulatory constraints.'
+    - 'Authentication: pick grants per actor — <strong>Authorization Code + PKCE</strong> (+ OIDC for identity) for users, <strong>Client Credentials</strong> or <strong>mTLS</strong> for machines.'
+    - 'Token strategy: short-lived signed JWT access tokens + rotating refresh tokens; choose HS256 (one domain) vs RS256/ES256 + JWKS (multi-service); pin <code>alg</code>, check <code>iss</code>/<code>aud</code>/<code>exp</code>.'
+    - 'Authorization layers: coarse <strong>scopes</strong> + role/attribute checks, then the one that bites — <strong>per-object owner/tenant checks</strong> to shut down BOLA — enforced in a shared data layer, deny-by-default per function.'
+    - 'Revocation &amp; key lifecycle: short expiry + denylist/introspection for emergency logout; JWKS <code>kid</code> rotation for signing keys.'
+    - 'Transport &amp; hygiene: TLS everywhere (incl. internal hops), tokens only in the <code>Authorization</code> header, secrets rotated, sensitive fields never in a JWT or logs.'
+    - 'Threat model &amp; observability: walk the OWASP API Top 10 (BOLA/BOPLA/BFLA, broken auth, SSRF); audit-log auth decisions; test cross-tenant and privilege-escalation paths.'
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          1. OWASP API Security Top 10 (2023) —
+          <a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/">owasp.org</a>.
+          <a href="#r1">↩</a>
+    - id: 's2'
+      html: >-
+          2. OAuth 2.0 Authorization Framework, RFC 6749 —
+          <a href="https://www.rfc-editor.org/rfc/rfc6749">rfc-editor.org</a>. <a href="#r2">↩</a>
+    - id: 's3'
+      html: >-
+          3. OpenID Connect — <em>How Connect Works</em> —
+          <a href="https://openid.net/developers/how-connect-works/">openid.net</a>.
+          <a href="#r3">↩</a>
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import Rehearse from '../../../components/Rehearse.astro';
+import {
+    Fig1,
+    Fig2,
+    Fig3,
+    Fig4,
+    Fig5,
+} from '../../../components/figures/rest-api/0008-authentication-and-authorization/index.ts';
+
+<div class="mission">
+    <strong>Why this, first.</strong> Security is non-negotiable at the senior bar — a fuzzy answer
+    here ends interviews. Interviewers probe three things hard:{' '}
+    <strong>AuthN-vs-AuthZ precision</strong>, the <strong>OAuth2/JWT trade-offs</strong> you'd
+    actually deploy, and
+    <strong>object-level authorization (BOLA)</strong> — the #1 API vulnerability on the OWASP list.
+    <sup>
+        <a href="#s1" id="r1">
+            1
+        </a>
+    </sup>{' '}
+    Get these crisp and you sound like someone who has shipped and been breached. Stay vague and you
+    sound like someone who has only read about it.
+</div>
+
+<div class="chips">
+    <span class="chip">
+        First prove <b>who you are</b>
+    </span>
+    <span class="chip">
+        then what you <b>may do</b>
+    </span>
+    <span class="chip">
+        on <b>this exact object</b>
+    </span>
+    <span class="chip">
+        over <b>TLS, every node</b>
+    </span>
+</div>
+
+<h2 class="sec">The distinction everything hangs on</h2>
+
+<p>
+    The fastest way to lose the room is to slur the two together. They are different questions, fail
+    at different layers, and map to different status codes:
+</p>
+
+<Fig1 />
+
+<h2 class="sec">Credential schemes and where each fits</h2>
+
+<Fig2 />
+
+<div class="myth">
+    <div class="m">✗ Myth: "OAuth2 logs the user in, so the access token proves who they are."</div>
+    <div class="t">
+        ✓ Truth: OAuth2 delegates authorization; you need OIDC's <code>id_token</code> to
+        authenticate.
+    </div>
+</div>
+
+<h2 class="sec">The OAuth2 authorization-code flow (+ PKCE)</h2>
+
+<p>
+    Name the right grant for the client and you've signalled real-world use, not a tutorial. For
+    <em>users</em> via web, mobile, or SPA, it's Authorization Code + PKCE:
+</p>
+
+<Fig3 />
+
+<div class="facts">
+    <div class="fact">
+        <b>Auth Code + PKCE</b> For users via web / mobile / SPA. PKCE protects public clients by
+        binding the code to whoever requested it.
+    </div>
+    <div class="fact">
+        <b>Client Credentials</b> Machine-to-machine, <em>no user</em>. The service authenticates as
+        itself — partner backends, internal services.
+    </div>
+    <div class="fact blue">
+        <b>Scopes &amp; audience</b> Tokens carry <code>scopes</code> (e.g. <code>orders:read</code>
+        ) and an <code>aud</code>. The resource server must check the token was issued{' '}
+        <em>for it</em>.
+    </div>
+    <div class="fact blue">
+        <b>Legacy — avoid</b> Implicit and Resource-Owner-Password grants are deprecated; naming
+        them as your default is a red flag.
+    </div>
+</div>
+
+<h2 class="sec">JWT structure — and the trade-off vs. sessions</h2>
+
+<p>
+    A JWT is three base64url parts joined by dots, signed so any node can verify it
+    <em>statelessly</em> — which fits REST perfectly:
+</p>
+
+<Fig4 />
+
+<div class="facts">
+    <div class="fact">
+        <b>JWT — self-contained</b> Verified statelessly on any node, fits REST. Catch: payload is
+        readable, and revocation before <code>exp</code> is hard.
+    </div>
+    <div class="fact">
+        <b>Server-side session</b> Opaque id pointing at server state. Trivial to revoke (delete the
+        row), but stateful — every node needs a shared store.
+    </div>
+    <div class="fact blue">
+        <b>The revocation answer that scores</b> Short-lived access tokens + refresh tokens with
+        rotation, backed by a denylist / introspection for emergency revoke.
+    </div>
+    <div class="fact blue">
+        <b>Validate everything</b> Check signature; pin alg, reject <code>alg:none</code> and
+        alg-confusion; verify <code>iss</code>, <code>aud</code>, <code>exp</code> — on every node.
+    </div>
+</div>
+
+<p class="pull">
+    <strong>Validate every token, every request, on every node.</strong> Short expiry shrinks the
+    blast radius; the denylist handles the "log this device out now" case. A JWT you don't fully
+    validate is just an attacker-supplied JSON blob.
+</p>
+
+<h2 class="sec">The model that actually gets you breached</h2>
+
+<p>
+    <strong>RBAC</strong> grants by <em>role</em>; <strong>ABAC</strong> decides from
+    <em>attributes</em> (department, region, resource tags) for finer policy. Both answer "can this
+    <em>kind</em> of principal do this <em>kind</em> of thing" — neither, alone, checks you own
+    <em>this</em> object:
+</p>
+
+<Fig5 />
+
+<div class="rule">
+    <span>🔐 Memory rule:</span> AuthN (who? → 401) before AuthZ (may you? → 403). OAuth2 =
+    authorization, OIDC = authentication. Validate the JWT fully on every node; check object
+    ownership on every access — that's what stops BOLA.
+</div>
+
+<h2 class="sec">Transport &amp; hygiene (forgotten under pressure)</h2>
+
+<div class="facts">
+    <div class="fact">
+        <b>TLS always</b> Bearer tokens over plaintext is game over — no exceptions, including
+        internal hops.
+    </div>
+    <div class="fact">
+        <b>Tokens never in URLs</b> They leak into access logs, history, and <code>Referer</code>.
+        Authorization header only.
+    </div>
+    <div class="fact">
+        <b>Cookies hardened</b> <code>HttpOnly</code> + <code>Secure</code> + <code>SameSite</code>{' '}
+        keep tokens out of JS (XSS) and off cross-site requests (CSRF).
+    </div>
+    <div class="fact">
+        <b>mTLS + rotate</b> Mutual TLS authenticates both ends; rotation limits damage when a key
+        inevitably leaks.
+    </div>
+</div>
+
+<h2 class="sec">Retrieval practice</h2>
+
+<p>Close the lesson in your mind first, then answer from memory. Immediate feedback below.</p>
+
+<Quiz items={frontmatter.quiz} id="quiz" />
+
+<h2 class="sec">Rehearse the answer out loud</h2>
+
+<Rehearse
+    promptHtml={`Interviewer: <strong>"Design authentication and authorization for a multi-tenant SaaS API used by both end users and partner backend services."</strong> ~60 seconds, from memory (no scrolling up) — then reveal and compare.`}
+    placeholder="Your 60-second answer, from memory…"
+>
+    <p>
+        "I'd standardize on <strong>OAuth2</strong>. For <strong>end users</strong> — web, mobile,
+        SPA — <strong>Authorization Code + PKCE</strong>, with <strong>OIDC</strong> on top for
+        their identity. For <strong>partner backends</strong>, <strong>Client Credentials</strong>,
+        no user in the loop. The authorization server issues{' '}
+        <strong>short-lived signed JWT access tokens</strong> plus{' '}
+        <strong>rotating refresh tokens</strong>.
+    </p>
+    <p>
+        Every request, on any node, I{' '}
+        <strong>
+            validate the signature, algorithm, <code>iss</code>,<code>aud</code>, and{' '}
+            <code>exp</code>
+        </strong>{' '}
+        — fully stateless, so it scales horizontally.
+        <strong>Scopes</strong> give coarse authZ, but the critical part is{' '}
+        <strong>object-level checks</strong>: the principal's tenant must own the requested object,
+        which is how I shut down <strong>BOLA</strong>. For revocation I rely on{' '}
+        <strong>short expiry plus a denylist / introspection</strong>. And the hygiene:{' '}
+        <strong>TLS everywhere, tokens only in the Authorization header, secrets rotated</strong>,
+        mTLS between services."
+    </p>
+    <p class="src">
+        <strong>Why this scores:</strong> it cleanly separates authN from authZ, picks the
+        <em>correct grant per client</em>, handles JWT revocation <em>honestly</em> instead of
+        pretending it's free, and explicitly defends against <em>BOLA</em> — the one failure that
+        actually breaches multi-tenant APIs.
+    </p>
+</Rehearse>
+
+<div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Want to walk through a PKCE exchange step
+    by step? Curious how refresh-token rotation detects replay? Want me to grade your rehearsal
+    answer, or fire harder follow-ups — token introspection vs. denylist, mTLS vs. signed JWTs
+    between services? Just say so in the chat.
+</div>
+
+<h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Primary source</h3>
+
+<p>
+    📖{' '}
+    <a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/">
+        <strong>OWASP API Security Top 10 (2023)</strong>
+    </a>
+    : the high-trust catalog of how real APIs get broken — start with API1:2023 (BOLA), API2 (Broken
+    Authentication), and API3 (BOPLA). For the protocol details,{' '}
+    <a href="https://www.rfc-editor.org/rfc/rfc6749">OAuth 2.0 (RFC 6749)</a> and the{' '}
+    <a href="https://openid.net/developers/how-connect-works/">OIDC overview</a>.
+</p>
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+<div class="next">
+    <span>
+        📄 Keep handy:{' '}
+        <a href="../reference/api-security-and-auth.html">API security &amp; auth reference</a>
+    </span>
+    <span>
+        <em>
+            Next ▸ <a href="0009-error-design-rate-limiting-observability.html">Lesson 9</a>
+        </em>
+    </span>
+</div>
+
+<Sources items={frontmatter.sources} />

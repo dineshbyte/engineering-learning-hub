@@ -1,0 +1,127 @@
+---
+/**
+ * streaming-event-driven · exactly-once-kafka-deep-dive · Figure 1 — the EOS pipeline hero.
+ *
+ * Copied VERBATIM from
+ * docs/streaming-event-driven/exactly-once-kafka-deep-dive.html (figure + svg +
+ * figcaption). It lives as an .astro component, NOT inline in the MDX, because
+ * MDX's JSX parser is unreliable with raw inline SVG that uses kebab-case
+ * attributes (text-anchor, font-size, stroke-width, marker-end, …). In an .astro
+ * file the SVG is plain HTML, so it renders byte-for-byte. The marker refs
+ * (#arw, #arwA, #arwG) point at the shared arrowhead <defs> emitted once in the
+ * MDX body, exactly as in the source DOM.
+ */
+---
+
+<figure style="margin-top:1.6rem">
+    <svg
+        viewBox="0 0 640 240"
+        role="img"
+        aria-label="The exactly-once pipeline: consume from an input topic, process, produce to an output topic, with the input offset committed inside the same transaction, read by a read_committed consumer"
+    >
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="320"
+                y="24"
+                text-anchor="middle"
+                font-size="12"
+                font-weight="700"
+                fill="#111110">THE EXACTLY-ONCE LOOP — Kafka in, process, Kafka out</text
+            >
+            <!-- input topic -->
+            <rect x="10" y="58" width="96" height="48" rx="9" fill="#fff" stroke="#1f3a5a"></rect>
+            <text x="58" y="80" text-anchor="middle" font-size="12" font-weight="700" fill="#1f3a5a"
+                >Input topic</text
+            >
+            <text x="58" y="96" text-anchor="middle" font-size="9.5" fill="#6b675f">consume</text>
+            <!-- processor / producer -->
+            <rect
+                x="146"
+                y="50"
+                width="160"
+                height="64"
+                rx="10"
+                fill="#f1eee2"
+                stroke="#7a1f12"
+                stroke-width="1.5"></rect>
+            <text
+                x="226"
+                y="74"
+                text-anchor="middle"
+                font-size="13"
+                font-weight="700"
+                fill="#7a1f12">read-process-write</text
+            >
+            <text x="226" y="92" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >txnal producer + consumer</text
+            >
+            <text x="226" y="105" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >transactional.id (stable)</text
+            >
+            <!-- output topic -->
+            <rect x="346" y="58" width="96" height="48" rx="9" fill="#fff" stroke="#2f5d3a"></rect>
+            <text
+                x="394"
+                y="80"
+                text-anchor="middle"
+                font-size="12"
+                font-weight="700"
+                fill="#2f5d3a">Output topic</text
+            >
+            <text x="394" y="96" text-anchor="middle" font-size="9.5" fill="#6b675f">produce</text>
+            <!-- downstream consumer -->
+            <rect x="494" y="58" width="136" height="48" rx="9" fill="#fff" stroke="#d8d4c8"></rect>
+            <text
+                x="562"
+                y="78"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#111110">Downstream</text
+            >
+            <text x="562" y="94" text-anchor="middle" font-size="9" fill="#6b675f"
+                >read_committed</text
+            >
+            <!-- forward arrows -->
+            <line x1="108" y1="82" x2="144" y2="82" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <line x1="308" y1="82" x2="344" y2="82" stroke="#2f5d3a" marker-end="url(#arwG)"></line>
+            <line x1="444" y1="82" x2="492" y2="82" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <!-- the trick: offset committed inside transaction -->
+            <rect
+                x="120"
+                y="150"
+                width="320"
+                height="40"
+                rx="8"
+                fill="#fbfaf2"
+                stroke="#7a1f12"
+                stroke-dasharray="4 3"></rect>
+            <text
+                x="280"
+                y="167"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#7a1f12">ONE transaction wraps: output records + input-offset commit</text
+            >
+            <text x="280" y="182" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >commit → both visible · abort/crash → neither happens</text
+            >
+            <path d="M 226 114 L 250 148" fill="none" stroke="#7a1f12" marker-end="url(#arwA)"
+            ></path>
+            <path
+                d="M 394 108 C 410 130, 400 140, 380 150"
+                fill="none"
+                stroke="#7a1f12"
+                stroke-dasharray="3 2"
+                marker-end="url(#arwA)"></path>
+            <text x="320" y="222" text-anchor="middle" font-size="11" fill="#9a2417"
+                >↑ leave Kafka here (DB · card · email) and EOS no longer applies</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        Memorise this banner. Every level below explains one box, one arrow, or the dashed
+        transaction that binds output to input-offset.
+    </figcaption>
+</figure>

@@ -1,0 +1,111 @@
+---
+/**
+ * bloom-filters · 0003 · Figure 1 — "LSM-tree read: the Bloom filter guards the disk".
+ *
+ * Copied VERBATIM from docs/bloom-filters/lessons/0003-failure-modes-and-lsm-reads.html
+ * (figure + svg + figcaption incl. the footnote <sup id="r1>). It lives as an .astro
+ * component, NOT inline in the MDX, because MDX's JSX parser is unreliable with
+ * raw inline SVG that uses kebab-case attributes (text-anchor, font-size,
+ * stroke-width, marker-end, …) and self-referential ids. In an .astro file the
+ * SVG is plain HTML, so it renders byte-for-byte. SVG ids (a, r1) are kept as-is
+ * to match the source DOM and the #s1 footnote anchor.
+ */
+---
+
+<figure>
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 720 320"
+        font-family="ui-sans-serif,system-ui,sans-serif"
+    >
+        <defs>
+            <marker
+                id="a"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+            >
+                <path d="M0 0L10 5L0 10z" fill="#136f63"></path>
+            </marker>
+        </defs>
+        <rect width="720" height="320" fill="#fffff8"></rect>
+        <text x="360" y="28" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold"
+            >LSM-tree read: the Bloom filter guards the disk</text
+        >
+        <rect x="20" y="58" width="150" height="48" rx="8" fill="#e8f1ef" stroke="#136f63"></rect>
+        <text x="95" y="80" text-anchor="middle" font-size="14" fill="#0f4f47">read(key)</text>
+        <text x="95" y="97" text-anchor="middle" font-size="11" fill="#6b675f"
+            >look up one SSTable</text
+        >
+        <rect x="225" y="52" width="186" height="60" rx="8" fill="#fff" stroke="#9a7a17"></rect>
+        <text x="318" y="76" text-anchor="middle" font-size="14" fill="#7a5e12"
+            >check SSTable&#8217;s Bloom</text
+        >
+        <text x="318" y="96" text-anchor="middle" font-size="11" fill="#6b675f"
+            >in RAM &#8212; nanoseconds</text
+        >
+        <path
+            d="M170 82 L225 82"
+            fill="none"
+            stroke="#136f63"
+            stroke-width="1.5"
+            marker-end="url(#a)"></path>
+        <rect x="470" y="44" width="232" height="50" rx="8" fill="#eef5ee" stroke="#2f5d3a"></rect>
+        <text x="586" y="66" text-anchor="middle" font-size="14" fill="#2f5d3a" font-weight="bold"
+            >&#8220;no&#8221; &#8594; SKIP the disk</text
+        >
+        <text x="586" y="84" text-anchor="middle" font-size="11" fill="#2f5d3a"
+            >certain absent &#8212; no I/O at all</text
+        >
+        <rect x="470" y="116" width="232" height="50" rx="8" fill="#fbf3e6" stroke="#9a7a17"></rect>
+        <text x="586" y="138" text-anchor="middle" font-size="14" fill="#7a5e12"
+            >&#8220;maybe&#8221; &#8594; READ disk</text
+        >
+        <text x="586" y="156" text-anchor="middle" font-size="11" fill="#6b675f"
+            >then verify &#8212; may be a false positive</text
+        >
+        <path
+            d="M411 74 L470 68"
+            fill="none"
+            stroke="#2f5d3a"
+            stroke-width="1.6"
+            marker-end="url(#a)"></path>
+        <path
+            d="M411 92 L470 136"
+            fill="none"
+            stroke="#9a7a17"
+            stroke-width="1.6"
+            marker-end="url(#a)"></path>
+        <text x="438" y="60" font-size="11" fill="#2f5d3a" font-weight="bold">no</text>
+        <text x="436" y="128" font-size="11" fill="#7a5e12" font-weight="bold">maybe</text>
+        <rect x="470" y="188" width="232" height="42" rx="6" fill="#f0ede2" stroke="#d8d4c8"></rect>
+        <text x="586" y="205" text-anchor="middle" font-size="12" fill="#3a372f"
+            >Disk / SSD: the slow path</text
+        >
+        <text x="586" y="221" text-anchor="middle" font-size="11" fill="#6b675f"
+            >microseconds&#8211;milliseconds, &#215;1000s</text
+        >
+        <path
+            d="M586 166 L586 188"
+            fill="none"
+            stroke="#9a7a17"
+            stroke-width="1.5"
+            marker-end="url(#a)"></path>
+        <rect x="20" y="252" width="682" height="48" rx="8" fill="#eef5ee" stroke="#2f5d3a"></rect>
+        <text x="361" y="272" text-anchor="middle" font-size="13" fill="#2f5d3a" font-weight="bold"
+            >No false negatives &#8594; a &#8220;no&#8221; is always safe to trust &#8594; skipping
+            disk never loses data</text
+        >
+        <text x="361" y="290" text-anchor="middle" font-size="11" fill="#6b675f"
+            >RocksDB &amp; Cassandra put one Bloom filter per SSTable for exactly this</text
+        >
+    </svg>
+    <figcaption>
+        A per-SSTable Bloom filter turns most <em>absent-key</em> lookups into a free RAM check<sup
+            ><a href="#s1" id="r1">1</a></sup
+        >.
+    </figcaption>
+</figure>
