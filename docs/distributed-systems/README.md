@@ -12,7 +12,7 @@ Your map for the whole series: what's built, what each lesson covers step by ste
 
 | | |
 |---|---|
-| **Status** | **All 10 lessons built** ✅ — full book |
+| **Status** | **All 10 lessons built** ✅ — read as one comprehensive page + deep-dive supplements |
 | **Read it** | `book-1-distributed-systems-fundamentals.epub` (send to Kindle) · or `distributed-systems-fundamentals.md` |
 | **How to work it** | Read in order; do each self-check from memory before peeking |
 | **Deep dive** | `consensus-deep-dive.epub` — supplement to Lesson 8 (FLP proof · Raft safety · Figure-8 · 3f+1) |

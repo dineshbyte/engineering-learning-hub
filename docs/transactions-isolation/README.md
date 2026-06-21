@@ -12,7 +12,7 @@ Your map for Book 2 of the series. Book 1 was *Distributed Systems — Fundament
 
 | | |
 |---|---|
-| **Status** | **All 9 lessons built** ✅ — full book |
+| **Status** | **All 9 lessons built** ✅ — read as one comprehensive page + deep-dive supplements |
 | **Read it** | `book-2-transactions-isolation-fundamentals.epub` (send to Kindle) · or `transactions-isolation-fundamentals.md` |
 | **How to work it** | Read in order; do each self-check from memory before peeking |
 | **Deep dive** | `mvcc-internals-deep-dive.epub` — a go-deeper supplement to Lesson 4 (heap vs undo-log · the visibility test · VACUUM bloat trap · xid wraparound) |

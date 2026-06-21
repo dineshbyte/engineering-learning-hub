@@ -1,6 +1,6 @@
 # Glossary — AI Evaluation
 
-Covers Lessons 1–7. Grouped by where each term first lands. Shared AI terms are reused verbatim
+Covers Lesson 1 (the rest of this track is in progress). Grouped by where each term first lands. Shared AI terms are reused verbatim
 from the cross-track canon so vocabulary never drifts.
 
 ## Shared canon (carried in from `../ai-agents`)

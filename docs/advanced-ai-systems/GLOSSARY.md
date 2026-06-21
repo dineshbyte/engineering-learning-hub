@@ -1,6 +1,6 @@
 # Glossary — Advanced AI Systems
 
-Covers Lessons 1–5. Grouped by where each term first lands. Shared AI terms are reused verbatim
+Covers Lesson 1 (the rest of this track is in progress). Grouped by where each term first lands. Shared AI terms are reused verbatim
 from the canonical set so they don't drift across tracks; track-new terms follow.
 
 ## Shared foundations (carried in from `../ai-agents` and `../context-engineering`)

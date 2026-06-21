@@ -444,9 +444,9 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   <div class="whatis-in">
     <p class="whatis-h">A public vault of engineering knowledge — I document what I learn from real work so it compounds over time, and anyone can learn from it.</p>
     <div class="whatis-domains" aria-label="What it covers">
-      <span>AI Systems</span><span>Architecture Reviews</span><span>Distributed Systems</span><span>System Design</span><span>Engineering Interviews</span><span>Production Incidents</span><span>Engineering Leadership</span>
+      <span>AI Systems</span><span>Architecture Reviews</span><span>Distributed Systems</span><span>System Design</span><span>Engineering Interviews</span>
     </div>
-    <p class="whatis-soon"><b>Coming soon:</b> Engineering Interview Vault · Production Failure Modes · Engineering Leadership · SRE &amp; on-call</p>
+    <p class="whatis-soon"><b>Coming soon:</b> Production Failure Modes · Engineering Leadership · SRE &amp; on-call</p>
   </div>
 </section>
 
@@ -672,6 +672,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
         <a class="pill" href="rest-api/reference/api-security-and-auth.html">Security</a>
         <a class="pill" href="rest-api/reference/api-design-interview-framework.html">Design framework</a>
         <a class="pill md" href="rest-api/GLOSSARY.html">Glossary</a>
+        <a class="pill md" href="rest-api/RESOURCES.html">Resources</a>
       </div>
     </article>
 
@@ -1051,11 +1052,16 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     });
 
     /* "NEW" pill — shows for NEW_DAYS after data-added, then auto-expires (date-driven, no manual cleanup) */
-    var NEW_DAYS=21, NEW_NOW=Date.now();
+    var NEW_DAYS=21;
+    // compare calendar days in one frame so a same-day add reads age 0 for every
+    // viewer (Date.parse('YYYY-MM-DD') is UTC midnight, Date.now() is local — mixing
+    // them made the pill vanish for viewers west of UTC on the day a track shipped).
+    var _now=new Date(), NEW_TODAY=Date.UTC(_now.getFullYear(),_now.getMonth(),_now.getDate());
     [].slice.call(document.querySelectorAll('[data-added]')).forEach(function(el){
-      var ts=Date.parse(el.getAttribute('data-added'));
-      if(isNaN(ts)){ return; }
-      var ageDays=(NEW_NOW-ts)/86400000;
+      var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(el.getAttribute('data-added')||'');
+      if(!m){ return; }
+      var added=Date.UTC(+m[1],+m[2]-1,+m[3]);
+      var ageDays=Math.round((NEW_TODAY-added)/86400000);
       if(ageDays<0 || ageDays>=NEW_DAYS){ return; }
       var p=document.createElement('span'); p.className='newpill'; p.textContent='NEW';
       if(el.classList.contains('tile')){ var r=el.querySelector('.tnamerow'); if(r){ r.appendChild(p); } }

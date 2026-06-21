@@ -100,6 +100,7 @@ def build():
 <meta name="keywords" content="{keywords}">
 <link rel="canonical" href="{canon}">
 <meta name="robots" content="index, follow">
+<meta name="author" content="dineshbyte">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Engineering Vault">
 <meta property="og:title" content="{title} · Engineering Vault">
