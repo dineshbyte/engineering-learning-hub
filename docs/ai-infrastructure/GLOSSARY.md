@@ -1,6 +1,6 @@
 # Glossary — AI Infrastructure
 
-Covers Lessons 0001–0006. Grouped by where each term first lands. Shared AI terms reuse the
+Covers Lesson 0001 (the rest of this track is in progress). Grouped by where each term first lands. Shared AI terms reuse the
 canonical definitions verbatim so they never drift across tracks.
 
 ## Shared AI foundations (reused verbatim)
