@@ -133,6 +133,16 @@ function isLessonPage(rel) {
     return /-fundamentals\.html$|-deep-dive\.html$/.test(p);
 }
 
+/** The "On this page" TOC uses one format site-wide: "N · Title" for numbered
+ *  sections and "★ Title" for the rest. No circled numerals (①…) or ◆ markers
+ *  (some pages shipped with the older book-style TOC, breaking consistency). */
+function checkTocFormat(page, html) {
+    const toc = html.match(/<nav class="toc">([\s\S]*?)<\/nav>/);
+    if (!toc) return;
+    if (/[①-⑳]/.test(toc[1])) fail(page, 'TOC uses circled numerals (①…) — use "N · Title" to match the lesson format');
+    if (/◆/.test(toc[1])) fail(page, 'TOC uses the ◆ marker — use ★ to match the lesson format');
+}
+
 /** The "On this page" TOC numbers must match the section badges they link to.
  *  (A lesson shipped with TOC "5·6·7" while its section badges read "1·2·3".) */
 function checkTocNumbering(page, html) {
@@ -180,6 +190,7 @@ function main() {
         checkJsonLd(page, html);
         checkLessonStructure(page, html, path.relative(ROOT, page));
         checkTocNumbering(page, html);
+        checkTocFormat(page, html);
     }
     checkSitemap(indexable);
 
