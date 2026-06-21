@@ -27,6 +27,13 @@
   This is an exception to the usual "one tiny thing per lesson" rule — justified by the explicit request.
 - The durable artifacts they'll revisit are `reference/agents-cheat-sheet.html` (cheat sheet + buzzword
   table + master diagram + 5-min/30-min review guides) and `GLOSSARY.md`.
+- **Lesson 0005 — Agent Systems Engineering (Phase 4, added 2026-06-21).** The execution-engineering
+  deep-dive (Staff rung): 14 modules — planning, state, execution engines, loop control, HITL, failure
+  recovery, orchestration, long-running/durable execution, cost, observability, architecture reviews,
+  design patterns, anti-patterns — with embedded deliverables (cheat sheet, checklists, catalogs, VP
+  review questions, leveled interview panel, revision guides, roadmap). Wired into the hub (card +
+  count + read-time), sitemap, search-index, 0004 forward-nav, and the EPUB (`epub/OEBPS/ch-s2-05`).
+  The `reference/agent-architecture-review.html` sheet now pairs with it.
 
 ## Future sessions / zone of proximal development
 - Next: convert passive reading into storage strength. Interleaved retrieval drills that MIX levels
