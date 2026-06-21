@@ -56,6 +56,19 @@ TRACKS = [
      ['Estimation', 'Consistent hashing', 'Back-of-envelope']),
 ]
 
+# Brand color system: indigo primary + sparing category accents (cyan / emerald /
+# amber). Tracks within a category share one accent, so the card set reads as one
+# brand with category accents — not a per-track rainbow. Overrides the per-tuple
+# accent above. AI -> indigo · APIs/design -> cyan · data -> emerald · distributed -> amber.
+CAT_ACCENT = {
+    'ai-agents': '#7b74f0', 'context-engineering': '#7b74f0', 'ai-evaluation': '#7b74f0',
+    'production-ai-architecture': '#7b74f0', 'ai-security': '#7b74f0',
+    'ai-infrastructure': '#7b74f0', 'domain-agent-design': '#7b74f0', 'advanced-ai-systems': '#7b74f0',
+    'rest-api': '#3b8fe6', 'applied-systems-design': '#3b8fe6',
+    'bloom-filters': '#1fa594', 'storage-engines': '#1fa594', 'transactions-isolation': '#1fa594',
+    'distributed-systems': '#e0902a', 'streaming-event-driven': '#e0902a',
+}
+
 ESC = lambda s: s.replace('&amp;', '&').replace('&#183;', '·')  # for length only
 
 
@@ -124,6 +137,7 @@ def main():
         os.makedirs(OUT)
     made = []
     for slug, name, tagline, accent, chips in TRACKS:
+        accent = CAT_ACCENT.get(slug, accent)
         svg = card_svg(slug, name, tagline, accent, chips)
         png = os.path.join(OUT, slug + '.png')
         r = subprocess.run(['rsvg-convert', '-w', '1200', '-h', '630', '-o', png],
