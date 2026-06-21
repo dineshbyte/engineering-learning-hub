@@ -1,0 +1,95 @@
+---
+/**
+    * LessonLayout — the shared lesson "frame": hubbar (with prev/next), masthead
+    * (kicker · h1 · meta · topic chips), then the lesson body (<slot/>), then the
+    * feedback widget + closing endnote. Authoring a lesson now means writing ONLY
+    * the body + a small typed `meta` object — the chrome, the feedback widget, and
+    * the endnote can never drift between pages because there is only one copy.
+    *
+    * The `inject-lesson-feedback.py` and `inject-lesson-endnote.py` scripts exist
+    * to keep those two widgets present on every lesson; here they're structural,
+    * so they're guaranteed present with zero tooling.
+    */
+import BaseLayout from './BaseLayout.astro';
+import {lessonMetaSchema} from '../schema/lesson';
+
+// Validate the contract at build time — bad/missing metadata fails the build.
+const m = lessonMetaSchema.parse(Astro.props.meta);
+const base = import.meta.env.BASE_URL;
+---
+<BaseLayout
+    title={m.title}
+    description={m.description}
+    keywords={m.keywords}
+    path={m.path}
+    ogImage={m.ogImage}
+    ogImageAlt={m.ogImageAlt}
+    accentVar={m.accentVar}
+    jsonLd={m.jsonLd}
+    bodyScripts={['assets/interview.js', 'assets/reading-progress.js']}
+>
+    <div class="wrap">
+        <nav id="hubbar">
+            <a href={`${base}index.html`}>&#8592; Engineering Vault</a>
+            <span class="pn">
+        {m.prev
+            ? <a href={m.prev.href} title={m.prev.title}>&#8249; Prev</a>
+            : <span style="color:var(--muted);opacity:.45">&#8249; Prev</span>}
+                {m.next
+                    ? <a href={m.next.href} title={m.next.title}>Next &#8250;</a>
+                    : <span style="color:var(--muted);opacity:.45">Next &#8250;</span>}
+      </span>
+            <span style="display:flex;align-items:center;gap:.6rem">
+        <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button>
+        <span style="color:var(--muted)">{m.trackLabel}</span>
+      </span>
+        </nav>
+        <main id="main" tabindex="-1">
+            <div id="reading-progress"></div>
+            <div class="kicker">{m.kicker}</div>
+            <h1 set:html={m.h1Html}></h1>
+            <p class="meta">{m.metaLine}</p>
+            <div class="ltags">{m.chips.map((c) => <span class="lt">{c}</span>)}</div>
+
+            <slot/>
+
+            <div class="lesson-fb" aria-live="polite">
+                <span class="lesson-fb-q">Was this lesson helpful?</span>
+                <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">
+                    👍 Yes
+                </button>
+                <button type="button" class="lesson-fb-btn" data-rating="down"
+                        aria-label="No, this lesson was not helpful">👎 No
+                </button>
+                <span class="lesson-fb-thanks">Thanks &mdash; noted.</span>
+            </div>
+            <p class="lesson-endnote">These notes reflect my current understanding and are updated as I learn, build,
+                and discover better explanations.</p>
+        </main>
+    </div>
+
+    <!-- generic quiz behaviour, shared by every lesson (was a per-page inline script) -->
+    <script is:inline>
+        document.querySelectorAll('.qitem').forEach(function (item) {
+            var correct = +item.dataset.correct;
+            var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+            var fb = item.querySelector('.fb');
+            opts.forEach(function (opt, i) {
+                opt.addEventListener('click', function () {
+                    opts.forEach(function (o) {
+                        o.disabled = true;
+                    });
+                    opts[correct].classList.add('correct');
+                    if (i === correct) {
+                        fb.textContent = '✓ Correct.';
+                        fb.className = 'fb ok';
+                    } else {
+                        opt.classList.add('wrong');
+                        fb.textContent = '✗ Not quite — the right answer is highlighted. Re-read it, then say it back out loud.';
+                        fb.className = 'fb no';
+                    }
+                });
+            });
+        });
+    </script>
+</BaseLayout>
