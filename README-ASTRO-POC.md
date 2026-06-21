@@ -29,13 +29,16 @@ the whole fix. These layouts replace what `inject-a11y.py`,
 `inject-lesson-feedback.py`, `inject-lesson-endnote.py`, and `inject-analytics.js`
 do today by hand-patching every file.
 
-## Run it (this is the step I can't run for you — `npm` is blocked in my sandbox)
+## Run it (this is the step I can't run for you — the package manager is blocked in my sandbox)
+
+Uses **pnpm**:
 
 ```sh
 cd astro-poc
-npm install
-npm run build        # → writes ../dist/bloom-filters/lessons/0001-what-is-a-bloom-filter.html
-npm run preview      # serves with the /engineering-learning-hub base path
+pnpm install
+pnpm build           # → writes ../dist/bloom-filters/lessons/0001-what-is-a-bloom-filter.html
+pnpm preview         # serves with the /engineering-learning-hub base path
+pnpm format          # Prettier, 4-space indent (matches .editorconfig)
 ```
 
 Then open:

@@ -13,10 +13,10 @@ import {defineConfig} from 'astro/config';
 // base is the project-pages subpath; site is the origin. Together they make
 // canonical/OG URLs and asset links resolve exactly as they do today.
 export default defineConfig({
-  site: 'https://dineshbyte.github.io',
-  base: '/engineering-learning-hub',
-  outDir: '../dist',
-  build: {
-    format: 'file'
-  },
+    site: 'https://dineshbyte.github.io',
+    base: '/engineering-learning-hub',
+    outDir: '../dist',
+    build: {
+        format: 'file'
+    },
 });
