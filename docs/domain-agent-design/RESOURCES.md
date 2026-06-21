@@ -2,7 +2,7 @@
 
 Ground every non-obvious claim in these; cite inline (`<sup>` → `#sources`). Populated before
 teaching. Prefer primary sources (vendor engineering, papers) over secondary commentary. This
-track is *design discipline*, so several sources are internal StackDepth tracks the learner has
+track is *design discipline*, so several sources are internal Engineering Vault tracks the learner has
 already built — cross-link, don't re-teach.
 
 ## Primary specs / docs
@@ -24,10 +24,10 @@ already built — cross-link, don't re-teach.
 - **Yao et al., 2022 — "ReAct: Synergizing Reasoning and Acting in Language Models"**
   (arXiv:2210.03629). Why it matters: the reason-then-act loop underneath every domain agent;
   grounding actions in observations is what makes a domain agent more than a chatbot.
-- **StackDepth — `../ai-agents`** (internal track). Why it matters: prerequisite. LLM, tool, agent,
+- **Engineering Vault — `../ai-agents`** (internal track). Why it matters: prerequisite. LLM, tool, agent,
   agent loop, runtime, memory, MCP. Lesson 0004 (`0004-agent-systems-and-production.html`) introduces
   *business agent* archetypes; this track turns that into a repeatable design discipline.
-- **StackDepth — `../context-engineering`** (internal track). Why it matters: prerequisite. How each
+- **Engineering Vault — `../context-engineering`** (internal track). Why it matters: prerequisite. How each
   agent's context is selected/retrieved/assembled — the layer this track designs *around*, not *in*.
 - **Build-vs-buy / SaaS framing** (general engineering literature; e.g. Martin Fowler on capability
   vs commodity, martinfowler.com). Why it matters: most domain-agent decisions are buy-the-platform,

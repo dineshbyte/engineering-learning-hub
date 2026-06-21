@@ -1,6 +1,6 @@
 <div align="center">
 
-# ▦ StackDepth
+# ▦ Engineering Vault
 
 **Visual system design & AI engineering, from first principles — interactive, and built for long-term recall.**
 
@@ -19,7 +19,7 @@ Infographic-first HTML lessons with diagrams, quizzes, rehearse-out-loud drills,
 
 ---
 
-Most resources teach these topics as disconnected facts. StackDepth teaches the **mental models** — each concept
+Most resources teach these topics as disconnected facts. Engineering Vault teaches the **mental models** — each concept
 grounded in a plain engineering analogy, shown as a diagram first, then drilled with retrieval practice and graded
 interview questions. It's tuned for two things at once: **passing senior/staff interviews** and **actually
 understanding the systems** long after.

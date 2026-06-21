@@ -72,9 +72,9 @@ def build():
             m = re.search(r'<h1[^>]*>(.*?)</h1>', body, re.S)
             title = re.sub('<[^>]+>', '', m.group(1)).strip() if m else f'{name} {kind.title()}'
             word = 'Glossary' if kind == 'GLOSSARY' else 'Resources'
-            desc = (f'{name} glossary — the canonical terms used across the StackDepth {name} lessons, defined in dependency order.'
+            desc = (f'{name} glossary — the canonical terms used across the Engineering Vault {name} lessons, defined in dependency order.'
                     if kind == 'GLOSSARY' else
-                    f'{name} resources — the high-trust sources (specs, docs, papers) behind the StackDepth {name} lessons.')
+                    f'{name} resources — the high-trust sources (specs, docs, papers) behind the Engineering Vault {name} lessons.')
             canon = f'{BASE}/{slug}/{kind}.html'
             # masthead consistency: add a kicker eyebrow + multi-colour topic
             # chips into the pandoc body so glossary/resources match lessons.
@@ -95,24 +95,24 @@ def build():
 <meta charset="utf-8">
 <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>{title} · StackDepth</title>
+<title>{title} · Engineering Vault</title>
 <meta name="description" content="{desc}">
 <meta name="keywords" content="{keywords}">
 <link rel="canonical" href="{canon}">
 <meta name="robots" content="index, follow">
 <meta property="og:type" content="article">
-<meta property="og:site_name" content="StackDepth">
-<meta property="og:title" content="{title} · StackDepth">
+<meta property="og:site_name" content="Engineering Vault">
+<meta property="og:title" content="{title} · Engineering Vault">
 <meta property="og:description" content="{desc}">
 <meta property="og:url" content="{canon}">
 <meta property="og:image" content="{BASE}/assets/og/{slug}.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="{name} · StackDepth learning track">
+<meta property="og:image:alt" content="{name} · Engineering Vault learning track">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@dineshxbyte">
 <meta name="twitter:creator" content="@dineshxbyte">
-<meta name="twitter:title" content="{title} · StackDepth">
+<meta name="twitter:title" content="{title} · Engineering Vault">
 <meta name="twitter:description" content="{desc}">
 <meta name="twitter:image" content="{BASE}/assets/og/{slug}.png">
 <link rel="stylesheet" href="../assets/tokens.css">
@@ -122,7 +122,7 @@ def build():
 <body>
 <div class="wrap">
 <nav id="hubbar">
-  <a href="../index.html">← StackDepth</a>
+  <a href="../index.html">← Engineering Vault</a>
   <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">\U0001f313</button><span style="color:var(--muted)">{name} · {word}</span></span>
 </nav>
 {body}

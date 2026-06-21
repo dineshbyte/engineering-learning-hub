@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Content validator for the StackDepth static site (docs/).
+ * Content validator for the Engineering Vault static site (docs/).
  *
  * Encodes the checks that used to be done by hand, as enforceable gates:
  *

@@ -64,8 +64,8 @@ for (const f of walk(ROOT)) {
       '$1\n<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">');
   }
   if (!/og:image:alt/i.test(html)) {
-    const alt = slug ? `${NAMES[slug]} · StackDepth learning track`
-                     : 'StackDepth — a free engineering learning hub';
+    const alt = slug ? `${NAMES[slug]} · Engineering Vault learning track`
+                     : 'Engineering Vault — a free engineering learning hub';
     html = html.replace(
       /(<meta property="og:image" content="[^"]*"\s*\/?>)/i,
       `$1\n<meta property="og:image:alt" content="${alt}">`);

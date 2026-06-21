@@ -47,5 +47,5 @@ I name, and the controls I require before it's allowed to serve real traffic and
 - `../context-engineering` — what gets assembled into the window. **Lesson 0005 (Architecture
   reviews / production design)** reviews the *context* layer specifically; THIS track reviews the
   *whole system* (reliability, cost, observability, multi-tenancy, platform).
-- Other Phase 5–10 tracks in the StackDepth ladder slot alongside these; this is **Phase 6**, the
+- Other Phase 5–10 tracks in the Engineering Vault ladder slot alongside these; this is **Phase 6**, the
   production-review keystone they all feed into.
