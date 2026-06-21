@@ -1,0 +1,65 @@
+---
+// Interview Q&A as DATA. Renders the level-grouped <details> AND the FAQ
+// structured data from the SAME array — so the visible Q&A and the JSON-LD can
+// never drift (today they're hand-duplicated in <head>). JSON-LD is valid in
+// <body>, so this one component owns both. Add a question = add one object.
+interface IQ {
+    level: 'core' | 'senior' | 'staff' | 'design';
+    q: string; // may contain inline HTML
+    a: string; // answer HTML
+}
+interface Props {
+    items: IQ[];
+    rubricIntro?: string; // the "Design-round framework — …" lead-in (HTML)
+    rubric?: string[]; // the ordered design-round checklist (HTML per item)
+}
+const { items, rubricIntro, rubric = [] } = Astro.props;
+
+// strip tags + decode the handful of entities our answers use, for the JSON-LD text
+const toText = (html: string) =>
+    html
+        .replace(/<[^>]+>/g, '')
+        .replace(/&rarr;/g, '→')
+        .replace(/&middot;/g, '·')
+        .replace(/&minus;/g, '−')
+        .replace(/&asymp;/g, '≈')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+const faq = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: items.map((it) => ({
+        '@type': 'Question',
+        name: toText(it.q),
+        acceptedAnswer: { '@type': 'Answer', text: toText(it.a) },
+    })),
+};
+
+const firstDesign = items.findIndex((it) => it.level === 'design');
+---
+
+<div data-interview>
+    {
+        items.map((it, i) => (
+            <Fragment>
+                {rubric.length > 0 && i === firstDesign && (
+                    <div class="designrubric" data-level="design">
+                        {rubricIntro && <Fragment set:html={rubricIntro} />}
+                        <ol>{rubric.map((li) => <li set:html={li} />)}</ol>
+                    </div>
+                )}
+                <details class="iq" data-level={it.level}>
+                    <summary set:html={it.q} />
+                    <div class="a" set:html={it.a} />
+                </details>
+            </Fragment>
+        ))
+    }
+</div>
+<script type="application/ld+json" is:inline set:html={JSON.stringify(faq)} />
