@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Broken-link checker for the StackDepth static site (docs/).
+ * Broken-link checker for the Engineering Vault static site (docs/).
  *
  * Walks every .html page under docs/, extracts internal href/src targets, and
  * verifies each one resolves to a real file — mirroring how GitHub Pages serves

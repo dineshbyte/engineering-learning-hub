@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Multi-Agent Systems: When &amp; When Not · Engineering Vault</title>
+<meta name="description" content="The hype-free take on multi-agent systems: orchestrator-worker vs swarms, the coordination tax, when one well-tooled agent wins, and the anti-patterns.">
+<meta name="keywords" content="multi-agent, orchestration, swarms, coordination cost, anti-patterns, orchestrator-worker, agent loop, cascading errors, context fragmentation, cost blowup, single agent, OWASP, LLM, RAG">
+<meta name="author" content="dineshbyte">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/advanced-ai-systems/lessons/0001-multi-agent-systems-when-and-when-not.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Engineering Vault">
+<meta property="og:title" content="Multi-Agent Systems: When &amp; When Not">
+<meta property="og:description" content="Coordination cost vs benefit: orchestrator-worker vs swarm patterns, when a single well-tooled agent beats a fleet, and the failure modes unique to multi-agent.">
+<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/advanced-ai-systems/lessons/0001-multi-agent-systems-when-and-when-not.html">
+<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/advanced-ai-systems.png">
+<meta property="og:image:alt" content="Advanced AI Systems · Engineering Vault learning track">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@dineshxbyte">
+<meta name="twitter:title" content="Multi-Agent Systems: When &amp; When Not">
+<meta name="twitter:description" content="Don't add agents for the reasons you wouldn't add microservices. Orchestrator-worker vs swarm, the coordination tax, and when one agent wins.">
+<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/advanced-ai-systems.png">
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<link rel="stylesheet" href="../../assets/interview.css">
+<style>
+  :root{--accent:var(--track-advai)}
+
+  /* one-sentence decomposition chips */
+  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+  .chip b{color:var(--accent)}
+  .chip.c2 b{color:var(--track-rest)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
+
+  /* TOC as a grid */
+  .toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
+  .toc a{text-decoration:none; padding:.15rem 0}
+
+  /* level block */
+  .lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
+  .lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
+  .num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
+  .lvltop h2{margin:0; font-size:1.24rem; font-weight:700}
+  .tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
+
+  /* fact cards — labelled 2-col variant */
+  .facts{grid-template-columns:1fr 1fr}
+  .fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+  .fact.blue b{color:var(--track-rest)}
+
+  /* myth -> truth (2-col grid) */
+  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
+  .myth div{border-radius:6px; padding:.45rem .6rem}
+  .myth .m{background:color-mix(in srgb,var(--bad) 12%,transparent); border-left:3px solid var(--bad); color:var(--bad)}
+  .myth .t{background:color-mix(in srgb,var(--good) 14%,transparent); border-left:3px solid var(--good); color:var(--good)}
+
+  /* dark "memory rule" band */
+  .rule{font-size:.92rem; font-weight:600; background:var(--ink); color:var(--bg); border-radius:8px; padding:.55rem .85rem; margin:.7rem 0}
+  .rule span{color:var(--accent)}
+
+  /* memory-check disclosure */
+  details.mc{border:0; background:transparent; padding:0; margin:.5rem 0 0; font-size:.84rem}
+  details.mc summary{cursor:pointer; color:var(--good); font-weight:600; list-style:none}
+  details.mc summary::before{content:"\25B8 "}
+  details.mc[open] summary::before{content:"\25BE "}
+  details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
+  details.mc .ans{color:var(--muted)}
+
+  /* interview-question disclosure */
+  details.iq{border-left:3px solid var(--track-rest); font-size:.88rem}
+  details.iq summary{list-style:none}
+  details.iq summary::-webkit-details-marker{display:none}
+  details.iq summary::before{content:"\1F4AC "}
+  details.iq[open] summary{color:var(--track-rest)}
+  details.iq .a{margin-top:.45rem; font-size:.85rem; color:var(--ink); line-height:1.45}
+  details.iq .a b{color:var(--track-rest)}
+
+  /* footer nav row */
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
+
+  @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
+</style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "M1 — A PM wants you to 'use a multi-agent system' for a feature. How do you decide whether that's the right shape at all?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: start from the default — one well-tooled agent in a loop is simpler, cheaper, and easier to debug, so the burden of proof is on adding agents -> ask whether the work is genuinely parallel and decomposable into independent sub-tasks that don't need to see each other's intermediate state -> if it's sequential, or the sub-tasks share a lot of context, multiple agents just pay coordination tax (extra tokens, latency, failure surface) for no parallelism -> if it IS parallel and the value of the result outweighs the spend, an orchestrator-worker fan-out can pay off -> the rule: don't add agents for the same reasons you wouldn't add microservices — premature distribution buys you a distributed-systems problem you didn't have."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "M2 — Contrast orchestrator-worker with a swarm. When would you reach for each, and what do you give up?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: orchestrator-worker = one lead agent decomposes the goal, fans out independent sub-tasks to workers, then synthesizes — scatter-gather, the lead owns planning and integration -> swarm = many peer agents, no central planner; behavior emerges from local interactions and shared state -> orchestrator-worker buys you a clear control point, easier debugging, and a place to attribute failures; you pay a planning bottleneck and a single point of coordination -> swarm buys maximum parallelism and decoupling; you give up predictability and the ability to attribute a bad outcome to any one agent -> default to orchestrator-worker for production: you almost always want the audit trail and the synthesis step more than you want emergent behavior."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "M3 — Your multi-agent feature's quality is unstable and the bill is 10x what you modeled. Diagnose the failure modes.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: separate the three multi-agent-specific failures -> cascading errors: one worker's wrong intermediate result is trusted downstream and the orchestrator synthesizes confident nonsense — fix with validation at the join, not blind trust -> context fragmentation: each agent sees a slice, no one sees the whole, so they duplicate work or contradict each other — fix by deciding what context is shared vs isolated up front -> cost/latency blowup: tokens scale with agents x turns x retries; one chatty loop or a runaway fan-out multiplies spend fast (multi-agent can burn many times the tokens of a single chat turn, illustrative) — fix with hard caps on agent count, turns, and budget -> measure: per-agent token attribution, a turn cap, and a kill switch; if you can't attribute the spend, you can't control it."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "M3 — Make the explicit analogy: why is 'don't add agents for the reasons you wouldn't add microservices' the governing rule?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: splitting a monolith into microservices trades in-process calls for network calls — you gain independent scaling and team autonomy but inherit partial failure, serialization cost, and distributed debugging -> splitting one agent into many trades in-context reasoning for message-passing — you gain parallelism but inherit coordination overhead, cascading errors, and context fragmentation -> in both cases the split only pays when the boundary is real (genuinely independent work) and the volume justifies the overhead -> people add both for resume-driven or demo reasons, not load reasons; the result is a distributed system with all the failure modes and none of the benefit -> so the test is identical: is the work truly independent and at a scale where the coordination tax pays for itself? If not, keep it in one process / one agent."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a multi-agent system, in one breath?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: multiple agents — each its own LLM + tools + context window — working on one goal and coordinating by passing messages or results -> it's the distributed-systems version of an agent: you trade a single reasoning thread for several that must agree -> the upside is throughput on genuinely parallel work; the downside is coordination overhead — the tokens, latency, and failure surface spent getting them to hand off and not duplicate work -> so it is a scaling pattern, not a smarter brain: more agents do not mean more intelligence, they mean more parallel hands."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is orchestrator-worker and what does the orchestrator actually own?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: one lead (orchestrator) agent decomposes the goal into independent sub-tasks, delegates each to a worker agent, then synthesizes the workers' results into the final answer -> it's the scatter-gather / fan-out-fan-in pattern -> the orchestrator owns planning (how to split), delegation (who does what), and integration (combining results) — workers own only their isolated sub-problem -> that single control point is the win: one place to plan, one place to validate, one place to attribute a failure."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is an agent swarm, and what does it trade away?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: many peer agents with no central orchestrator; behavior emerges from local interactions and a shared environment or state -> it maximizes parallelism and decoupling — no planning bottleneck, agents act on what they see locally -> the trade is predictability and attribution: with no central plan you can't easily say why the system did what it did, or which agent caused a bad outcome -> so swarms suit exploratory or simulation-style work where emergence is the point, not production tasks where you need an audit trail and a synthesis step."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is coordination overhead, and why is it the central anti-pattern of multi-agent?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: coordination overhead = the extra tokens, latency, and failure surface spent getting agents to agree, hand off, and not duplicate work -> every multi-agent design pays this tax whether or not the task benefits -> if the task is genuinely parallel, the throughput gain can exceed the tax; if it's sequential or context-heavy, the tax is pure loss -> that's the anti-pattern: adding agents to a task that isn't parallel buys coordination cost with no payoff -> the discipline is to keep the default at one agent and make the multi-agent design justify the tax."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When does a single well-tooled agent beat a fleet? Walk me through the call.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a single agent wins whenever the work is sequential, shares a lot of context, or isn't large enough to amortize coordination cost -> one agent keeps all state in one context window, so there's no fragmentation, no handoff loss, and one place to debug -> it's cheaper (no inter-agent chatter) and lower-latency (no fan-out / join) -> the honest default: most production features are a single agent with good tools and a tight loop -> reach for multiple agents only when you've shown the work is genuinely parallel and the value of the outcome outweighs the extra spend — separate that real case from the demo that just looks impressive."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your fan-out spawned far more workers than the task needed and the bill exploded. What happened and how do you prevent it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the orchestrator over-decomposed — it spun up a worker per trivial sub-question because nothing bounded it -> tokens scale with agents x turns x retries, so an unbounded fan-out multiplies spend with no quality gain -> root cause is missing limits, not a model bug: no cap on worker count, no per-task budget, no floor on what's worth delegating -> fix: cap concurrent workers, set a token/turn budget per run with a kill switch, and only delegate sub-tasks above a complexity threshold -> add per-agent token attribution so you can see which branch ran away -> the lesson: an autonomous decomposer needs the same guardrails you'd put on any process that can fan out work."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Quality swings run to run and you suspect cascading errors. Diagnose and fix.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: log each worker's intermediate output and the orchestrator's synthesis for a good and a bad run — you're auditing the handoffs, not the final answer -> look for a worker that returned a wrong or low-confidence result that got trusted downstream and folded into a confident final answer -> that's a cascading error: no validation at the join, so one bad slice poisons the synthesis -> fix: validate or score worker outputs before integration, have the orchestrator reconcile disagreements instead of blending them, and let workers signal low confidence -> add a check that contradictory worker results trigger a re-run or escalation, not a silent merge -> the framing: in a pipeline of probabilistic steps, error compounds — you must inspect at the joins."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Two workers duplicated each other's work and a third contradicted both. Why, and how do you design against it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: this is context fragmentation — each agent saw only its slice, none saw the whole, so they overlapped and disagreed -> root cause is an unmade decision: what context is shared across agents vs isolated to each -> too much isolation duplicates and contradicts; too much sharing reintroduces the cost and bloat you split to avoid -> fix: give the orchestrator authority over the global plan so sub-tasks are carved to be genuinely non-overlapping, share the minimal common context (the goal, constraints, what's already done), and isolate the rest -> have the synthesis step reconcile, not concatenate -> the principle: decide the context boundaries deliberately, the way you'd define service boundaries — fragmentation is a design smell, not bad luck."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Reason about the trade-offs across coordination cost, latency, and reliability in a multi-agent design.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: name the axes — cost (tokens scale with agents x turns), latency (fan-out can run workers in parallel, but the join waits for the slowest, and an orchestrator adds planning turns), reliability (more independent steps means more places to fail and compound) -> parallelism can cut wall-clock latency for genuinely independent work, which is the main reason to pay the rest -> but it raises cost (inter-agent chatter, retries) and lowers reliability (cascading errors, fragmentation) -> sequence the call: prove the work is parallel first; if not, one agent dominates on all three axes -> if it is, bound the blast radius — cap agents/turns/budget, validate at joins, attribute spend per agent -> measure parallel speedup against the cost multiple; if you're not getting the speedup, you're paying the tax for nothing."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A teammate wants every feature to be a swarm of specialist agents 'because that's how the smartest demos work.' Tear it apart as a system design.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: two flawed assumptions -> 'more agents = smarter' is false: agents add parallel hands, not intelligence; a swarm of weak reasoners doesn't out-think one strong agent on a sequential problem -> 'demos generalize' is false: demos optimize for looking impressive on a curated task; production optimizes for cost, latency, debuggability, and a clean audit trail -> a swarm gives up the things production needs most — predictability and failure attribution — for emergence you rarely want -> map the failure modes you'd inherit: coordination cost, cascading errors, context fragmentation, cost blowup -> the framing, same as microservices: don't distribute until the work is genuinely independent and at a scale that pays the tax; default to one well-tooled agent and make the fleet justify itself with measured parallel speedup, not vibes."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the architecture for a research assistant that must answer a broad question by gathering from many independent sources.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: clarify whether the work is genuinely parallel — many independent sources to gather is the textbook case where fan-out pays, so this is a fair multi-agent candidate -> choose orchestrator-worker over swarm: a lead agent plans the sub-questions, fans out a bounded set of worker agents to gather in parallel, then synthesizes — you keep one control point, an audit trail, and a place to validate -> bound the blast radius: cap concurrent workers, set a per-run token/turn budget with a kill switch, only delegate sub-tasks above a complexity floor so you don't over-decompose -> handle the failure modes: validate worker results at the join (cascading errors), share the goal + what's gathered and isolate the rest (context fragmentation), attribute tokens per worker (cost blowup) -> compare honestly against the single-agent baseline: if one agent with a search tool and a tight loop gets close, ship that -> measure parallel speedup vs the cost multiple, and treat the multi-agent design as something to justify, not assume (multi-agent token use is many times a single chat turn, illustrative)."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design the guardrails and observability for a multi-agent system you have to run in production.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: one principle drives the design — every multi-agent system is a distributed system, so bound it like one -> limits: hard caps on concurrent agents, total turns, and per-run token budget, with a kill switch that stops a runaway fan-out -> attribution: per-agent / per-task token and latency accounting so you can see which branch ran away and what the parallel speedup actually was -> validation at the joins: score or check worker outputs before the orchestrator synthesizes, reconcile disagreements instead of blending them (defuses cascading errors) -> context discipline: define shared vs isolated context explicitly so agents don't duplicate or contradict (defuses fragmentation) -> safety: autonomy raises blast radius, so apply least privilege on tools, no arbitrary egress, confirmation on irreversible actions — map to OWASP LLM Top 10 (excessive agency) -> measure against a single-agent baseline; if the fleet isn't beating it on the metric that matters, collapse it back to one agent."
+   }
+  }
+ ]
+}
+</script>
+<script src="../../assets/analytics.js" defer></script>
+</head>
+<body>
+<!-- shared arrowheads -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
+  <marker id="arwM" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b5179e"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; Engineering Vault</a>
+    <span class="pn"><span style="color:var(--muted);opacity:.55" title="Start of track">&#8249; Prev</span><span style="color:var(--muted);opacity:.55" title="Coming soon">Next &#8250;</span></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Advanced AI Systems</span></span>
+  </nav>
+  <div id="reading-progress"></div>
+
+  <div class="kicker">Lesson 1 · Advanced AI Systems · Staff</div>
+  <h1>Multi-Agent Systems: <em>When &amp; When Not</em></h1>
+  <p class="meta">~14 min · 3 modules · the skeptical, cost-aware take on coordinating fleets of agents</p>
+  <div class="ltags"><span class="lt">Multi-agent</span><span class="lt">Orchestration</span><span class="lt">Swarms</span><span class="lt">Coordination cost</span><span class="lt">Anti-patterns</span></div>
+
+  <div class="mission">
+    <p><strong>Your bar:</strong> decide whether a problem actually warrants more than one agent, choose <em>orchestrator-worker</em> vs <em>swarm</em> when it does, and name the failure modes that only appear once agents must coordinate. By the end you can answer the production question every PM eventually asks: <b>should this be a fleet of agents, or one well-tooled agent in a loop?</b><sup><a href="#s1" id="r1">1</a></sup></p>
+    <p>The advanced, cost-aware sequel to the <a href="../../ai-agents/lessons/0004-agent-systems-and-production.html">AI&nbsp;Agents track's single-vs-multi intro</a> — here we add the trade-off math and the anti-patterns.</p>
+  </div>
+
+  <p>The whole skeptical case fits in four moves. Each chip is one of them:</p>
+  <div class="chips">
+    <span class="chip">Default to <b>one well-tooled agent</b></span>
+    <span class="chip c2">add agents only for <b>genuinely parallel work</b></span>
+    <span class="chip c3">prefer <b>orchestrator-worker</b> over emergent swarms</span>
+    <span class="chip c4">and pay the <b>coordination tax</b> only when it pays you back</span>
+  </div>
+
+  <!-- ============ HERO ============ -->
+  <figure>
+    <svg viewBox="0 0 640 300" role="img" aria-label="One agent versus a fleet: a fleet only wins when the work is genuinely parallel and the coordination tax is paid back; otherwise the single agent dominates.">
+      <!-- the decision spine -->
+      <rect x="40" y="130" width="120" height="44" rx="8" fill="#f6eef7" stroke="#b5179e" stroke-width="1.5"/>
+      <text x="100" y="150" text-anchor="middle" font-size="10.5" font-weight="700" fill="#111110">A goal</text>
+      <text x="100" y="165" text-anchor="middle" font-size="8" fill="#6b675f">one task to do</text>
+      <rect x="260" y="130" width="120" height="44" rx="8" fill="#f1eef2" stroke="#b5179e" stroke-width="2"/>
+      <text x="320" y="150" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b5179e">Is it parallel?</text>
+      <text x="320" y="165" text-anchor="middle" font-size="8" fill="#6b675f">independent sub-work</text>
+      <rect x="480" y="130" width="120" height="44" rx="8" fill="#f6eef7" stroke="#b5179e" stroke-width="1.5"/>
+      <text x="540" y="150" text-anchor="middle" font-size="10.5" font-weight="700" fill="#111110">Answer</text>
+      <text x="540" y="165" text-anchor="middle" font-size="8" fill="#6b675f">cheap + debuggable</text>
+      <line x1="160" y1="152" x2="256" y2="152" stroke="#6b675f" marker-end="url(#arw)"/>
+      <line x1="380" y1="152" x2="476" y2="152" stroke="#6b675f" marker-end="url(#arw)"/>
+
+      <!-- the default badge -->
+      <rect x="40" y="34" width="240" height="62" rx="10" fill="#e9f3ec" stroke="#2f5d3a" stroke-width="1.5"/>
+      <text x="160" y="54" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">Default · ONE well-tooled agent</text>
+      <text x="160" y="72" text-anchor="middle" font-size="8.5" fill="#6b675f">all state in one context</text>
+      <text x="160" y="86" text-anchor="middle" font-size="8.5" fill="#6b675f">cheaper, lower-latency, one place to debug</text>
+
+      <!-- the fleet badge -->
+      <rect x="360" y="34" width="240" height="62" rx="10" fill="#fbecec" stroke="#9a2417" stroke-width="1.5"/>
+      <text x="480" y="54" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">Only if parallel · a FLEET of agents</text>
+      <text x="480" y="72" text-anchor="middle" font-size="8.5" fill="#6b675f">throughput on independent work</text>
+      <text x="480" y="86" text-anchor="middle" font-size="8.5" fill="#6b675f">pays a coordination tax in tokens + latency</text>
+
+      <line x1="160" y1="96" x2="120" y2="128" stroke="#2f5d3a" stroke-dasharray="3 3" marker-end="url(#arwG)"/>
+      <line x1="480" y1="96" x2="540" y2="128" stroke="#9a2417" stroke-dasharray="3 3" marker-end="url(#arwR)"/>
+      <text x="320" y="118" text-anchor="middle" font-size="8" fill="#6b675f">no &rarr;</text>
+      <text x="430" y="118" text-anchor="middle" font-size="8" fill="#6b675f">&larr; yes</text>
+
+      <text x="320" y="216" text-anchor="middle" font-size="11" font-style="italic" fill="#b5179e">More agents add parallel hands, not a smarter brain.</text>
+      <text x="320" y="240" text-anchor="middle" font-size="9.5" fill="#6b675f">A multi-agent system is the distributed-systems version of an agent — same trade as a monolith vs microservices.</text>
+      <text x="320" y="276" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">Don't add agents for the reasons you wouldn't add microservices.</text>
+    </svg>
+    <figcaption>The whole lesson in one picture. The single well-tooled agent is the <em>default</em>; a fleet is a scaling pattern you reach for only when work is genuinely parallel and the <b>coordination tax</b> pays for itself.<sup><a href="#s1" id="r1b">1</a></sup></figcaption>
+  </figure>
+
+  <nav class="toc">
+    <a href="#m1">1 · Multi-agent systems (what &amp; when)</a>
+    <a href="#m2">2 · Orchestrator-worker vs swarm</a>
+    <a href="#m3">3 · Failure modes &amp; anti-patterns</a>
+    <a href="#quiz">★ Retrieval practice</a>
+    <a href="#interview">★ Interview questions</a>
+    <a href="#m3">★ Foundations laid</a>
+  </nav>
+
+  <!-- ============ MODULE 1 ============ -->
+  <section class="lvl" id="m1">
+    <div class="lvltop"><span class="num">1</span><h2>Multi-Agent Systems</h2></div>
+    <p class="tagline">Multiple agents — each its own <b>LLM + tools + context window</b> — working on one goal, coordinating by passing messages or results. It's the <b>distributed-systems version of an agent</b>: more throughput on parallel work, paid for with coordination.<sup><a href="#s3" id="r2">2</a></sup></p>
+
+    <h3>One agent, or many? Start from the default</h3>
+    <figure>
+      <svg viewBox="0 0 640 250" role="img" aria-label="A single agent keeps all state in one context window; a multi-agent system splits work across agents that must pass messages, adding coordination overhead.">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">Single agent vs multi-agent</text>
+
+        <!-- single agent -->
+        <rect x="30" y="34" width="270" height="180" rx="10" fill="#e9f3ec" stroke="#2f5d3a" stroke-width="1.5"/>
+        <text x="165" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">Single agent (the default)</text>
+        <rect x="70" y="70" width="190" height="40" rx="6" fill="#ffffff" stroke="#2f5d3a"/>
+        <text x="165" y="88" text-anchor="middle" font-size="9" font-weight="700" fill="#111110">one LLM + tools</text>
+        <text x="165" y="101" text-anchor="middle" font-size="8" fill="#6b675f">observe &rarr; think &rarr; act, in a loop</text>
+        <rect x="70" y="122" width="190" height="34" rx="6" fill="#ffffff" stroke="#2f5d3a"/>
+        <text x="165" y="143" text-anchor="middle" font-size="8.5" fill="#111110">ALL state in one context window</text>
+        <text x="165" y="182" text-anchor="middle" font-size="8.5" font-weight="700" fill="#2f5d3a">no handoff loss · one place to debug</text>
+        <text x="165" y="198" text-anchor="middle" font-size="8" fill="#6b675f">cheaper, lower-latency</text>
+
+        <!-- multi-agent -->
+        <rect x="340" y="34" width="270" height="180" rx="10" fill="#f6eef7" stroke="#b5179e" stroke-width="1.5"/>
+        <text x="475" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b5179e">Multi-agent (a scaling pattern)</text>
+        <rect x="360" y="70" width="78" height="34" rx="6" fill="#ffffff" stroke="#b5179e"/>
+        <text x="399" y="91" text-anchor="middle" font-size="8" fill="#111110">agent A</text>
+        <rect x="446" y="70" width="78" height="34" rx="6" fill="#ffffff" stroke="#b5179e"/>
+        <text x="485" y="91" text-anchor="middle" font-size="8" fill="#111110">agent B</text>
+        <rect x="532" y="70" width="58" height="34" rx="6" fill="#ffffff" stroke="#b5179e"/>
+        <text x="561" y="91" text-anchor="middle" font-size="8" fill="#111110">agent C</text>
+        <line x1="438" y1="104" x2="475" y2="124" stroke="#9a2417" marker-end="url(#arwR)"/>
+        <line x1="485" y1="104" x2="475" y2="124" stroke="#9a2417" marker-end="url(#arwR)"/>
+        <line x1="561" y1="104" x2="490" y2="124" stroke="#9a2417" marker-end="url(#arwR)"/>
+        <rect x="380" y="126" width="190" height="30" rx="6" fill="#ffffff" stroke="#b5179e"/>
+        <text x="475" y="145" text-anchor="middle" font-size="8.5" fill="#111110">message-passing / shared state</text>
+        <text x="475" y="182" text-anchor="middle" font-size="8.5" font-weight="700" fill="#9a2417">throughput on parallel work</text>
+        <text x="475" y="198" text-anchor="middle" font-size="8" fill="#6b675f">+ coordination tax (tokens, latency, failures)</text>
+      </svg>
+      <figcaption>A single agent holds everything in one window — no fragmentation, one debugger. Splitting into agents buys parallelism but trades in-context reasoning for <em>message-passing</em>, which is where the cost and the failure modes live.<sup><a href="#s3" id="r2b">2</a></sup></figcaption>
+    </figure>
+
+    <h3>When does the work justify more than one agent?</h3>
+    <table>
+      <thead><tr><th>Property of the task</th><th>Single agent</th><th>Multi-agent</th></tr></thead>
+      <tbody>
+        <tr><td><b>Shape of the work</b></td><td>Sequential / one thread</td><td>Genuinely parallel, independent sub-tasks</td></tr>
+        <tr><td><b>Shared context</b></td><td>Sub-steps share a lot of state</td><td>Sub-tasks need little of each other's state</td></tr>
+        <tr><td><b>Scale</b></td><td>Small enough to not amortize overhead</td><td>Large enough that the coordination tax pays back</td></tr>
+        <tr><td><b>What you optimize</b></td><td>Cost, latency, debuggability</td><td>Wall-clock throughput on parallel work</td></tr>
+        <tr><td><b>Honest default</b></td><td>Most production features</td><td>The exception you must justify</td></tr>
+      </tbody>
+    </table>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> A multi-agent system is several agents (each its own LLM + tools + context) on one goal, coordinating by passing messages or results. A scaling pattern, not a smarter brain.</div>
+      <div class="fact"><b>Why it exists</b> Some goals decompose into independent sub-tasks that can run in parallel. Splitting them across agents turns serial work into concurrent work — when the work is actually parallel.</div>
+      <div class="fact blue"><b>Like (world)</b> A newsroom on a breaking story: an editor assigns reporters to separate angles in parallel, then stitches the pieces. It only helps because the angles are independent.</div>
+      <div class="fact blue"><b>Like (code)</b> A monolith vs microservices: you split for independent scaling, not for fun. The split pays only when the boundary is real and the volume justifies the network cost.</div>
+    </div>
+
+    <div class="myth">
+      <div class="m">&#10007; "More agents make the system smarter."</div>
+      <div class="t">&#10003; More agents add parallel <em>hands</em>, not a smarter brain. A fleet of weak reasoners doesn't out-think one strong agent on a sequential problem.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; "Multi-agent is the modern, default way to build."</div>
+      <div class="t">&#10003; The default is one well-tooled agent in a loop. Multi-agent is the exception you reach for only when the work is genuinely parallel.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> <span>One well-tooled agent is the default.</span> A multi-agent system is the <span>distributed-systems version</span> of an agent — reach for it only when the work is genuinely parallel.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What is a multi-agent system in one line? <span class="ans">&rarr; several agents (each LLM + tools + context) on one goal, coordinating by passing messages/results</span></li>
+      <li>What does adding agents actually buy you? <span class="ans">&rarr; parallel throughput on independent work — not more intelligence</span></li>
+      <li>What's the honest default? <span class="ans">&rarr; one well-tooled agent in a loop; multi-agent is the exception you must justify</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>M1 — A PM wants you to "use a multi-agent system" for a feature. How do you decide whether that's the right shape at all?</summary>
+      <div class="a">
+        <b>Hit these points:</b> start from the default — one well-tooled agent in a loop is simpler, cheaper, and easier to debug, so the burden of proof is on <em>adding</em> agents &rarr; ask whether the work is genuinely parallel and decomposable into independent sub-tasks that don't need each other's intermediate state &rarr; if it's sequential, or the sub-tasks share a lot of context, multiple agents just pay coordination tax (extra tokens, latency, failure surface) for no parallelism &rarr; if it IS parallel and the value of the result outweighs the spend, an orchestrator-worker fan-out can pay off &rarr; the rule: don't add agents for the same reasons you wouldn't add microservices — premature distribution buys you a distributed-systems problem you didn't have.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ MODULE 2 ============ -->
+  <section class="lvl" id="m2">
+    <div class="lvltop"><span class="num">2</span><h2>Orchestration: Orchestrator-Worker vs Swarm</h2></div>
+    <p class="tagline">Two ways to wire a fleet. <b>Orchestrator-worker</b>: one lead decomposes, delegates, and synthesizes (scatter-gather). <b>Swarm</b>: peer agents, no central planner, behavior <em>emerges</em>. For production you almost always want the control point.<sup><a href="#s2" id="r3">3</a></sup></p>
+
+    <h3>The two patterns, side by side</h3>
+    <figure>
+      <svg viewBox="0 0 640 250" role="img" aria-label="Orchestrator-worker has a lead agent that fans out to workers and synthesizes results; a swarm has peer agents with no central planner coordinating through shared state.">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">Orchestrator-worker vs swarm</text>
+
+        <!-- orchestrator-worker -->
+        <rect x="30" y="34" width="270" height="180" rx="10" fill="#e9f3ec" stroke="#2f5d3a" stroke-width="1.5"/>
+        <text x="165" y="52" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">Orchestrator-worker</text>
+        <rect x="120" y="62" width="90" height="28" rx="6" fill="#ffffff" stroke="#2f5d3a"/>
+        <text x="165" y="80" text-anchor="middle" font-size="8.5" font-weight="700" fill="#111110">lead (plans)</text>
+        <line x1="140" y1="90" x2="90" y2="118" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <line x1="165" y1="90" x2="165" y2="118" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <line x1="190" y1="90" x2="240" y2="118" stroke="#2f5d3a" marker-end="url(#arwG)"/>
+        <rect x="55" y="120" width="62" height="26" rx="5" fill="#ffffff" stroke="#2f5d3a"/><text x="86" y="137" text-anchor="middle" font-size="7.5" fill="#111110">worker</text>
+        <rect x="134" y="120" width="62" height="26" rx="5" fill="#ffffff" stroke="#2f5d3a"/><text x="165" y="137" text-anchor="middle" font-size="7.5" fill="#111110">worker</text>
+        <rect x="213" y="120" width="62" height="26" rx="5" fill="#ffffff" stroke="#2f5d3a"/><text x="244" y="137" text-anchor="middle" font-size="7.5" fill="#111110">worker</text>
+        <line x1="86" y1="146" x2="150" y2="170" stroke="#6b675f" marker-end="url(#arwG)"/>
+        <line x1="165" y1="146" x2="165" y2="170" stroke="#6b675f" marker-end="url(#arwG)"/>
+        <line x1="244" y1="146" x2="180" y2="170" stroke="#6b675f" marker-end="url(#arwG)"/>
+        <rect x="110" y="172" width="110" height="26" rx="6" fill="#ffffff" stroke="#2f5d3a"/>
+        <text x="165" y="189" text-anchor="middle" font-size="8" font-weight="700" fill="#111110">lead synthesizes</text>
+        <text x="165" y="210" text-anchor="middle" font-size="7.5" fill="#6b675f">one control point · auditable · debuggable</text>
+
+        <!-- swarm -->
+        <rect x="340" y="34" width="270" height="180" rx="10" fill="#f6eef7" stroke="#b5179e" stroke-width="1.5"/>
+        <text x="475" y="52" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b5179e">Swarm (no lead)</text>
+        <circle cx="420" cy="95" r="16" fill="#ffffff" stroke="#b5179e"/><text x="420" y="98" text-anchor="middle" font-size="7" fill="#111110">peer</text>
+        <circle cx="530" cy="95" r="16" fill="#ffffff" stroke="#b5179e"/><text x="530" y="98" text-anchor="middle" font-size="7" fill="#111110">peer</text>
+        <circle cx="420" cy="160" r="16" fill="#ffffff" stroke="#b5179e"/><text x="420" y="163" text-anchor="middle" font-size="7" fill="#111110">peer</text>
+        <circle cx="530" cy="160" r="16" fill="#ffffff" stroke="#b5179e"/><text x="530" y="163" text-anchor="middle" font-size="7" fill="#111110">peer</text>
+        <line x1="436" y1="95" x2="514" y2="95" stroke="#9a2417" marker-end="url(#arwR)" marker-start="url(#arwR)"/>
+        <line x1="420" y1="111" x2="420" y2="144" stroke="#9a2417" marker-end="url(#arwR)" marker-start="url(#arwR)"/>
+        <line x1="530" y1="111" x2="530" y2="144" stroke="#9a2417" marker-end="url(#arwR)" marker-start="url(#arwR)"/>
+        <line x1="434" y1="106" x2="516" y2="149" stroke="#9a2417" marker-end="url(#arwR)" marker-start="url(#arwR)"/>
+        <text x="475" y="127" text-anchor="middle" font-size="7.5" fill="#6b675f">shared state</text>
+        <text x="475" y="196" text-anchor="middle" font-size="8" font-weight="700" fill="#9a2417">behavior emerges</text>
+        <text x="475" y="210" text-anchor="middle" font-size="7.5" fill="#6b675f">max parallelism · hard to attribute failures</text>
+      </svg>
+      <figcaption>Orchestrator-worker gives you a <em>place to stand</em>: one planner, one synthesizer, one spot to validate and attribute failures. A swarm trades that control for emergence — great for exploration, risky for production.<sup><a href="#s2" id="r3b">3</a></sup></figcaption>
+    </figure>
+
+    <h3>What each pattern buys and costs</h3>
+    <table>
+      <thead><tr><th>Dimension</th><th>Orchestrator-worker</th><th>Swarm</th></tr></thead>
+      <tbody>
+        <tr><td><b>Control</b></td><td>Central lead plans &amp; integrates</td><td>None — peers act on local state</td></tr>
+        <tr><td><b>Predictability</b></td><td>High — one plan, one synthesis</td><td>Low — behavior emerges</td></tr>
+        <tr><td><b>Failure attribution</b></td><td>Clear — trace to a worker or the join</td><td>Hard — no single owner of an outcome</td></tr>
+        <tr><td><b>Parallelism</b></td><td>Bounded by the lead's fan-out</td><td>Maximal, fully decoupled</td></tr>
+        <tr><td><b>Best for</b></td><td>Production tasks needing an audit trail</td><td>Exploration / simulation where emergence is the point</td></tr>
+      </tbody>
+    </table>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> Orchestrator-worker = a lead agent decomposes the goal, delegates sub-tasks to workers, and synthesizes results. Fan-out-fan-in with one owner of planning and integration.</div>
+      <div class="fact"><b>Why it exists</b> Production needs a control point: somewhere to plan the split, validate the results, and attribute failures. The lead is that point; workers stay isolated on their sub-problem.</div>
+      <div class="fact blue"><b>Like (world)</b> A general contractor: subcontractors do isolated jobs in parallel; the contractor scopes the work, checks it, and signs off the whole build.</div>
+      <div class="fact blue"><b>Like (code)</b> Scatter-gather / map-reduce: a coordinator fans work to mappers and reduces their outputs. The reduce step is the synthesis — and the place bad partials get caught.</div>
+    </div>
+
+    <div class="myth">
+      <div class="m">&#10007; "A swarm is more advanced, so it's the better default."</div>
+      <div class="t">&#10003; A swarm trades away the things production needs most — predictability and failure attribution — for emergence you rarely want. Default to orchestrator-worker.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; "The orchestrator is just a router; the workers do the real work."</div>
+      <div class="t">&#10003; The orchestrator owns planning, delegation, AND synthesis. The synthesis (and validating partials) is where quality is won or lost.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> Orchestrator-worker gives you <span>one control point</span> — plan, validate, attribute. A swarm trades that for <span>emergence you rarely want</span> in production.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What does the orchestrator own? <span class="ans">&rarr; planning the split, delegating to workers, and synthesizing their results</span></li>
+      <li>What does a swarm trade away? <span class="ans">&rarr; predictability and failure attribution — there's no central plan or owner of the outcome</span></li>
+      <li>Which is the production default? <span class="ans">&rarr; orchestrator-worker — you want the audit trail and the synthesis step</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>M2 — Contrast orchestrator-worker with a swarm. When would you reach for each, and what do you give up?</summary>
+      <div class="a">
+        <b>Hit these points:</b> orchestrator-worker = one lead agent decomposes the goal, fans out independent sub-tasks to workers, then synthesizes — scatter-gather, the lead owns planning and integration &rarr; swarm = many peer agents, no central planner; behavior emerges from local interactions and shared state &rarr; orchestrator-worker buys a clear control point, easier debugging, and a place to attribute failures; you pay a planning bottleneck and a single coordination point &rarr; swarm buys maximum parallelism and decoupling; you give up predictability and the ability to attribute a bad outcome to any one agent &rarr; default to orchestrator-worker for production: you almost always want the audit trail and the synthesis step more than emergent behavior.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ MODULE 3 ============ -->
+  <section class="lvl" id="m3">
+    <div class="lvltop"><span class="num">3</span><h2>Failure Modes &amp; Anti-Patterns</h2></div>
+    <p class="tagline">Three failures appear <em>only</em> once agents must coordinate: <b>cascading errors</b>, <b>context fragmentation</b>, and <b>cost / latency blowups</b>. Each is a distributed-systems failure wearing an LLM costume — and each is why you bound a fleet like one.<sup><a href="#s4" id="r4">4</a></sup></p>
+
+    <h3>The three multi-agent-specific failures</h3>
+    <figure>
+      <svg viewBox="0 0 640 240" role="img" aria-label="Three failure modes unique to multi-agent: cascading errors where a wrong partial poisons the synthesis, context fragmentation where no agent sees the whole, and cost blowups where tokens scale with agents times turns times retries.">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">Failure modes unique to multi-agent</text>
+
+        <!-- cascading errors -->
+        <rect x="24" y="34" width="190" height="170" rx="10" fill="#fbecec" stroke="#9a2417" stroke-width="1.5"/>
+        <text x="119" y="54" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a2417">1 · Cascading errors</text>
+        <rect x="44" y="66" width="68" height="24" rx="5" fill="#ffffff" stroke="#9a2417"/><text x="78" y="82" text-anchor="middle" font-size="7.5" fill="#9a2417">bad partial</text>
+        <line x1="112" y1="78" x2="138" y2="78" stroke="#9a2417" marker-end="url(#arwR)"/>
+        <rect x="138" y="66" width="58" height="24" rx="5" fill="#ffffff" stroke="#9a2417"/><text x="167" y="82" text-anchor="middle" font-size="7.5" fill="#9a2417">trusted</text>
+        <line x1="119" y1="92" x2="119" y2="112" stroke="#9a2417" marker-end="url(#arwR)"/>
+        <rect x="44" y="114" width="152" height="26" rx="5" fill="#ffffff" stroke="#9a2417"/>
+        <text x="120" y="131" text-anchor="middle" font-size="7.5" fill="#9a2417">confident wrong synthesis</text>
+        <text x="119" y="162" text-anchor="middle" font-size="7.5" font-style="italic" fill="#9a2417">error compounds across steps</text>
+        <text x="119" y="182" text-anchor="middle" font-size="7.5" font-weight="700" fill="#2f5d3a">Fix: validate at the join</text>
+        <text x="119" y="195" text-anchor="middle" font-size="7" fill="#6b675f">don't blindly trust partials</text>
+
+        <!-- context fragmentation -->
+        <rect x="224" y="34" width="192" height="170" rx="10" fill="#fbecec" stroke="#9a2417" stroke-width="1.5"/>
+        <text x="320" y="54" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a2417">2 · Context fragmentation</text>
+        <rect x="244" y="66" width="50" height="26" rx="5" fill="#ffffff" stroke="#9a2417"/><text x="269" y="83" text-anchor="middle" font-size="7" fill="#9a2417">slice A</text>
+        <rect x="299" y="66" width="50" height="26" rx="5" fill="#ffffff" stroke="#9a2417"/><text x="324" y="83" text-anchor="middle" font-size="7" fill="#9a2417">slice B</text>
+        <rect x="354" y="66" width="50" height="26" rx="5" fill="#ffffff" stroke="#9a2417"/><text x="379" y="83" text-anchor="middle" font-size="7" fill="#9a2417">slice C</text>
+        <text x="320" y="112" text-anchor="middle" font-size="7.5" fill="#9a2417">no one sees the whole</text>
+        <text x="320" y="130" text-anchor="middle" font-size="7.5" fill="#9a2417">&rarr; duplicate &amp; contradict</text>
+        <text x="320" y="162" text-anchor="middle" font-size="7.5" font-style="italic" fill="#9a2417">slices don't add up to the picture</text>
+        <text x="320" y="182" text-anchor="middle" font-size="7.5" font-weight="700" fill="#2f5d3a">Fix: decide shared vs isolated</text>
+        <text x="320" y="195" text-anchor="middle" font-size="7" fill="#6b675f">share the goal; isolate the rest</text>
+
+        <!-- cost blowup -->
+        <rect x="426" y="34" width="190" height="170" rx="10" fill="#fbecec" stroke="#9a2417" stroke-width="1.5"/>
+        <text x="521" y="54" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a2417">3 · Cost / latency blowup</text>
+        <rect x="446" y="66" width="150" height="50" rx="6" fill="#ffffff" stroke="#9a2417"/>
+        <text x="521" y="86" text-anchor="middle" font-size="8.5" font-weight="700" fill="#9a2417">tokens scale with</text>
+        <text x="521" y="102" text-anchor="middle" font-size="8" fill="#9a2417">agents &times; turns &times; retries</text>
+        <text x="521" y="138" text-anchor="middle" font-size="7.5" fill="#9a2417">runaway fan-out / chatty loops</text>
+        <text x="521" y="156" text-anchor="middle" font-size="7" font-style="italic" fill="#6b675f">multi-agent burns many&times; a chat turn (illustrative)</text>
+        <text x="521" y="182" text-anchor="middle" font-size="7.5" font-weight="700" fill="#2f5d3a">Fix: cap agents/turns/budget</text>
+        <text x="521" y="195" text-anchor="middle" font-size="7" fill="#6b675f">attribute spend · kill switch</text>
+      </svg>
+      <figcaption>None of these exist for a single agent — they're the price of coordination. Treat each as a distributed-systems failure: validate at the joins, define context boundaries, and bound the blast radius with caps and per-agent attribution.<sup><a href="#s4" id="r4b">4</a></sup></figcaption>
+    </figure>
+
+    <h3>Failure mode &rarr; root cause &rarr; defense</h3>
+    <table>
+      <thead><tr><th>Failure mode</th><th>Root cause</th><th>Defense</th></tr></thead>
+      <tbody>
+        <tr><td><b>Cascading errors</b></td><td>A wrong partial is trusted and folded into the synthesis</td><td>Validate / score worker outputs at the join; reconcile, don't blend</td></tr>
+        <tr><td><b>Context fragmentation</b></td><td>Each agent sees a slice; no one sees the whole</td><td>Decide shared vs isolated context up front; orchestrator owns the global plan</td></tr>
+        <tr><td><b>Cost / latency blowup</b></td><td>Tokens scale with agents &times; turns &times; retries; unbounded fan-out</td><td>Hard caps on agents/turns/budget; per-agent token attribution; kill switch</td></tr>
+        <tr><td><b>Excessive agency</b></td><td>Autonomous agents act with broad tool access</td><td>Least privilege, no arbitrary egress, confirmation on irreversible actions</td></tr>
+      </tbody>
+    </table>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> The multi-agent failure set: cascading errors, context fragmentation, and cost/latency blowup — failures that exist only because agents must coordinate. Add excessive agency once they can act.</div>
+      <div class="fact"><b>Why it exists</b> Coordination introduces joins (where bad partials compound), boundaries (where context fragments), and amplification (where tokens multiply). Distribution creates them; a single agent has none.</div>
+      <div class="fact blue"><b>Like (world)</b> A relay race: one dropped baton (cascading), runners who don't know the course (fragmentation), and a roster you keep growing for no speed gain (cost blowup).</div>
+      <div class="fact blue"><b>Like (code)</b> Microservice sprawl: cascading failures across calls, state split awkwardly across services, and a bill that balloons with chatty inter-service traffic. Same lessons apply.</div>
+    </div>
+
+    <div class="myth">
+      <div class="m">&#10007; "We'll add specialist agents because that's how the impressive demos work."</div>
+      <div class="t">&#10003; Demos optimize for looking smart on a curated task; production optimizes for cost, latency, debuggability, and an audit trail. Don't generalize from the demo.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; "Adding agents is a low-risk way to improve quality."</div>
+      <div class="t">&#10003; Each agent is a new failure surface. You inherit cascading errors, fragmentation, and cost blowups — a distributed-systems problem — for parallelism you may not need.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> <span>Don't add agents for the reasons you wouldn't add microservices.</span> Bound a fleet like a distributed system: <span>validate at joins, cap the blast radius, attribute spend</span>.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Name the three multi-agent-specific failures. <span class="ans">&rarr; cascading errors, context fragmentation, cost/latency blowup</span></li>
+      <li>What is a cascading error? <span class="ans">&rarr; one worker's wrong partial is trusted downstream and folded into a confident wrong synthesis — fix by validating at the join</span></li>
+      <li>What's the governing analogy? <span class="ans">&rarr; don't add agents for the reasons you wouldn't add microservices — distribute only when the boundary is real and the volume pays the tax</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>M3 — Your multi-agent feature's quality is unstable and the bill is 10x what you modeled. Diagnose the failure modes.</summary>
+      <div class="a">
+        <b>Hit these points:</b> separate the three multi-agent-specific failures &rarr; cascading errors: a worker's wrong intermediate result is trusted downstream and the orchestrator synthesizes confident nonsense — fix with validation at the join, not blind trust &rarr; context fragmentation: each agent sees a slice, no one sees the whole, so they duplicate work or contradict each other — fix by deciding shared vs isolated context up front &rarr; cost/latency blowup: tokens scale with agents &times; turns &times; retries; one chatty loop or a runaway fan-out multiplies spend fast (multi-agent can burn many times the tokens of a single chat turn, illustrative) — fix with hard caps on agent count, turns, and budget &rarr; measure: per-agent token attribution, a turn cap, and a kill switch; if you can't attribute the spend, you can't control it.
+      </div>
+    </details>
+
+    <details class="iq">
+      <summary>M3 — Make the explicit analogy: why is "don't add agents for the reasons you wouldn't add microservices" the governing rule?</summary>
+      <div class="a">
+        <b>Hit these points:</b> splitting a monolith into microservices trades in-process calls for network calls — you gain independent scaling and team autonomy but inherit partial failure, serialization cost, and distributed debugging &rarr; splitting one agent into many trades in-context reasoning for message-passing — you gain parallelism but inherit coordination overhead, cascading errors, and context fragmentation &rarr; in both cases the split only pays when the boundary is real (genuinely independent work) and the volume justifies the overhead &rarr; people add both for resume-driven or demo reasons, not load reasons; the result is a distributed system with all the failure modes and none of the benefit &rarr; so the test is identical: is the work truly independent and at a scale where the coordination tax pays for itself? If not, keep it in one process / one agent.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ QUIZ ============ -->
+  <h2 class="sec" id="quiz">Retrieval practice — test the three modules</h2>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q1.</span> Adding more agents to a system primarily gives you…</p>
+      <button class="opt">A model that reasons more deeply because several brains debate the problem first</button>
+      <button class="opt">Lower cost and latency since the work is now spread thin across many helpers</button>
+      <button class="opt">Parallel throughput on independent work, paid for with coordination overhead</button>
+      <button class="opt">Stronger safety guarantees because no single agent holds all of the context</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q2.</span> The honest default shape for most production agent features is…</p>
+      <button class="opt">One well-tooled agent in a tight loop, with multi-agent kept as the exception</button>
+      <button class="opt">A swarm of specialist agents so each narrow skill has a dedicated owner</button>
+      <button class="opt">An orchestrator with as many workers as there are sub-questions to answer</button>
+      <button class="opt">Whichever shape the most impressive recent product demo happened to use</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q3.</span> Compared with a swarm, orchestrator-worker mainly gives you…</p>
+      <button class="opt">Strictly more parallelism because the lead can spawn unlimited extra workers</button>
+      <button class="opt">Lower token cost in every case since a central lead removes all the chatter</button>
+      <button class="opt">Emergent behavior that adapts on its own without any central planning step</button>
+      <button class="opt">A central control point to plan, validate, and attribute failures cleanly</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q4.</span> A worker returns a wrong partial and the lead folds it into a confident final answer. This is…</p>
+      <button class="opt">Context fragmentation, because the worker could not see the whole problem set</button>
+      <button class="opt">A cascading error, fixed by validating worker outputs before the synthesis step</button>
+      <button class="opt">A cost blowup, fixed by lowering the per-call token budget for that one worker</button>
+      <button class="opt">Excessive agency, fixed by removing the tool that the worker used to act outward</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q5.</span> The governing rule "don't add agents for the reasons you wouldn't add microservices" means…</p>
+      <button class="opt">Multi-agent and microservices are unrelated, so the comparison does not hold up</button>
+      <button class="opt">Always split work into the smallest possible agents to keep each one simple to test</button>
+      <button class="opt">Distribute only when the boundary is real and the scale repays the coordination tax</button>
+      <button class="opt">Microservices are obsolete, so avoid both patterns in any modern system you build</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <!-- ============ INTERVIEW QUESTIONS ============ -->
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
+  <div data-interview>
+
+    <details class="iq" data-level="core">
+      <summary>What is a multi-agent system, in one breath?</summary>
+      <div class="a"><b>Hit these points:</b> multiple agents — each its own <b>LLM + tools + context window</b> — working on one goal and coordinating by passing messages or results &rarr; it's the <b>distributed-systems version of an agent</b>: you trade a single reasoning thread for several that must agree &rarr; the upside is throughput on genuinely parallel work; the downside is <b>coordination overhead</b> — the tokens, latency, and failure surface spent getting them to hand off and not duplicate work &rarr; so it is a scaling pattern, not a smarter brain: more agents mean more parallel hands, not more intelligence.</div>
+    </details>
+
+    <details class="iq" data-level="core">
+      <summary>What is orchestrator-worker and what does the orchestrator actually own?</summary>
+      <div class="a"><b>Hit these points:</b> one lead (orchestrator) agent decomposes the goal into independent sub-tasks, delegates each to a worker, then <b>synthesizes</b> the results into the final answer &rarr; it's the <b>scatter-gather / fan-out-fan-in</b> pattern &rarr; the orchestrator owns planning (how to split), delegation (who does what), and integration (combining results) — workers own only their isolated sub-problem &rarr; that single control point is the win: one place to plan, one place to validate, one place to attribute a failure.</div>
+    </details>
+
+    <details class="iq" data-level="core">
+      <summary>What is an agent swarm, and what does it trade away?</summary>
+      <div class="a"><b>Hit these points:</b> many <b>peer</b> agents with no central orchestrator; behavior <b>emerges</b> from local interactions and a shared environment or state &rarr; it maximizes parallelism and decoupling — no planning bottleneck, agents act on what they see locally &rarr; the trade is <b>predictability and attribution</b>: with no central plan you can't easily say why the system did what it did, or which agent caused a bad outcome &rarr; so swarms suit exploratory or simulation-style work where emergence is the point, not production tasks that need an audit trail and a synthesis step.</div>
+    </details>
+
+    <details class="iq" data-level="core">
+      <summary>What is coordination overhead, and why is it the central anti-pattern of multi-agent?</summary>
+      <div class="a"><b>Hit these points:</b> coordination overhead = the extra <b>tokens, latency, and failure surface</b> spent getting agents to agree, hand off, and not duplicate work &rarr; every multi-agent design pays this tax whether or not the task benefits &rarr; if the task is genuinely parallel, the throughput gain can exceed the tax; if it's sequential or context-heavy, the tax is pure loss &rarr; that's the anti-pattern: adding agents to a task that isn't parallel buys coordination cost with no payoff &rarr; the discipline is to keep the default at one agent and make the multi-agent design justify the tax.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>When does a single well-tooled agent beat a fleet? Walk me through the call.</summary>
+      <div class="a"><b>Hit these points:</b> a single agent wins whenever the work is <b>sequential</b>, shares a lot of context, or isn't large enough to amortize coordination cost &rarr; one agent keeps all state in one context window, so there's no fragmentation, no handoff loss, and one place to debug &rarr; it's cheaper (no inter-agent chatter) and lower-latency (no fan-out / join) &rarr; the honest default: most production features are a single agent with good tools and a tight loop &rarr; reach for multiple agents only when you've shown the work is genuinely parallel and the value of the outcome outweighs the extra spend — separate that real case from the demo that just looks impressive.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>Your fan-out spawned far more workers than the task needed and the bill exploded. What happened and how do you prevent it?</summary>
+      <div class="a"><b>Hit these points:</b> the orchestrator <b>over-decomposed</b> — it spun up a worker per trivial sub-question because nothing bounded it &rarr; tokens scale with <b>agents &times; turns &times; retries</b>, so an unbounded fan-out multiplies spend with no quality gain &rarr; root cause is missing limits, not a model bug: no cap on worker count, no per-task budget, no floor on what's worth delegating &rarr; fix: cap concurrent workers, set a token/turn budget per run with a <b>kill switch</b>, and only delegate sub-tasks above a complexity threshold &rarr; add per-agent token attribution so you can see which branch ran away &rarr; the lesson: an autonomous decomposer needs the same guardrails you'd put on any process that can fan out work.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>Quality swings run to run and you suspect cascading errors. Diagnose and fix.</summary>
+      <div class="a"><b>Hit these points:</b> log each worker's intermediate output and the orchestrator's synthesis for a good and a bad run — you're auditing the <b>handoffs</b>, not the final answer &rarr; look for a worker that returned a wrong or low-confidence result that got trusted downstream and folded into a confident final answer &rarr; that's a <b>cascading error</b>: no validation at the join, so one bad slice poisons the synthesis &rarr; fix: validate or score worker outputs before integration, have the orchestrator reconcile disagreements instead of blending them, and let workers signal low confidence &rarr; add a check that contradictory results trigger a re-run or escalation, not a silent merge &rarr; the framing: in a pipeline of probabilistic steps, error compounds — you must inspect at the joins.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>Two workers duplicated each other's work and a third contradicted both. Why, and how do you design against it?</summary>
+      <div class="a"><b>Hit these points:</b> this is <b>context fragmentation</b> — each agent saw only its slice, none saw the whole, so they overlapped and disagreed &rarr; root cause is an unmade decision: what context is <b>shared</b> across agents vs <b>isolated</b> to each &rarr; too much isolation duplicates and contradicts; too much sharing reintroduces the cost and bloat you split to avoid &rarr; fix: give the orchestrator authority over the global plan so sub-tasks are carved to be genuinely non-overlapping, share the minimal common context (the goal, constraints, what's already done), and isolate the rest &rarr; have the synthesis step reconcile, not concatenate &rarr; the principle: decide the context boundaries deliberately, the way you'd define service boundaries — fragmentation is a design smell, not bad luck.</div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>Reason about the trade-offs across coordination cost, latency, and reliability in a multi-agent design.</summary>
+      <div class="a"><b>Hit these points:</b> name the axes — <b>cost</b> (tokens scale with agents &times; turns), <b>latency</b> (fan-out can run workers in parallel, but the join waits for the slowest, and an orchestrator adds planning turns), <b>reliability</b> (more independent steps means more places to fail and compound) &rarr; parallelism can cut wall-clock latency for genuinely independent work, which is the main reason to pay the rest &rarr; but it raises cost (inter-agent chatter, retries) and lowers reliability (cascading errors, fragmentation) &rarr; sequence the call: prove the work is parallel first; if not, one agent dominates on all three axes &rarr; if it is, bound the blast radius — cap agents/turns/budget, validate at joins, attribute spend per agent &rarr; measure parallel speedup against the cost multiple; if you're not getting the speedup, you're paying the tax for nothing.</div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>A teammate wants every feature to be a swarm of specialist agents "because that's how the smartest demos work." Tear it apart as a system design.</summary>
+      <div class="a"><b>Hit these points:</b> two flawed assumptions &rarr; <b>"more agents = smarter"</b> is false: agents add parallel hands, not intelligence; a swarm of weak reasoners doesn't out-think one strong agent on a sequential problem &rarr; <b>"demos generalize"</b> is false: demos optimize for looking impressive on a curated task; production optimizes for cost, latency, debuggability, and a clean audit trail &rarr; a swarm gives up what production needs most — predictability and failure attribution — for emergence you rarely want &rarr; map the failure modes you'd inherit: coordination cost, cascading errors, context fragmentation, cost blowup &rarr; the framing, same as microservices: don't distribute until the work is genuinely independent and at a scale that pays the tax; default to one well-tooled agent and make the fleet justify itself with measured parallel speedup, not vibes.</div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>Multi-agent demos look magical; production multi-agent often disappoints. Separate the real capability from the demo.</summary>
+      <div class="a"><b>Hit these points:</b> a demo is a curated happy path — one impressive trace on a task chosen to show emergence; it hides cost, tail latency, and the runs where coordination went wrong &rarr; production is the distribution, not the best trace: you pay for the average and the tail, you debug the failures, and you carry the bill every call &rarr; the real, durable capability is narrow: <b>genuinely parallel</b> work (gather from many independent sources, fan out independent checks) where the orchestrator can synthesize and validate &rarr; the fake capability is "more agents = smarter on a sequential problem" — that just adds coordination tax and failure surface &rarr; the test: does the fleet beat a single well-tooled agent on the metric that matters, measured, with the failure modes bounded? If you can't show that, you have a demo, not a system.</div>
+    </details>
+
+    <div class="designrubric" data-level="design"><b>Design-round framework</b> — narrate a multi-agent decision in this order so the interviewer hears default-first, then justification, then guardrails:
+      <ol>
+        <li>Clarify scope: is the work genuinely parallel? How much shared context? What tools can act, and what's the cost of a wrong action vs a slow answer?</li>
+        <li>State the default: one well-tooled agent in a loop — cheaper, lower-latency, one place to debug. Make the fleet justify replacing it.</li>
+        <li>If parallel, choose the pattern: <em>orchestrator-worker</em> for a control point + audit trail; <em>swarm</em> only when emergence is the actual goal.</li>
+        <li>Bound the blast radius: caps on concurrent agents, total turns, and per-run token budget, with a kill switch.</li>
+        <li>Defuse the failure modes: validate at joins (cascading errors), define shared vs isolated context (fragmentation), per-agent token attribution (cost blowup).</li>
+        <li>Safety for autonomy: least privilege on tools, no arbitrary egress, confirmation on irreversible actions — map to OWASP LLM Top 10 (excessive agency).</li>
+        <li>Measure vs the single-agent baseline: parallel speedup against the cost multiple; if the fleet doesn't win on the metric that matters, collapse it back.</li>
+      </ol>
+    </div>
+
+    <details class="iq" data-level="design">
+      <summary>Design the architecture for a research assistant that must answer a broad question by gathering from many independent sources.</summary>
+      <div class="a"><b>A strong answer covers:</b> clarify whether the work is genuinely parallel — many independent sources to gather is the textbook case where fan-out pays, so this is a fair multi-agent candidate &rarr; choose <b>orchestrator-worker</b> over swarm: a lead agent plans the sub-questions, fans out a bounded set of worker agents to gather in parallel, then synthesizes — you keep one control point, an audit trail, and a place to validate &rarr; bound the blast radius: cap concurrent workers, set a per-run token/turn budget with a kill switch, only delegate sub-tasks above a complexity floor so you don't over-decompose &rarr; handle the failure modes: validate worker results at the join (cascading errors), share the goal + what's gathered and isolate the rest (context fragmentation), attribute tokens per worker (cost blowup) &rarr; compare honestly against the single-agent baseline: if one agent with a search tool and a tight loop gets close, ship that &rarr; measure parallel speedup vs the cost multiple, and treat the multi-agent design as something to justify, not assume (multi-agent token use is many times a single chat turn, illustrative).<sup><a href="#s1" id="r5">1</a></sup></div>
+    </details>
+
+    <details class="iq" data-level="design">
+      <summary>Design the guardrails and observability for a multi-agent system you have to run in production.</summary>
+      <div class="a"><b>A strong answer covers:</b> one principle drives the design — every multi-agent system is a <b>distributed system</b>, so bound it like one &rarr; limits: hard caps on concurrent agents, total turns, and per-run token budget, with a <b>kill switch</b> that stops a runaway fan-out &rarr; attribution: per-agent / per-task token and latency accounting so you can see which branch ran away and what the parallel speedup actually was &rarr; validation at the joins: score or check worker outputs before the orchestrator synthesizes, reconcile disagreements instead of blending them (defuses cascading errors) &rarr; context discipline: define shared vs isolated context explicitly so agents don't duplicate or contradict (defuses fragmentation) &rarr; safety: autonomy raises blast radius, so least privilege on tools, no arbitrary egress, confirmation on irreversible actions — map to OWASP LLM Top 10 (excessive agency) &rarr; measure against a single-agent baseline; if the fleet isn't beating it on the metric that matters, collapse it back to one agent.<sup><a href="#s5" id="r6">5</a></sup></div>
+    </details>
+
+  </div>
+
+  <!-- ============ NAV ============ -->
+  <div class="nav">
+    <span style="color:var(--muted)">&#8592; <a href="../../index.html#grid">Engineering Vault</a></span>
+    <span style="color:var(--muted)">Next: <em>Fine-Tuning &amp; Distillation: When to Adapt a Model</em> — coming soon</span>
+  </div>
+
+  <footer>
+    <p>Sources</p>
+    <ol style="padding-left:1.2rem;margin:.3rem 0">
+      <li id="s1">Anthropic, "Building effective agents" &mdash; anthropic.com/engineering. Start with the simplest thing that works; reach for multi-agent only when the task is genuinely parallel and the coordination cost pays for itself.</li>
+      <li id="s2">Anthropic, "How we built our multi-agent research system" &mdash; anthropic.com/engineering/multi-agent-research-system. Orchestrator-worker in practice: a lead agent plans and spawns parallel subagents, then synthesizes; multi-agent token use is reported as many times a single chat turn (illustrative).</li>
+      <li id="s3">Wu et al., 2023, "AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation" &mdash; arXiv:2308.08155. Conversable agents and conversation programming; the canonical reference for orchestrator-worker and group-chat patterns.</li>
+      <li id="s4">Anthropic, "Effective context engineering for AI agents" &mdash; anthropic.com/engineering. Context budget and sub-agent context isolation; the reference for fragmentation and compaction across long-horizon, multi-agent work.</li>
+      <li id="s5">OWASP, "Top 10 for LLM Applications" &mdash; owasp.org. Excessive agency and insecure tool use: autonomy raises the blast radius, so least privilege and confirmation gates are the controls.</li>
+    </ol>
+  </footer>
+
+</div><!-- /wrap -->
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+<script src="../../assets/interview.js" defer></script>
+<script src="../../assets/reading-progress.js" defer></script>
+</body>
+</html>

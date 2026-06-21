@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" style="--accent:var(--track-prodai)">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Glossary — Production AI
+Architecture · Engineering Vault</title>
+<meta name="description" content="Production AI Architecture glossary — the canonical terms used across the Engineering Vault Production AI Architecture lessons, defined in dependency order.">
+<meta name="keywords" content="reliability, scalability, observability, cost control, failure modes, production ai architecture, governance, auditability, runtime architecture, context architecture, tool architecture, multi-tenant, agent platform">
+<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/production-ai-architecture/GLOSSARY.html">
+<meta name="robots" content="index, follow">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Engineering Vault">
+<meta property="og:title" content="Glossary — Production AI
+Architecture · Engineering Vault">
+<meta property="og:description" content="Production AI Architecture glossary — the canonical terms used across the Engineering Vault Production AI Architecture lessons, defined in dependency order.">
+<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/production-ai-architecture/GLOSSARY.html">
+<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/production-ai-architecture.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Production AI Architecture · Engineering Vault learning track">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@dineshxbyte">
+<meta name="twitter:creator" content="@dineshxbyte">
+<meta name="twitter:title" content="Glossary — Production AI
+Architecture · Engineering Vault">
+<meta name="twitter:description" content="Production AI Architecture glossary — the canonical terms used across the Engineering Vault Production AI Architecture lessons, defined in dependency order.">
+<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/production-ai-architecture.png">
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/lesson.css">
+<script src="../assets/analytics.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+<nav id="hubbar">
+  <a href="../index.html">← Engineering Vault</a>
+  <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">🌓</button><span style="color:var(--muted)">Production AI Architecture · Glossary</span></span>
+</nav>
+<div class="kicker">Reference · Glossary</div>
+<h1 id="glossary-production-ai-architecture">Glossary — Production AI
+Architecture</h1>
+<div class="ltags"><span class="lt">Reliability</span><span class="lt">Scalability</span><span class="lt">Observability</span><span class="lt">Cost control</span><span class="lt">Failure modes</span></div>
+<p>Covers the production-review methodology. Grouped by where each term
+first lands. Shared AI terms reuse the canonical hub definitions
+verbatim so they never drift across tracks.</p>
+<h2
+id="shared-foundations-carried-in-from-..ai-agents-and-..context-engineering">Shared
+foundations (carried in from <code>../ai-agents</code> and
+<code>../context-engineering</code>)</h2>
+<ul>
+<li><strong>LLM</strong> — the reasoning model (the brain in a jar);
+predicts tokens, has no memory/tools/actions on its own.</li>
+<li><strong>Tool</strong> — a callable capability/API/function the model
+can invoke.</li>
+<li><strong>Agent</strong> — an LLM using tools in a loop to accomplish
+a goal.</li>
+<li><strong>Agent loop</strong> — observe → think → act → repeat.</li>
+<li><strong>Runtime</strong> — the orchestration layer around the model
+(loop, state, tool execution, retries, limits).</li>
+<li><strong>Workflow vs Agent</strong> — developer-defined path
+(workflow) vs model-influenced path (agent).</li>
+<li><strong>MCP</strong> — a protocol exposing tools/resources/prompts
+to AI clients (USB-C for tools).</li>
+<li><strong>Context engineering</strong> — curating the window before
+the model runs.</li>
+<li><strong>RAG</strong> — retrieve → assemble → LLM → answer.</li>
+<li><strong>Memory</strong> — persisted state reachable only by
+retrieval into the context window.</li>
+</ul>
+<h2 id="reliability-degradation-l1l3">Reliability &amp; degradation
+(L1–L3)</h2>
+<ul>
+<li><strong>Reliability (for AI)</strong> — the probability the system
+returns a <em>useful, correct-enough</em> answer within budget under
+real load and partial failure. Not “the model is up” — the model being
+up but slow, rate-limited, or hallucinating is still an outage to the
+user.</li>
+<li><strong>Graceful degradation</strong> — keeping the system useful as
+components fail or saturate, by shedding quality before availability:
+shorter context, smaller model, cached/templated answer, or an honest “I
+can’t do that right now” instead of a 30s hang or a wrong answer.</li>
+<li><strong>Fallback model</strong> — a cheaper/faster/more-available
+model (or a non-AI code path) you route to when the primary is
+rate-limited, timing out, or down. The AI equivalent of a read replica
+or a static cached page.</li>
+<li><strong>Token budget</strong> — the per-request ceiling on
+input+output tokens you’ll spend, set by cost, latency, and the context
+window. The capacity-planning unit of an AI system; you provision and
+bill in tokens the way you provision CPU and bill in requests.</li>
+</ul>
+<h2 id="observability-control-l2">Observability &amp; control (L2)</h2>
+<ul>
+<li><strong>AI observability</strong> — being able to answer “what did
+the system do and why” from telemetry, on three signals: the
+<strong>trace/span</strong> (the full agent-loop call tree — model
+calls, tool calls, retrievals, latency, tokens), the <strong>eval
+signal</strong> (was the output correct/grounded/safe, scored offline on
+a golden set or online from production), and cost/usage.
+Logs/metrics/traces plus a quality axis classic systems don’t have.</li>
+<li><strong>Governance</strong> — the rules and controls deciding which
+models, data, tools, and prompts are allowed, by whom, for what — and
+the enforcement that makes those rules real (NIST RMF: GOVERN / MAP /
+MEASURE / MANAGE). The change-management and access-control layer for AI
+behaviour.</li>
+<li><strong>Auditability</strong> — the ability to reconstruct, after
+the fact, exactly what a given AI decision saw and did: the prompt,
+retrieved context, model+version, tool calls, and output, tied to a
+request ID and retained. “Show me what the agent did for ticket #4471
+last Tuesday” must be answerable.</li>
+</ul>
+<h2 id="multi-tenancy-platform-capacity-l3-l5l6">Multi-tenancy, platform
+&amp; capacity (L3, L5–L6)</h2>
+<ul>
+<li><strong>Multi-tenancy</strong> — one AI system serving many isolated
+customers/teams from shared infrastructure, with per-tenant isolation of
+data (retrieval scoped by tenant), cost (per-tenant token
+budgets/metering), and blast radius (one tenant’s load or
+prompt-injection can’t reach another’s). The SaaS isolation problem with
+a context-window twist.</li>
+<li><strong>Agent platform</strong> — the shared substrate teams build
+agents <em>on</em>: the runtime, tool registry, context/memory services,
+model gateway, eval harness, and observability — so each team doesn’t
+rebuild the loop, retries, and telemetry. The
+internal-developer-platform pattern applied to AI (Claude Code, Cursor,
+enterprise agent platforms).</li>
+<li><strong>Inference capacity planning</strong> — sizing for AI load:
+tokens/sec and concurrent requests against provider rate limits or
+self-hosted GPU memory (KV-cache grows with context length ×
+concurrency), with queueing, batching, and admission control. The AI
+analogue of connection-pool and thread-pool sizing — get it wrong and
+you get latency cliffs, not graceful slowdown.</li>
+</ul>
+
+</div>
+</body>
+</html>
