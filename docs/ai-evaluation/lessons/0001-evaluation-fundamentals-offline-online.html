@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>AI Evaluation Fundamentals: Offline &amp; Online · StackDepth</title>
+<meta name="description" content="Why evaluation is the real moat: the offline vs online split, golden sets, LLM-as-judge scoring, and the eval loop that turns failures into a regression suite.">
+<meta name="keywords" content="offline eval, online eval, llm-as-judge, golden sets, eval loop, evaluation fundamentals, regression evaluation, shadow deployment, a/b testing, eval harness, benchmark contamination, rag">
+<meta name="author" content="dineshbyte">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/ai-evaluation/lessons/0001-evaluation-fundamentals-offline-online.html">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="AI Evaluation Fundamentals: Offline &amp; Online">
+<meta property="og:description" content="Evaluation is the moat: you can't improve what you can't measure. The offline/online split, golden sets, LLM-as-judge, and the eval loop that gates every ship.">
+<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/ai-evaluation/lessons/0001-evaluation-fundamentals-offline-online.html">
+<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@dineshxbyte">
+<meta name="twitter:title" content="AI Evaluation Fundamentals: Offline &amp; Online">
+<meta name="twitter:description" content="Offline = fixed dataset, pre-ship, repeatable. Online = live traffic, A/B + shadow, post-ship. The loop that feeds failures back into the golden set.">
+<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<link rel="stylesheet" href="../../assets/tokens.css">
+<link rel="stylesheet" href="../../assets/lesson.css">
+<link rel="stylesheet" href="../../assets/interview.css">
+<style>
+  :root{--accent:var(--track-eval)}
+
+  /* one-sentence decomposition chips */
+  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
+  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
+  .chip b{color:var(--accent)}
+  .chip.c2 b{color:var(--track-rest)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
+
+  /* TOC as a grid */
+  .toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
+  .toc a{text-decoration:none; padding:.15rem 0}
+
+  /* level block */
+  .lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
+  .lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
+  .num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
+  .lvltop h2{margin:0; font-size:1.24rem; font-weight:700}
+  .tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
+
+  /* fact cards — labelled 2-col variant */
+  .facts{grid-template-columns:1fr 1fr}
+  .fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
+  .fact.blue b{color:var(--track-rest)}
+
+  /* myth -> truth (2-col grid) */
+  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
+  .myth div{border-radius:6px; padding:.45rem .6rem}
+  .myth .m{background:color-mix(in srgb,var(--bad) 12%,transparent); border-left:3px solid var(--bad); color:var(--bad)}
+  .myth .t{background:color-mix(in srgb,var(--good) 14%,transparent); border-left:3px solid var(--good); color:var(--good)}
+
+  /* dark "memory rule" band */
+  .rule{font-size:.92rem; font-weight:600; background:var(--ink); color:var(--bg); border-radius:8px; padding:.55rem .85rem; margin:.7rem 0}
+  .rule span{color:var(--accent)}
+
+  /* memory-check disclosure */
+  details.mc{border:0; background:transparent; padding:0; margin:.5rem 0 0; font-size:.84rem}
+  details.mc summary{cursor:pointer; color:var(--good); font-weight:600; list-style:none}
+  details.mc summary::before{content:"\25B8 "}
+  details.mc[open] summary::before{content:"\25BE "}
+  details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
+  details.mc .ans{color:var(--muted)}
+
+  /* interview-question disclosure */
+  details.iq{border-left:3px solid var(--track-rest); font-size:.88rem}
+  details.iq summary{list-style:none}
+  details.iq summary::-webkit-details-marker{display:none}
+  details.iq summary::before{content:"\1F4AC "}
+  details.iq[open] summary{color:var(--track-rest)}
+  details.iq .a{margin-top:.45rem; font-size:.85rem; color:var(--ink); line-height:1.45}
+  details.iq .a b{color:var(--track-rest)}
+
+  /* footer nav row */
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
+
+  @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
+</style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "M1 — Your team ships LLM changes on 'looks good to me.' Convince them evaluation is worth building.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: you cannot improve what you cannot measure — without a score, every prompt or model change is a coin flip you can't compare to the last one -> vibes don't aggregate: a reviewer eyeballs 5 outputs, a system serves millions, and 'looks good' hides a 3% regression that's thousands of bad answers -> evaluation is the moat because the model is a commodity everyone can call; the asset is your dataset of what good looks like for YOUR task -> the minimum viable eval is a golden set of ~50 cases plus one grader plus a baseline number to diff against -> name the payoff: every change becomes a measured before/after, and CI can block a regression the way it blocks a failing unit test."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "M2 — Walk me through building an offline eval for a support assistant from scratch.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: start by defining success criteria per task BEFORE writing cases — what is a pass, what is a fail, in measurable terms -> collect a golden set of real, representative inputs paired with expected outputs or acceptance criteria; keep it small, hand-checked, versioned like test fixtures -> pick a grader per case: exact-match / programmatic where output is structured, an LLM-as-judge where it's open-ended, humans for the gold labels -> run the harness: load dataset, execute the system per case, score, aggregate into a report -> establish a baseline number, then every change is a diff vs that baseline -> it runs in CI and gates the merge, like a regression suite -> note the limits: a fixed dataset can't catch what you didn't think to put in it, which is why you also need online eval."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "M3 — Offline eval is green but users complain after you ship. What happened and what do you add?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: offline eval only measures the distribution you captured in the golden set — real traffic drifts, hits inputs you never imagined, and interacts with context you didn't fixture -> green offline + unhappy users = a coverage gap, not a broken eval -> add online evaluation on live traffic: A/B split real users between old and new and compare outcome metrics, or run the new system in shadow (same traffic, output discarded) to compare safely with zero user risk -> instrument production signals: thumbs-down, regenerate-rate, escalation-to-human, task completion -> close the loop: harvest the failing live cases, label them, fold them into the golden set so the next offline run catches that class of failure -> the two are complementary: offline is repeatable and pre-ship, online is real and post-ship."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "M3 — Your LLM-as-judge gives a new prompt a higher score, so you ship. The judge was wrong. How do you prevent this?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: an LLM judge is itself a model with biases — position (favors the first option), verbosity (favors longer answers), and self-preference (favors text from its own model family) -> never trust a judge you haven't calibrated: measure its agreement against a human-labeled slice before you let it gate anything -> a strong judge can reach roughly human-level agreement on some tasks, but that is dataset-dependent and must be re-verified, not assumed -> mitigations: randomize option order, force a rubric / chain-of-thought, use a different model family as judge, anchor with reference answers -> treat the judge as a noisy, cheap sensor that scales human judgment, never a replacement for the gold labels it was calibrated against -> keep humans in the loop for the gold set and for periodic audits."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Why is evaluation called the real moat for an AI product?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the model is a commodity — any competitor can call the same API -> what you can't copy is a curated dataset of what 'good' means for YOUR task and a measured baseline of how well you do it -> you cannot improve what you cannot measure: without a score, every change is a guess and progress is unprovable -> 'vibes-based' eval works at 5 examples and collapses at scale, where a small regression is thousands of bad answers no human will eyeball -> evaluation turns model changes into measured before/after diffs, which is the only way to improve reliably."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is the difference between offline and online evaluation?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: offline = score the system against a FIXED dataset (the golden set) BEFORE shipping; reproducible, runs in CI, gates a deploy — same inputs every run, like an integration test suite -> online = measure quality on LIVE production traffic AFTER shipping; real distribution, real users -> online comes in two shapes: A/B (split real users between old and new, users see the variant, you compare outcomes) and shadow (run the new system on real traffic in parallel but discard its output — no user risk, no live conversion signal) -> they're complementary: offline is repeatable but only covers what you captured; online is real but can't gate a deploy that hasn't happened."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What is a golden set and how is it different from a benchmark?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: a golden set is a versioned, curated set of (input, expected-output / acceptance-criteria) cases that is YOUR ground truth for offline eval — small, hand-checked, treated like test fixtures, changed only by deliberate review -> a benchmark is a shared, public dataset + metric used to compare models against EACH OTHER (MT-Bench, HELM scenarios) -> the benchmark is a standardized exam: good for cross-model comparison, weak as a proxy for your task -> benchmarks also rot via contamination (test data leaked into training, so the score is memorization not capability) -> a fresh, private golden set beats a public leaderboard for trusting a result on your problem."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are the three ways to score an eval case, and when do you use each?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: programmatic / exact-match — deterministic checks (regex, JSON schema, did-it-equal-expected, did-the-tool-succeed); cheapest and most reliable, use whenever the output is structured or has a single right answer -> human grading — a person applies a rubric; the gold standard for quality and the source of your gold labels, but slow and expensive, so reserve it for the golden set and audits -> LLM-as-judge — an LLM scores or compares outputs against a rubric; scales cheaply for open-ended quality, but biased and must be calibrated against human labels before you trust it -> the practical stack: programmatic where you can, judge where you must, human to anchor both."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Offline eval passes but production users complain. Diagnose.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the golden set only covers the distribution you thought to capture; live traffic drifts and hits inputs you never fixtured — green offline plus unhappy users is a coverage gap -> confirm by sampling the complaints and checking whether those inputs even exist in the golden set (usually they don't) -> add online signals: thumbs-down rate, regenerate rate, escalation-to-human, task completion, plus a shadow or A/B comparison of old vs new on real traffic -> close the loop: harvest the failing live cases, label them, fold them into the golden set so the next offline run catches that class -> the fix isn't 'trust offline less' — it's that offline and online cover different risks and you need both."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "When do you use shadow deployment vs an A/B test for online evaluation?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: shadow = run the new system on real traffic in parallel and THROW THE OUTPUT AWAY; users never see it, so there is zero user risk — use it when the change is risky, hard to roll back, or you only need to compare behavior, not measure conversion -> A/B = split real users between old and new; users SEE the variant, so you get a real outcome signal (conversion, completion, satisfaction) but you've exposed some users to a possibly-worse experience -> the trade: shadow gives you safety but no live business signal; A/B gives you the business signal but at real user cost -> common sequence: shadow first to confirm no regressions, then A/B to measure the real-world lift."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Your LLM-as-judge prefers the new prompt. Should you trust it? Argue both sides.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: the judge is a model with documented biases — position, verbosity, self-preference — so a preference can be an artifact, not real quality -> trust it ONLY to the degree you've calibrated it: measure agreement against a human-labeled slice; a strong judge can reach roughly human-level agreement on some tasks, but that's dataset-dependent and must be re-verified -> mitigations before trusting a gate: randomize order, force a rubric/CoT, use a different model family as judge, include reference answers -> the synthesis: the judge is a cheap noisy sensor that lets you scale human judgment to thousands of cases — use it to flag, then confirm the close calls with humans, never let an uncalibrated judge alone decide a ship."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Map the full eval loop end to end: from a failing user report to a regression test that protects against it.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: collect — gather representative cases, including failures harvested from production -> score — apply the right grader per case (programmatic / human / LLM-judge) -> diff — compare the aggregate score against the baseline to see if you got better or worse -> decide — ship if it's a measured win, roll back if it's a regression; offline gates the merge, online (A/B / shadow) confirms on live traffic -> feed back — every production failure becomes a new labeled case in the golden set, so the next offline run catches that class -> the loop is the whole point: it converts one-off failures into permanent regression coverage and makes quality a ratchet, not a coin flip -> measure each stage (coverage, judge-human agreement, regression rate) so the loop itself is trustworthy."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "One eval system, three forces — speed, trust, coverage — that pull against each other. How do you reason about the trade-offs?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Hit these points: name the three: programmatic/judge graders give SPEED, human labels give TRUST, online + golden-set growth give COVERAGE -> the tension: the fast graders (judge) are the least trusted, the trusted grader (human) is the slowest, and the most realistic signal (online) can't gate a pre-ship decision -> sequence it: gold-label a small golden set with humans (trust), automate the bulk with programmatic + calibrated judge (speed), and grow coverage by folding online failures back in -> never trade an unmeasured risk for a measured saving: a judge that's cheap but uncalibrated is worse than no gate because it ships regressions confidently -> measure the loop itself — judge-human agreement, offline coverage of real traffic, regression catch-rate — so you know which force is currently weakest."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Design an evaluation strategy for a new LLM feature, from zero to a CI gate plus production monitoring.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: define success criteria per task first — measurable pass/fail, not 'good' -> build a small versioned golden set of real, representative (input, expected) cases, hand-labeled by humans -> choose graders: programmatic where structured, calibrated LLM-as-judge where open-ended, human for the gold labels and audits -> stand up the harness (dataset + runner + grader + report) and establish a baseline number -> wire offline regression eval into CI so a drop below baseline blocks the merge -> ship behind shadow first (no user risk), then A/B to measure real lift -> instrument production signals (thumbs-down, regenerate, escalation, task success) and route failures back into the golden set -> map risks: benchmark contamination, judge bias, coverage gaps; measure the loop, not just the model."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "A leader says 'just use the public leaderboard score to pick our model.' Tear this apart and propose what you'd do instead.",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "A strong answer covers: a public benchmark measures a generic task on shared data — it's a proxy for capability, not a measure of YOUR task -> contamination: leaderboard test data leaks into training sets, so a high rank can be memorization, not skill, and leaderboards saturate and rot as new models arrive -> the right move is a private golden set of your real inputs with your success criteria, scored by your graders — that's the number that predicts production -> use benchmarks only to shortlist candidate models cheaply, then decide with your own offline eval and confirm with shadow/A/B on live traffic -> the framing: the leaderboard tells you a model is generally capable; only your eval tells you it's right for the job — teach the method, not the rank."
+   }
+  }
+ ]
+}
+</script>
+<script src="../../assets/analytics.js" defer></script>
+</head>
+<body>
+<!-- shared arrowheads -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
+  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
+  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
+  <marker id="arwM" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3d54c9"/></marker>
+</defs></svg>
+
+<div class="wrap">
+  <nav id="hubbar">
+    <a href="../../index.html">&#8592; StackDepth</a>
+    <span class="pn"><span style="color:var(--muted);opacity:.55" title="Start of track">&#8249; Prev</span><span style="color:var(--muted);opacity:.55" title="Coming soon">Next &#8250;</span></span>
+    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">AI Evaluation</span></span>
+  </nav>
+  <div id="reading-progress"></div>
+
+  <div class="kicker">Lesson 1 · AI Evaluation · Foundation</div>
+  <h1>Evaluation Fundamentals: <em>Offline &amp; Online</em></h1>
+  <p class="meta">~14 min · 3 modules · why measurement is the moat, the offline/online split, and the loop that gates every ship</p>
+  <div class="ltags"><span class="lt">Offline eval</span><span class="lt">Online eval</span><span class="lt">LLM-as-judge</span><span class="lt">Golden sets</span><span class="lt">Eval loop</span></div>
+
+  <div class="mission">
+    <strong>Your bar:</strong> explain why evaluation — not the model — is the real moat, draw the line between <em>offline</em> eval (a fixed dataset, repeatable, run before you ship) and <em>online</em> eval (live traffic, A/B and shadow, measured after you ship), and walk the loop that turns a production failure into a permanent regression test. By the end you can answer the question every AI team eventually faces: <b>how do you know a change made the system better instead of just different?</b><sup><a href="#s1" id="r1">1</a></sup>
+  </div>
+
+  <p>The whole discipline reduces to four moves. Each chip is one of them:</p>
+  <div class="chips">
+    <span class="chip">You can't <b>improve what you can't measure</b></span>
+    <span class="chip c2">score <b>offline</b> against a fixed golden set before you ship</span>
+    <span class="chip c3">score <b>online</b> on live traffic after you ship</span>
+    <span class="chip c4">feed every <b>failure back</b> into the golden set</span>
+  </div>
+
+  <!-- ============ HERO ============ -->
+  <figure>
+    <svg viewBox="0 0 640 300" role="img" aria-label="The evaluation loop: collect cases, score them, diff against baseline, ship or roll back, and feed failures back into the golden set. Offline gates pre-ship, online measures post-ship.">
+      <!-- the loop spine -->
+      <rect x="26" y="120" width="104" height="46" rx="8" fill="#eef0fb" stroke="#3d54c9" stroke-width="1.5"/>
+      <text x="78" y="140" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3d54c9">1 · Collect</text>
+      <text x="78" y="155" text-anchor="middle" font-size="8" fill="#6b675f">golden cases</text>
+      <rect x="160" y="120" width="104" height="46" rx="8" fill="#eef0fb" stroke="#3d54c9" stroke-width="1.5"/>
+      <text x="212" y="140" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3d54c9">2 · Score</text>
+      <text x="212" y="155" text-anchor="middle" font-size="8" fill="#6b675f">prog / human / judge</text>
+      <rect x="294" y="120" width="104" height="46" rx="8" fill="#eef0fb" stroke="#3d54c9" stroke-width="1.5"/>
+      <text x="346" y="140" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3d54c9">3 · Diff</text>
+      <text x="346" y="155" text-anchor="middle" font-size="8" fill="#6b675f">vs baseline</text>
+      <rect x="428" y="120" width="104" height="46" rx="8" fill="#eef0fb" stroke="#3d54c9" stroke-width="2"/>
+      <text x="480" y="140" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3d54c9">4 · Ship / roll back</text>
+      <text x="480" y="155" text-anchor="middle" font-size="8" fill="#6b675f">decide on the number</text>
+      <line x1="130" y1="143" x2="156" y2="143" stroke="#6b675f" marker-end="url(#arw)"/>
+      <line x1="264" y1="143" x2="290" y2="143" stroke="#6b675f" marker-end="url(#arw)"/>
+      <line x1="398" y1="143" x2="424" y2="143" stroke="#6b675f" marker-end="url(#arw)"/>
+
+      <!-- feedback arc 5 -->
+      <path d="M480,166 C480,214 78,214 78,168" fill="none" stroke="#2f5d3a" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arwG)"/>
+      <text x="279" y="208" text-anchor="middle" font-size="9" font-weight="700" fill="#2f5d3a">5 · Feed failures back into the golden set &mdash; the loop closes</text>
+
+      <!-- offline vs online bands -->
+      <rect x="26" y="40" width="372" height="58" rx="10" fill="#eef0fb" stroke="#3d54c9" stroke-width="1.5"/>
+      <text x="212" y="60" text-anchor="middle" font-size="11" font-weight="700" fill="#3d54c9">OFFLINE &mdash; before you ship</text>
+      <text x="212" y="78" text-anchor="middle" font-size="8.5" fill="#6b675f">fixed dataset · repeatable · runs in CI · gates the merge</text>
+      <text x="212" y="91" text-anchor="middle" font-size="8.5" fill="#6b675f">same inputs every run</text>
+      <rect x="428" y="40" width="186" height="58" rx="10" fill="#e9f3ec" stroke="#2f5d3a" stroke-width="1.5"/>
+      <text x="521" y="60" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">ONLINE &mdash; after you ship</text>
+      <text x="521" y="78" text-anchor="middle" font-size="8.5" fill="#6b675f">live traffic · A/B + shadow</text>
+      <text x="521" y="91" text-anchor="middle" font-size="8.5" fill="#6b675f">real distribution</text>
+
+      <line x1="212" y1="98" x2="280" y2="118" stroke="#3d54c9" stroke-dasharray="3 3" marker-end="url(#arwM)"/>
+      <line x1="521" y1="98" x2="490" y2="118" stroke="#2f5d3a" stroke-dasharray="3 3" marker-end="url(#arwG)"/>
+
+      <text x="320" y="244" text-anchor="middle" font-size="11" font-style="italic" fill="#3d54c9">The model is a commodity. The dataset of what 'good' means for your task is the moat.</text>
+      <text x="320" y="266" text-anchor="middle" font-size="9.5" fill="#6b675f">Offline tells you it's safe to ship. Online tells you it actually worked.</text>
+      <text x="320" y="290" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">You cannot improve what you cannot measure.</text>
+    </svg>
+    <figcaption>The eval loop in one frame. <b>Collect</b> cases, <b>score</b> them, <b>diff</b> against a baseline, <b>ship or roll back</b>, and <b>feed failures back</b>. Offline runs the loop on a fixed dataset before ship; online runs it on live traffic after.<sup><a href="#s1" id="r1b">1</a></sup></figcaption>
+  </figure>
+
+  <nav class="toc">
+    <a href="#m1">1 · Why evaluation is the moat</a>
+    <a href="#m2">2 · Offline evaluation (pre-ship)</a>
+    <a href="#m3">3 · Online evaluation (post-ship)</a>
+    <a href="#quiz">★ Retrieval practice</a>
+    <a href="#interview">★ Interview questions</a>
+    <a href="#m3">★ The loop closes</a>
+  </nav>
+
+  <!-- ============ MODULE 1 ============ -->
+  <section class="lvl" id="m1">
+    <div class="lvltop"><span class="num">1</span><h2>Why Evaluation Is the Moat</h2></div>
+    <p class="tagline">The model is a commodity — your competitor can call the same API. What you can't copy is a curated dataset of what <b>good</b> means for your task and a measured baseline of how well you hit it. <em>You cannot improve what you cannot measure.</em><sup><a href="#s2" id="r2">2</a></sup></p>
+
+    <h3>Vibes don't aggregate — they collapse at scale</h3>
+    <figure>
+      <svg viewBox="0 0 640 230" role="img" aria-label="A reviewer eyeballs five outputs and calls them good; production serves millions, where a small regression hides thousands of bad answers that no human reviews.">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">Why &quot;looks good to me&quot; breaks</text>
+
+        <!-- vibes side -->
+        <rect x="30" y="40" width="270" height="150" rx="10" fill="#fbecec" stroke="#9a2417" stroke-width="1.5"/>
+        <text x="165" y="60" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a2417">&#10007; Vibes-based</text>
+        <text x="165" y="80" text-anchor="middle" font-size="8.5" fill="#111110">a reviewer reads ~5 outputs</text>
+        <text x="165" y="95" text-anchor="middle" font-size="8.5" fill="#111110">&quot;yeah, looks good&quot; &rarr; ship</text>
+        <rect x="50" y="108" width="230" height="28" rx="6" fill="#ffffff" stroke="#9a2417"/>
+        <text x="165" y="126" text-anchor="middle" font-size="8" fill="#9a2417">no number to compare to last week</text>
+        <text x="165" y="156" text-anchor="middle" font-size="8.5" font-style="italic" fill="#9a2417">a 3% regression is invisible &mdash;</text>
+        <text x="165" y="170" text-anchor="middle" font-size="8.5" font-style="italic" fill="#9a2417">and silent across millions of calls</text>
+
+        <!-- measured side -->
+        <rect x="340" y="40" width="270" height="150" rx="10" fill="#e9f3ec" stroke="#2f5d3a" stroke-width="1.5"/>
+        <text x="475" y="60" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">&#10003; Measured</text>
+        <text x="475" y="80" text-anchor="middle" font-size="8.5" fill="#111110">score every change on a golden set</text>
+        <text x="475" y="95" text-anchor="middle" font-size="8.5" fill="#111110">diff vs baseline &rarr; ship or roll back</text>
+        <rect x="360" y="108" width="230" height="28" rx="6" fill="#ffffff" stroke="#2f5d3a"/>
+        <text x="475" y="126" text-anchor="middle" font-size="8" fill="#2f5d3a">82% &rarr; 79% = a blocked regression</text>
+        <text x="475" y="156" text-anchor="middle" font-size="8.5" font-style="italic" fill="#2f5d3a">every change is a before/after diff &mdash;</text>
+        <text x="475" y="170" text-anchor="middle" font-size="8.5" font-style="italic" fill="#2f5d3a">CI blocks it like a failing test</text>
+
+        <text x="320" y="216" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">5 examples fit in a human's head. Millions of calls do not. (numbers illustrative)</text>
+      </svg>
+      <figcaption>Eyeballing a handful of outputs works at demo scale and quietly fails in production, where a small quality drop is thousands of bad answers nobody reads. Measurement is the only thing that scales with traffic.<sup><a href="#s2" id="r2b">2</a></sup></figcaption>
+    </figure>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> Evaluation = systematically scoring an AI system's outputs against defined success criteria, so a change becomes a measured before/after instead of a guess. You evaluate the <em>system</em>, not just the model.</div>
+      <div class="fact"><b>Why it exists</b> Every prompt, model, retrieval, or tool change can silently help or hurt. Without a score you can't tell which, can't compare to last week, and can't prove progress.</div>
+      <div class="fact blue"><b>Like (world)</b> A thermometer for a fever. You don't argue about whether the patient &quot;feels warm&quot; — you read a number, treat, and read it again to see if the treatment worked.</div>
+      <div class="fact blue"><b>Like (code)</b> A regression test suite. Code without tests &quot;works on my machine&quot;; a green suite is the contract that a refactor didn't break behavior. Eval is that contract for AI.</div>
+    </div>
+
+    <div class="myth">
+      <div class="m">&#10007; &quot;Our model is great, so the product is great — the model is the moat.&quot;</div>
+      <div class="t">&#10003; The model is a commodity anyone can call. The moat is your dataset of what &quot;good&quot; means for your task plus a measured baseline — that's what a competitor can't copy.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; &quot;We reviewed a few outputs by hand; quality is fine.&quot;</div>
+      <div class="t">&#10003; Vibes work at 5 examples and collapse at scale. A 3% regression you'd never spot by eye is thousands of bad answers in production. (illustrative)</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> <span>You cannot improve what you cannot measure.</span> The model is a commodity; the <span>eval is the moat</span>.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Why is the model NOT the moat? <span class="ans">&rarr; anyone can call the same API; the curated dataset of what's "good" for your task is the asset they can't copy</span></li>
+      <li>What does a score buy you that eyeballing doesn't? <span class="ans">&rarr; a before/after diff — you can prove a change helped or blocked a regression, and it scales past what a human can read</span></li>
+      <li>What do you evaluate — the model or the system? <span class="ans">&rarr; the whole system (prompt + retrieval + tools + model), because any of those can move quality</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>M1 — Your team ships LLM changes on "looks good to me." Convince them evaluation is worth building.</summary>
+      <div class="a">
+        <b>Hit these points:</b> you cannot improve what you cannot measure — without a score, every prompt or model change is a coin flip you can't compare to the last one &rarr; vibes don't aggregate: a reviewer eyeballs 5 outputs, a system serves millions, and "looks good" hides a small regression that's thousands of bad answers &rarr; evaluation is the moat because the model is a commodity everyone can call; the asset is <em>your</em> dataset of what good looks like for your task &rarr; the minimum viable eval is a golden set of ~50 cases plus one grader plus a baseline number to diff against &rarr; the payoff: every change becomes a measured before/after, and CI can block a regression the way it blocks a failing unit test.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ MODULE 2 ============ -->
+  <section class="lvl" id="m2">
+    <div class="lvltop"><span class="num">2</span><h2>Offline Evaluation</h2></div>
+    <p class="tagline">Offline eval scores the system against a <b>fixed dataset</b> — the golden set — <em>before</em> you ship. Same inputs every run, so it's reproducible, runs in CI, and gates the merge. It's the integration test suite for AI behavior.<sup><a href="#s3" id="r3">3</a></sup></p>
+
+    <h3>The harness: dataset &rarr; runner &rarr; grader &rarr; report</h3>
+    <figure>
+      <svg viewBox="0 0 640 250" role="img" aria-label="An eval harness loads the golden dataset, runs the system per case, applies a grader, aggregates a score, and diffs it against the baseline to gate the merge.">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">The eval harness</text>
+
+        <!-- pipeline -->
+        <rect x="26" y="44" width="116" height="42" rx="8" fill="#eef0fb" stroke="#3d54c9" stroke-width="1.5"/>
+        <text x="84" y="62" text-anchor="middle" font-size="9.5" font-weight="700" fill="#3d54c9">Golden dataset</text>
+        <text x="84" y="76" text-anchor="middle" font-size="7.5" fill="#6b675f">(input, expected)</text>
+        <rect x="170" y="44" width="116" height="42" rx="8" fill="#eef0fb" stroke="#3d54c9" stroke-width="1.5"/>
+        <text x="228" y="62" text-anchor="middle" font-size="9.5" font-weight="700" fill="#3d54c9">Runner</text>
+        <text x="228" y="76" text-anchor="middle" font-size="7.5" fill="#6b675f">execute per case</text>
+        <rect x="314" y="44" width="116" height="42" rx="8" fill="#eef0fb" stroke="#3d54c9" stroke-width="1.5"/>
+        <text x="372" y="62" text-anchor="middle" font-size="9.5" font-weight="700" fill="#3d54c9">Grader</text>
+        <text x="372" y="76" text-anchor="middle" font-size="7.5" fill="#6b675f">score each output</text>
+        <rect x="458" y="44" width="116" height="42" rx="8" fill="#eef0fb" stroke="#3d54c9" stroke-width="2"/>
+        <text x="516" y="62" text-anchor="middle" font-size="9.5" font-weight="700" fill="#3d54c9">Report</text>
+        <text x="516" y="76" text-anchor="middle" font-size="7.5" fill="#6b675f">aggregate score</text>
+        <line x1="142" y1="65" x2="166" y2="65" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="286" y1="65" x2="310" y2="65" stroke="#6b675f" marker-end="url(#arw)"/>
+        <line x1="430" y1="65" x2="454" y2="65" stroke="#6b675f" marker-end="url(#arw)"/>
+
+        <!-- three graders feeding the grader box -->
+        <rect x="280" y="118" width="180" height="22" rx="5" fill="#e9f3ec" stroke="#2f5d3a"/>
+        <text x="370" y="133" text-anchor="middle" font-size="8" font-weight="700" fill="#2f5d3a">programmatic / exact-match</text>
+        <rect x="280" y="146" width="180" height="22" rx="5" fill="#fff7e6" stroke="#c2700f"/>
+        <text x="370" y="161" text-anchor="middle" font-size="8" font-weight="700" fill="#c2700f">LLM-as-judge (calibrated)</text>
+        <rect x="280" y="174" width="180" height="22" rx="5" fill="#eef0fb" stroke="#3d54c9"/>
+        <text x="370" y="189" text-anchor="middle" font-size="8" font-weight="700" fill="#3d54c9">human (gold labels)</text>
+        <line x1="372" y1="116" x2="372" y2="88" stroke="#6b675f" marker-end="url(#arw)"/>
+
+        <!-- diff + gate -->
+        <rect x="458" y="118" width="156" height="42" rx="8" fill="#ffffff" stroke="#111110" stroke-width="1.5"/>
+        <text x="536" y="136" text-anchor="middle" font-size="9" font-weight="700" fill="#111110">diff vs baseline</text>
+        <text x="536" y="150" text-anchor="middle" font-size="8" fill="#6b675f">better? ship · worse? block</text>
+        <line x1="516" y1="86" x2="516" y2="116" stroke="#6b675f" marker-end="url(#arw)"/>
+
+        <rect x="40" y="210" width="560" height="30" rx="6" fill="#eef0fb" stroke="#3d54c9"/>
+        <text x="320" y="229" text-anchor="middle" font-size="9.5" font-weight="700" fill="#3d54c9">Same inputs every run &rarr; reproducible &rarr; lives in CI &rarr; a drop below baseline blocks the merge.</text>
+      </svg>
+      <figcaption>An eval harness is just a test framework for AI: a dataset, a runner that executes the system per case, a grader that scores each output, and a report you diff against the baseline. The golden set is your fixtures.<sup><a href="#s3" id="r3b">3</a></sup></figcaption>
+    </figure>
+
+    <h3>Three ways to score a case</h3>
+    <table>
+      <thead><tr><th>Grader</th><th>How it works</th><th>Use it when</th></tr></thead>
+      <tbody>
+        <tr><td><b>Programmatic</b></td><td>Deterministic check: exact-match, regex, JSON schema, tool succeeded</td><td>Output is structured or has one right answer &mdash; cheapest, most reliable</td></tr>
+        <tr><td><b>LLM-as-judge</b></td><td>An LLM scores / compares outputs against a rubric</td><td>Open-ended quality at scale &mdash; cheap, but biased; calibrate first</td></tr>
+        <tr><td><b>Human</b></td><td>A person applies a rubric</td><td>Gold labels &amp; audits &mdash; the trusted source, but slow and costly</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Golden set vs benchmark — don't confuse them</h3>
+    <table>
+      <thead><tr><th>Dimension</th><th>Golden set (yours)</th><th>Benchmark (public)</th></tr></thead>
+      <tbody>
+        <tr><td><b>Purpose</b></td><td>Is the system right for <em>your</em> task?</td><td>Compare models against each other</td></tr>
+        <tr><td><b>Data</b></td><td>Private, curated, your real inputs</td><td>Shared, public (MT-Bench, HELM)</td></tr>
+        <tr><td><b>Trust</b></td><td>High &mdash; you hand-checked it</td><td>Rots: contamination, saturation</td></tr>
+        <tr><td><b>Role</b></td><td>Gates your ship</td><td>Shortlists candidate models</td></tr>
+      </tbody>
+    </table>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> Offline eval = scoring the system against a fixed golden set before shipping. Reproducible, gated in CI. A golden set is a versioned set of (input, expected / acceptance-criteria) cases, changed only by deliberate review.</div>
+      <div class="fact"><b>Why it exists</b> You need a repeatable, pre-ship signal that a change helped or hurt — one you can re-run on every commit and block a merge on, exactly like a unit test.</div>
+      <div class="fact blue"><b>Like (world)</b> A drug trial against a fixed cohort: same patients, same protocol, run again after each formulation change so the only variable is the change itself.</div>
+      <div class="fact blue"><b>Like (code)</b> Snapshot / golden-file tests: a curated set of fixtures with expected outputs; CI fails the build when the new output diverges from the approved snapshot.</div>
+    </div>
+
+    <div class="myth">
+      <div class="m">&#10007; &quot;A bigger golden set is always better — dump in every log line.&quot;</div>
+      <div class="t">&#10003; Small and hand-checked beats large and noisy. The golden set is fixtures: representative, labeled, versioned, changed only by review — not a raw traffic dump.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; &quot;We scored high on the public benchmark, so we're good.&quot;</div>
+      <div class="t">&#10003; Benchmarks measure a generic task and rot via contamination (test data leaked into training = memorization, not skill). A private golden set predicts your production.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> Offline = <span>fixed dataset, repeatable, pre-ship, gates the merge.</span> Build the harness once; <span>diff every change vs the baseline</span>.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>What makes offline eval reproducible? <span class="ans">&rarr; a fixed dataset — same inputs every run, so the only variable is your change</span></li>
+      <li>What are the four parts of an eval harness? <span class="ans">&rarr; dataset + runner + grader + report; you diff the report against a baseline</span></li>
+      <li>Golden set vs benchmark? <span class="ans">&rarr; golden = your private curated fixtures that gate your ship; benchmark = shared public data to compare models, and it rots</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>M2 — Walk me through building an offline eval for a support assistant from scratch.</summary>
+      <div class="a">
+        <b>Hit these points:</b> define success criteria per task <em>before</em> writing cases — what's a pass, what's a fail, in measurable terms &rarr; collect a golden set of real, representative inputs paired with expected outputs or acceptance criteria; keep it small, hand-checked, versioned like test fixtures &rarr; pick a grader per case: exact-match / programmatic where structured, LLM-as-judge where open-ended, humans for the gold labels &rarr; run the harness (dataset &rarr; runner &rarr; grader &rarr; report) &rarr; establish a baseline number, then every change is a diff vs that baseline &rarr; wire it into CI so it gates the merge &rarr; name the limit: a fixed dataset can't catch what you didn't think to put in it — which is why you also need online eval.
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ MODULE 3 ============ -->
+  <section class="lvl" id="m3">
+    <div class="lvltop"><span class="num">3</span><h2>Online Evaluation &amp; Closing the Loop</h2></div>
+    <p class="tagline">Offline only measures the distribution you captured. Online eval measures quality on <b>live traffic</b> after you ship — in two shapes: <b>A/B</b> (real users see the variant, you compare outcomes) and <b>shadow</b> (run the new system in parallel, discard its output, zero user risk).<sup><a href="#s4" id="r4">4</a></sup></p>
+
+    <h3>Shadow vs A/B — safety vs signal</h3>
+    <figure>
+      <svg viewBox="0 0 640 240" role="img" aria-label="Shadow runs the new system on real traffic but discards its output for zero user risk; A/B splits real users so they see the variant and you measure a real outcome signal.">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">Two shapes of online eval</text>
+
+        <!-- shadow -->
+        <rect x="30" y="40" width="270" height="160" rx="10" fill="#e9f3ec" stroke="#2f5d3a" stroke-width="1.5"/>
+        <text x="165" y="60" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">Shadow</text>
+        <rect x="50" y="72" width="100" height="26" rx="5" fill="#ffffff" stroke="#2f5d3a"/>
+        <text x="100" y="89" text-anchor="middle" font-size="8" fill="#111110">live traffic</text>
+        <line x1="150" y1="85" x2="172" y2="85" stroke="#6b675f" marker-end="url(#arw)"/>
+        <rect x="174" y="72" width="100" height="26" rx="5" fill="#ffffff" stroke="#2f5d3a"/>
+        <text x="224" y="89" text-anchor="middle" font-size="8" fill="#111110">old &rarr; user</text>
+        <line x1="100" y1="98" x2="100" y2="120" stroke="#2f5d3a" stroke-dasharray="3 3" marker-end="url(#arwG)"/>
+        <rect x="50" y="122" width="100" height="26" rx="5" fill="#ffffff" stroke="#2f5d3a"/>
+        <text x="100" y="139" text-anchor="middle" font-size="8" fill="#111110">new (parallel)</text>
+        <text x="200" y="139" text-anchor="middle" font-size="8" font-weight="700" fill="#9a2417">output discarded</text>
+        <text x="165" y="172" text-anchor="middle" font-size="8.5" font-style="italic" fill="#2f5d3a">zero user risk</text>
+        <text x="165" y="187" text-anchor="middle" font-size="8.5" font-style="italic" fill="#9a2417">no live conversion signal</text>
+
+        <!-- A/B -->
+        <rect x="340" y="40" width="270" height="160" rx="10" fill="#eef0fb" stroke="#3d54c9" stroke-width="1.5"/>
+        <text x="475" y="60" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3d54c9">A/B test</text>
+        <rect x="430" y="72" width="90" height="24" rx="5" fill="#ffffff" stroke="#3d54c9"/>
+        <text x="475" y="88" text-anchor="middle" font-size="8" fill="#111110">split users</text>
+        <line x1="475" y1="96" x2="420" y2="116" stroke="#3d54c9" marker-end="url(#arwM)"/>
+        <line x1="475" y1="96" x2="530" y2="116" stroke="#3d54c9" marker-end="url(#arwM)"/>
+        <rect x="362" y="118" width="116" height="24" rx="5" fill="#ffffff" stroke="#3d54c9"/>
+        <text x="420" y="134" text-anchor="middle" font-size="8" fill="#111110">50% &rarr; old (control)</text>
+        <rect x="486" y="118" width="116" height="24" rx="5" fill="#ffffff" stroke="#3d54c9"/>
+        <text x="544" y="134" text-anchor="middle" font-size="8" fill="#111110">50% &rarr; new (variant)</text>
+        <text x="475" y="172" text-anchor="middle" font-size="8.5" font-style="italic" fill="#3d54c9">real outcome signal (conversion)</text>
+        <text x="475" y="187" text-anchor="middle" font-size="8.5" font-style="italic" fill="#9a2417">some users see a worse experience</text>
+
+        <text x="320" y="226" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110">Common sequence: shadow first to confirm no regressions &rarr; then A/B to measure the real lift.</text>
+      </svg>
+      <figcaption>Shadow buys safety (no user ever sees the new output) but gives no business signal; A/B buys a real outcome signal but exposes some users to a possibly-worse variant. Run shadow first, then A/B.<sup><a href="#s4" id="r4b">4</a></sup></figcaption>
+    </figure>
+
+    <h3>LLM-as-judge — a cheap sensor you must calibrate</h3>
+    <figure>
+      <svg viewBox="0 0 640 200" role="img" aria-label="An LLM judge scales scoring cheaply but carries position, verbosity, and self-preference biases; you must calibrate it against human labels before trusting it to gate a ship.">
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">LLM-as-judge: scale, but biased</text>
+
+        <rect x="30" y="40" width="180" height="120" rx="10" fill="#fff7e6" stroke="#c2700f" stroke-width="1.5"/>
+        <text x="120" y="60" text-anchor="middle" font-size="10" font-weight="700" fill="#c2700f">Known biases</text>
+        <text x="120" y="80" text-anchor="middle" font-size="8.5" fill="#111110">position (favors 1st)</text>
+        <text x="120" y="96" text-anchor="middle" font-size="8.5" fill="#111110">verbosity (favors longer)</text>
+        <text x="120" y="112" text-anchor="middle" font-size="8.5" fill="#111110">self-preference (own family)</text>
+        <text x="120" y="140" text-anchor="middle" font-size="8" font-style="italic" fill="#9a2417">a preference may be an artifact</text>
+
+        <line x1="210" y1="100" x2="244" y2="100" stroke="#6b675f" marker-end="url(#arw)"/>
+        <text x="227" y="93" text-anchor="middle" font-size="7" fill="#6b675f">calibrate</text>
+
+        <rect x="246" y="40" width="180" height="120" rx="10" fill="#eef0fb" stroke="#3d54c9" stroke-width="1.5"/>
+        <text x="336" y="60" text-anchor="middle" font-size="10" font-weight="700" fill="#3d54c9">Calibrate vs humans</text>
+        <text x="336" y="80" text-anchor="middle" font-size="8.5" fill="#111110">measure judge&ndash;human</text>
+        <text x="336" y="94" text-anchor="middle" font-size="8.5" fill="#111110">agreement on a labeled slice</text>
+        <text x="336" y="114" text-anchor="middle" font-size="8.5" fill="#111110">randomize order · force a rubric</text>
+        <text x="336" y="140" text-anchor="middle" font-size="8" font-style="italic" fill="#3d54c9">~80% agreement is illustrative</text>
+
+        <line x1="426" y1="100" x2="460" y2="100" stroke="#6b675f" marker-end="url(#arw)"/>
+
+        <rect x="462" y="40" width="148" height="120" rx="10" fill="#e9f3ec" stroke="#2f5d3a" stroke-width="1.5"/>
+        <text x="536" y="60" text-anchor="middle" font-size="10" font-weight="700" fill="#2f5d3a">Then trust it</text>
+        <text x="536" y="82" text-anchor="middle" font-size="8.5" fill="#111110">use as a cheap sensor</text>
+        <text x="536" y="98" text-anchor="middle" font-size="8.5" fill="#111110">to scale scoring</text>
+        <text x="536" y="118" text-anchor="middle" font-size="8.5" fill="#111110">confirm close calls</text>
+        <text x="536" y="134" text-anchor="middle" font-size="8.5" fill="#111110">with humans</text>
+      </svg>
+      <figcaption>A judge is a noisy, cheap sensor that scales human judgment — not a replacement for it. A strong judge can reach roughly human-level agreement on some tasks, but that's dataset-dependent; calibrate before you let it gate anything.<sup><a href="#s5" id="r5">5</a></sup></figcaption>
+    </figure>
+
+    <h3>Offline &harr; online — complementary, not rivals</h3>
+    <table>
+      <thead><tr><th>Dimension</th><th>Offline</th><th>Online</th></tr></thead>
+      <tbody>
+        <tr><td><b>Data</b></td><td>Fixed golden set</td><td>Live production traffic</td></tr>
+        <tr><td><b>When</b></td><td>Before ship (gates the merge)</td><td>After ship (measures reality)</td></tr>
+        <tr><td><b>Repeatable?</b></td><td>Yes &mdash; same inputs every run</td><td>No &mdash; traffic drifts constantly</td></tr>
+        <tr><td><b>Blind spot</b></td><td>Only what you put in the set</td><td>Can't gate a deploy that hasn't happened</td></tr>
+      </tbody>
+    </table>
+
+    <div class="facts">
+      <div class="fact"><b>Is</b> Online eval = measuring quality on live traffic after shipping. A/B splits real users between old and new and compares outcomes; shadow runs the new system in parallel and discards its output.</div>
+      <div class="fact"><b>Why it exists</b> A fixed dataset can't cover what you never imagined. Real traffic drifts and surfaces failure classes the golden set missed — online is the only honest signal of production quality.</div>
+      <div class="fact blue"><b>Like (world)</b> Crash-test dummies (offline, repeatable lab) vs real-world accident data (online, messy but true). You need both: the lab to gate the design, the road to find what the lab missed.</div>
+      <div class="fact blue"><b>Like (code)</b> Tests in CI (offline) vs production observability / canary releases (online). Green CI lets you deploy; metrics and canaries tell you it actually worked under load.</div>
+    </div>
+
+    <div class="myth">
+      <div class="m">&#10007; &quot;Offline eval is green, so we're done — ship and move on.&quot;</div>
+      <div class="t">&#10003; Green offline + unhappy users = a coverage gap, not a broken eval. Add online signals and fold the failing live cases back into the golden set.</div>
+    </div>
+    <div class="myth">
+      <div class="m">&#10007; &quot;The LLM judge scored the new prompt higher, so it's better. Ship it.&quot;</div>
+      <div class="t">&#10003; An uncalibrated judge has biases (position, verbosity, self-preference). Measure its agreement with humans first; otherwise it ships regressions confidently.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> Offline gates the ship; online proves it worked. <span>Feed every production failure back into the golden set</span> &mdash; the loop closes.</div>
+
+    <details class="mc"><summary>Memory check</summary><ul>
+      <li>Shadow vs A/B in one line each? <span class="ans">&rarr; shadow = run new in parallel, discard output, zero user risk; A/B = split real users, they see the variant, you get an outcome signal</span></li>
+      <li>Why must you calibrate an LLM judge? <span class="ans">&rarr; it has position / verbosity / self-preference bias; measure its agreement with human labels before trusting it to gate</span></li>
+      <li>How does the loop close? <span class="ans">&rarr; harvest failing live cases, label them, fold them into the golden set so the next offline run catches that class</span></li>
+    </ul></details>
+
+    <details class="iq">
+      <summary>M3 — Offline eval is green but users complain after you ship. What happened and what do you add?</summary>
+      <div class="a">
+        <b>Hit these points:</b> offline eval only measures the distribution you captured in the golden set — real traffic drifts and hits inputs you never fixtured &rarr; green offline + unhappy users = a coverage gap, not a broken eval &rarr; add online evaluation: A/B split real users between old and new and compare outcomes, or run the new system in shadow (same traffic, output discarded) to compare safely with zero user risk &rarr; instrument production signals: thumbs-down, regenerate-rate, escalation-to-human, task completion &rarr; close the loop: harvest the failing live cases, label them, fold them into the golden set so the next offline run catches that class &rarr; the two are complementary — offline is repeatable and pre-ship, online is real and post-ship.
+      </div>
+    </details>
+
+    <details class="iq">
+      <summary>M3 — Your LLM-as-judge gives a new prompt a higher score, so you ship. The judge was wrong. How do you prevent this?</summary>
+      <div class="a">
+        <b>Hit these points:</b> an LLM judge is itself a model with biases — position (favors the first option), verbosity (favors longer answers), self-preference (favors its own family's text) &rarr; never trust a judge you haven't calibrated: measure its agreement against a human-labeled slice before letting it gate anything &rarr; a strong judge can reach roughly human-level agreement on <em>some</em> tasks, but that's dataset-dependent and must be re-verified &rarr; mitigations: randomize option order, force a rubric / chain-of-thought, use a different model family as judge, anchor with reference answers &rarr; treat the judge as a cheap noisy sensor that scales human judgment, never a replacement for the gold labels it was calibrated against.
+      </div>
+    </details>
+
+    <div class="rule" style="background:transparent;color:var(--ink);border:1px dashed var(--line);font-weight:500">
+      <span style="color:var(--accent);font-weight:700">Retrieval-specific eval:</span> RAG pipelines need their own metrics (faithfulness, context precision/recall). The retrieval-eval deep dive lives in <a href="../../context-engineering/lessons/0006-retrieval-evaluation-and-observability.html">Context Engineering · Lesson 6 — Retrieval Evaluation &amp; Observability</a>. This track generalizes evaluation to whole AI systems and agents.
+    </div>
+  </section>
+
+  <!-- ============ QUIZ ============ -->
+  <h2 class="sec" id="quiz">Retrieval practice — test the three modules</h2>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q1.</span> The strongest argument that evaluation, not the model, is the moat is that…</p>
+      <button class="opt">A bigger and more capable model always wins, so model choice is the whole game here</button>
+      <button class="opt">Public benchmark leaderboards already rank every model, so you can just copy the top one</button>
+      <button class="opt">The model is a commodity anyone can call; the curated dataset of "good" is what they can't copy</button>
+      <button class="opt">Vibes-based review scales perfectly once a senior engineer signs off on the output quality</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="0">
+      <p class="q"><span class="qn">Q2.</span> What makes <em>offline</em> evaluation reproducible enough to gate a merge in CI?</p>
+      <button class="opt">It scores against a fixed golden set, so the same inputs run on every single commit</button>
+      <button class="opt">It samples fresh live production traffic each run, so the inputs always stay current</button>
+      <button class="opt">It uses an LLM judge whose scores are guaranteed identical across every separate run</button>
+      <button class="opt">It only runs after the deploy, so it captures the exact behavior real users observed</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="3">
+      <p class="q"><span class="qn">Q3.</span> The defining difference between a <em>shadow</em> deployment and an <em>A/B</em> test is that…</p>
+      <button class="opt">Shadow needs no live traffic at all, whereas an A/B test replays a saved golden set</button>
+      <button class="opt">A/B discards the new system's output, whereas shadow shows that output to half of users</button>
+      <button class="opt">Both expose users to the new variant; the only real difference is the split percentage used</button>
+      <button class="opt">Shadow discards the new output (zero user risk); A/B shows the variant for a real signal</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="1">
+      <p class="q"><span class="qn">Q4.</span> Before letting an LLM-as-judge gate a ship decision, you must first…</p>
+      <button class="opt">Switch to the largest available judge model so its raw scores can simply be trusted</button>
+      <button class="opt">Calibrate it against human labels and measure agreement, since it carries known biases</button>
+      <button class="opt">Run it on the public benchmark so its leaderboard rank confirms it is good enough now</button>
+      <button class="opt">Ask it to also write the answers it grades, so the rubric and output always stay aligned</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <div class="quiz">
+    <div class="qitem" data-correct="2">
+      <p class="q"><span class="qn">Q5.</span> Offline eval is green but production users complain. The right next step is to…</p>
+      <button class="opt">Trust the green eval and dismiss the reports, since the fixed dataset already passed fully</button>
+      <button class="opt">Delete the failing cases from the golden set so the suite stays comfortably green again</button>
+      <button class="opt">Add online signals and fold the failing live cases back into the golden set as new tests</button>
+      <button class="opt">Replace the human gold labels with an LLM judge so the whole pipeline simply runs faster</button>
+      <div class="fb"></div>
+    </div>
+  </div>
+
+  <!-- ============ INTERVIEW QUESTIONS ============ -->
+  <h2 class="sec" id="interview">Interview — pick your bar</h2>
+  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
+  <div data-interview>
+
+    <details class="iq" data-level="core">
+      <summary>Why is evaluation called the real moat for an AI product?</summary>
+      <div class="a"><b>Hit these points:</b> the model is a <b>commodity</b> — any competitor can call the same API &rarr; what you can't copy is a curated dataset of what "good" means for <b>your</b> task and a measured baseline &rarr; <b>you cannot improve what you cannot measure</b>: without a score, every change is a guess and progress is unprovable &rarr; "vibes-based" eval works at 5 examples and collapses at scale, where a small regression is thousands of bad answers no human will eyeball &rarr; evaluation turns model changes into measured before/after diffs — the only way to improve reliably.</div>
+    </details>
+
+    <details class="iq" data-level="core">
+      <summary>What is the difference between offline and online evaluation?</summary>
+      <div class="a"><b>Hit these points:</b> <b>offline</b> = score the system against a FIXED dataset (the golden set) BEFORE shipping; reproducible, runs in CI, gates a deploy — same inputs every run, like an integration test suite &rarr; <b>online</b> = measure quality on LIVE production traffic AFTER shipping; real distribution, real users &rarr; online has two shapes: <b>A/B</b> (split real users, they see the variant, you compare outcomes) and <b>shadow</b> (run the new system in parallel but discard output — no user risk, no live signal) &rarr; they're complementary: offline is repeatable but only covers what you captured; online is real but can't gate a deploy that hasn't happened.</div>
+    </details>
+
+    <details class="iq" data-level="core">
+      <summary>What is a golden set and how is it different from a benchmark?</summary>
+      <div class="a"><b>Hit these points:</b> a <b>golden set</b> is a versioned, curated set of (input, expected-output / acceptance-criteria) cases that is YOUR ground truth for offline eval — small, hand-checked, treated like test fixtures, changed only by deliberate review &rarr; a <b>benchmark</b> is a shared, public dataset + metric used to compare models against EACH OTHER (MT-Bench, HELM scenarios) &rarr; the benchmark is a standardized exam: good for cross-model comparison, weak as a proxy for your task &rarr; benchmarks rot via <b>contamination</b> (test data leaked into training = memorization, not capability) &rarr; a fresh private golden set beats a public leaderboard for trusting a result on your problem.</div>
+    </details>
+
+    <details class="iq" data-level="core">
+      <summary>What are the three ways to score an eval case, and when do you use each?</summary>
+      <div class="a"><b>Hit these points:</b> <b>programmatic / exact-match</b> — deterministic checks (regex, JSON schema, equals-expected, tool-succeeded); cheapest and most reliable, use whenever the output is structured or has one right answer &rarr; <b>human grading</b> — a person applies a rubric; the gold standard and the source of your gold labels, but slow and expensive, so reserve it for the golden set and audits &rarr; <b>LLM-as-judge</b> — an LLM scores or compares against a rubric; scales cheaply for open-ended quality, but biased and must be calibrated against human labels first &rarr; the stack: programmatic where you can, judge where you must, human to anchor both.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>Offline eval passes but production users complain. Diagnose.</summary>
+      <div class="a"><b>Hit these points:</b> the golden set only covers the distribution you thought to capture; live traffic drifts and hits inputs you never fixtured — green offline + unhappy users is a <b>coverage gap</b> &rarr; confirm by sampling the complaints and checking whether those inputs even exist in the golden set (usually they don't) &rarr; add online signals: thumbs-down rate, regenerate rate, escalation-to-human, task completion, plus a shadow or A/B comparison of old vs new on real traffic &rarr; close the loop: harvest the failing live cases, label them, fold them into the golden set so the next offline run catches that class &rarr; the fix isn't "trust offline less" — offline and online cover different risks and you need both.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>When do you use shadow deployment vs an A/B test for online evaluation?</summary>
+      <div class="a"><b>Hit these points:</b> <b>shadow</b> = run the new system on real traffic in parallel and THROW THE OUTPUT AWAY; users never see it, so zero user risk — use it when the change is risky, hard to roll back, or you only need to compare behavior, not measure conversion &rarr; <b>A/B</b> = split real users between old and new; users SEE the variant, so you get a real outcome signal (conversion, completion, satisfaction) but you've exposed some users to a possibly-worse experience &rarr; the trade: shadow gives safety but no business signal; A/B gives the business signal at real user cost &rarr; common sequence: shadow first to confirm no regressions, then A/B to measure the real lift.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>Your LLM-as-judge prefers the new prompt. Should you trust it? Argue both sides.</summary>
+      <div class="a"><b>Hit these points:</b> the judge is a model with documented biases — <b>position, verbosity, self-preference</b> — so a preference can be an artifact, not real quality &rarr; trust it ONLY to the degree you've calibrated it: measure agreement against a human-labeled slice; a strong judge can reach roughly human-level agreement on <em>some</em> tasks, but that's dataset-dependent and must be re-verified &rarr; mitigations before trusting a gate: randomize order, force a rubric/CoT, use a different model family as judge, include reference answers &rarr; synthesis: the judge is a cheap noisy sensor that lets you scale human judgment to thousands of cases — use it to flag, confirm close calls with humans, never let an uncalibrated judge alone decide a ship.</div>
+    </details>
+
+    <details class="iq" data-level="senior">
+      <summary>A teammate wants to grow the golden set by dumping in every production log line. Push back.</summary>
+      <div class="a"><b>Hit these points:</b> the golden set is <b>fixtures</b>, not a data lake — its value is that every case is representative, labeled, and hand-checked, so a score on it means something &rarr; raw logs are unlabeled, redundant, and noisy; dumping them in inflates the suite, slows every run, and dilutes the signal without adding coverage &rarr; it also breaks the "changed only by deliberate review" property — silent growth means you no longer know what your baseline measures &rarr; the right move: <b>sample</b> from logs, especially failures and edge cases, <b>label</b> them, and add the ones that cover a class you don't already test &rarr; quality and coverage of the set beat raw size every time.</div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>Map the full eval loop end to end: from a failing user report to a regression test that protects against it.</summary>
+      <div class="a"><b>Hit these points:</b> <b>collect</b> — gather representative cases, including failures harvested from production &rarr; <b>score</b> — apply the right grader per case (programmatic / human / LLM-judge) &rarr; <b>diff</b> — compare the aggregate score against the baseline to see better or worse &rarr; <b>decide</b> — ship if it's a measured win, roll back if it's a regression; offline gates the merge, online (A/B / shadow) confirms on live traffic &rarr; <b>feed back</b> — every production failure becomes a new labeled case in the golden set, so the next offline run catches that class &rarr; the loop is the point: it converts one-off failures into permanent regression coverage and makes quality a ratchet, not a coin flip &rarr; measure each stage (coverage, judge-human agreement, regression catch-rate) so the loop itself is trustworthy.</div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>One eval system, three forces — speed, trust, coverage — that pull against each other. How do you reason about the trade-offs?</summary>
+      <div class="a"><b>Hit these points:</b> name the three: programmatic/judge graders give <b>SPEED</b>, human labels give <b>TRUST</b>, online + golden-set growth give <b>COVERAGE</b> &rarr; the tension: the fast graders (judge) are the least trusted, the trusted grader (human) is the slowest, and the most realistic signal (online) can't gate a pre-ship decision &rarr; sequence it: gold-label a small golden set with humans (trust), automate the bulk with programmatic + calibrated judge (speed), grow coverage by folding online failures back in &rarr; never trade an unmeasured risk for a measured saving: a cheap but uncalibrated judge is worse than no gate because it ships regressions confidently &rarr; measure the loop itself — judge-human agreement, offline coverage of real traffic, regression catch-rate — so you know which force is weakest.</div>
+    </details>
+
+    <details class="iq" data-level="staff">
+      <summary>"We hit 90% on the public benchmark, so we don't need our own eval." Tear this apart as a system design.</summary>
+      <div class="a"><b>Hit these points:</b> two unsafe assumptions &rarr; <b>"benchmark = our task"</b> is false: a public benchmark measures a generic task on shared data — it's a capability proxy, not a measure of YOUR inputs and YOUR success criteria &rarr; <b>"a high score = real skill"</b> is suspect: <b>contamination</b> means leaderboard test data leaks into training, so the rank can be memorization; benchmarks also saturate and rot as new models arrive &rarr; the right design: a private golden set of your real inputs + your graders gates the ship; benchmarks only shortlist candidate models cheaply &rarr; then confirm with shadow/A/B on live traffic &rarr; the framing: the leaderboard says a model is generally capable; only your eval says it's right for the job — teach the method, not the rank.</div>
+    </details>
+
+    <div class="designrubric" data-level="design"><b>Design-round framework</b> — narrate an eval strategy in this order so the interviewer hears criteria-first, then offline gate, then online reality, then the loop:
+      <ol>
+        <li>Clarify scope: what's the task, what's the cost of a wrong answer vs a missed answer, is there ground truth, who can label?</li>
+        <li>Define success criteria <em>per task</em> first — measurable pass/fail, not "good."</li>
+        <li>Build a small, versioned golden set of real, representative (input, expected) cases, hand-labeled by humans.</li>
+        <li>Choose graders: programmatic where structured, calibrated LLM-as-judge where open-ended, human for gold labels and audits.</li>
+        <li>Stand up the harness (dataset + runner + grader + report), set a baseline, and wire offline regression eval into CI to gate the merge.</li>
+        <li>Ship behind shadow first (no user risk), then A/B to measure real lift; instrument production signals (thumbs-down, regenerate, escalation, task success).</li>
+        <li>Close the loop: route live failures back into the golden set; name risks — benchmark contamination, judge bias, coverage gaps — and measure the loop, not just the model.</li>
+      </ol>
+    </div>
+
+    <details class="iq" data-level="design">
+      <summary>Design an evaluation strategy for a new LLM feature, from zero to a CI gate plus production monitoring.</summary>
+      <div class="a"><b>A strong answer covers:</b> define success criteria per task first — measurable pass/fail, not "good" &rarr; build a small versioned <b>golden set</b> of real, representative (input, expected) cases, hand-labeled by humans &rarr; choose graders: programmatic where structured, calibrated LLM-as-judge where open-ended, human for the gold labels and audits &rarr; stand up the harness (dataset + runner + grader + report) and establish a baseline number &rarr; wire offline regression eval into CI so a drop below baseline blocks the merge &rarr; ship behind <b>shadow</b> first (no user risk), then <b>A/B</b> to measure real lift &rarr; instrument production signals (thumbs-down, regenerate, escalation, task success) and route failures back into the golden set &rarr; map risks: benchmark contamination, judge bias, coverage gaps; measure the loop, not just the model.</div>
+    </details>
+
+    <details class="iq" data-level="design">
+      <summary>A leader says "just use the public leaderboard score to pick our model." Tear this apart and propose what you'd do instead.</summary>
+      <div class="a"><b>A strong answer covers:</b> a public benchmark measures a generic task on shared data — it's a proxy for capability, not a measure of YOUR task &rarr; <b>contamination</b>: leaderboard test data leaks into training sets, so a high rank can be memorization, and leaderboards saturate and rot as new models arrive &rarr; the right move is a private golden set of your real inputs with your success criteria, scored by your graders — that's the number that predicts production &rarr; use benchmarks only to <b>shortlist</b> candidate models cheaply, then decide with your own offline eval and confirm with shadow/A/B on live traffic &rarr; the framing: the leaderboard says a model is generally capable; only your eval says it's right for the job — teach the method, not the rank.</div>
+    </details>
+
+  </div>
+
+  <!-- ============ NAV ============ -->
+  <div class="nav">
+    <span style="color:var(--muted)">&#8592; <a href="../../index.html#grid">StackDepth</a></span>
+    <span style="color:var(--muted)">Next: <em>Datasets &amp; Benchmarks</em> — coming soon</span>
+  </div>
+
+  <footer>
+    <p>Sources</p>
+    <ol style="padding-left:1.2rem;margin:.3rem 0">
+      <li id="s1">Anthropic, "Create strong empirical evaluations" &mdash; docs.anthropic.com (Build with Claude &rarr; Test &amp; evaluate). Building task-specific evals, grading methods, and evaluating the system not just the model.</li>
+      <li id="s2">Anthropic, "Define your success criteria" &mdash; docs.anthropic.com. Turning a fuzzy quality goal into measurable per-task pass/fail criteria before writing eval cases.</li>
+      <li id="s3">OpenAI, "Evals" framework &mdash; github.com/openai/evals. Reference eval-harness shape: a registry of evals, model-graded vs exact-match graders, datasets-as-code.</li>
+      <li id="s4">Liang et al., 2022, "Holistic Evaluation of Language Models" (HELM) &mdash; Stanford CRFM, arXiv:2211.09110. One number is never enough: evaluate across many scenarios and metrics and surface the trade-offs. Coverage / distribution numbers illustrative.</li>
+      <li id="s5">Zheng et al., 2023, "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena" &mdash; arXiv:2306.05685. Strong judges can approach human-level agreement; documents position, verbosity, and self-preference bias. Agreement figures illustrative and dataset-dependent.</li>
+    </ol>
+  </footer>
+
+</div><!-- /wrap -->
+
+<script>
+  document.querySelectorAll('.qitem').forEach(function(item){
+    var correct = +item.dataset.correct;
+    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+    var fb = item.querySelector('.fb');
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        opts.forEach(function(o){ o.disabled = true; });
+        opts[correct].classList.add('correct');
+        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
+        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
+      });
+    });
+  });
+</script>
+<script src="../../assets/interview.js" defer></script>
+<script src="../../assets/reading-progress.js" defer></script>
+</body>
+</html>
