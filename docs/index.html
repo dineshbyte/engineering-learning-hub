@@ -815,6 +815,61 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
         var m=getProg(); if(slug && !m[slug]){ m[slug]=a.getAttribute('href'); try{localStorage.setItem(PKEY,JSON.stringify(m));}catch(e){} }
       });
     });
+
+    /* ---- card detail sheet: tap a card (not Start / footer pills / Reset) to
+       preview every lesson with a blurb, plus the Start CTA and reference pills ---- */
+    var sheet = document.getElementById('cardsheet');
+    if (sheet && grid && typeof sheet.showModal === 'function') {
+      var csName = sheet.querySelector('.cs-name'),
+          csTag  = sheet.querySelector('.cs-tag'),
+          csMeta = sheet.querySelector('.cs-meta'),
+          csList = sheet.querySelector('.cs-lessons'),
+          csFoot = sheet.querySelector('.cs-foot'),
+          DETAIL = window.CARD_DETAIL || {};
+
+      function openSheet(tile) {
+        var nm = tile.querySelector('.tname'), tg = tile.querySelector('.ttag'),
+            cnt = tile.querySelector('.cnt'), rt = tile.querySelector('.rtime'),
+            tc = tile.style.getPropertyValue('--tc') || 'var(--accent)';
+        sheet.style.setProperty('--accent', tc);
+        csName.textContent = nm ? nm.textContent : '';
+        csTag.textContent = tg ? tg.textContent : '';
+        csMeta.textContent = [cnt && cnt.textContent.trim(), rt && rt.textContent.trim()]
+          .filter(Boolean).join('  ·  ');
+
+        csList.innerHTML = '';
+        [].slice.call(tile.querySelectorAll('.lchip')).forEach(function (ch) {
+          var href = ch.getAttribute('href'),
+              num = ch.querySelector('i'), title = ch.querySelector('span');
+          var li = document.createElement('li');
+          var n = document.createElement('span'); n.className = 'cs-n';
+          n.textContent = num ? num.textContent : '';
+          var col = document.createElement('div');
+          var a = document.createElement('a'); a.className = 'cs-lt'; a.href = href;
+          a.textContent = title ? title.textContent : href;
+          col.appendChild(a);
+          var blurb = DETAIL[href];
+          if (blurb) { var d = document.createElement('span'); d.className = 'cs-d'; d.textContent = blurb; col.appendChild(d); }
+          li.appendChild(n); li.appendChild(col); csList.appendChild(li);
+        });
+
+        csFoot.innerHTML = '';
+        var start = tile.querySelector('.start'); if (start) csFoot.appendChild(start.cloneNode(true));
+        [].slice.call(tile.querySelectorAll('.tfoot a')).forEach(function (p) { csFoot.appendChild(p.cloneNode(true)); });
+
+        sheet.showModal();
+      }
+
+      grid.addEventListener('click', function (e) {
+        if (e.target.closest('.start, .tfoot, .creset')) return;   // keep direct actions
+        var tile = e.target.closest('.tile'); if (!tile) return;
+        e.preventDefault();                                        // cancel the <details> toggle
+        openSheet(tile);
+      });
+      sheet.addEventListener('click', function (e) { if (e.target === sheet) sheet.close(); }); // backdrop
+      var closeBtn = sheet.querySelector('.cs-close');
+      if (closeBtn) closeBtn.addEventListener('click', function () { sheet.close(); });
+    }
   })();
 </script>
 </body>
