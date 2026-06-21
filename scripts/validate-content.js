@@ -133,6 +133,24 @@ function isLessonPage(rel) {
     return /-fundamentals\.html$|-deep-dive\.html$/.test(p);
 }
 
+/** The "On this page" TOC numbers must match the section badges they link to.
+ *  (A lesson shipped with TOC "5·6·7" while its section badges read "1·2·3".) */
+function checkTocNumbering(page, html) {
+    const toc = html.match(/<nav class="toc">([\s\S]*?)<\/nav>/);
+    if (!toc) return;
+    const badge = {};
+    const secRe = /id="([a-z0-9-]+)"[^>]*>\s*<div class="lvltop"><span class="num">(\d+)<\/span>/gi;
+    let m;
+    while ((m = secRe.exec(html)) !== null) badge[m[1]] = m[2];
+    const linkRe = /<a href="#([a-z0-9-]+)">\s*(\d+)\s*·/gi;
+    while ((m = linkRe.exec(toc[1])) !== null) {
+        const b = badge[m[1]];
+        if (b !== undefined && b !== m[2]) {
+            fail(page, `TOC number "${m[2]} ·" for #${m[1]} doesn't match its section badge (${b})`);
+        }
+    }
+}
+
 /** Lesson-page structural integrity — guards the two breakages we hit:
  *   (1) the feedback widget / closing endnote must be present on every lesson;
  *   (2) the <main> landmark must enclose the WHOLE lesson — nothing of substance
@@ -161,6 +179,7 @@ function main() {
         checkInterviewLevels(page, html);
         checkJsonLd(page, html);
         checkLessonStructure(page, html, path.relative(ROOT, page));
+        checkTocNumbering(page, html);
     }
     checkSitemap(indexable);
 
