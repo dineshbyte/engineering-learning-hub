@@ -25,7 +25,12 @@ WIDGET = (
 
 def main():
     changed = 0
-    for path in glob.glob(os.path.join(ROOT, '**', 'lessons', '*.html'), recursive=True):
+    # every teaching page: /lessons/ files PLUS the single-page tracks' fundamentals
+    # and deep-dive pages (Distributed Systems, Storage Engines, Transactions, etc.)
+    targets = set()
+    for pat in ('**/lessons/*.html', '**/*-fundamentals.html', '**/*-deep-dive.html'):
+        targets.update(glob.glob(os.path.join(ROOT, pat), recursive=True))
+    for path in sorted(targets):
         s = open(path, encoding='utf-8').read()
         if 'class="lesson-fb"' in s:        # idempotent
             continue
