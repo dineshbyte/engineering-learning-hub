@@ -209,6 +209,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <script src="../assets/analytics.js" defer></script>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <!-- shared arrowheads -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
   <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
@@ -221,6 +222,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     <span class="pn"><a href="storage-engines-fundamentals.html" title="Storage Engines from first principles">&#8249; Prev</a><span style="color:var(--muted);opacity:.45">Next &#8250;</span></span>
     <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Storage Engines</span></span>
   </nav>
+<main id="main" tabindex="-1">
   <div class="kicker">Deep Dive · Storage Engines · visual edition</div>
   <h1>LSM Compaction — the trade-off you cannot escape</h1>
   <p class="meta">~25 min · 6 levels · diagrams + interview questions · interactive recall · supplement to Book 3, Lessons 3–4</p>
@@ -242,11 +244,11 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   </div>
 
   <nav class="toc">
-    <a href="#l1">①&nbsp;The job &amp; 3 amplifications</a><a href="#l2">②&nbsp;Size-tiered (STCS)</a>
-    <a href="#l3">③&nbsp;Leveled (LCS)</a><a href="#l4">④&nbsp;The trade-off triangle</a>
-    <a href="#l5">⑤&nbsp;Tombstone resurrection</a><a href="#l6">⑥&nbsp;L0 &amp; write stalls</a>
-    <a href="#interview">◆&nbsp;Interview Qs</a><a href="#quiz">◆&nbsp;Retrieval quiz</a>
-    <a href="#cheat">★&nbsp;Cheat sheet</a><a href="#sources">★&nbsp;Sources</a>
+    <a href="#l1">1 · The job &amp; 3 amplifications</a><a href="#l2">2 · Size-tiered (STCS)</a>
+    <a href="#l3">3 · Leveled (LCS)</a><a href="#l4">4 · The trade-off triangle</a>
+    <a href="#l5">5 · Tombstone resurrection</a><a href="#l6">6 · L0 &amp; write stalls</a>
+    <a href="#interview">★ Interview Qs</a><a href="#quiz">★ Retrieval quiz</a>
+    <a href="#cheat">★ Cheat sheet</a><a href="#sources">★ Sources</a>
   </nav>
 
   <!-- ============ HERO: the LSM write path & where compaction lives ============ -->
@@ -673,7 +675,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       <button class="opt">higher write amplification for lower read and space amp</button>
       <button class="opt">lower space amplification for much higher write latency only</button>
       <button class="opt">higher read amplification for lower total disk space used</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="0">
       <p class="q"><span class="qn">Q2.</span> In leveled compaction, levels below L0 hold any given key in at most one SSTable because…</p>
@@ -681,7 +683,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       <button class="opt">Bloom filters remove the key from all the other SSTables</button>
       <button class="opt">the memtable is flushed straight into the lowest level only</button>
       <button class="opt">compaction deletes every duplicate key before a flush runs</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="2">
       <p class="q"><span class="qn">Q3.</span> A tombstone must be retained until compaction has carried it past all older copies because otherwise…</p>
@@ -689,7 +691,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       <button class="opt">the bottom level would grow without any bound over time</button>
       <button class="opt">the deleted key's old value would reappear on the next read</button>
       <button class="opt">replicas would never converge on the same set of SSTables</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="3">
       <p class="q"><span class="qn">Q4.</span> An LSM database showing sudden write stalls under heavy ingest is usually…</p>
@@ -697,7 +699,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       <button class="opt">waiting on a fsync to the write-ahead commit log to finish</button>
       <button class="opt">rebuilding its Bloom filters after a recent schema change</button>
       <button class="opt">back-pressuring because compaction has fallen behind L0</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="2">
       <p class="q"><span class="qn">Q5.</span> Size-tiered compaction's worst-case weakness is…</p>
@@ -705,7 +707,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       <button class="opt">write amplification, rewriting each key 10–30 times</button>
       <button class="opt">space — a big merge briefly needs ~2× the dataset on disk</button>
       <button class="opt">durability, because flushes are not written to the WAL</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="0">
       <p class="q"><span class="qn">Q6.</span> The RUM conjecture says a compaction strategy can minimise…</p>
@@ -713,7 +715,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       <button class="opt">all three amplifications if you add enough RAM cache</button>
       <button class="opt">read and write only, never space, on any hardware</button>
       <button class="opt">whichever single amplification you configure it to target</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
   </div>
 
@@ -769,6 +771,14 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     <span id="s4">4. <em>RocksDB wiki</em> — Leveled vs Universal compaction, write stalls, <code>level0_*_trigger</code>, pending-compaction-bytes. The operational bible.</span><br>
     <span id="s5">5. <em>Apache Cassandra docs</em> — STCS / LCS / TWCS, <code>gc_grace_seconds</code>, tombstone thresholds and the resurrection hazard.</span>
   </footer>
+<div class="lesson-fb" aria-live="polite">
+  <span class="lesson-fb-q">Was this lesson helpful?</span>
+  <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">👍 Yes</button>
+  <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No</button>
+  <span class="lesson-fb-thanks">Thanks &mdash; noted.</span>
+</div>
+<p class="lesson-endnote">These notes reflect my current understanding and are updated as I learn, build, and discover better explanations.</p>
+</main>
 </div>
 
 <script>

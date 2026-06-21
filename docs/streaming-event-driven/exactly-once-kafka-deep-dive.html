@@ -182,6 +182,7 @@ details.iq .a b{color:var(--accent)}
 <script src="../assets/analytics.js" defer></script>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <!-- shared arrowheads -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
   <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
@@ -195,6 +196,7 @@ details.iq .a b{color:var(--accent)}
     <span class="pn"><a href="streaming-event-driven-fundamentals.html" title="Streaming &amp;amp; Event-Driven">&#8249; Prev</a><a href="watermarks-deep-dive.html" title="Watermarks — deep dive">Next &#8250;</a></span>
     <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Streaming &amp; Event-Driven</span></span>
   </nav>
+<main id="main" tabindex="-1">
   <div class="kicker">Book 4 · Lesson 3 supplement · visual edition</div>
   <h1>Exactly-Once in Kafka — Deep Dive</h1>
   <p class="meta">~25 min · 5 mechanisms · interview questions · interactive recall · read after Lesson 3 settles</p>
@@ -216,11 +218,11 @@ details.iq .a b{color:var(--accent)}
   </div>
 
   <nav class="toc">
-    <a href="#l0">◆&nbsp;What EOS actually promises</a><a href="#l1">①&nbsp;Idempotent producer</a>
-    <a href="#l2">②&nbsp;Transactions</a><a href="#l3">③&nbsp;read_committed &amp; LSO</a>
-    <a href="#l4">④&nbsp;Zombie fencing</a><a href="#l5">⑤&nbsp;The boundary</a>
-    <a href="#usecases">◆&nbsp;Where it shows up</a><a href="#quiz">◆&nbsp;Retrieval practice</a>
-    <a href="#interview">◆&nbsp;Interview Qs</a><a href="#cheat">★&nbsp;Cheat sheet</a>
+    <a href="#l0">★ What EOS actually promises</a><a href="#l1">1 · Idempotent producer</a>
+    <a href="#l2">2 · Transactions</a><a href="#l3">3 · read_committed &amp; LSO</a>
+    <a href="#l4">4 · Zombie fencing</a><a href="#l5">5 · The boundary</a>
+    <a href="#usecases">★ Where it shows up</a><a href="#quiz">★ Retrieval practice</a>
+    <a href="#interview">★ Interview Qs</a><a href="#cheat">★ Cheat sheet</a>
   </nav>
 
   <!-- ============ HERO: the EOS pipeline ============ -->
@@ -504,7 +506,7 @@ commitTransaction()                            // markers to every partition, vi
       <button class="opt">exactly one greater than the last one it has accepted</button>
       <button class="opt">more than one greater than the last accepted sequence</button>
       <button class="opt">reset to zero after the producer reconnects to the broker</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="0">
       <p class="q"><span class="qn">Q2.</span> What makes the read-process-write loop exactly-once is that the transaction atomically includes…</p>
@@ -512,7 +514,7 @@ commitTransaction()                            // markers to every partition, vi
       <button class="opt">every record the producer has ever sent to that partition</button>
       <button class="opt">a full copy of the input topic alongside the new output</button>
       <button class="opt">the consumer group rebalance plus the broker's commit log</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="1">
       <p class="q"><span class="qn">Q3.</span> A consumer reading a transactional topic with the default <code>read_uncommitted</code> isolation level…</p>
@@ -520,7 +522,7 @@ commitTransaction()                            // markers to every partition, vi
       <button class="opt">sees aborted and in-flight records, so it isn't exactly-once</button>
       <button class="opt">automatically filters out every aborted record using markers</button>
       <button class="opt">only ever delivers records from committed transactions</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="1">
       <p class="q"><span class="qn">Q4.</span> A zombie producer cannot corrupt exactly-once because the replacement's <code>initTransactions()</code>…</p>
@@ -528,7 +530,7 @@ commitTransaction()                            // markers to every partition, vi
       <button class="opt">bumps the epoch, so the old epoch's requests are fenced</button>
       <button class="opt">waits for the zombie to time out before it produces anything</button>
       <button class="opt">copies the zombie's open transaction and finishes it cleanly</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="3">
       <p class="q"><span class="qn">Q5.</span> Your pipeline produces transactionally but still emits duplicates downstream. Most likely cause?</p>
@@ -536,7 +538,7 @@ commitTransaction()                            // markers to every partition, vi
       <button class="opt"><code>max.in.flight.requests</code> is set higher than five</button>
       <button class="opt">the transaction coordinator lost its <code>__transaction_state</code></button>
       <button class="opt">the downstream consumer is left at default <code>read_uncommitted</code></button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="2">
       <p class="q"><span class="qn">Q6.</span> Your processing also writes a row to Postgres. Kafka EOS covers that write…</p>
@@ -544,7 +546,7 @@ commitTransaction()                            // markers to every partition, vi
       <button class="opt">yes — as long as the consumer is set to <code>read_committed</code></button>
       <button class="opt">no — it's outside Kafka; you need an idempotency key or outbox</button>
       <button class="opt">no — but enabling <code>exactly_once_v2</code> extends EOS to the DB</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
   </div>
 
@@ -672,6 +674,14 @@ commitTransaction()                            // markers to every partition, vi
     <span id="s4">4. Kleppmann — <em>DDIA, Chapter 11</em> — stream processing, exactly-once, and the boundary argument. <a href="#r4">↩</a></span><br>
     <span id="s5">5. <em>Book 1, Lesson 2</em> (at-least-once + idempotency) and <em>Book 2</em> (the outbox, the dual-write problem) — what you still need for the byte that leaves Kafka. <a href="#r5">↩</a></span>
   </footer>
+<div class="lesson-fb" aria-live="polite">
+  <span class="lesson-fb-q">Was this lesson helpful?</span>
+  <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">👍 Yes</button>
+  <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No</button>
+  <span class="lesson-fb-thanks">Thanks &mdash; noted.</span>
+</div>
+<p class="lesson-endnote">These notes reflect my current understanding and are updated as I learn, build, and discover better explanations.</p>
+</main>
 </div>
 
 <script>

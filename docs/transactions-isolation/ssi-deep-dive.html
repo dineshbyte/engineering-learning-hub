@@ -197,6 +197,7 @@ details.iq .a b{color:var(--track-rest)}
 <script src="../assets/analytics.js" defer></script>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <!-- shared arrowheads -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
   <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
@@ -210,6 +211,7 @@ details.iq .a b{color:var(--track-rest)}
     <span class="pn"><a href="mvcc-internals-deep-dive.html" title="MVCC Internals">&#8249; Prev</a></span>
     <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Transactions &amp; Isolation</span></span>
   </nav>
+<main id="main" tabindex="-1">
   <div class="kicker">Transactions &amp; Isolation · Deep dive · visual edition</div>
   <h1>Serializable Snapshot Isolation</h1>
   <p class="meta">~25 min · 5 levels · graph theory → runtime detector · interview questions + interactive recall</p>
@@ -232,10 +234,10 @@ details.iq .a b{color:var(--track-rest)}
   </div>
 
   <nav class="toc">
-    <a href="#l1">①&nbsp;SI's blind spot — write skew</a><a href="#l2">②&nbsp;Serializability is a graph</a>
-    <a href="#l3">③&nbsp;The dangerous structure</a><a href="#l4">④&nbsp;How Postgres catches it</a>
-    <a href="#l5">⑤&nbsp;The price &amp; escape hatch</a><a href="#interview">◆&nbsp;Interview Qs</a>
-    <a href="#quiz">◆&nbsp;Retrieval quiz</a><a href="#cheat">★&nbsp;Cheat sheet</a>
+    <a href="#l1">1 · SI's blind spot — write skew</a><a href="#l2">2 · Serializability is a graph</a>
+    <a href="#l3">3 · The dangerous structure</a><a href="#l4">4 · How Postgres catches it</a>
+    <a href="#l5">5 · The price &amp; escape hatch</a><a href="#interview">★ Interview Qs</a>
+    <a href="#quiz">★ Retrieval quiz</a><a href="#cheat">★ Cheat sheet</a>
   </nav>
 
   <!-- ============ HERO: the SSI pipeline ============ -->
@@ -545,7 +547,7 @@ details.iq .a b{color:var(--track-rest)}
       <button class="opt">each reads a shared condition then writes a different, non-conflicting row</button>
       <button class="opt">one transaction reads uncommitted data written by a second transaction</button>
       <button class="opt">the snapshot is refreshed mid-transaction so reads stop being repeatable</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="2">
       <p class="q"><span class="qn">Q2.</span> A multiversion history is serializable exactly when its dependency graph…</p>
@@ -553,7 +555,7 @@ details.iq .a b{color:var(--track-rest)}
       <button class="opt">has at least one transaction that reads before any others write</button>
       <button class="opt">is acyclic — no cycle of "must-come-before" edges exists</button>
       <button class="opt">forms a single connected component spanning every transaction</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="0">
       <p class="q"><span class="qn">Q3.</span> Fekete's theorem says every snapshot-isolation anomaly contains…</p>
@@ -561,7 +563,7 @@ details.iq .a b{color:var(--track-rest)}
       <button class="opt">exactly one write-write conflict between two concurrent transactions</button>
       <button class="opt">a read-only transaction that observes two different committed snapshots</button>
       <button class="opt">a long-running transaction that pins the cleanup horizon far back</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="3">
       <p class="q"><span class="qn">Q4.</span> SSI may abort a transaction that was <em>actually</em> serializable because…</p>
@@ -569,7 +571,7 @@ details.iq .a b{color:var(--track-rest)}
       <button class="opt">SIRead locks block writers and force a deadlock-style rollback choice</button>
       <button class="opt">the dangerous structure is sufficient for a cycle but not necessary</button>
       <button class="opt">the dangerous structure is necessary for a cycle but not sufficient</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="0">
       <p class="q"><span class="qn">Q5.</span> PostgreSQL's <code>READ ONLY DEFERRABLE</code> / safe-snapshot optimization lets…</p>
@@ -577,7 +579,7 @@ details.iq .a b{color:var(--track-rest)}
       <button class="opt">a write transaction skip first-committer-wins for faster blind updates</button>
       <button class="opt">the engine widen predicate locks from tuple level up to relation level</button>
       <button class="opt">two serializable transactions share one snapshot to avoid any conflict</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
     <div class="qitem" data-correct="2">
       <p class="q"><span class="qn">Q6.</span> A SIRead lock differs from an ordinary lock because it…</p>
@@ -585,7 +587,7 @@ details.iq .a b{color:var(--track-rest)}
       <button class="opt">is released the instant the reading transaction commits</button>
       <button class="opt">never blocks a writer — it only records that a read happened</button>
       <button class="opt">guarantees a deadlock-free ordering by escalating to a table lock</button>
-      <p class="fb"></p>
+      <p class="fb" role="status" aria-live="polite"></p>
     </div>
   </div>
 
@@ -642,6 +644,14 @@ details.iq .a b{color:var(--track-rest)}
     <span id="s5">5. Berenson, Bernstein, Gray et al., <em>A Critique of ANSI SQL Isolation Levels</em> (SIGMOD 1995). Why named-SERIALIZABLE-that-is-really-SI (e.g. Oracle) admits write skew. <a href="#r5">↩</a></span><br>
     <span id="s6">6. Adya, <em>Weak Consistency: A Generalized Theory and Optimistic Implementations</em> (MIT PhD, 1999). The multiversion dependency-graph framework the whole argument rests on. Synthesis in Kleppmann, <em>DDIA</em>, Ch. 7. <a href="#r6">↩</a></span>
   </footer>
+<div class="lesson-fb" aria-live="polite">
+  <span class="lesson-fb-q">Was this lesson helpful?</span>
+  <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">👍 Yes</button>
+  <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No</button>
+  <span class="lesson-fb-thanks">Thanks &mdash; noted.</span>
+</div>
+<p class="lesson-endnote">These notes reflect my current understanding and are updated as I learn, build, and discover better explanations.</p>
+</main>
 </div>
 
 <script>
