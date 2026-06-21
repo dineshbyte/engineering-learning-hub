@@ -5,7 +5,8 @@
  * Encodes the checks that used to be done by hand, as enforceable gates:
  *
  *   SEO         every indexable page has exactly one <title>, a canonical link,
- *               an og:url, and a meta description.
+ *               an og:url, a meta description, non-empty meta keywords, the shared
+ *               analytics.js include, and meta robots + author.
  *   Interview   every interview panel uses only valid data-level values
  *               (core | senior | staff | design).
  *   JSON-LD     every <script type="application/ld+json"> block parses as JSON.
@@ -68,6 +69,10 @@ function checkSeo(page, html) {
     if (!/<script[^>]+src=["'][^"']*assets\/analytics\.js["']/i.test(html)) {
         fail(page, 'missing analytics.js include (run scripts/inject-analytics.js)');
     }
+
+    // codified head bar: every indexable page carries robots + author
+    if (!/<meta[^>]+name=["']robots["']/i.test(html)) fail(page, 'missing meta robots');
+    if (!/<meta[^>]+name=["']author["']/i.test(html)) fail(page, 'missing meta author');
 }
 
 function checkInterviewLevels(page, html) {
