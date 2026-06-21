@@ -17,7 +17,8 @@
      ad-free site; usage disclosed in /privacy.html). A stored opt-out
      (localStorage 'sd:consent'='denied') is honoured. An opt-in banner is
      available behind SHOW_BANNER but is OFF by default.
-   - Production-only: nothing is sent off dineshbyte.github.io unless ?debug_mode=1.
+   - Production-only: nothing is sent off dineshbyte.github.io unless ?debug_mode=1;
+     localhost / 127.0.0.1 / loopback NEVER send (even with ?debug_mode=1).
    ========================================================================== */
 (function () {
   'use strict';
@@ -28,8 +29,13 @@
 
   /* --- 0. environment guard: never pollute prod data with dev traffic ------ */
   var debugMode = /[?&]debug_mode=1\b/.test(location.search);
-  var isProd = (location.hostname === PROD_HOST);
-  if (!isProd && !debugMode) {
+  var host = location.hostname;
+  var isProd = (host === PROD_HOST);
+  // localhost / loopback NEVER sends — not even with ?debug_mode=1
+  var isLocal = (host === 'localhost' || /\.localhost$/.test(host) ||
+    /^127\./.test(host) || host === '0.0.0.0' || host === '::1' ||
+    host === '[::1]' || location.protocol === 'file:');
+  if (isLocal || (!isProd && !debugMode)) {
     window.gtag = window.gtag || function () {}; // no-op so nothing throws
     return;
   }
@@ -68,7 +74,7 @@
 
   function pageContext() {
     var p = location.pathname;
-    var ctx = { page_type: 'hub', track: null, lesson_number: null };
+    var ctx = { page_type: 'hub', track: null, lesson_number: null, lesson_id: null };
     for (var i = 0; i < SLUGS.length; i++) {
       if (p.indexOf('/' + SLUGS[i] + '/') >= 0) { ctx.track = SLUGS[i]; break; }
     }
@@ -80,8 +86,12 @@
     else if (/\/lessons\//.test(p)) ctx.page_type = 'lesson';
     else if (ctx.track) ctx.page_type = 'lesson'; // depth-2 fundamentals/deep-dive pages
     else ctx.page_type = 'hub';
-    var m = p.match(/\/(\d{3,4})-/);
-    if (m) ctx.lesson_number = parseInt(m[1], 10);
+    var m = p.match(/\/(\d{3,4})-([a-z0-9-]+?)(?:\.html)?$/i);
+    if (m) {
+      ctx.lesson_number = parseInt(m[1], 10);
+      // stable slug id (track/NNNN-slug) — survives renames/reorders better than the ordinal
+      ctx.lesson_id = (ctx.track ? ctx.track + '/' : '') + m[1] + '-' + m[2];
+    }
     return ctx;
   }
   var CTX = pageContext();
@@ -92,17 +102,19 @@
     send_page_view: false,
     page_type: CTX.page_type,
     track: CTX.track,
-    lesson_number: CTX.lesson_number
+    lesson_number: CTX.lesson_number,
+    lesson_id: CTX.lesson_id
   });
   gtag('event', 'page_view', {
     page_type: CTX.page_type,
     track: CTX.track,
-    lesson_number: CTX.lesson_number
+    lesson_number: CTX.lesson_number,
+    lesson_id: CTX.lesson_id
   });
 
   /* --- 4. helpers ---------------------------------------------------------- */
   function ev(name, params) {
-    var base = { page_type: CTX.page_type, track: CTX.track };
+    var base = { page_type: CTX.page_type, track: CTX.track, lesson_id: CTX.lesson_id };
     if (params) { for (var k in params) { if (params.hasOwnProperty(k)) base[k] = params[k]; } }
     gtag('event', name, base);
   }
