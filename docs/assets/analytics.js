@@ -119,6 +119,20 @@
     gtag('event', name, base);
   }
   function txt(el) { return ((el && el.textContent) || '').replace(/\s+/g, ' ').trim().slice(0, 120); }
+  // hub helpers: derive the track slug + resource type from a card/sheet link href
+  function trackFromHref(href) {
+    if (!href) return null;
+    for (var i = 0; i < SLUGS.length; i++) { if (href.indexOf(SLUGS[i] + '/') >= 0) return SLUGS[i]; }
+    return null;
+  }
+  function resourceType(href) {
+    if (!href) return 'reference';
+    if (/GLOSSARY\.html$/i.test(href)) return 'glossary';
+    if (/RESOURCES\.html$/i.test(href)) return 'resources';
+    if (/cheat-sheet/i.test(href)) return 'cheatsheet';
+    if (/architecture-review|-review/i.test(href)) return 'review_sheet';
+    return 'reference';
+  }
 
   /* --- 5. one delegated click router (first match wins) -------------------- */
   // The generic outbound rule is intentionally absent — Enhanced Measurement
@@ -129,14 +143,30 @@
       ev('search_result_select', { link_text: txt(el.querySelector('.rt') || el), result_kind: txt(el.querySelector('.rkind')) });
     }],
     ['.nr-sugg button', function (el) { ev('search_suggestion_select', { suggestion: txt(el) }); }],
+    ['a.start-here-link', function () { ev('browse_vault_click', {}); }],
     ['.fchip[data-cat]', function (el) { ev('filter_select', { filter_category: el.getAttribute('data-cat') }); }],
     ['a.start[data-track]', function (el) {
       var tile = el.closest('.tile');
       var cont = !!(tile && tile.classList.contains('is-started'));
-      ev(cont ? 'track_continue' : 'track_start', { track: el.getAttribute('data-track') });
+      // source distinguishes the card's Start button from the preview-sheet's cloned one
+      ev(cont ? 'track_continue' : 'track_start',
+        { track: el.getAttribute('data-track'), source: el.closest('.cardsheet') ? 'sheet' : 'card' });
+    }],
+    ['a.pill', function (el) {  // footer cheat-sheet / review-sheet / glossary / resources (card OR preview sheet)
+      var href = el.getAttribute('href');
+      ev('resource_click', { resource_type: resourceType(href), track: trackFromHref(href),
+        source: el.closest('.cardsheet') ? 'sheet' : 'card', link_url: href });
     }],
     ['article.tile a:not(.start)', function (el) {
       ev('lesson_card_link', { link_url: el.getAttribute('href'), link_text: txt(el) });
+    }],
+    ['button.creset', function (el) {
+      var t = el.closest('.tile'), s = t && t.querySelector('a.start[data-track]');
+      ev('progress_reset', { track: s ? s.getAttribute('data-track') : null });
+    }],
+    ['article.tile', function (el) {  // tapping the card body opens the preview sheet
+      var s = el.querySelector('a.start[data-track]');
+      ev('card_open', { track: s ? s.getAttribute('data-track') : null });
     }],
     ['button.themebtn', function () {
       // inline onclick="toggleTheme()" has already flipped data-theme by now
