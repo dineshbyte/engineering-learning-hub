@@ -27,6 +27,16 @@ const SLUGS = new Set([
   'rest-api', 'bloom-filters', 'distributed-systems', 'storage-engines',
   'transactions-isolation', 'streaming-event-driven', 'applied-systems-design',
 ]);
+const NAMES = {
+  'ai-agents': 'AI Agents', 'context-engineering': 'Context Engineering',
+  'ai-evaluation': 'AI Evaluation', 'production-ai-architecture': 'Production AI Architecture',
+  'ai-security': 'AI Security', 'ai-infrastructure': 'AI Infrastructure',
+  'domain-agent-design': 'Domain Agent Design', 'advanced-ai-systems': 'Advanced AI Systems',
+  'rest-api': 'REST API', 'bloom-filters': 'Bloom Filters',
+  'distributed-systems': 'Distributed Systems', 'storage-engines': 'Storage Engines',
+  'transactions-isolation': 'Transactions &amp; Isolation', 'streaming-event-driven': 'Streaming &amp; Event-Driven',
+  'applied-systems-design': 'Applied Systems Design',
+};
 
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -52,6 +62,13 @@ for (const f of walk(ROOT)) {
     html = html.replace(
       /(<meta property="og:image" content="[^"]*"\s*\/?>)/i,
       '$1\n<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">');
+  }
+  if (!/og:image:alt/i.test(html)) {
+    const alt = slug ? `${NAMES[slug]} · StackDepth learning track`
+                     : 'StackDepth — a free engineering learning hub';
+    html = html.replace(
+      /(<meta property="og:image" content="[^"]*"\s*\/?>)/i,
+      `$1\n<meta property="og:image:alt" content="${alt}">`);
   }
   if (html !== orig) { fs.writeFileSync(f, html); updated++; }
 }
