@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en" style="--accent:var(--track-aiinfra)">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Glossary — AI Infrastructure · StackDepth</title>
+<meta name="description" content="AI Infrastructure glossary — the canonical terms used across the StackDepth AI Infrastructure lessons, defined in dependency order.">
+<meta name="keywords" content="embeddings, vector dbs, rerankers, model gateway, inference, ai infrastructure, vector databases, retrieval systems, model gateways, caching, prompt stores, evaluation infrastructure, memory infrastructure, hnsw, faiss, kv cache">
+<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/ai-infrastructure/GLOSSARY.html">
+<meta name="robots" content="index, follow">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="Glossary — AI Infrastructure · StackDepth">
+<meta property="og:description" content="AI Infrastructure glossary — the canonical terms used across the StackDepth AI Infrastructure lessons, defined in dependency order.">
+<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/ai-infrastructure/GLOSSARY.html">
+<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/lesson.css">
+<script src="../assets/analytics.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+<nav id="hubbar">
+  <a href="../index.html">← StackDepth</a>
+  <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">🌓</button><span style="color:var(--muted)">AI Infrastructure · Glossary</span></span>
+</nav>
+<div class="kicker">Reference · Glossary</div>
+<h1 id="glossary-ai-infrastructure">Glossary — AI Infrastructure</h1>
+<div class="ltags"><span class="lt">Embeddings</span><span class="lt">Vector DBs</span><span class="lt">Rerankers</span><span class="lt">Model gateway</span><span class="lt">Inference</span></div>
+<p>Covers Lessons 0001–0006. Grouped by where each term first lands.
+Shared AI terms reuse the canonical definitions verbatim so they never
+drift across tracks.</p>
+<h2 id="shared-ai-foundations-reused-verbatim">Shared AI foundations
+(reused verbatim)</h2>
+<ul>
+<li><strong>LLM (large language model)</strong> — the reasoning model
+(the brain in a jar); predicts tokens, has no memory/tools/actions on
+its own.</li>
+<li><strong>Tool</strong> — a callable capability/API/function the model
+can invoke.</li>
+<li><strong>Agent</strong> — an LLM using tools in a loop to accomplish
+a goal.</li>
+<li><strong>Agent loop</strong> — observe → think → act → repeat.</li>
+<li><strong>Runtime</strong> — the orchestration layer around the model
+(loop, state, tool execution, retries, limits).</li>
+<li><strong>Workflow vs agent</strong> — developer-defined path
+(workflow) vs model-influenced path (agent).</li>
+<li><strong>MCP</strong> — a protocol exposing tools/resources/prompts
+to AI clients (USB-C for tools).</li>
+<li><strong>Context engineering</strong> — curating the window before
+the model runs.</li>
+<li><strong>RAG (Retrieval-Augmented Generation)</strong> — retrieve →
+assemble → LLM → answer.</li>
+<li><strong>Memory</strong> — persisted state reachable only by
+retrieval into the context window.</li>
+</ul>
+<h2 id="retrieval-substrate-l2l3">Retrieval substrate (L2–L3)</h2>
+<ul>
+<li><strong>Embedding</strong> — a dense vector capturing meaning; near
+vectors ≈ similar meaning. Pre-computed once at ingest, then compared at
+query time.</li>
+<li><strong>Vector database</strong> — a store that indexes embeddings
+for similarity search at scale, with metadata filtering, CRUD, and ANN
+indexes. The serving substrate retrieval reads from.</li>
+<li><strong>ANN (approximate nearest neighbor)</strong> — trade a little
+recall for large speed/memory wins at scale; exact k-NN is O(n) per
+query and does not scale.</li>
+<li><strong>HNSW</strong> — graph-based ANN index: layered proximity
+graphs, logarithmic search. Fast, high recall, memory-heavy; tuned via
+<code>M</code> (graph degree) and <code>ef</code> (search breadth).</li>
+<li><strong>IVF (inverted file)</strong> — clustering-based ANN:
+partition vectors into cells, probe only a few (<code>nprobe</code>) at
+query time. Cheaper memory than HNSW; recall depends on cells
+probed.</li>
+<li><strong>Reranker</strong> — a second, expensive, accurate stage that
+re-scores the top-N candidates jointly with the query to optimize
+precision. Cannot recover a doc the first stage missed.</li>
+<li><strong>Cross-encoder</strong> — the model class behind most
+rerankers: encodes query and document <em>together</em> in one forward
+pass for a relevance score. Accurate but O(candidates) per query — too
+slow for first-stage retrieval, ideal for reranking a small top-N.</li>
+</ul>
+<h2 id="serving-gateways-l4">Serving &amp; gateways (L4)</h2>
+<ul>
+<li><strong>Model gateway</strong> — a proxy in front of one or more
+model providers: routing, auth, rate limits, retries/fallback, cost
+accounting, caching, and observability. The API gateway pattern for
+LLMs.</li>
+<li><strong>Inference server</strong> — the system that runs model
+forward passes for many concurrent requests: batching, scheduling,
+KV-cache management, streaming (e.g. vLLM). Where GPUs actually serve
+traffic.</li>
+<li><strong>Quantization</strong> — storing model weights (and/or KV
+cache) at lower precision (e.g. INT8/INT4) to cut memory and raise
+throughput, trading some accuracy. The serving-side cost/quality
+knob.</li>
+</ul>
+<h2 id="caching-prompt-infra-l5">Caching &amp; prompt infra (L5)</h2>
+<ul>
+<li><strong>KV cache</strong> — the per-request attention key/value
+tensors the model reuses across generated tokens. Grows with sequence
+length; the dominant GPU-memory consumer in serving (PagedAttention
+exists to manage it).</li>
+<li><strong>Prompt store</strong> — a versioned registry for
+prompts/templates (with variables, A/B variants, and rollout): treat
+prompts as deployable config, not hardcoded strings. The “feature flag”
+layer for prompts.</li>
+</ul>
+
+</div>
+</body>
+</html>

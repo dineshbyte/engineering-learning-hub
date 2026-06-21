@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" style="--accent:var(--track-aiinfra)">
+<head>
+<script>
+(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
+</script>
+<meta charset="utf-8">
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Resources —
+high-trust sources for AI Infrastructure · StackDepth</title>
+<meta name="description" content="AI Infrastructure resources — the high-trust sources (specs, docs, papers) behind the StackDepth AI Infrastructure lessons.">
+<meta name="keywords" content="embeddings, vector dbs, rerankers, model gateway, inference, ai infrastructure, vector databases, retrieval systems, model gateways, caching, prompt stores, evaluation infrastructure, memory infrastructure, hnsw, faiss, kv cache">
+<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/ai-infrastructure/RESOURCES.html">
+<meta name="robots" content="index, follow">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="StackDepth">
+<meta property="og:title" content="Resources —
+high-trust sources for AI Infrastructure · StackDepth">
+<meta property="og:description" content="AI Infrastructure resources — the high-trust sources (specs, docs, papers) behind the StackDepth AI Infrastructure lessons.">
+<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/ai-infrastructure/RESOURCES.html">
+<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og-cover.png">
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/lesson.css">
+<script src="../assets/analytics.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+<nav id="hubbar">
+  <a href="../index.html">← StackDepth</a>
+  <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">🌓</button><span style="color:var(--muted)">AI Infrastructure · Resources</span></span>
+</nav>
+<div class="kicker">Reference · Resources</div>
+<h1 id="resources-high-trust-sources-for-ai-infrastructure">Resources —
+high-trust sources for AI Infrastructure</h1>
+<div class="ltags"><span class="lt">Embeddings</span><span class="lt">Vector DBs</span><span class="lt">Rerankers</span><span class="lt">Model gateway</span><span class="lt">Inference</span></div>
+<p>Ground every non-obvious claim in these; cite inline
+(<code>&lt;sup&gt;</code> → <code>#sources</code>). Populated before
+teaching. Prefer primary sources (papers, vendor engineering docs) over
+secondary commentary. This track is the infra/ops deep dive — serving,
+gateways, scaling, cost — so the sources skew toward systems papers and
+product docs, not modeling papers.</p>
+<h2 id="primary-specs-docs">Primary specs / docs</h2>
+<ul>
+<li><strong>pgvector — documentation</strong>
+(github.com/pgvector/pgvector). Vector search inside Postgres: exact +
+HNSW/IVFFlat indexes. The “do I even need a dedicated vector DB?”
+baseline — relevant when retrieval volume fits in your existing OLTP
+store.</li>
+<li><strong>Pinecone — documentation</strong> (docs.pinecone.io).
+Managed serverless vector DB; useful for the build-vs-buy and
+operational-model (sharding, replication, metadata filtering)
+framing.</li>
+<li><strong>Weaviate — documentation</strong>
+(weaviate.io/developers/weaviate). Open-source vector DB with hybrid
+search and built-in reranking modules; good reference for the hybrid +
+rerank pipeline.</li>
+<li><strong>vLLM — documentation</strong> (docs.vllm.ai). Production
+inference server: PagedAttention, continuous batching, KV-cache
+management, prefix caching. The reference implementation for the serving
+lesson.</li>
+<li><strong>Anthropic — prompt caching</strong> (docs.anthropic.com).
+KV/prefix caching at the API layer: cache the stable prefix (system +
+tools), pay reduced rates on cache hits. The cost lever for L5.</li>
+<li><strong>OpenAI — embeddings &amp; API docs</strong>
+(platform.openai.com/docs). Embedding model dims/metrics and the
+hosted-embeddings cost/latency baseline for the embeddings lesson.</li>
+</ul>
+<h2 id="papers-deeper-reading">Papers &amp; deeper reading</h2>
+<ul>
+<li><strong>Johnson, Douze &amp; Jégou, 2017 — “Billion-scale similarity
+search with GPUs”</strong> (arXiv:1702.08734; FAISS). Why exact k-NN
+does not scale and how IVF + product quantization trade recall for
+memory and speed at billion-vector scale.</li>
+<li><strong>Malkov &amp; Yashunin, 2016 — “Efficient and robust
+approximate nearest neighbor search using Hierarchical Navigable Small
+World graphs”</strong> (arXiv:1603.09320; HNSW). The graph-based ANN
+index most vector DBs default to; the recall ↔︎ latency ↔︎ memory knobs
+(<code>ef</code>, <code>M</code>).</li>
+<li><strong>Reimers &amp; Gurevych, 2019 — “Sentence-BERT: Sentence
+Embeddings using Siamese BERT-Networks”</strong> (arXiv:1908.10084). Why
+you pre-compute embeddings once (bi-encoder) instead of scoring every
+pair at query time — the architecture that makes vector search
+feasible.</li>
+<li><strong>Khattab &amp; Zaharia, 2020 — “ColBERT: Efficient and
+Effective Passage Search via Contextualized Late Interaction over
+BERT”</strong> (arXiv:2004.12832). Late-interaction retrieval: the
+middle ground between cheap bi-encoders and expensive cross-encoder
+rerankers; storage cost trade-off.</li>
+<li><strong>Kwon et al., 2023 — “Efficient Memory Management for Large
+Language Model Serving with PagedAttention”</strong> (arXiv:2309.06180;
+vLLM, SOSP ’23). KV cache as the serving bottleneck; OS-paging applied
+to attention. The spine of the inference-serving lesson.</li>
+</ul>
+<h2 id="notes-on-trust">Notes on trust</h2>
+<ul>
+<li>Vendor docs describe <em>their</em> product’s current behaviour;
+treat product specifics (default index type, exact cache discount,
+supported metrics) as version-dependent and verify against current docs
+before teaching as fact.</li>
+<li>Throughput/latency/cost numbers in serving papers are hardware- and
+model-specific. Teach the <em>shape</em> of the trade-off; quote
+concrete numbers only as illustrative “at time of writing.”</li>
+</ul>
+
+</div>
+</body>
+</html>
