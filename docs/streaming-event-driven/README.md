@@ -12,7 +12,7 @@ Your map for Book 4 of the series. Books 1–3 covered distributed systems, tran
 
 | | |
 |---|---|
-| **Status** | **All 9 lessons built** ✅ — full book |
+| **Status** | **All 9 lessons built** ✅ — read as one comprehensive page + deep-dive supplements |
 | **Read it** | `book-4-streaming-event-driven-fundamentals.epub` (send to Kindle) · or `streaming-event-driven-fundamentals.md` |
 | **How to work it** | Read in order; do each self-check from memory before peeking |
 | **Deep dive** | `watermarks-deep-dive.epub` — a go-deeper supplement to Lesson 8 (perfect vs heuristic · the idle-partition stall · triggers & late firings) |

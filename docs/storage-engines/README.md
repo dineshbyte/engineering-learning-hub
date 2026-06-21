@@ -12,7 +12,7 @@ Your map for Book 3 of the series. Book 1 was *Distributed Systems*; Book 2 was 
 
 | | |
 |---|---|
-| **Status** | **All 9 lessons built** ✅ — full book |
+| **Status** | **All 9 lessons built** ✅ — read as one comprehensive page + deep-dive supplements |
 | **Read it** | `book-3-storage-engines-fundamentals.epub` (send to Kindle) · or `storage-engines-fundamentals.md` |
 | **How to work it** | Read in order; do each self-check from memory before peeking |
 | **Deep dive** | `lsm-compaction-deep-dive.epub` — a go-deeper supplement to Lessons 3–4 (STCS vs LCS · the RUM trade-off · tombstone resurrection · L0 write stalls) |

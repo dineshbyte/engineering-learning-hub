@@ -1,6 +1,6 @@
 # Glossary — AI Security
 
-Covers Lessons 1–6. Grouped by where each term first lands. Shared AI terms are reused **verbatim**
+Covers Lesson 1 (the rest of this track is in progress). Grouped by where each term first lands. Shared AI terms are reused **verbatim**
 from the canonical definitions so they never drift across tracks; track-new security terms follow.
 
 ## Shared foundations (reused verbatim from ai-agents / context-engineering)

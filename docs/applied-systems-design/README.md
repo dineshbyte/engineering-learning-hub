@@ -12,7 +12,7 @@ Your map for Book 5, the finale. Books 1–4 built the theory; this book applies
 
 | | |
 |---|---|
-| **Status** | **All 9 lessons built** ✅ — full book · **series complete** 🎉 |
+| **Status** | **All 9 lessons built** ✅ — read as one comprehensive page · **series complete** 🎉 |
 | **Read it** | `book-5-applied-systems-design-fundamentals.epub` (send to Kindle) · or `applied-systems-design-fundamentals.md` |
 | **How to work it** | Read in order; do each self-check from memory before peeking |
 | **Deep dive** | `consistent-hashing-deep-dive.epub` — a go-deeper supplement to Lessons 6 & 8 (why mod-N fails · vnodes · bounded loads · rendezvous & jump hashing) |

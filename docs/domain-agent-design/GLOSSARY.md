@@ -1,6 +1,6 @@
 # Glossary — Domain Agent Design
 
-Covers Lessons 0001–0007. Shared AI terms are reused verbatim from `../ai-agents` /
+Covers Lesson 0001 (the rest of this track is in progress). Shared AI terms are reused verbatim from `../ai-agents` /
 `../context-engineering` so vocabulary never drifts; track-new terms are defined once, crisply.
 
 ## Shared AI foundations (reused verbatim)
