@@ -416,9 +416,10 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
 <script src="assets/analytics.js" defer></script>
 </head>
 <body>
+<a class="skip-link" href="#grid">Skip to content</a>
 <header class="topbar">
   <h1 class="brand"><span class="logo">▦</span> <span class="brandname">Engineering Vault</span></h1>
-  <div class="search"><input id="q" type="search" placeholder="Search tracks &amp; lessons…" aria-label="Search tracks and lessons" autocomplete="off"></div>
+  <div class="search"><input id="q" type="search" placeholder="Search tracks &amp; lessons…" aria-label="Search tracks and lessons" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="results" aria-autocomplete="list"></div>
   <nav class="soc-hdr" aria-label="Social links">
     <a class="soclink" href="https://twitter.com/dineshxbyte" target="_blank" rel="noopener" title="Twitter / X" aria-label="Twitter / X">𝕏</a>
     <a class="soclink" href="https://medium.com/@dineshbyte" target="_blank" rel="noopener" title="Medium" aria-label="Medium">M</a>
@@ -462,8 +463,9 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
   </nav>
 
   <div class="results" id="results" role="listbox" aria-label="Search results"></div>
+  <div id="q-status" class="sr-only" role="status" aria-live="polite"></div>
 
-  <main class="grid" id="grid">
+  <main class="grid" id="grid" tabindex="-1">
 
     <!-- AI AGENTS -->
     <article class="tile" data-tier="2" data-here style="--tc:var(--track-agents)" data-cat="ai" data-name="ai agents llm tool agent loop runtime memory mcp multi-agent claude cursor production">
@@ -864,9 +866,10 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       'Applied Systems Design':'--track-applied'};
     function esc(s){return s.replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
     function reEsc(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+    function setStatus(msg){ var s=document.getElementById('q-status'); if(s) s.textContent=msg; }
     function run(){
       var raw=q.value.trim(), term=raw.toLowerCase();
-      if(!term){ results.style.display='none'; results.innerHTML=''; grid.style.display=''; filters.style.display=''; applyFilter(); return; }
+      if(!term){ results.style.display='none'; results.innerHTML=''; grid.style.display=''; filters.style.display=''; q.setAttribute('aria-expanded','false'); q.removeAttribute('aria-activedescendant'); setStatus(''); applyFilter(); return; }
       // Word-boundary matching: a token must START a word in the title or body.
       // (Plain substring made "rag" match "sto-rag-e" and rank Storage above RAG.)
       var toks=term.split(/\s+/).filter(Boolean);
@@ -888,15 +891,18 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       // counts don't read as conflicting with the result count
       grid.style.display='none'; filters.style.display='none';
       results.style.display='block'; // '' would fall back to the .results{display:none} default
-      if(!hits.length){ results.innerHTML=renderEmpty(raw); return; }
+      if(!hits.length){ results.innerHTML=renderEmpty(raw); q.setAttribute('aria-expanded','false'); q.removeAttribute('aria-activedescendant'); setStatus('No results for '+raw); return; }
       var html='<p class="rhead">'+hits.length+' result'+(hits.length>1?'s':'')+'</p>';
       hits.slice(0,25).forEach(function(h,i){
         var d=h.d, tk=TOK[d.g]||'--accent';
-        html+='<a class="ritem'+(i===0?' sel':'')+'" href="'+d.u+'" style="--rtc:var('+tk+')">'+
+        html+='<a class="ritem'+(i===0?' sel':'')+'" id="ropt'+i+'" role="option" aria-selected="'+(i===0?'true':'false')+'" href="'+d.u+'" style="--rtc:var('+tk+')">'+
           '<span class="rdot"></span><span class="rcol"><span class="rt">'+esc(d.t)+'</span>'+
           '<span class="rg">'+esc(d.g)+'</span></span><span class="rkind">'+d.k+'</span></a>';
       });
       results.innerHTML=html;
+      q.setAttribute('aria-expanded','true');
+      q.setAttribute('aria-activedescendant','ropt0');
+      setStatus(hits.length+' result'+(hits.length>1?'s':'')+' found');
     }
 
     /* Empty state: instead of a dead end, show the full catalog grouped by the
@@ -936,7 +942,7 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
       var b=e.target.closest('.nr-sugg button'); if(!b) return;
       q.value=b.getAttribute('data-q'); run(); q.focus();
     });
-    function sel(items,n){ items.forEach(function(it){it.classList.remove('sel');}); if(items[n]){items[n].classList.add('sel'); items[n].scrollIntoView({block:'nearest'});} }
+    function sel(items,n){ items.forEach(function(it,j){ var on=j===n; it.classList.toggle('sel',on); it.setAttribute('aria-selected',on?'true':'false'); }); if(items[n]){ items[n].scrollIntoView({block:'nearest'}); if(items[n].id) q.setAttribute('aria-activedescendant',items[n].id); } }
     q.addEventListener('input', run);
     q.addEventListener('keydown', function(e){
       var items=results.querySelectorAll('.ritem'); if(!items.length) return;
