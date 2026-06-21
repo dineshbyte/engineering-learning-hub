@@ -123,6 +123,32 @@ function checkSitemap(indexablePages) {
     }
 }
 
+/** A teaching/lesson page: /lessons/* OR a track's *-fundamentals / *-deep-dive
+ *  page (NOT reference/interview/glossary/resources). Every card links one of
+ *  these as its "lesson". */
+function isLessonPage(rel) {
+    const p = rel.split(path.sep).join('/');
+    if (/(^|\/)(reference|interview)\//.test(p)) return false;
+    if (/\/lessons\//.test(p)) return true;
+    return /-fundamentals\.html$|-deep-dive\.html$/.test(p);
+}
+
+/** Lesson-page structural integrity — guards the two breakages we hit:
+ *   (1) the feedback widget / closing endnote must be present on every lesson;
+ *   (2) the <main> landmark must enclose the WHOLE lesson — nothing of substance
+ *       may follow </main> (a too-early </main> stranded content + broke layout). */
+function checkLessonStructure(page, html, rel) {
+    if (!isLessonPage(rel)) return;
+    if (!/class=["']lesson-fb["']/.test(html)) fail(page, 'lesson missing feedback widget (run scripts/inject-lesson-feedback.py)');
+    if (!/class=["']lesson-endnote["']/.test(html)) fail(page, 'lesson missing closing endnote (run scripts/inject-lesson-endnote.py)');
+    const opens = (html.match(/<main[\s>]/gi) || []).length;
+    const closes = (html.match(/<\/main>/gi) || []).length;
+    if (opens !== 1 || closes !== 1) { fail(page, `lesson needs exactly one <main>…</main> (found ${opens} open / ${closes} close)`); return; }
+    const after = html.slice(html.lastIndexOf('</main>') + '</main>'.length)
+        .replace(/<\/div>|<\/body>|<\/html>|<!--[\s\S]*?-->|<script[\s\S]*?<\/script>|\s+/gi, '');
+    if (after) fail(page, `content stranded after </main> (landmark closed too early): "${after.slice(0, 60)}"`);
+}
+
 function main() {
     if (!fs.existsSync(ROOT)) { console.error(`✗ docs/ not found at ${ROOT}`); process.exit(1); }
 
@@ -134,6 +160,7 @@ function main() {
         checkSeo(page, html);
         checkInterviewLevels(page, html);
         checkJsonLd(page, html);
+        checkLessonStructure(page, html, path.relative(ROOT, page));
     }
     checkSitemap(indexable);
 
