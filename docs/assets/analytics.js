@@ -119,6 +119,20 @@
     gtag('event', name, base);
   }
   function txt(el) { return ((el && el.textContent) || '').replace(/\s+/g, ' ').trim().slice(0, 120); }
+  // hub helpers: derive the track slug + resource type from a card/sheet link href
+  function trackFromHref(href) {
+    if (!href) return null;
+    for (var i = 0; i < SLUGS.length; i++) { if (href.indexOf(SLUGS[i] + '/') >= 0) return SLUGS[i]; }
+    return null;
+  }
+  function resourceType(href) {
+    if (!href) return 'reference';
+    if (/GLOSSARY\.html$/i.test(href)) return 'glossary';
+    if (/RESOURCES\.html$/i.test(href)) return 'resources';
+    if (/cheat-sheet/i.test(href)) return 'cheatsheet';
+    if (/architecture-review|-review/i.test(href)) return 'review_sheet';
+    return 'reference';
+  }
 
   /* --- 5. one delegated click router (first match wins) -------------------- */
   // The generic outbound rule is intentionally absent — Enhanced Measurement
@@ -129,14 +143,30 @@
       ev('search_result_select', { link_text: txt(el.querySelector('.rt') || el), result_kind: txt(el.querySelector('.rkind')) });
     }],
     ['.nr-sugg button', function (el) { ev('search_suggestion_select', { suggestion: txt(el) }); }],
+    ['a.start-here-link', function () { ev('browse_vault_click', {}); }],
     ['.fchip[data-cat]', function (el) { ev('filter_select', { filter_category: el.getAttribute('data-cat') }); }],
     ['a.start[data-track]', function (el) {
       var tile = el.closest('.tile');
       var cont = !!(tile && tile.classList.contains('is-started'));
-      ev(cont ? 'track_continue' : 'track_start', { track: el.getAttribute('data-track') });
+      // source distinguishes the card's Start button from the preview-sheet's cloned one
+      ev(cont ? 'track_continue' : 'track_start',
+        { track: el.getAttribute('data-track'), source: el.closest('.cardsheet') ? 'sheet' : 'card' });
+    }],
+    ['a.pill', function (el) {  // footer cheat-sheet / review-sheet / glossary / resources (card OR preview sheet)
+      var href = el.getAttribute('href');
+      ev('resource_click', { resource_type: resourceType(href), track: trackFromHref(href),
+        source: el.closest('.cardsheet') ? 'sheet' : 'card', link_url: href });
     }],
     ['article.tile a:not(.start)', function (el) {
       ev('lesson_card_link', { link_url: el.getAttribute('href'), link_text: txt(el) });
+    }],
+    ['button.creset', function (el) {
+      var t = el.closest('.tile'), s = t && t.querySelector('a.start[data-track]');
+      ev('progress_reset', { track: s ? s.getAttribute('data-track') : null });
+    }],
+    ['article.tile', function (el) {  // tapping the card body opens the preview sheet
+      var s = el.querySelector('a.start[data-track]');
+      ev('card_open', { track: s ? s.getAttribute('data-track') : null });
     }],
     ['button.themebtn', function () {
       // inline onclick="toggleTheme()" has already flipped data-theme by now
@@ -153,6 +183,18 @@
     ['.iqtab[data-tab]', function (el) { ev('interview_tab_select', { level: el.getAttribute('data-tab') }); }],
     ['.ltags .lt', function (el) { ev('tag_chip_click', { tag: txt(el) }); }],
     ['sup a[href^="#"]', function (el) { ev('footnote_click', { anchor: el.getAttribute('href') }); }],
+    ['.lesson-fb-btn[data-rating]', function (el) {
+      var box = el.closest('.lesson-fb');
+      if (box && box.classList.contains('voted')) return;       // one vote per reader
+      var rating = el.getAttribute('data-rating');
+      ev('lesson_feedback', { rating: rating, lesson_number: CTX.lesson_number });
+      if (box) box.classList.add('voted');
+      try {
+        var m = JSON.parse(localStorage.getItem('sd:fb') || '{}');
+        m[CTX.lesson_id || location.pathname] = rating;
+        localStorage.setItem('sd:fb', JSON.stringify(m));
+      } catch (e) { /* storage unavailable */ }
+    }],
     ['.qitem .opt', function (el) {
       var item = el.closest('.qitem');
       setTimeout(function () {
@@ -192,7 +234,14 @@
       clearTimeout(timer);
       timer = setTimeout(function () {
         var term = q.value.trim();
-        if (term.length >= 2) ev('search', { search_term: term });
+        if (term.length >= 2) {
+          // run() renders #results synchronously on 'input', so by this debounce we
+          // can tell whether the search returned anything.
+          var hasResults = !!document.querySelector('#results .ritem');
+          ev('search', { search_term: term, has_results: hasResults });
+          // unmet demand — the clearest signal of what content to write next
+          if (!hasResults) ev('search_no_results', { search_term: term });
+        }
       }, 600);
     });
   }
@@ -232,7 +281,7 @@
        lesson_complete → scrolled to ~90% (after real scrolling), OR clicked Next
      Each fires at most once per page load. */
   if (CTX.page_type === 'lesson') {
-    var readSent = false, doneSent = false, scrolled = false;
+    var readSent = false, doneSent = false, scrolled = false, depthSent = {};
 
     function scrollPct() {
       var h = document.documentElement;
@@ -250,12 +299,30 @@
       ev('lesson_complete', { lesson_number: CTX.lesson_number, trigger: trigger });
     }
 
+    // scroll-depth milestones — each fires once, to see WHERE in a post readers drop off
+    function markDepth(p) {
+      var pct = p * 100;
+      [25, 50, 75, 100].forEach(function (m) {
+        if (!depthSent[m] && pct >= m) { depthSent[m] = true; ev('scroll_depth', { percent: m, lesson_number: CTX.lesson_number }); }
+      });
+    }
+
     window.addEventListener('scroll', function () {
       scrolled = true;
       var p = scrollPct();
+      markDepth(p);
       if (p >= 0.75) markRead('scroll');
       if (p >= 0.90 && scrolled) markComplete('scroll');
     }, { passive: true });
+
+    // restore the "voted" state if this reader already rated this lesson
+    try {
+      var fbMap = JSON.parse(localStorage.getItem('sd:fb') || '{}');
+      if (fbMap[CTX.lesson_id || location.pathname]) {
+        var fbBox = document.querySelector('.lesson-fb');
+        if (fbBox) fbBox.classList.add('voted');
+      }
+    } catch (e) { /* storage unavailable */ }
 
     // time-based read fallback (long dwell, or pages too short to scroll)
     setTimeout(function () { markRead('time'); }, 30000);
