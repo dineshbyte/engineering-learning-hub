@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Generate a per-track Open Graph / social-share card (1200x630 PNG) for every
-StackDepth track, so a shared link to any track shows a banner with that
+Engineering Vault track, so a shared link to any track shows a banner with that
 track's name, tagline and topics — not the generic site cover.
 
 Cards are stamped from one template (brand-consistent: indigo→teal gradient,
-StackDepth wordmark, track name, tagline eyebrow, topic chips, footer), so the
+Engineering Vault wordmark, track name, tagline eyebrow, topic chips, footer), so the
 set scales to any number of tracks. Output: docs/assets/og/<slug>.png.
 
 The global homepage cover stays docs/assets/og-cover.svg → og-cover.png
@@ -107,8 +107,7 @@ def card_svg(slug, name, tagline, accent, chips):
       <rect x="11" y="11" width="11" height="11" rx="2.5"/><rect x="26" y="11" width="11" height="11" rx="2.5"/>
       <rect x="11" y="26" width="11" height="11" rx="2.5"/><rect x="26" y="26" width="11" height="11" rx="2.5"/>
     </g>
-    <text x="64" y="33" font-size="23" letter-spacing="3" fill="#9fb0c8" font-weight="bold">STACKDEPTH</text>
-    <text x="64" y="33" dx="200" font-size="15" letter-spacing="2" fill="#5f6f86">LEARNING TRACK</text>
+    <text x="64" y="33" font-size="22" letter-spacing="2" fill="#9fb0c8" font-weight="bold">ENGINEERING VAULT</text>
   </g>
   <text x="72" y="252" font-size="22" letter-spacing="2" font-weight="bold" fill="{accent}">{eyebrow}</text>
   <text x="72" y="346" font-size="{name_font(name)}" font-weight="bold" fill="#ffffff">{name}</text>

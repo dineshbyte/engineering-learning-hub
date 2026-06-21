@@ -1,5 +1,5 @@
 <!--
-  Thanks for contributing to StackDepth! Keep PRs small and reviewable.
+  Thanks for contributing to Engineering Vault! Keep PRs small and reviewable.
   Delete sections that don't apply.
 -->
 
@@ -26,7 +26,7 @@
 - [ ] `node scripts/check-broken-links.js` passes (no broken internal links)
 - [ ] `node scripts/validate-content.js` passes (SEO tags, interview `data-level`s, JSON-LD, sitemap in sync)
 - [ ] New/renamed pages are added to `docs/sitemap.xml`
-- [ ] Each page has a unique `<title>` (· StackDepth), meta description, canonical, and Open Graph tags
+- [ ] Each page has a unique `<title>` (· Engineering Vault), meta description, canonical, and Open Graph tags
 
 ### For content changes
 

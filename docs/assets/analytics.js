@@ -1,5 +1,5 @@
 /* ==========================================================================
-   analytics.js — single shared GA4 (gtag.js) module for StackDepth.
+   analytics.js — single shared GA4 (gtag.js) module for Engineering Vault.
 
    One file, linked once per page (see scripts/inject-analytics.js). No build
    step, no SPA: every page is a fresh document load, so page_view fires once.
@@ -195,7 +195,7 @@
             'background:var(--card,#1c1a15);color:var(--ink,#e9e3d6);border-top:1px solid var(--line,#332f27);' +
             'font:14px ui-sans-serif,system-ui,sans-serif;display:flex;gap:.6rem;align-items:center;' +
             'flex-wrap:wrap;justify-content:center';
-          b.innerHTML = 'StackDepth uses privacy-respecting analytics. ' +
+          b.innerHTML = 'Engineering Vault uses privacy-respecting analytics. ' +
             '<a href="/engineering-learning-hub/privacy.html" style="color:inherit;text-decoration:underline">Details</a> ' +
             '<button type="button" id="sdc-yes" style="cursor:pointer">Allow</button> ' +
             '<button type="button" id="sdc-no" style="cursor:pointer">No thanks</button>';

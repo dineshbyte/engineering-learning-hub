@@ -22,7 +22,7 @@ labels: ["content", "fix"]
 ## Source (required for accuracy fixes)
 
 <!--
-  StackDepth grounds claims in high-trust sources, not memory. For a factual
+  Engineering Vault grounds claims in high-trust sources, not memory. For a factual
   correction, link the authoritative source: an RFC, a spec, vendor/standards
   docs (MDN, OWASP, Anthropic/MCP, cloud provider AIP), or a primary paper.
 -->
