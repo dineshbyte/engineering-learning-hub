@@ -105,7 +105,16 @@ def build():
 <meta property="og:title" content="{title} · StackDepth">
 <meta property="og:description" content="{desc}">
 <meta property="og:url" content="{canon}">
-<meta property="og:image" content="{BASE}/assets/og-cover.png">
+<meta property="og:image" content="{BASE}/assets/og/{slug}.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{name} · StackDepth learning track">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@dineshxbyte">
+<meta name="twitter:creator" content="@dineshxbyte">
+<meta name="twitter:title" content="{title} · StackDepth">
+<meta name="twitter:description" content="{desc}">
+<meta name="twitter:image" content="{BASE}/assets/og/{slug}.png">
 <link rel="stylesheet" href="../assets/tokens.css">
 <link rel="stylesheet" href="../assets/lesson.css">
 <script src="../assets/analytics.js" defer></script>
