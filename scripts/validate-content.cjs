@@ -48,6 +48,7 @@ function isIndexable(file) {
     if (!rel.endsWith('.html')) return false;
     if (rel.split(path.sep).includes('epub')) return false;     // EPUB build sources
     if (path.basename(rel).toLowerCase() === 'readme.html') return false;
+    if (path.basename(rel).toLowerCase() === '404.html') return false;   // host 404 page (noindex, not in sitemap)
     return true;
 }
 
