@@ -1,10 +1,12 @@
 ---
 // The home track grid — <main class="grid" id="grid" tabindex="-1">, the
 // skip-link / "Browse the vault" scroll target from docs/index.html. It maps the
-// tracks (in DOM order) to <TrackCard>. id="grid", class="grid" and tabindex="-1"
-// are part of the contract (skip link href="#grid", the ported client script's
-// `grid` query root) — do NOT rename them.
+// tracks to <TrackCard> in the canonical hub order (startHere → manual order →
+// publishedAt desc → title), NOT raw array order. id="grid", class="grid" and
+// tabindex="-1" are part of the contract (skip link href="#grid", the ported
+// client script's `grid` query root) — do NOT rename them.
 import type { Track } from '../schema/track';
+import { sortTracksForHub } from '../data/sortTracks';
 import TrackCard from './TrackCard.astro';
 
 interface Props {
@@ -12,8 +14,9 @@ interface Props {
 }
 
 const { tracks } = Astro.props;
+const orderedTracks = sortTracksForHub(tracks);
 ---
 
 <main class="grid" id="grid" tabindex="-1">
-    {tracks.map((track) => <TrackCard track={track} />)}
+    {orderedTracks.map((track) => <TrackCard track={track} />)}
 </main>

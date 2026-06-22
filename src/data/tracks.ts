@@ -11,7 +11,9 @@ import { type Track, trackSchema } from '../schema/track';
  *   index.astro derives window.CARD_DETAIL { `${base}${href}` → blurb } inline from
  *   this field (no separate prebuilt asset). Every lesson now carries a blurb.
  *
- * Order matches the DOM order of the cards in <main class="grid">.
+ * Array position seeds each track's `order` (1..15) here, but the hub renders
+ * in sortTracksForHub order (startHere → order → publishedAt desc → title), NOT
+ * raw array order — so reordering this array does not silently reorder the grid.
  */
 export const tracks: Track[] = [
     {
@@ -22,6 +24,7 @@ export const tracks: Track[] = [
         tier: 2,
         colorVar: '--track-agents',
         startHere: true,
+        order: 1,
         tags: ['Agent loop', 'Tool use', 'MCP', 'Memory', 'Runtime'],
         description:
             'The whole agent stack, bottom-up — tell real capability from hype in pitches and reviews.',
@@ -79,7 +82,8 @@ export const tracks: Track[] = [
         category: 'ai',
         tier: 3,
         colorVar: '--track-context',
-        startHere: false,
+        startHere: true,
+        order: 2,
         tags: ['RAG', 'Retrieval', 'Embeddings', 'Chunking', 'Reranking'],
         description:
             'Why one AI system feels far smarter than another on the identical model — selection, retrieval &amp; assembly of context.',
@@ -170,7 +174,8 @@ export const tracks: Track[] = [
         tier: 3,
         colorVar: '--track-eval',
         startHere: false,
-        added: '2026-06-21',
+        order: 3,
+        publishedAt: '2026-06-21',
         tags: ['Offline eval', 'Online eval', 'LLM-as-judge', 'Golden sets', 'Eval loop'],
         description:
             'How AI systems are measured and made to improve — offline &amp; online eval, golden sets, LLM-as-judge, and the production eval loop.',
@@ -201,7 +206,8 @@ export const tracks: Track[] = [
         tier: 3,
         colorVar: '--track-prodai',
         startHere: false,
-        added: '2026-06-21',
+        order: 4,
+        publishedAt: '2026-06-21',
         tags: ['Reliability', 'Scalability', 'Observability', 'Cost control', 'Failure modes'],
         description:
             'Review AI systems with the rigor of production distributed systems — reliability, scalability, observability, cost, governance &amp; failure modes.',
@@ -236,7 +242,8 @@ export const tracks: Track[] = [
         tier: 3,
         colorVar: '--track-aisec',
         startHere: false,
-        added: '2026-06-21',
+        order: 5,
+        publishedAt: '2026-06-21',
         tags: ['Prompt injection', 'Threat model', 'OWASP LLM', 'Tool egress', 'Defense in depth'],
         description:
             'The AI attack surface — prompt injection, jailbreaks, tool abuse, data leakage &amp; multi-tenant risk — with threat models, detection &amp; mitigation.',
@@ -263,7 +270,8 @@ export const tracks: Track[] = [
         tier: 3,
         colorVar: '--track-aiinfra',
         startHere: false,
-        added: '2026-06-21',
+        order: 6,
+        publishedAt: '2026-06-21',
         tags: ['Embeddings', 'Vector DBs', 'Rerankers', 'Model gateway', 'Inference'],
         description:
             'The infrastructure powering AI products — embeddings, vector DBs, rerankers, model gateways, inference &amp; caching — with scaling &amp; cost trade-offs.',
@@ -298,7 +306,8 @@ export const tracks: Track[] = [
         tier: 3,
         colorVar: '--track-domain',
         startHere: false,
-        added: '2026-06-21',
+        order: 7,
+        publishedAt: '2026-06-21',
         tags: ['Responsibilities', 'Tool surface', 'Approval gates', 'Build vs buy', 'ROI'],
         description:
             'A repeatable method to design production agents for real domains — responsibilities, tools, context, memory, runtime, eval, security, approval &amp; ROI.',
@@ -333,7 +342,8 @@ export const tracks: Track[] = [
         tier: 3,
         colorVar: '--track-advai',
         startHere: false,
-        added: '2026-06-21',
+        order: 8,
+        publishedAt: '2026-06-21',
         tags: ['Multi-agent', 'Orchestration', 'Swarms', 'Coordination cost', 'Anti-patterns'],
         description:
             'Advanced AI systems judged on engineering merit — multi-agent &amp; swarms, fine-tuning, distillation, reasoning models &amp; long-horizon autonomy: when, and when not.',
@@ -368,6 +378,7 @@ export const tracks: Track[] = [
         tier: 3,
         colorVar: '--track-rest',
         startHere: false,
+        order: 9,
         tags: ['HTTP', 'Idempotency', 'Pagination', 'Caching', 'Auth'],
         description:
             'The design decisions a senior interview probes — each infographic-first with a quiz and a rehearse-out-loud drill.',
@@ -474,6 +485,7 @@ export const tracks: Track[] = [
         tier: 2,
         colorVar: '--track-bloom',
         startHere: false,
+        order: 10,
         tags: ['Probabilistic', 'Hashing', 'Sizing', 'LSM reads'],
         description:
             'Foundation → Staff: the membership-test asymmetry, sizing math, failure modes, and variants at scale.',
@@ -526,6 +538,7 @@ export const tracks: Track[] = [
         tier: 3,
         colorVar: '--track-distributed',
         startHere: false,
+        order: 11,
         tags: ['Consensus', 'Clocks', 'Idempotency', 'Failure modes'],
         description:
             'Why distributed systems are hard, and the primitives that tame failure and time.',
@@ -567,6 +580,7 @@ export const tracks: Track[] = [
         tier: 3,
         colorVar: '--track-storage',
         startHere: false,
+        order: 12,
         tags: ['B-trees', 'LSM', 'Indexes', 'Compaction'],
         description:
             'How databases actually store and find data — and the read/write/space trade-offs underneath.',
@@ -602,6 +616,7 @@ export const tracks: Track[] = [
         tier: 3,
         colorVar: '--track-transactions',
         startHere: false,
+        order: 13,
         tags: ['ACID', 'MVCC', 'Isolation levels', 'SSI'],
         description: 'What isolation levels really promise, and how MVCC and SSI deliver them.',
         lessonCountLabel: '3 lessons',
@@ -642,6 +657,7 @@ export const tracks: Track[] = [
         tier: 3,
         colorVar: '--track-streaming',
         startHere: false,
+        order: 14,
         tags: ['The log', 'Exactly-once', 'Watermarks', 'Kafka'],
         description:
             'The log as a primitive, and how exactly-once and event-time processing are really achieved.',
@@ -683,6 +699,7 @@ export const tracks: Track[] = [
         tier: 3,
         colorVar: '--track-applied',
         startHere: false,
+        order: 15,
         tags: ['Estimation', 'Consistent hashing', 'Back-of-envelope'],
         description:
             'A repeatable method for system-design rounds, plus the building blocks they lean on.',

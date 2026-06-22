@@ -22,6 +22,7 @@
 // entities (&amp;, &mdash;) and are emitted with set:html so the DOM matches
 // docs/index.html byte-for-byte. name and lessonCountLabel are plain text.
 import type { Track } from '../schema/track';
+import { sortLessons } from '../data/sortTracks';
 
 interface Props {
     track: Track;
@@ -29,6 +30,9 @@ interface Props {
 
 const { track } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+// Render lessons in learning sequence (order → publishedAt → title), not raw
+// array order. lessons[0] is therefore the track's entry point (the Start CTA).
+const lessons = sortLessons(track.lessons);
 
 // data-tier → difficulty band label (mirrors SD_LVL in the old home script).
 const LVL_LABEL: Record<1 | 2 | 3, string> = {
@@ -51,7 +55,7 @@ const badgeTitle =
     data-here={track.startHere ? '' : undefined}
     style={`--tc:var(${track.colorVar})`}
     data-cat={track.category}
-    data-added={track.added}
+    data-added={track.publishedAt}
 >
     <div class="thead">
         <div class="tmeta">
@@ -84,7 +88,7 @@ const badgeTitle =
         <summary class="lsum">Lessons</summary>
         <div class="lessons">
             {
-                track.lessons.map((lesson) => (
+                lessons.map((lesson) => (
                     <a class="lchip" href={`${base}${lesson.href}`}>
                         <i>{lesson.n}</i>
                         <span set:html={lesson.title} />
@@ -94,7 +98,7 @@ const badgeTitle =
         </div>
     </details>
     <div class="rtime">{track.readTime}</div>
-    <a class="start" data-track={track.slug} href={`${base}${track.lessons[0].href}`}
+    <a class="start" data-track={track.slug} href={`${base}${lessons[0].href}`}
         ><span class="start-label">Start</span> <span aria-hidden="true">&#8594;</span></a
     >
     <div class="tfoot">

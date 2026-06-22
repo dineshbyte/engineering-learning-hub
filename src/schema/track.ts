@@ -15,7 +15,9 @@ import { z } from 'astro/zod';
  *   tier             → data-tier  (1 | 2 | 3)
  *   colorVar         → style="--tc:var(COLORVAR)"  e.g. "--track-agents"
  *   startHere        → the `data-here` boolean attribute (emit only when true)
- *   added            → data-added="YYYY-MM-DD"  (only on newer tracks; optional)
+ *   order            → hub-grid sort position (no DOM output; see sortTracksForHub)
+ *   publishedAt      → data-added="YYYY-MM-DD"  (only on newer tracks; optional)
+ *   updatedAt        → freshness marker for the date-first "Latest" sort (optional)
  *   tags             → .tags > span.tag[]   (the 5 topic chips, raw HTML preserved)
  *   description      → p.tdesc  (raw HTML preserved — may contain &amp; etc.)
  *   lessonCountLabel → span.cnt  e.g. "5 lessons" / "1 lesson"
@@ -49,6 +51,18 @@ export const lessonRefSchema = z.object({
     /** Per-lesson blurb shown in the card-detail sheet; emitted into
      *  window.CARD_DETAIL (derived inline from this field in index.astro). */
     blurb: z.string().min(1).optional(),
+    /** Learning-sequence position (ascending). OPTIONAL: when unset the lesson
+     *  keeps its authored position in the `lessons` array, which is already the
+     *  learning order — set this only to override without moving the array entry.
+     *  NOTE: distinct from `n` (the display glyph, which may be "★" or a label),
+     *  so ordering never depends on the glyph. */
+    order: z.number().int().optional(),
+    /** When the lesson was first published (YYYY-MM-DD). Tiebreak only — the
+     *  learning sequence is `order`/array position, NOT the publish date. */
+    publishedAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'publishedAt must be YYYY-MM-DD')
+        .optional(),
 });
 
 /** Footer pill — one `a.pill` (or `a.pill.md`) in the card's `.tfoot`. */
@@ -74,12 +88,27 @@ export const trackSchema = z.object({
     tier: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     /** CSS custom-property name for the track color, e.g. "--track-agents". */
     colorVar: z.string().startsWith('--track-'),
-    /** Emit the `data-here` boolean attribute when true. */
+    /** Recommended entry path. Emits the `data-here` boolean attribute when true
+     *  AND floats the card to the front of the hub grid (see sortTracksForHub). */
     startHere: z.boolean(),
-    /** data-added="YYYY-MM-DD" — only on newer tracks. */
-    added: z
+    /** Manual hub-grid position (ascending), AFTER startHere tracks. Self-
+     *  documents the intended order independently of the array's source position.
+     *  OPTIONAL: unset falls back to the array index (authored position). */
+    order: z.number().int().optional(),
+    /** When the track was first published (YYYY-MM-DD) — emitted as the
+     *  `data-added` attribute that drives the "NEW" pill. Used only as a sort
+     *  TIEBREAK (newest-first) after startHere + order; never the learning
+     *  sequence. Only on newer tracks. */
+    publishedAt: z
         .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/, 'added must be YYYY-MM-DD')
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'publishedAt must be YYYY-MM-DD')
+        .optional(),
+    /** Freshness marker (YYYY-MM-DD) for the date-first "Latest" ordering
+     *  (sortByLatest). Distinct from publishedAt so re-touching content doesn't
+     *  rewrite its first-published date. */
+    updatedAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'updatedAt must be YYYY-MM-DD')
         .optional(),
     /** .tags > span.tag[] topic chips (raw HTML preserved). */
     tags: z.array(z.string().min(1)).min(1),
