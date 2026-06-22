@@ -44,7 +44,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <main id="main" tabindex="-1">
             <div class="kicker">Engineering Vault · Privacy</div>
             <h1>Privacy &amp; analytics</h1>
-            <p class="meta">Last updated 2026-06-20</p>
+            <p class="meta">Last updated 2026-06-23</p>
             <div class="ltags">
                 <span class="lt">Privacy</span><span class="lt">Analytics</span><span class="lt"
                     >Consent</span
@@ -79,30 +79,94 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
             <h2 class="sec">Consent &amp; cookies</h2>
             <p>
-                Analytics runs under <strong>Google Consent Mode v2</strong>. Analytics storage is
-                enabled by default so a first-party analytics cookie (e.g.
-                <code>_ga</code>) may be set to measure usage. <strong
-                    >Advertising signals stay denied</strong
+                Analytics runs under <strong>Google Consent Mode v2</strong>, and analytics cookies
+                are <strong>optional and off by default</strong>. On your first visit a small banner
+                asks whether to enable them; until you choose <em>Accept analytics</em>,
+                <code>analytics_storage</code> stays <strong>denied</strong> and
+                <strong>no analytics cookie (e.g. <code>_ga</code>) is set</strong> — Google Analytics
+                receives only cookieless, aggregate pings. Choosing
+                <em>Reject</em> keeps it that way. <strong
+                    >Advertising signals are always denied</strong
                 > — the site sets no advertising cookies and runs no ad, remarketing, or personalization
-                tags. You can opt out at any time (below).
+                tags.
             </p>
 
-            <h2 class="sec">How to opt out</h2>
+            <h2 class="sec">How to change your choice</h2>
             <ul>
                 <li>
-                    Use your browser's tracking protection / "Do Not Track", or an analytics blocker
-                    — the site works fully without analytics.
+                    Pick <strong>Accept analytics</strong> or <strong>Reject</strong> on the consent banner.
+                    Your choice is stored in your browser (<code>localStorage</code>, key
+                    <code>sd:consent</code>) and the banner won't show again.
                 </li>
                 <li>
-                    Install Google's
+                    To be asked again, clear this site's site data / <code>localStorage</code> in your
+                    browser, then reload.
+                </li>
+                <li>
+                    You can also use your browser's tracking protection or Google's
                     <a
                         href="https://tools.google.com/dlpage/gaoptout"
                         target="_blank"
                         rel="noopener">Analytics opt-out add-on</a
-                    >.
+                    > — the site works fully without analytics.
                 </li>
                 <li>Analytics never runs on non-production hosts (local development).</li>
             </ul>
+
+            <h2 class="sec">Manage analytics on this device</h2>
+            <p id="sd-consent-state" class="meta">Checking your current choice&hellip;</p>
+            <p>
+                <button type="button" id="sd-enable" class="btn">Enable analytics</button>
+                <button type="button" id="sd-disable" class="btn ghost">Disable analytics</button>
+            </p>
+            <p class="src">
+                Your choice is stored only in this browser (<code>localStorage</code>, key
+                <code>sd:consent</code>) and takes effect immediately — no account, no server-side
+                record.
+            </p>
+            <script is:inline>
+                (function () {
+                    var stateEl = document.getElementById('sd-consent-state');
+                    var enableBtn = document.getElementById('sd-enable');
+                    var disableBtn = document.getElementById('sd-disable');
+                    function read() {
+                        try {
+                            return localStorage.getItem('sd:consent');
+                        } catch (e) {
+                            return null;
+                        }
+                    }
+                    function render() {
+                        var v = read();
+                        var label =
+                            v === 'granted'
+                                ? 'enabled — a first-party analytics cookie may be set.'
+                                : v === 'denied'
+                                  ? 'disabled — analytics runs cookieless (no _ga cookie).'
+                                  : 'not set yet — analytics is off until you choose.';
+                        if (stateEl) stateEl.textContent = 'Analytics is currently ' + label;
+                        if (enableBtn) enableBtn.disabled = v === 'granted';
+                        if (disableBtn) disableBtn.disabled = v === 'denied';
+                    }
+                    function set(v) {
+                        try {
+                            localStorage.setItem('sd:consent', v);
+                        } catch (e) {}
+                        if (typeof window.gtag === 'function')
+                            window.gtag('consent', 'update', { analytics_storage: v });
+                        render();
+                    }
+                    if (enableBtn)
+                        enableBtn.addEventListener('click', function () {
+                            set('granted');
+                        });
+                    if (disableBtn)
+                        disableBtn.addEventListener('click', function () {
+                            set('denied');
+                        });
+                    render();
+                })();
+            </script>
 
             <h2 class="sec">Data sharing &amp; retention</h2>
             <p>

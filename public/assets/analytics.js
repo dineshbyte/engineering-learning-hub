@@ -13,10 +13,11 @@
      clicks, engagement). We set send_page_view:false and emit ONE enriched
      page_view to avoid double counting, and we do NOT add a generic outbound
      event (EM covers it) — only the semantic social_click / github_click.
-   - Consent Mode v2: analytics_storage GRANTED by default (ad_* stay denied —
-     ad-free site; usage disclosed in /privacy.html). A stored opt-out
-     (localStorage 'sd:consent'='denied') is honoured. An opt-in banner is
-     available behind SHOW_BANNER but is OFF by default.
+   - Consent Mode v2 (opt-IN): analytics_storage DENIED by default, so GA sends
+     only cookieless pings and sets NO analytics cookie until the reader clicks
+     "Accept analytics" on the consent banner. The choice is persisted in
+     localStorage 'sd:consent' ('granted' | 'denied'); either value hides the
+     banner thereafter. ad_* are always denied (ad-free site). See /privacy.html.
    - Production-only: nothing is sent off dineshbyte.github.io unless ?debug_mode=1;
      localhost / 127.0.0.1 / loopback NEVER send (even with ?debug_mode=1).
    ========================================================================== */
@@ -25,7 +26,6 @@
 
   var MEASUREMENT_ID = 'G-5VXHVXESPR';
   var PROD_HOST = 'dineshbyte.github.io';
-  var SHOW_BANNER = false; // flip to true to show a consent banner (see §7)
 
   /* --- 0. environment guard: never pollute prod data with dev traffic ------ */
   var debugMode = /[?&]debug_mode=1\b/.test(location.search);
@@ -45,12 +45,12 @@
   function gtag() { window.dataLayer.push(arguments); }
   window.gtag = gtag;
 
-  // analytics_storage granted by default (full-fidelity, first-party analytics
-  // cookie) — this is an ad-free, no-login educational site and usage is
-  // disclosed in /privacy.html. Advertising signals stay DENIED (no ads run).
-  // If a stored opt-out exists, honour it.
-  var analyticsConsent = 'granted';
-  try { if (localStorage.getItem('sd:consent') === 'denied') analyticsConsent = 'denied'; } catch (e) {}
+  // analytics_storage DENIED by default (opt-in). Under Consent Mode v2 GA sends
+  // only cookieless pings and sets NO analytics cookie (e.g. _ga) until the
+  // reader accepts via the banner below (§8). Grant ONLY if a prior 'granted'
+  // choice is stored. Advertising signals stay DENIED (ad-free site, no ads run).
+  var analyticsConsent = 'denied';
+  try { if (localStorage.getItem('sd:consent') === 'granted') analyticsConsent = 'granted'; } catch (e) {}
   gtag('consent', 'default', {
     ad_storage: 'denied',
     ad_user_data: 'denied',
@@ -246,34 +246,81 @@
     });
   }
 
-  /* --- 8. optional consent banner (off by default) ------------------------ */
-  if (SHOW_BANNER) {
-    try {
-      if (!localStorage.getItem('sd:consent')) {
-        var mount = function () {
-          var b = document.createElement('div');
-          b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:.8rem 1rem;' +
-            'background:var(--card,#1c1a15);color:var(--ink,#e9e3d6);border-top:1px solid var(--line,#332f27);' +
-            'font:14px ui-sans-serif,system-ui,sans-serif;display:flex;gap:.6rem;align-items:center;' +
-            'flex-wrap:wrap;justify-content:center';
-          b.innerHTML = 'Engineering Vault uses privacy-respecting analytics. ' +
-            '<a href="/engineering-learning-hub/privacy.html" style="color:inherit;text-decoration:underline">Details</a> ' +
-            '<button type="button" id="sdc-yes" style="cursor:pointer">Allow</button> ' +
-            '<button type="button" id="sdc-no" style="cursor:pointer">No thanks</button>';
-          var decide = function (v) {
-            try { localStorage.setItem('sd:consent', v); } catch (e) {}
-            gtag('consent', 'update', { analytics_storage: v === 'granted' ? 'granted' : 'denied' });
-            b.parentNode && b.parentNode.removeChild(b);
-          };
-          document.body.appendChild(b);
-          b.querySelector('#sdc-yes').onclick = function () { decide('granted'); };
-          b.querySelector('#sdc-no').onclick = function () { decide('denied'); };
-        };
-        if (document.readyState !== 'loading') mount();
-        else document.addEventListener('DOMContentLoaded', mount);
-      }
-    } catch (e) { /* storage blocked */ }
-  }
+  /* --- 8. consent banner (opt-IN) -----------------------------------------
+     analytics_storage starts DENIED (§1). Show a small, theme-aware banner
+     until the reader chooses, then persist the choice so it never shows again.
+       Accept analytics -> consent 'granted' (GA may now set its _ga cookie).
+       Reject           -> stays 'denied' (cookieless pings only).
+     Lives here (not in the layout) so ALL consent logic stays in one module and
+     the banner only appears where GA actually runs (prod / ?debug_mode=1). */
+  (function consentBanner() {
+    var stored = null;
+    try { stored = localStorage.getItem('sd:consent'); } catch (e) { return; } // storage blocked → no banner
+    if (stored === 'granted' || stored === 'denied') return;                    // already decided
+
+    function decide(choice) {
+      try { localStorage.setItem('sd:consent', choice); } catch (e) {}
+      gtag('consent', 'update', { analytics_storage: choice });
+      var el = document.getElementById('sd-consent');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    }
+
+    function mount() {
+      if (document.getElementById('sd-consent')) return;
+
+      var style = document.createElement('style');
+      style.id = 'sd-consent-style';
+      style.textContent =
+        '#sd-consent{position:fixed;right:1rem;bottom:1rem;z-index:9999;' +
+        'width:min(23rem,calc(100vw - 2rem));display:flex;flex-direction:column;gap:.7rem;padding:1rem 1.1rem;' +
+        'border-radius:14px;background:var(--surface-elevated,var(--card));color:var(--text,var(--ink));' +
+        'border:1px solid var(--border-strong,var(--line));box-shadow:0 14px 44px rgba(0,0,0,.45);' +
+        'font:.875rem/1.5 var(--font-sans,ui-sans-serif,system-ui,sans-serif)}' +
+        '#sd-consent p{margin:0;padding-right:1.4rem}' +
+        '#sd-consent a{color:var(--link);text-decoration:underline;text-underline-offset:2px}' +
+        '#sd-consent .sd-c-btns{display:flex;gap:.5rem;flex-wrap:wrap}' +
+        '#sd-consent button{cursor:pointer;font:inherit;font-weight:700;border-radius:8px;' +
+        'padding:.45rem .95rem;border:1px solid var(--line);line-height:1.2}' +
+        '#sd-consent .sd-c-yes{background:var(--accent);border-color:var(--accent);color:#111827}' +
+        '#sd-consent .sd-c-no{background:transparent;color:var(--text,var(--ink))}' +
+        '#sd-consent .sd-c-no:hover{background:var(--chip)}' +
+        // ✕ dismiss (top-right): persists 'denied' so the banner shows once and
+        // never nags again; the Privacy page lets the reader opt in later.
+        '#sd-consent .sd-c-x{position:absolute;top:.4rem;right:.5rem;width:1.7rem;height:1.7rem;' +
+        'display:grid;place-items:center;padding:0;border:0;border-radius:8px;background:transparent;' +
+        'color:var(--text-soft,var(--muted));font-size:1.15rem;line-height:1;cursor:pointer}' +
+        '#sd-consent .sd-c-x:hover{background:var(--chip);color:var(--text,var(--ink))}' +
+        // Mobile (<=480px): a distinct full-width bottom sheet docked to the
+        // screen edge with rounded top corners + split full-width buttons —
+        // instead of the desktop floating corner card.
+        '@media(max-width:480px){' +
+        '#sd-consent{left:0;right:0;bottom:0;width:auto;border-radius:14px 14px 0 0;' +
+        'border-left-width:0;border-right-width:0;border-bottom-width:0}' +
+        '#sd-consent .sd-c-btns button{flex:1}}';
+      document.head.appendChild(style);
+
+      var box = document.createElement('div');
+      box.id = 'sd-consent';
+      box.setAttribute('role', 'region');
+      box.setAttribute('aria-label', 'Analytics cookie consent');
+      box.innerHTML =
+        '<button type="button" class="sd-c-x" aria-label="Dismiss (keeps analytics off)">&times;</button>' +
+        '<p>This site uses Google Analytics to understand which engineering lessons are useful. ' +
+        'Analytics cookies are optional. ' +
+        '<a href="/engineering-learning-hub/privacy.html">Privacy</a></p>' +
+        '<div class="sd-c-btns">' +
+        '<button type="button" class="sd-c-yes">Accept analytics</button>' +
+        '<button type="button" class="sd-c-no">Reject</button>' +
+        '</div>';
+      document.body.appendChild(box);
+      box.querySelector('.sd-c-yes').addEventListener('click', function () { decide('granted'); });
+      box.querySelector('.sd-c-no').addEventListener('click', function () { decide('denied'); });
+      box.querySelector('.sd-c-x').addEventListener('click', function () { decide('denied'); });
+    }
+
+    if (document.readyState !== 'loading') mount();
+    else document.addEventListener('DOMContentLoaded', mount);
+  })();
 
   /* --- 9. lesson read / completion (lesson pages only) --------------------
      page_view = "opened". These approximate "actually read":
