@@ -82,7 +82,7 @@ export const tracks: Track[] = [
         category: 'ai',
         tier: 3,
         colorVar: '--track-context',
-        startHere: true,
+        startHere: false,
         order: 2,
         tags: ['RAG', 'Retrieval', 'Embeddings', 'Chunking', 'Reranking'],
         description:
