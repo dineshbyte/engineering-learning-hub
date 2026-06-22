@@ -1,0 +1,119 @@
+---
+/**
+ * rest-api · 0006-pagination-at-scale · Figure 4 — "A POINTER WALKING A SORTED,
+ * INDEXED KEY" (the cursor seeks the anchor, reads forward LIMIT n, and returns
+ * a { data, next_cursor, has_more } envelope).
+ *
+ * Copied VERBATIM from docs/rest-api/lessons/0006-pagination-at-scale.html
+ * (figure + svg + figcaption). Component, not inline, because MDX's JSX parser
+ * mishandles kebab-case SVG attributes. References the red + green arrow markers
+ * (url(#arwR), url(#arwG)); the source declared them in a shared body <defs>, so
+ * they're embedded locally here to keep the SVG self-contained. The kₙ subscript
+ * glyphs are literal Unicode characters, kept as-is.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 640 210"
+        role="img"
+        aria-label="A pointer walks a sorted indexed key; the server reads forward from the anchor and returns a response envelope carrying data, next_cursor and has_more"
+    >
+        <defs>
+            <marker
+                id="arwR"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+            >
+                <path d="M0,0 L10,5 L0,10 z" fill="#9a2417"></path>
+            </marker>
+            <marker
+                id="arwG"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+            >
+                <path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path>
+            </marker>
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110"
+                >A POINTER WALKING A SORTED, INDEXED KEY</text
+            >
+
+            <text x="40" y="48" font-size="9" fill="#6b675f"
+                >sorted on (created_at, id) ▸ indexed</text
+            >
+            <rect x="40" y="54" width="64" height="30" rx="3" fill="#eef2f5" stroke="#1f3a5a"
+            ></rect><text x="72" y="73" text-anchor="middle" font-size="9">k₁</text>
+            <rect x="106" y="54" width="64" height="30" rx="3" fill="#eef2f5" stroke="#1f3a5a"
+            ></rect><text x="138" y="73" text-anchor="middle" font-size="9">k₂</text>
+            <rect
+                x="172"
+                y="54"
+                width="64"
+                height="30"
+                rx="3"
+                fill="#fbfaf2"
+                stroke="#9a2417"
+                stroke-width="1.6"></rect><text
+                x="204"
+                y="73"
+                text-anchor="middle"
+                font-size="9"
+                font-weight="700"
+                fill="#9a2417">last_seen</text
+            >
+            <rect x="238" y="54" width="64" height="30" rx="3" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect><text x="270" y="73" text-anchor="middle" font-size="9" fill="#2f5d3a">k₄</text>
+            <rect x="304" y="54" width="64" height="30" rx="3" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect><text x="336" y="73" text-anchor="middle" font-size="9" fill="#2f5d3a">k₅</text>
+            <rect x="370" y="54" width="64" height="30" rx="3" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect><text x="402" y="73" text-anchor="middle" font-size="9" fill="#2f5d3a">k₆</text>
+            <rect x="436" y="54" width="64" height="30" rx="3" fill="#fff" stroke="#d8d4c8"
+            ></rect><text x="468" y="73" text-anchor="middle" font-size="9" fill="#6b675f">k₇ …</text>
+            <line x1="204" y1="98" x2="204" y2="86" stroke="#9a2417" marker-end="url(#arwR)"></line>
+            <text x="204" y="112" text-anchor="middle" font-size="8.5" fill="#9a2417"
+                >WHERE key &gt; last_seen</text
+            >
+            <line x1="238" y1="98" x2="430" y2="98" stroke="#2f5d3a" marker-end="url(#arwG)"></line>
+            <text x="334" y="112" text-anchor="middle" font-size="8.5" fill="#2f5d3a"
+                >read forward · LIMIT n</text
+            >
+
+            <rect
+                x="160"
+                y="128"
+                width="320"
+                height="68"
+                rx="9"
+                fill="#fff"
+                stroke="#1f3a5a"
+                stroke-width="1.4"></rect>
+            <text x="320" y="146" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1f3a5a"
+                >RESPONSE ENVELOPE</text
+            >
+            <text x="320" y="164" text-anchor="middle" font-size="10" fill="#111110"
+                >&#123; data: [k₄, k₅, k₆],</text
+            >
+            <text x="320" y="179" text-anchor="middle" font-size="10" fill="#111110"
+                >  next_cursor: "opaque(k₆)", has_more: true &#125;</text
+            >
+            <text x="320" y="191" text-anchor="middle" font-size="8" fill="#6b675f"
+                >client sends next_cursor back as the new anchor</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        <code>WHERE (created_at, id) &gt; (last_seen)</code>
+        <code>ORDER BY created_at, id LIMIT n</code> — the engine seeks to the anchor and reads forward,
+        then hands back an opaque <code>next_cursor</code>.
+    </figcaption>
+</figure>

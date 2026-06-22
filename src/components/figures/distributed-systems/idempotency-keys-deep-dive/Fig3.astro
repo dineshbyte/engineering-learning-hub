@@ -1,0 +1,136 @@
+---
+/**
+ * idempotency-keys-deep-dive · Figure 3 — atomicity, two cases (Level 2).
+ *
+ * Copied VERBATIM from docs/distributed-systems/idempotency-keys-deep-dive.html
+ * (figure + svg + figcaption). The single arrowhead marker it references
+ * (#arwA, via marker-end="url(#arwA)") is inlined here in a local <defs> so it
+ * resolves standalone (verbatim from the source's hidden top-of-body defs).
+ * Lives as an .astro component because raw inline SVG with kebab-case attrs is
+ * unreliable inside MDX.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 580 200"
+        role="img"
+        aria-label="Two cases side by side: local side effect wrapped in one transaction; external side effect delegated to the downstream's own idempotency key"
+    >
+        <defs>
+            <marker
+                id="arwA"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="150"
+                y="18"
+                text-anchor="middle"
+                font-size="11.5"
+                font-weight="700"
+                fill="#2f5d3a">CASE A — effect in YOUR DB</text
+            >
+            <rect
+                x="22"
+                y="34"
+                width="256"
+                height="120"
+                rx="10"
+                fill="#eef5ee"
+                stroke="#2f5d3a"
+                stroke-width="1.5"></rect>
+            <text
+                x="150"
+                y="54"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#244a2e">ONE database transaction</text
+            >
+            <rect x="44" y="66" width="212" height="32" rx="7" fill="#fff" stroke="#2f5d3a"></rect>
+            <text x="150" y="86" text-anchor="middle" font-size="10" fill="#111110"
+                >business mutation (the charge row)</text
+            >
+            <rect x="44" y="104" width="212" height="32" rx="7" fill="#fff" stroke="#2f5d3a"></rect>
+            <text x="150" y="124" text-anchor="middle" font-size="10" fill="#111110"
+                >idempotency record (key + result)</text
+            >
+            <text
+                x="150"
+                y="148"
+                text-anchor="middle"
+                font-size="9"
+                fill="#2f5d3a"
+                font-weight="700">commit both or neither</text
+            >
+            <line x1="290" y1="20" x2="290" y2="180" stroke="#d8d4c8" stroke-dasharray="4 4"></line>
+            <text
+                x="430"
+                y="18"
+                text-anchor="middle"
+                font-size="11.5"
+                font-weight="700"
+                fill="#9a2417">CASE B — EXTERNAL effect</text
+            >
+            <rect
+                x="302"
+                y="34"
+                width="256"
+                height="120"
+                rx="10"
+                fill="#f7ecea"
+                stroke="#9a2417"
+                stroke-width="1.5"></rect>
+            <text x="430" y="53" text-anchor="middle" font-size="9.5" fill="#7a2218"
+                >no txn spans Stripe + your Postgres</text
+            >
+            <rect x="320" y="62" width="100" height="40" rx="7" fill="#fff" stroke="#7a1f12"></rect>
+            <text
+                x="370"
+                y="82"
+                text-anchor="middle"
+                font-size="9.5"
+                font-weight="700"
+                fill="#111110">your service</text
+            >
+            <text x="370" y="95" text-anchor="middle" font-size="8.5" fill="#6b675f">your key</text>
+            <rect x="440" y="62" width="100" height="40" rx="7" fill="#f1eee2" stroke="#7a1f12"
+            ></rect>
+            <text
+                x="490"
+                y="82"
+                text-anchor="middle"
+                font-size="9.5"
+                font-weight="700"
+                fill="#7a1f12">downstream</text
+            >
+            <text x="490" y="95" text-anchor="middle" font-size="8.5" fill="#6b675f"
+                >dedups by key</text
+            >
+            <line x1="420" y1="82" x2="438" y2="82" stroke="#7a1f12" marker-end="url(#arwA)"></line>
+            <text
+                x="430"
+                y="124"
+                text-anchor="middle"
+                font-size="9.5"
+                fill="#7a2218"
+                font-weight="700">pass your Idempotency-Key through</text
+            >
+            <text x="430" y="140" text-anchor="middle" font-size="9" fill="#6b675f"
+                >delegate dedup to the boundary you can't wrap</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        The idempotency record is a ledger entry committed alongside the work it describes — or,
+        when external, the downstream's own key is that ledger.
+    </figcaption>
+</figure>

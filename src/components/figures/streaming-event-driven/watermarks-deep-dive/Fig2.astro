@@ -1,0 +1,92 @@
+---
+/**
+ * watermarks-deep-dive · Figure 2 — Level 1: "what a watermark asserts".
+ *
+ * Copied VERBATIM from docs/streaming-event-driven/watermarks-deep-dive.html
+ * (figure + svg + figcaption). Lives as an .astro component for the same reason as
+ * Fig1: raw inline SVG with kebab-case attributes is unreliable inside MDX. The
+ * #arw arrowhead marker (declared once in the source's hidden top-of-body defs) is
+ * inlined here in a local <defs> so it resolves standalone.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 600 150"
+        role="img"
+        aria-label="A watermark W carried in the stream asserts that no future record will have a timestamp at or below W; everything to the left of W is claimed complete."
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <!-- timeline of records + watermark marker -->
+            <line x1="20" y1="78" x2="580" y2="78" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <text x="580" y="100" text-anchor="end" font-size="10" fill="#6b675f">event time →</text
+            >
+            <!-- records -->
+            <g fill="#2f5d3a" font-size="9" text-anchor="middle">
+                <circle cx="70" cy="78" r="5"></circle><text x="70" y="64">e1</text>
+                <circle cx="140" cy="78" r="5"></circle><text x="140" y="64">e2</text>
+                <circle cx="210" cy="78" r="5"></circle><text x="210" y="64">e3</text>
+                <circle cx="300" cy="78" r="5"></circle><text x="300" y="64">e4</text>
+            </g>
+            <!-- the watermark marker flowing in the stream -->
+            <g>
+                <rect
+                    x="350"
+                    y="58"
+                    width="40"
+                    height="40"
+                    rx="6"
+                    fill="#f1eee2"
+                    stroke="#7a1f12"
+                    stroke-width="1.5"></rect>
+                <text
+                    x="370"
+                    y="83"
+                    text-anchor="middle"
+                    font-size="13"
+                    font-weight="700"
+                    fill="#7a1f12">W</text
+                >
+                <text x="370" y="46" text-anchor="middle" font-size="9" fill="#7a1f12"
+                    >marker in the stream</text
+                >
+            </g>
+            <!-- claimed-complete region -->
+            <line x1="370" y1="100" x2="370" y2="130" stroke="#7a1f12" stroke-dasharray="3 2"
+            ></line>
+            <text x="190" y="124" text-anchor="middle" font-size="10" fill="#2f5d3a"
+                >✓ claimed COMPLETE: no future record ≤ W</text
+            >
+            <text x="480" y="124" text-anchor="middle" font-size="10" fill="#6b675f"
+                >not yet claimed (&gt; W)</text
+            >
+            <!-- monotonic note -->
+            <text
+                x="300"
+                y="16"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#111110"
+                >W is a monotonic, non-decreasing lower bound on all FUTURE timestamps</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        <code>W</code> asserts: "event time has advanced to <code>W</code> — no record with timestamp
+        ≤ <code>W</code> arrives from here on." It turns "have I seen all of 12:00–12:05?" into a concrete
+        signal.
+    </figcaption>
+</figure>

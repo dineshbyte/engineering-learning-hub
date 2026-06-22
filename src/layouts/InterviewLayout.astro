@@ -1,0 +1,148 @@
+---
+/**
+ * InterviewLayout — the shared "frame" for the Tufte-styled interview banks
+ * (rest-api/interview/NNNN-….html). Like LessonLayout, authoring a bank means
+ * writing ONLY the short `.how` intro (the MDX body) + a typed `meta` object;
+ * the serif chrome, the level-grouped Q&A, the design rubric, the FAQ JSON-LD,
+ * and the data-driven nav/footer all live here exactly once.
+ *
+ * It wraps BaseLayout with extraCss=['assets/interview.css'] (tokens + interview
+ * only — deliberately NO lesson.css, which would clobber the serif design) and
+ * bodyScripts=['assets/interview.js'] (the tab enhancer; NOT reading-progress.js).
+ * The banks' Tufte inline <style> is injected below — the serif :root tokens +
+ * layout/typography + the .ltags chip block + the MODERN
+ * `[data-interview] details.iq[open] .a{display:block}` reveal CSS (lifted from
+ * bank 0010/0011; the legacy `.a{display:none}/.show` rules are intentionally
+ * dropped).
+ *
+ * FAQ JSON-LD note: <Interview> emits the single FAQPage from the interview
+ * array, so the schema carries NO jsonLd — exactly one FAQPage blob ships.
+ */
+import BaseLayout from './BaseLayout.astro';
+import Interview from '../components/Interview.astro';
+import { interviewSchema } from '../schema/interview';
+import PageDates from '../components/PageDates.astro';
+
+// Validate the contract at build time — bad/missing metadata fails the build.
+const m = interviewSchema.parse(Astro.props.meta);
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/'); // normalize to one trailing slash
+
+// Nav hrefs are stored VERBATIM as they appear in the source bank (relative to
+// the bank's own dir, e.g. "../reference/foo.html", "0002-….html",
+// "../../index.html") — emit them as-is; they resolve correctly because the
+// built bank lives at the identical path. (Same convention as LessonLayout's
+// prev/next hrefs.)
+const nav = m.topNav;
+---
+
+<BaseLayout
+    title={m.title}
+    description={m.description}
+    keywords={m.keywords}
+    path={m.path}
+    ogImage={m.ogImage}
+    ogImageAlt={m.ogImageAlt}
+    accentVar={m.accentVar}
+    extraCss={['assets/interview.css']}
+    bodyScripts={['assets/interview.js']}
+>
+    {
+        /* Tufte inline design — serif tokens + layout/typography + chip block +
+        the MODERN data-interview reveal CSS (lifted from bank 0010/0011). */
+    }
+    <style
+        is:inline
+        set:html={`
+  :root{
+    --ink:#111110; --paper:#fffff8; --muted:#6b675f; --rule:#d8d4c8;
+    --accent:#7a1f12; --chip:#f1eee2; --good:#2f5d3a; --staff:#3a4a7a;
+  }
+  *{box-sizing:border-box}
+  html{font-size:18px}
+  body{margin:0; background:var(--paper); color:var(--ink);
+    font-family:"Palatino Linotype",Palatino,"Iowan Old Style",Georgia,serif; line-height:1.5}
+  .wrap{max-width:43rem; margin:0 auto; padding:3rem 1.4rem 6rem}
+  .kicker{font-size:.72rem; letter-spacing:.18em; text-transform:uppercase; color:var(--muted);
+    font-family:ui-sans-serif,system-ui,sans-serif}
+  h1{font-size:2rem; line-height:1.08; margin:.25rem 0 .4rem; font-weight:600; letter-spacing:-.01em}
+  h2{font-size:.82rem; margin:2.4rem 0 .6rem; font-family:ui-sans-serif,system-ui,sans-serif;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border-bottom:1px solid var(--rule); padding-bottom:.3rem}
+  a{color:var(--accent)}
+  .how{background:var(--chip); border-left:3px solid var(--accent); padding:.7rem 1rem; font-size:.9rem; margin:1.1rem 0 1.4rem}
+  .meta{font-family:ui-sans-serif,system-ui,sans-serif; font-size:.78rem; color:var(--muted)}
+  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2.6rem; padding-top:1rem; border-top:1px solid var(--rule); font-size:.85rem}
+  footer{margin-top:2.4rem; font-size:.78rem; color:var(--muted)}
+  @media print{ a{color:var(--ink)} }
+  /* topic tag chips (theme-aware) — match the lesson pages */
+  .ltags{display:flex;flex-wrap:wrap;gap:.4rem;margin:.7rem 0 .2rem}
+  .ltags .lt{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:.7rem;font-weight:600;line-height:1;white-space:nowrap;padding:.32rem .56rem;border-radius:6px;color:color-mix(in srgb,var(--lt-c,var(--text-muted)) 88%,var(--ink));background:color-mix(in srgb,var(--lt-c,var(--border)) 55%,transparent);border:1px solid var(--line)}
+  /* host the shared interview panel inside this standalone bank */
+  :root{--accent:var(--track-rest, #7a1f12)}
+  [data-interview]{--card:#fcfbf2; --bg:#fffff8; --line:var(--rule); --chip:#f1eee2; --muted:#6b675f}
+  /* Dark mode: flip the panel onto the dark surface tokens so the Q&A cards are
+     dark with light text (consistent with the lesson interview cards and the
+     rest of the dark site). The cream pins above stay the light/default look.
+     --ink is intentionally NOT pinned here, so card text follows the theme —
+     pinning the bg to cream while letting --ink go light was the original bug
+     (light text on a cream card, invisible in dark mode). */
+  html[data-theme="dark"] [data-interview]{--card:var(--surface); --bg:var(--bg-soft); --chip:var(--surface-elevated); --muted:var(--text-muted)}
+  [data-interview] details.iq{border-left:3px solid var(--track-rest,#7a1f12); border-radius:6px;
+    background:var(--card); padding:.6rem .85rem}
+  [data-interview] details.iq summary{cursor:pointer; font-weight:600; list-style:none}
+  [data-interview] details.iq summary::-webkit-details-marker{display:none}
+  [data-interview] details.iq summary::before{content:"\\1F4AC"; margin-right:.4em}
+  /* answers show when the details is open (modern reveal; no legacy .a.show) */
+  [data-interview] details.iq .a{display:none; margin-top:.5rem; padding-top:.5rem;
+    border-top:1px dashed var(--rule); font-size:.94rem}
+  [data-interview] details.iq[open] .a{display:block}
+  [data-interview] details.iq .a b{color:var(--track-rest,#7a1f12)}
+`}
+    ></style>
+
+    <div class="wrap">
+        <nav
+            id="hubbar"
+            style="position:sticky;top:0;z-index:50;display:flex;justify-content:space-between;align-items:center;gap:1rem;margin:-3rem -1.4rem 1.4rem;padding:.6rem 1.4rem;background:var(--card);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);font-family:ui-sans-serif,system-ui,sans-serif;font-size:.8rem"
+        >
+            <a
+                href={`${base}index.html`}
+                style="color:var(--accent);text-decoration:none;font-weight:600"
+                >&#8592; Engineering Vault</a
+            >
+            <span style="display:flex;align-items:center;gap:.6rem">
+                <button
+                    class="themebtn"
+                    onclick="toggleTheme()"
+                    aria-label="Toggle dark mode"
+                    title="Toggle dark / light"
+                    style="cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.1rem .45rem;line-height:1.4;font-size:.9rem;color:var(--ink)"
+                    >&#127763;</button
+                >
+                <span style="color:var(--muted)">{m.trackLabel}</span>
+            </span>
+        </nav>
+
+        <main id="main" tabindex="-1">
+            <div class="kicker">{m.kicker}</div>
+            <h1 set:html={m.h1Html} />
+            <p class="meta" set:html={m.metaLine} />
+            <div class="ltags">{m.chips.map((c) => <span class="lt" set:html={c} />)}</div>
+            <PageDates publishedAt={m.publishedAt} updatedAt={m.updatedAt} />
+
+            <slot />
+
+            <Interview items={m.interview} rubricIntro={m.rubricIntro} rubric={m.rubric} />
+
+            <nav class="nav">
+                <span>📄 <a href={nav.refHref} set:html={nav.refLabel} /></span>
+                <span>
+                    {nav.prevHref && <a href={nav.prevHref} set:html={nav.prevLabel ?? 'Prev'} />}
+                    {nav.prevHref && nav.nextHref && <Fragment> · </Fragment>}
+                    {nav.nextHref && <a href={nav.nextHref} set:html={nav.nextLabel ?? 'Next'} />}
+                </span>
+            </nav>
+
+            <footer set:html={m.footerHtml} />
+        </main>
+    </div>
+</BaseLayout>

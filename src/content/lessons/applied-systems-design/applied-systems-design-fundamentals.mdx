@@ -1,0 +1,1297 @@
+---
+publishedAt: '2026-06-21'
+# ─── applied-systems-design · Fundamentals (capstone) — MDX-hybrid lesson ──────
+# FRONTMATTER = the full lesson contract (head + masthead + wayfinding) PLUS the
+# structured body data lifted out of the prose: the 6-question retrieval quiz, the
+# 13 leveled interview Q&A (incl. the design rubric) and the 5 footnote sources.
+# Validated at build time by the `lessons` collection schema
+# (src/content.config.ts → src/schema/lesson.ts). The FAQ JSON-LD is emitted by
+# <Interview> from `interview` below — it must NOT also be set on `jsonLd`.
+#
+# HTML-bearing strings (interview q/a, rubric, sources.html) use YAML folded block
+# scalars (>-) so the embedded ", ', &, < and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'Applied Systems Design Fundamentals'
+description: >-
+    A repeatable method for any blank-page system design — interview or real review. Walk through
+    requirements, estimates, APIs, data, and scaling without freezing.
+keywords: 'applied systems design, consistent hashing, back of envelope, method, estimation, capacity'
+path: 'applied-systems-design/applied-systems-design-fundamentals.html'
+ogImage: 'assets/og/applied-systems-design.png'
+ogImageAlt: 'Applied Systems Design · Engineering Vault learning track'
+accentVar: '--track-applied'
+
+# —— masthead ——
+trackLabel: 'Applied Systems Design'
+kicker: 'Part 5 · The capstone · visual edition'
+h1Html: 'Applied Systems Design from first principles'
+metaLine: '~40 min · 9 designs on 1 method · worked architectures + interview questions · interactive recall'
+chips:
+    - 'Applied systems design'
+    - 'Consistent hashing'
+    - 'Back of envelope'
+    - 'Method'
+    - 'Estimation'
+
+# —— wayfinding (source has only a Next; Prev is a disabled span) ——
+next:
+    href: 'consistent-hashing-deep-dive.html'
+    title: 'Consistent Hashing — Deep Dive'
+
+# —— routing (used only by the dynamic route) ——
+track: 'applied-systems-design'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: 'In the five-step method, which step most directly decides whether you shard from day one?'
+      correct: 1
+      options:
+          - 'Clarifying the functional requirements of the API'
+          - 'Estimating scale — the storage and QPS arithmetic'
+          - 'Defining the data model and its primary access pattern'
+          - 'Deep-diving the bottleneck once the design exists'
+    - q: 'Two gateway replicas each GET a counter (5), add 1, and SET 6. What went wrong?'
+      correct: 2
+      options:
+          - 'A deadlock — both replicas wait on each other'
+          - 'A dirty read of uncommitted data'
+          - 'A lost update — one increment is silently dropped'
+          - 'A phantom read — a new row appeared mid-scan'
+    - q: 'What specific input breaks pure fan-out on write?'
+      correct: 1
+      options:
+          - 'A user who follows millions of accounts at once'
+          - 'A user with millions of followers posting once'
+          - 'A user who opens the app far more often than average'
+          - 'A user posting many short posts in a brief window'
+    - q: 'Why does consistent hashing beat hash(key) mod N for a distributed cache?'
+      correct: 3
+      options:
+          - 'It guarantees every node holds an exactly equal share'
+          - 'It removes the need for any rehashing ever'
+          - 'It lets the cache serve writes without the DB'
+          - 'A membership change remaps only ~K/N keys, not nearly all'
+    - q: 'With a log-based broker, what happens when a consumer falls far behind the producer?'
+      correct: 0
+      options:
+          - 'It just lags; data is safe until it falls past retention'
+          - 'The broker buffers in memory until it OOMs and drops'
+          - 'The producer is throttled until the consumer catches up'
+          - "The slowest partition's leader is demoted to a faster broker"
+    - q: 'With N=3, which R/W tolerates one node down while a read still sees the latest write?'
+      correct: 2
+      options:
+          - 'R=1, W=1'
+          - 'R=1, W=2'
+          - 'R=2, W=2'
+          - 'R=3, W=3'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'Walk me through the design method you run on any blank-page prompt.'
+      a: >-
+          <b>Hit these points:</b> clarify functional + the four non-functionals (scale, latency,
+          availability, consistency) &rarr; estimate QPS, storage, bandwidth &rarr; API for the hot
+          operation &rarr; data model for the hot query &rarr; draw the high-level boxes &rarr;
+          deep-dive the one bottleneck and name its trade-off &rarr; the system changes but the method
+          does not; skipping a step (usually estimation) is the #1 failure mode &rarr; "I clarify
+          before estimating because the read:write ratio falls out of scope."
+    - level: 'core'
+      q: '100M DAU at 10 reads/day each — size the read QPS and storage out loud.'
+      a: >-
+          <b>Hit these points:</b> 100M &times; 10 = 1B reads/day &rarr; &divide; 86,400 s &asymp; 12K
+          avg QPS &rarr; &times;2&ndash;3 for peak &asymp; 35K peak QPS (numbers illustrative) &rarr; if
+          those were 1 KB writes: 1B &times; 1 KB = 1 TB/day, &times;3 replicas &asymp; 1 PB/year &rarr;
+          conclusion each number drives: 35K QPS is past one box &rarr; cache + replicas; 1 PB forces a
+          sharded fleet &rarr; estimate reads and writes separately because the ratio picks the
+          architecture.
+    - level: 'core'
+      q: 'What goes in the API and data model for a URL shortener, and why a KV store?'
+      a: >-
+          <b>Hit these points:</b> two endpoints &mdash; <code>POST /urls {longUrl}</code> &rarr; short
+          code, and <code>GET /{code}</code> &rarr; 301/302 redirect &rarr; data model is pure
+          key-value: <code>code (PK) &rarr; longUrl, createdAt</code> &rarr; access is single-key point
+          lookups, no joins or range scans &rarr; so a KV engine beats a relational schema you'd never
+          query relationally &rarr; the mapping is immutable, so cache invalidation is nearly free and
+          TTLs can be long.
+    - level: 'core'
+      q: 'Name the five reusable levers and what each one buys you.'
+      a: >-
+          <b>Hit these points:</b> <b>cache</b> &rarr; faster reads + DB load shed (trade: staleness)
+          &rarr; <b>replicate</b> &rarr; survive node loss + scale reads (trade: replication lag / write
+          cost) &rarr; <b>partition / shard</b> &rarr; more storage + write throughput past one box
+          (trade: cross-shard queries, rebalancing) &rarr; <b>queue</b> &rarr; absorb spikes + decouple
+          producers from consumers (trade: async, eventual) &rarr; <b>tune consistency</b> &rarr; lower
+          latency / higher availability by accepting staleness (trade: read-your-writes is no longer
+          free) &rarr; every design is "which lever, on which box, at what cost."
+    - level: 'senior'
+      q: 'A teammate wants to size the database first and check the math later. Push back.'
+      a: >-
+          <b>Hit these points:</b> the estimate IS the design constraint, not a sanity check bolted on
+          after &rarr; the QPS and storage arithmetic is what decides single box vs replicas vs a
+          sharded fleet &rarr; design decisions differ by ~1000&times; (one machine vs a thousand), so
+          being off by 2&times; never flips the answer &mdash; that's why two minutes of
+          back-of-envelope is enough &rarr; without it you've committed to a shape arbitrarily and may
+          discover at build time that storage alone forces sharding you didn't plan for &rarr; estimate
+          reads and writes separately: 100:1 read-heavy screams cache + replicas, write-heavy screams
+          LSM-trees and a log-first ingest path.
+    - level: 'senior'
+      q: "A rate limiter shares a Redis counter across N gateway replicas. What's the trap and the fix?"
+      a: >-
+          <b>Hit these points:</b> the lost-update race &mdash; naive <code>GET</code> &rarr; +1 &rarr;
+          <code>SET</code> interleaves across replicas and silently drops increments, so the effective
+          limit drifts above the target &rarr; fix: atomic <code>INCR</code>, which is a single
+          uninterruptible step &rarr; for multi-step token-bucket logic (refill + decrement + TTL) wrap
+          it in a Lua <code>EVAL</code> so it runs as one atomic unit &rarr; don't use per-replica local
+          counters: N replicas fragment the count to an effective N&times;L &rarr; decide fail-open vs
+          fail-closed when Redis is unreachable (usually fail-open: availability over precision, with a
+          local fallback bucket).
+    - level: 'senior'
+      q: 'Your cache fronts the DB at a 95% hit ratio. Which two failure modes will page you?'
+      a: >-
+          <b>Hit these points:</b> first quantify the win &mdash; 100K rps at 95% hit leaves the DB
+          serving ~5K rps, a 20&times; reduction &rarr; (1) <b>cache stampede</b>: a hot key expires and
+          every concurrent request misses at once, stampeding the DB; fix with request coalescing
+          (single-flight) + jittered/staggered TTLs + probabilistic early refresh &rarr; (2)
+          <b>invalidation</b>: a cache is derived data with no idea when its source changed; TTL is
+          blunt, explicit invalidation races, CDC from the DB change stream is the robust answer &rarr;
+          bonus: a cold-cluster restart is a self-inflicted stampede across every key at once.
+    - level: 'senior'
+      q: 'When does fan-out-on-write break for a news feed, and how do you resolve it?'
+      a: >-
+          <b>Hit these points:</b> push (fan-out on write) is the default because reads dominate
+          (~5:1), so a feed read becomes a cheap precomputed cache lookup &rarr; it breaks on the
+          celebrity: one post by a millions-follower account = millions of feed writes, a fan-out
+          explosion that floods the write path and is a hot, skewed partition &rarr; resolution is the
+          hybrid: push for normal accounts, pull (merge their recent posts at read time) for accounts
+          above a follower threshold &rarr; store post IDs not bodies (a viral post is stored once,
+          referenced N times) in a capped Redis sorted set &rarr; run fan-out as an async, idempotent
+          outbox/log job so a spike degrades freshness, not availability.
+    - level: 'staff'
+      q: 'Make the case that the estimate, not the feature list, should drive the architecture — then steelman the opposite.'
+      a: >-
+          <b>For:</b> decisions span ~1000&times; (one box vs a fleet) and fall directly out of the
+          QPS/storage/bandwidth arithmetic; features tell you what to build, numbers tell you what shape
+          survives; clarifying then estimating makes the rest of the design near-inevitable rather than
+          improvised. <b>Steelman against:</b> early-stage products with unknown load shouldn't shard
+          from day one &mdash; over-architecting for hypothetical scale is real cost and operational
+          drag, and premature partitioning can be harder to undo than to add. <b>Synthesis:</b> let the
+          estimate set the <em>shape</em> (stateless app tier, clean partition key chosen even if you
+          run one shard), but defer the <em>cost</em> (actual fleet size) until load is real; design so
+          scaling is "add replicas / split shards," never "re-architect."
+    - level: 'staff'
+      q: "You're handed a system that's slow at p99 but fine at the mean. How do you reason about it as the senior in the room?"
+      a: >-
+          <b>Hit these points:</b> the SLO is the tail, not the average &mdash; p99 can be 10&times; the
+          mean under load, and at high fan-out a 1-in-100 slow call hits nearly every request, so a
+          "fine average" hides a broken experience &rarr; attribute the tail before tuning: is it GC
+          pauses, a cold cache, lock/queue contention, a hot/skewed partition, or a slow downstream
+          dependency? &rarr; instrument with percentile histograms and per-dependency latency, not just
+          means &rarr; common levers map to causes: stampede &rarr; coalescing + jittered TTLs; hot key
+          &rarr; better partition key / replication of the hot item; tail amplification from fan-out
+          &rarr; hedged requests or reducing fan-out width &rarr; name the trade-off of each fix and
+          verify with a before/after percentile, not a vibe.
+    - level: 'staff'
+      q: 'An engineer proposes adding a cache to "make everything faster." Make the principal-level call.'
+      a: >-
+          <b>Hit these points:</b> a cache is not free speed &mdash; it's a bet that you can tolerate
+          staleness in exchange for not touching the DB, and it adds the two hardest operational
+          problems in the book (invalidation and stampede) &rarr; first ask whether the workload is
+          actually read-heavy and re-readable; caching a write-heavy or low-hit-ratio path adds
+          complexity for little load shed &rarr; decide the consistency need: is a 200 ms-stale read
+          OK? If not, you've committed to write-through or a quorum path, which has its own cost &rarr;
+          choose the strategy deliberately (cache-aside workhorse vs write-through vs write-back, where
+          write-back can lose acknowledged data on crash) &rarr; require a hit-ratio target and an
+          invalidation story (TTL vs CDC) up front &rarr; the principal move: cache the specific hot
+          read path with a measured hit-ratio and a defined staleness budget, not "everything."
+    - level: 'design'
+      q: 'Design a news feed for 300M users with a sub-200 ms feed-read budget.'
+      a: >-
+          <b>A strong answer covers:</b> clarify &mdash; home timeline of followees' posts, ranked or
+          reverse-chron, read-your-own-writes for the author, eventual for others &rarr; estimate
+          &mdash; reads dominate (~5:1), so the read path is the SLO; size feed-read QPS and fan-out
+          write amplification &rarr; data model &mdash; feed = per-user list of
+          <code>(postId, authorId, createdAt)</code> in a capped Redis sorted set; posts stored once in
+          a KV/blob store &rarr; core decision: aggregate at write time (push) or read time (pull)
+          &rarr; default push so reads are a cheap precomputed lookup; the celebrity breaks pure push
+          (fan-out explosion / hot partition), so go hybrid: pull for high-follower accounts, merged in
+          at read time &rarr; run fan-out as an async idempotent outbox/log job so spikes degrade
+          freshness not availability &rarr; cache the hot feeds; CDN media &rarr; failure modes:
+          fan-out lag, hot partitions, the inactive-user wasted-work problem &rarr; trade-off: push pays
+          at write time and wastes work on inactive users; pull pays at read time; the hybrid pays pull
+          only where push would explode.
+    - level: 'design'
+      q: 'Design a distributed key-value store that stays writeable under node and network failure.'
+      a: >-
+          <b>A strong answer covers:</b> clarify &mdash; durability, target availability, and the
+          consistency bar (do we accept eventual + conflict resolution?) &rarr; placement: a
+          consistent-hashing ring with virtual nodes so a membership change moves only ~K/N keys and
+          load stays even &rarr; replication: each key to the next N=3 distinct physical nodes clockwise
+          (the preference list), skipping vnodes of the same host &rarr; leaderless, tunable quorums
+          R + W &gt; N for strong-ish reads; W=1 for always-writeable (Dynamo's shopping cart) at the
+          cost of more reconciliation &rarr; concurrent writes &rarr; vector clocks (or version vectors)
+          return siblings to merge, not blind last-write-wins &rarr; per-node storage: an LSM-tree for
+          write-heavy load &rarr; anti-entropy: Merkle-tree comparison + read-repair + gossip-based
+          membership and failure detection &rarr; failure modes: hinted handoff for a briefly-down
+          node, permanent-loss re-replication, and the partition behavior &rarr; trade-off: this is an
+          AP design (CAP) &mdash; it chooses availability and accepts temporary inconsistency you
+          resolve at read time; if the use case needs strong consistency, you'd move to
+          single-leader-per-shard with synchronous replication instead.
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Design-round framework</b> — drive any blank-page system prompt through these, out loud:
+rubric:
+    - 'Clarify — functional requirements + the four non-functionals (scale, latency, availability, consistency); state assumptions.'
+    - 'Estimate — QPS (avg &amp; peak), storage/year, bandwidth, memory; read:write ratio.'
+    - 'API — the hot operations and their shapes; pick REST/RPC and idempotency where it matters.'
+    - 'Data model — the hot query first; choose KV / relational / wide-column / log to match the access pattern.'
+    - 'High-level design — wire the universal blocks: client &rarr; CDN &rarr; LB &rarr; stateless app &rarr; cache &rarr; DB, with a queue + workers and object store as needed.'
+    - 'Scale the bottleneck — vertical first, then horizontal: read replicas, sharding (consistent hashing), caching, async via queue.'
+    - 'Deep-dive &amp; trade-offs — name the one bottleneck with a number, the lever, its cost, the alternative you rejected, and the failure modes.'
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          1. Alex Xu, <em>System Design Interview</em> (vol 1 &amp; 2). The four/five-step framework,
+          estimation, and the worked designs (shortener, rate limiter, feed, queue, KV store).
+          <a href="#r1">↩</a>
+    - id: 's2'
+      html: >-
+          2. Martin Kleppmann, <em>Designing Data-Intensive Applications</em> (DDIA).
+          Reliability/scalability/maintainability (ch.1); indexes (ch.3); replication &amp; quorums
+          (ch.5); partitioning (ch.6); derived data &amp; log brokers (ch.11). <a href="#r2">↩</a>
+    - id: 's3'
+      html: >-
+          3. Jeff Dean, <em>Latency Numbers Every Programmer Should Know</em>; Dean &amp; Barroso,
+          <em>The Tail at Scale</em> (CACM 2013). The estimation foundation and tail-latency framing.
+          <a href="#r3">↩</a>
+    - id: 's4'
+      html: >-
+          4. DeCandia et al., <em>Dynamo: Amazon's Highly Available Key-value Store</em> (SOSP 2007).
+          The ring, preference list, quorums, vector clocks, Merkle anti-entropy, gossip.
+          <a href="#r4">↩</a>
+    - id: 's5'
+      html: >-
+          5. Brendan Burns, <em>Designing Distributed Systems</em>. The replicated-load-balanced-stateless
+          pattern and reusable distributed-systems patterns. <a href="#r5">↩</a>
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import Rehearse from '../../../components/Rehearse.astro';
+import MemoryCheck from '../../../components/MemoryCheck.astro';
+import {
+    Fig1,
+    Fig2,
+} from '../../../components/figures/applied-systems-design/applied-systems-design-fundamentals/index.ts';
+
+export const mc1 = [
+    { q: 'Five steps in order?', a: 'clarify, estimate, API+data, draw, deep-dive' },
+    { q: 'Which step forces partitioning?', a: 'estimate (the storage/QPS arithmetic)' },
+    { q: 'Why keep the app tier stateless?', a: 'scale by adding replicas, survive instance loss' },
+];
+
+export const mc2 = [
+    {
+        q: '50M DAU &times; 20 writes, peak &times;3 = ?',
+        a: '1B/day &divide; 86,400 &asymp; 12K avg &rarr; ~35K peak',
+    },
+    { q: 'Biggest gap on the ladder?', a: 'RAM vs cross-region, ~200,000&times;' },
+    {
+        q: 'Why is a 2&times; error fine?',
+        a: 'decisions differ by 1000&times;, so 2&times; never flips the answer',
+    },
+];
+
+export const mc3 = [
+    { q: 'Why read-heavy?', a: '~100:1 redirects-to-creations' },
+    { q: "Counter+base62's win?", a: 'unique codes, no collision retry' },
+    { q: '301 vs 302?', a: '301 cached (saves QPS, loses analytics); 302 hits server every time' },
+];
+
+export const mc4 = [
+    {
+        q: 'Why does INCR beat read-modify-write?',
+        a: 'atomic single step, no interleaved lost update',
+    },
+    { q: 'Fixed-window flaw?', a: '2L straddling the boundary' },
+    { q: 'Token bucket vs leaky bucket?', a: 'token allows bursts; leaky forces a smooth outflow' },
+];
+
+export const mc5 = [
+    { q: 'Why push as default?', a: 'reads dominate; precompute makes them cheap' },
+    { q: 'What breaks pure push?', a: 'a millions-follower account posting (fan-out explosion)' },
+    { q: 'Why store IDs not bodies?', a: 'store viral post once, reference N times' },
+];
+
+export const mc6 = [
+    { q: '80K rps at 96% hit &rarr; DB rps?', a: '~3,200 (4% miss)' },
+    { q: "Consistent hashing's win?", a: 'a membership change remaps only ~K/N keys' },
+    { q: 'Two stampede fixes?', a: 'request coalescing + staggered/jittered TTLs' },
+];
+
+export const mc7 = [
+    {
+        q: 'Why can many groups read one topic?',
+        a: "reads don't delete; each group has its own offset",
+    },
+    { q: 'Where is ordering guaranteed?', a: 'within a partition, for one key' },
+    { q: 'Slow consumer in a log broker?', a: 'it lags; safe until past the retention window' },
+];
+
+export const mc8 = [
+    { q: 'R,W for one-down + fresh reads (N=3)?', a: 'R=2, W=2' },
+    { q: 'What do virtual nodes solve?', a: "load balance + spread a failed node's keys" },
+    {
+        q: 'Why LSM not B-tree here?',
+        a: 'write-heavy; sequential appends beat random in-place writes',
+    },
+];
+
+export const mc9 = [
+    {
+        q: 'Why clarify before estimate?',
+        a: 'scope fixes the read:write ratio + object sizes the estimate needs',
+    },
+    { q: 'Which lever raises write throughput past one node?', a: 'partition / shard' },
+    {
+        q: 'Critique "exactly-once"?',
+        a: 'wire is at-least-once; effective-once needs idempotency keys',
+    },
+];
+
+<div class="mission">
+    <strong>Your bar:</strong> walk into any blank-page design — interview or real review — and
+    never freeze. One repeatable method drives every system in this book, so each design becomes{' '}
+    <em>filling in boxes</em>, not improvising. Grounded in Alex Xu's{' '}
+    <em>System Design Interview</em>
+    <sup><a href="#s1" id="r1">1</a></sup>
+    and Kleppmann's <em>DDIA</em>.
+    <sup><a href="#s2" id="r2">2</a></sup>
+</div>
+
+<p>One sentence holds the whole method. Every design just runs it in order:</p>
+
+<div class="chips">
+    <span class="chip">
+        <b>Clarify</b> functional + non-functional
+    </span>
+    <span class="chip c2">
+        <b>Estimate</b> QPS, storage, bandwidth
+    </span>
+    <span class="chip c3">
+        <b>API + data model</b> for the hot query
+    </span>
+    <span class="chip c4">
+        <b>Draw</b> the boxes &amp; arrows
+    </span>
+    <span class="chip">
+        <b>Deep-dive</b> the bottleneck &amp; name the trade-off
+    </span>
+</div>
+
+<nav class="toc">
+    <a href="#l1">1 · The design method</a>
+    <a href="#l2">2 · Back-of-envelope</a>
+    <a href="#l3">3 · URL shortener</a>
+    <a href="#l4">4 · Rate limiter</a>
+    <a href="#l5">5 · News feed</a>
+    <a href="#l6">6 · Distributed cache</a>
+    <a href="#l7">7 · Message queue</a>
+    <a href="#l8">8 · Key-value store</a>
+    <a href="#l9">9 · The universal checklist</a>
+    <a href="#interview">★ Interview Qs</a>
+    <a href="#quiz">★ Retrieval quiz</a>
+    <a href="#cheat">★ Cheat sheet</a>
+</nav>
+
+{/* ============ HERO: the method as a banner ============ */}
+
+<Fig1 />
+
+{/* ================= LEVEL 1 ================= */}
+
+<section class="lvl" id="l1">
+    <div class="lvltop">
+        <span class="num">1</span>
+        <h2>The design method — never start by drawing boxes</h2>
+    </div>
+    <p class="tagline">
+        Designing a system is not improvisation. It is a five-step gate you run in order.
+    </p>
+    <figure>
+        <img
+            src="diagrams/01-design-method.png"
+            alt="The design method, and the building blocks it assembles. Left: five numbered steps as a top-to-bottom flow. Right: a generic web-scale architecture wiring the universal blocks the method draws."
+        />
+        <figcaption>
+            The method (left) and the canonical web-scale shape it draws (right): client → CDN →
+            load balancer → stateless app servers → cache → DB, with a queue + workers for deferred
+            writes and an object store for blobs.
+        </figcaption>
+    </figure>
+    <table>
+        <tr>
+            <th>Non-functional dimension</th>
+            <th>The question you ask</th>
+            <th>Where the answer lives</th>
+        </tr>
+        <tr>
+            <td>Scale</td>
+            <td>How many users, QPS, GB/day?</td>
+            <td>Lesson 2 (estimation)</td>
+        </tr>
+        <tr>
+            <td>Latency</td>
+            <td>p99 read/write budget in ms?</td>
+            <td>Storage + caching</td>
+        </tr>
+        <tr>
+            <td>Availability</td>
+            <td>Tolerate a region loss?</td>
+            <td>Replication, quorums</td>
+        </tr>
+        <tr>
+            <td>Consistency</td>
+            <td>Read-your-writes, or eventual OK?</td>
+            <td>Consistency models</td>
+        </tr>
+    </table>
+    <div class="facts">
+        <div class="fact">
+            <b>The hinge question</b> "Is a 200 ms-stale read OK?" Yes → caching + async replication
+            unlock. No → you've committed to a quorum or single-leader path, and its cost.
+        </div>
+        <div class="fact">
+            <b>Keep the app tier stateless</b> Push state down into cache + DB; then any replica can
+            die and you scale by adding identical ones behind the LB.
+            <sup><a href="#s5" id="r5">5</a></sup>
+        </div>
+        <div class="fact blue">
+            <b>Six universal blocks</b> LB · cache · DB · message queue · CDN · object store. You
+            wire these same six for the next eight lessons.
+        </div>
+        <div class="fact blue">
+            <b>There is no "best"</b> Only an architecture matched to the requirements you clarified
+            in step 1. State the trade-off you chose.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "Start by sketching the architecture"</div>
+        <div class="t">✓ Start by understanding what + at what scale, then commit to a shape</div>
+    </div>
+    <div class="rule">
+        <span>🧭 Memory rule:</span> Clarify → Estimate → API + data → Draw → Deep-dive. The
+        estimate, not the features, decides whether you shard from day one.
+    </div>
+    <MemoryCheck items={mc1} />
+</section>
+
+{/* ================= LEVEL 2 ================= */}
+
+<section class="lvl" id="l2">
+    <div class="lvltop">
+        <span class="num">2</span>
+        <h2>Back-of-the-envelope estimation — the bridge to architecture</h2>
+    </div>
+    <p class="tagline">
+        Two minutes of arithmetic decides "one box" vs "a thousand." Correct to within 10× is
+        enough.
+    </p>
+    <Fig2 />
+    <div class="rule">
+        <span>🧮 The QPS formula:</span> avg QPS = (DAU × actions/day) ÷ 86,400, then peak ≈ avg ×
+        2–3. There are 86,400 seconds in a day — that's the denominator of every estimate.
+    </div>
+    <figure>
+        <img
+            src="diagrams/02-estimation.png"
+            alt="Back-of-the-envelope reference card. Left: the latency ladder from L1 cache to cross-region round-trip with bars that grow by orders of magnitude. Right: a worked QPS-and-storage estimate."
+        />
+        <figcaption>
+            Worked example: 100M DAU × 10 reads = 1B/day ÷ 86,400 ≈ 12K avg QPS, ×3 ≈ 35K peak. 1B
+            writes/day × 1 KB × 3 replicas ≈ 1 PB/year → unambiguously a sharded fleet.
+        </figcaption>
+    </figure>
+    <div class="facts">
+        <div class="fact">
+            <b>The anchor number</b> A record is ~1 KB. A tweet, an order, a Kafka event — call it 1
+            KB unless you know better. Billions of records → terabytes by inspection.
+        </div>
+        <div class="fact">
+            <b>One multiply per resource</b> QPS, storage, bandwidth, memory each get one
+            multiplication. Whichever blows past a single machine is your deep-dive.
+        </div>
+        <div class="fact blue">
+            <b>Estimate reads + writes separately</b> 100:1 read-heavy screams cache + replicas;
+            write-heavy screams LSM-trees + a log-first ingest path.
+        </div>
+        <div class="fact blue">
+            <b>Tail, not average, is the SLO</b> p99 can be 10× the mean under load; at 100-way
+            fan-out a 1-in-100 slow call hits nearly every request.
+            <sup><a href="#s3" id="r3b">3</a></sup>
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "I'll size the database, then sanity-check the math later"</div>
+        <div class="t">
+            ✓ The estimate IS the design constraint — it makes the rest inevitable, not arbitrary
+        </div>
+    </div>
+    <MemoryCheck items={mc2} />
+</section>
+
+{/* ================= LEVEL 3 ================= */}
+
+<section class="lvl" id="l3">
+    <div class="lvltop">
+        <span class="num">3</span>
+        <h2>URL shortener — the canonical read-amplifier</h2>
+    </div>
+    <p class="tagline">
+        One write is read thousands of times. Optimise the read path first; the write path can be
+        almost naive.
+    </p>
+    <figure>
+        <img
+            src="diagrams/03-url-shortener.png"
+            alt="Two-path URL-shortener architecture, write on top and the hot read path below. A counter feeds base62 encoding into a key-value store on writes; redirects are served from a CDN and an in-memory cache, hitting the store only on a miss."
+        />
+        <figcaption>
+            Estimate: 100M URLs/day → ~1.2K wps, ~116K rps (100:1), ~180 TB over 10 years. Two
+            conclusions: reads need a cache + CDN; storage forces partitioning.
+        </figcaption>
+    </figure>
+    <h4 class="sans" style="color:var(--accent)">
+        Generating the short code — the design's centre of gravity
+    </h4>
+    <table>
+        <tr>
+            <th>Concern</th>
+            <th>Hash of URL</th>
+            <th>Counter + base62</th>
+        </tr>
+        <tr>
+            <td>Collisions</td>
+            <td>Possible; needs retry</td>
+            <td>
+                <b>None by construction</b>
+            </td>
+        </tr>
+        <tr>
+            <td>Same URL → same code</td>
+            <td>Free</td>
+            <td>Needs a lookup table</td>
+        </tr>
+        <tr>
+            <td>Predictability</td>
+            <td>Unpredictable</td>
+            <td>Sequential — guessable</td>
+        </tr>
+        <tr>
+            <td>Hotspot</td>
+            <td>Stateless</td>
+            <td>Counter is a write hotspot</td>
+        </tr>
+    </table>
+    <div class="facts">
+        <div class="fact">
+            <b>base62 length math</b> 62⁷ ≈ 3.5 trillion codes — ten years of 100M/day with room.
+            62⁶ ≈ 56B would run out; 7 chars is the sweet spot.
+        </div>
+        <div class="fact">
+            <b>Break the counter hotspot</b> Hand each app server a <em>range</em> of IDs (a block
+            of 1,000) so it increments locally and coordinates once per block.
+        </div>
+        <div class="fact blue">
+            <b>Data model = pure KV</b> <code>code (PK) → longUrl, createdAt</code>. Single-key
+            point lookups, no joins → a KV engine beats a relational schema you never query
+            relationally.
+        </div>
+        <div class="fact blue">
+            <b>Read chain sheds load</b> CDN → cache → read replica → leader. Immutable mappings
+            mean cache invalidation is nearly free — exploit long TTLs.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "Use a 301 redirect — it's the permanent one"</div>
+        <div class="t">
+            ✓ 301 is browser-cached → you lose click analytics. Pick 302 when tracking is a feature
+        </div>
+    </div>
+    <div class="rule">
+        <span>🔗 Memory rule:</span> A URL shortener is a read-amplifier — counter + base62 gives
+        collision-free codes; the 301-vs-302 call is "save QPS" vs "keep your data."
+    </div>
+    <MemoryCheck items={mc3} />
+</section>
+
+{/* ================= LEVEL 4 ================= */}
+
+<section class="lvl" id="l4">
+    <div class="lvltop">
+        <span class="num">4</span>
+        <h2>Rate limiter — atomicity on the hot path</h2>
+    </div>
+    <p class="tagline">
+        The smallest system in the book, and the one that forces an atomic counter on every single
+        request.
+    </p>
+    <figure>
+        <img
+            src="diagrams/04-rate-limiter.png"
+            alt="Left: the token-bucket algorithm. Right: a shared atomic counter in Redis. Token bucket allows a request when a token is present and returns 429 when the bucket is empty; the distributed counter shows many app servers issuing a single atomic INCR against one Redis key."
+        />
+        <figcaption>
+            Token bucket allows a request when a token is present, returns 429 when empty. Many
+            gateway replicas issue one atomic <code>INCR</code> against a single Redis key so the
+            limit stays global.
+        </figcaption>
+    </figure>
+    <table>
+        <tr>
+            <th>Algorithm</th>
+            <th>Memory / client</th>
+            <th>Accuracy</th>
+            <th>Notes</th>
+        </tr>
+        <tr>
+            <td>Fixed window</td>
+            <td>1 integer</td>
+            <td>Low (2L at edges)</td>
+            <td>Cheapest</td>
+        </tr>
+        <tr>
+            <td>Sliding-window counter</td>
+            <td>2 integers</td>
+            <td>High (~0.003% err)</td>
+            <td>Best general default</td>
+        </tr>
+        <tr>
+            <td>Sliding-window log</td>
+            <td>O(L) timestamps</td>
+            <td>Exact</td>
+            <td>Costly at high L</td>
+        </tr>
+        <tr>
+            <td>Token bucket</td>
+            <td>2 numbers</td>
+            <td>High, allows bursts</td>
+            <td>Production default</td>
+        </tr>
+    </table>
+    <div class="facts">
+        <div class="fact">
+            <b>The lost-update trap</b> Naive <code>GET</code>→+1→<code>SET</code> lets two replicas
+            overwrite each other. Redis <code>INCR</code> is atomic by construction → no lost
+            update.
+        </div>
+        <div class="fact">
+            <b>Multi-step? Use a Lua script</b> Refill + decrement + TTL wrapped in{' '}
+            <code>EVAL</code> runs as one atomic unit — a transaction collapsed to one instruction.
+        </div>
+        <div class="fact blue">
+            <b>Where it lives</b> Standard answer: the API gateway — one chokepoint sees all traffic
+            before fan-out. Add per-service limits for expensive endpoints.
+        </div>
+        <div class="fact blue">
+            <b>Fail-open vs fail-closed</b> If shared Redis is unreachable, usually fail-open
+            (availability over precision) with a per-replica local fallback.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "Local in-memory counters are fine across replicas"</div>
+        <div class="t">
+            ✓ N replicas fragment the count → effective limit becomes N × L; you need one shared
+            counter
+        </div>
+    </div>
+    <div class="rule">
+        <span>🪣 Memory rule:</span> Token bucket allows bursts up to B at average rate r;
+        correctness across replicas needs an atomic shared counter (Redis INCR / a Lua script).
+    </div>
+    <MemoryCheck items={mc4} />
+</section>
+
+{/* ================= LEVEL 5 ================= */}
+
+<section class="lvl" id="l5">
+    <div class="lvltop">
+        <span class="num">5</span>
+        <h2>News feed — when do you pay the fan-out cost?</h2>
+    </div>
+    <p class="tagline">
+        A many-to-many aggregation under a read-latency budget. The one decision: aggregate at write
+        time or read time.
+    </p>
+    <figure>
+        <img
+            src="diagrams/05-news-feed.png"
+            alt="Two fan-out strategies for the same new post. Left: fan-out on write copies the post into every follower's precomputed feed (cheap reads, expensive writes); right: fan-out on read merges followees' recent posts at request time (cheap writes, expensive reads); a hybrid uses push for normal users and pull for celebrities."
+        />
+        <figcaption>
+            Push (left): copy a post into every follower's precomputed feed → cheap reads, expensive
+            writes. Pull (right): merge followees' posts at read time → cheap writes, expensive
+            reads.
+        </figcaption>
+    </figure>
+    <table>
+        <tr>
+            <th></th>
+            <th>Fan-out on write (push)</th>
+            <th>Fan-out on read (pull)</th>
+        </tr>
+        <tr>
+            <td>Cost of a post</td>
+            <td>high — write to every follower</td>
+            <td>low — one insert</td>
+        </tr>
+        <tr>
+            <td>Cost of a feed read</td>
+            <td>low — read precomputed list</td>
+            <td>high — merge at read time</td>
+        </tr>
+        <tr>
+            <td>Wasted work</td>
+            <td>feeds for inactive users</td>
+            <td>none</td>
+        </tr>
+        <tr>
+            <td>Freshness</td>
+            <td>a few seconds (fan-out lag)</td>
+            <td>always current</td>
+        </tr>
+    </table>
+    <div class="facts">
+        <div class="fact">
+            <b>Push wins by default</b> Reads dominate (~5:1), so precomputing makes the common op a
+            cheap cache lookup. The cost moves to write time.
+        </div>
+        <div class="fact">
+            <b>The celebrity problem</b> One post by a millions-follower account = a fan-out
+            explosion (hot-key / skewed partition) that floods the write path.
+        </div>
+        <div class="fact blue">
+            <b>The hybrid real systems run</b> Normal users → push. Celebrities → pull (skip
+            fan-out; merge their recent posts in at read time). You pay pull only where push would
+            explode.
+        </div>
+        <div class="fact blue">
+            <b>Store IDs, not bodies</b> Feed = per-user list of{' '}
+            <code>(postId, authorId, createdAt)</code> in a Redis sorted set, capped ~1,000. A viral
+            post is stored once, referenced N times.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "Pure push scales to every account"</div>
+        <div class="t">
+            ✓ It breaks on the high-follower account; the hybrid push+pull split is the resolution
+        </div>
+    </div>
+    <div class="rule">
+        <span>📰 Memory rule:</span> A feed is many-to-many aggregation under a latency budget —
+        push for the masses, pull for celebrities, and run fan-out as an async outbox/log job.
+    </div>
+    <MemoryCheck items={mc5} />
+</section>
+
+{/* ================= LEVEL 6 ================= */}
+
+<section class="lvl" id="l6">
+    <div class="lvltop">
+        <span class="num">6</span>
+        <h2>Distributed cache — trade freshness for latency &amp; load</h2>
+    </div>
+    <p class="tagline">
+        Every cache decision is a bet on how stale a copy you can tolerate in exchange for not
+        touching the DB.
+    </p>
+    <figure>
+        <img
+            src="diagrams/06-distributed-cache.png"
+            alt="Cache-aside read flow and the consistent-hashing ring. The left panel numbers the miss path that populates the cache; the right shows keys owned by the next node clockwise and how adding a node remaps only one arc."
+        />
+        <figcaption>
+            Cache-aside (left): on a miss, read the DB, populate, return. Consistent hashing
+            (right): a key is owned by the next node clockwise; adding a node remaps only one arc
+            (~K/N keys), not all of them.
+        </figcaption>
+    </figure>
+    <table>
+        <tr>
+            <th>Strategy</th>
+            <th>Consistency</th>
+            <th>Write latency</th>
+            <th>Failure risk</th>
+        </tr>
+        <tr>
+            <td>Cache-aside</td>
+            <td>Eventual; stale until invalidated</td>
+            <td>DB only</td>
+            <td>Stale reads on a race</td>
+        </tr>
+        <tr>
+            <td>Write-through</td>
+            <td>Strong (cache tracks DB)</td>
+            <td>Cache + DB</td>
+            <td>Wasted writes</td>
+        </tr>
+        <tr>
+            <td>Write-back</td>
+            <td>Weak; cache leads DB</td>
+            <td>Cache only</td>
+            <td>Data loss on crash</td>
+        </tr>
+    </table>
+    <div class="facts">
+        <div class="fact">
+            <b>The load win</b> 100K rps at 95% hit ratio leaves the DB serving 5K rps — a 20×
+            reduction in the hardest thing to scale.
+        </div>
+        <div class="fact">
+            <b>Why mod-N fails</b> Change N (a deploy, a death) and almost every key remaps → the
+            whole cache cold-starts and hammers the DB. Consistent hashing + virtual nodes fix it.
+        </div>
+        <div class="fact blue">
+            <b>Cache stampede</b> A hot key expires → every concurrent request misses at once. Fix
+            with request coalescing (single-flight) + jittered/staggered TTLs.
+        </div>
+        <div class="fact blue">
+            <b>Invalidation is the hard 20%</b> A cache is derived data with no idea when its source
+            changed. TTL is blunt; explicit invalidation is fragile; CDC from the DB's change stream
+            is the robust answer.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "Write-back is just a faster write-through"</div>
+        <div class="t">
+            ✓ Write-back acks from cache memory → a crash in the flush window loses acknowledged
+            data
+        </div>
+    </div>
+    <div class="rule">
+        <span>🗄️ Memory rule:</span> Cache-aside is the workhorse; consistent hashing keeps reshards
+        cheap; the two things that page you are stampede and invalidation.
+    </div>
+    <MemoryCheck items={mc6} />
+</section>
+
+{/* ================= LEVEL 7 ================= */}
+
+<section class="lvl" id="l7">
+    <div class="lvltop">
+        <span class="num">7</span>
+        <h2>Message queue — the partitioned, replicated log</h2>
+    </div>
+    <p class="tagline">
+        Decouple producers from consumers. The core choice: a log that doesn't delete on read.
+    </p>
+    <figure>
+        <img
+            src="diagrams/07-message-queue.png"
+            alt="A Kafka-like message queue: producers append to a partitioned topic, each partition replicated leader-to-followers, consumed by a consumer group tracking offsets. Read it as Part 4's log plus Part 1's replication."
+        />
+        <figcaption>
+            Producers append to a partitioned topic; each partition is replicated leader→followers;
+            a consumer group tracks offsets. Estimate: 1M msg/s × 1 KB × 3 days × RF 3 ≈ 780 TB → a
+            disk-resident system.
+        </figcaption>
+    </figure>
+    <table>
+        <tr>
+            <th>Setting</th>
+            <th>Durability</th>
+            <th>Latency</th>
+            <th>Survives</th>
+        </tr>
+        <tr>
+            <td>
+                <code>acks=0</code>
+            </td>
+            <td>none</td>
+            <td>lowest</td>
+            <td>nothing</td>
+        </tr>
+        <tr>
+            <td>
+                <code>acks=1</code> (leader)
+            </td>
+            <td>leader's disk</td>
+            <td>low</td>
+            <td>follower loss</td>
+        </tr>
+        <tr>
+            <td>
+                <code>acks=all</code> (full ISR)
+            </td>
+            <td>whole ISR</td>
+            <td>higher</td>
+            <td>leader loss (2 of 3)</td>
+        </tr>
+    </table>
+    <div class="facts">
+        <div class="fact">
+            <b>Log &gt; delete-on-read</b> Reading doesn't delete — the consumer remembers its
+            offset. Buys replayability, multiple independent consumers, cheap append-only
+            durability.
+        </div>
+        <div class="fact">
+            <b>Partition = parallelism + ordering</b> Order holds only within a partition; route by{' '}
+            <code>hash(key) mod N</code> so all events for one key stay ordered. More partitions =
+            more throughput, weaker global order.
+        </div>
+        <div class="fact blue">
+            <b>acks=all is R+W&gt;N in disguise</b> Leader + ISR; an acked write survives losing any
+            2 of 3 brokers. A new leader is elected from the ISR on failure.
+        </div>
+        <div class="fact blue">
+            <b>Backpressure = lag</b> A slow consumer just lags (tail offset − consumer offset); the
+            buffer is retention itself. Monitor consumer lag — the #1 operational signal.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "acks=all always means 3 copies"</div>
+        <div class="t">
+            ✓ A silently-shrunk ISR gives acks=1 durability; set <code>min.insync.replicas=2</code>{' '}
+            to reject under-replicated writes
+        </div>
+    </div>
+    <div class="rule">
+        <span>📨 Memory rule:</span> A partitioned append-only log + ISR replication; offset-commit
+        timing picks at-most/at-least-once, and exactly-once = delivery + idempotent processing.
+    </div>
+    <MemoryCheck items={mc7} />
+</section>
+
+{/* ================= LEVEL 8 ================= */}
+
+<section class="lvl" id="l8">
+    <div class="lvltop">
+        <span class="num">8</span>
+        <h2>Key-value store — the Dynamo ring</h2>
+    </div>
+    <p class="tagline">
+        Where distributed systems and storage engines meet in one box: partitioned, replicated,
+        tunably consistent.
+    </p>
+    <figure>
+        <img
+            src="diagrams/08-kv-store.png"
+            alt="A Dynamo-style key-value store on a consistent-hashing ring. The key hashes to a ring position and is replicated on the next three nodes clockwise; a write reaches a W=2 quorum and a read an R=2 quorum, with R+W>N guaranteeing overlap."
+        />
+        <figcaption>
+            A key hashes to a ring position and is replicated on the next N=3 distinct nodes
+            clockwise (its preference list). A W=2 write and an R=2 read overlap because R+W&gt;N.
+            <sup><a href="#s4" id="r4">4</a></sup>
+        </figcaption>
+    </figure>
+    <table>
+        <tr>
+            <th>Setting</th>
+            <th>R</th>
+            <th>W</th>
+            <th>Behaviour</th>
+        </tr>
+        <tr>
+            <td>Balanced</td>
+            <td>2</td>
+            <td>2</td>
+            <td>One node down tolerated; strong-ish reads</td>
+        </tr>
+        <tr>
+            <td>Fast write</td>
+            <td>1</td>
+            <td>3</td>
+            <td>Cheap reads, every write hits all replicas</td>
+        </tr>
+        <tr>
+            <td>Always writeable</td>
+            <td>3</td>
+            <td>1</td>
+            <td>
+                <code>put</code> survives 2 dead nodes; reads reconcile
+            </td>
+        </tr>
+    </table>
+    <div class="facts">
+        <div class="fact">
+            <b>R + W &gt; N</b> The W nodes that took the latest write and the R nodes you read must
+            share ≥1 node → the read sees the most recent acknowledged write.
+        </div>
+        <div class="fact">
+            <b>Virtual nodes</b> Each machine claims many small ring positions → load smooths across
+            heterogeneous boxes; a dead node's keys spread across many successors, not one.
+        </div>
+        <div class="fact blue">
+            <b>Concurrent writes → vector clocks</b> Track causality, not wall-clock. If neither
+            clock descends from the other, the writes are concurrent — return both siblings, let the
+            app merge (the cart unions items).
+        </div>
+        <div class="fact blue">
+            <b>LSM per node + gossip</b> Write-heavy → LSM-tree (sequential appends), not a B-tree.
+            Merkle-tree anti-entropy repairs drift; gossip spreads membership in O(log N) with no
+            coordinator.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "Last-write-wins by timestamp is safe"</div>
+        <div class="t">
+            ✓ Clocks drift (no global clock) → LWW silently drops an update; vector clocks detect
+            the conflict
+        </div>
+    </div>
+    <div class="rule">
+        <span>💍 Memory rule:</span> The ring places keys + nodes; the preference list replicates;
+        R+W&gt;N tunes consistency; vector clocks catch conflicts; LSM persists each node.
+    </div>
+    <MemoryCheck items={mc8} />
+</section>
+
+{/* ================= LEVEL 9 ================= */}
+
+<section class="lvl" id="l9">
+    <div class="lvltop">
+        <span class="num">9</span>
+        <h2>Putting it together — the universal checklist &amp; five levers</h2>
+    </div>
+    <p class="tagline">
+        Every design reduces to: which lever, on which box, and what does it cost?
+    </p>
+    <figure>
+        <img
+            src="diagrams/09-design-checklist.png"
+            alt="The universal systems-design checklist as a one-page method. Seven numbered steps flow top to bottom; a recurring-levers palette runs down the right edge so any prompt reuses the same toolkit."
+        />
+        <figcaption>
+            The checklist is a <em>gate</em>, not a menu: Clarify → Estimate → API → Data model →
+            High-level design → Deep-dive the bottleneck → State the trade-offs. The five-lever
+            palette runs down the right.
+        </figcaption>
+    </figure>
+    <table>
+        <tr>
+            <th>Lever</th>
+            <th>What it buys</th>
+            <th>Reach for it when…</th>
+        </tr>
+        <tr>
+            <td>Cache</td>
+            <td>Read latency, fewer DB hits</td>
+            <td>read path is hot</td>
+        </tr>
+        <tr>
+            <td>Replicate</td>
+            <td>Read throughput, availability</td>
+            <td>survive a node loss / scale reads</td>
+        </tr>
+        <tr>
+            <td>Partition / shard</td>
+            <td>Write throughput, storage past one node</td>
+            <td>writes or data exceed one box</td>
+        </tr>
+        <tr>
+            <td>Queue (async)</td>
+            <td>Decouple, absorb spikes</td>
+            <td>survive a traffic spike</td>
+        </tr>
+        <tr>
+            <td>Tune consistency</td>
+            <td>Trade freshness for speed/availability</td>
+            <td>staleness is tolerable</td>
+        </tr>
+    </table>
+    <div class="facts">
+        <div class="fact">
+            <b>Senior signal</b> Not picking the "right" answer — naming the alternative you
+            rejected and the condition that would flip the call ("…but if this were account
+            balances, I'd want sync replication").
+        </div>
+        <div class="fact">
+            <b>Immutable data = free caching</b> Pastebin's pastes never change, so the hard half of
+            caching (invalidation) simply disappears. Spot immutability and exploit it.
+        </div>
+        <div class="fact blue">
+            <b>Most "scale" is read-scale</b> Cache + read replicas solve a huge fraction of
+            prompts. Write-scale (sharding, outbox, Kafka) is the harder, rarer case.
+        </div>
+        <div class="fact blue">
+            <b>The single-box baseline</b> Before sharding, ask whether one big NVMe node + a read
+            replica would do. Many "web-scale" problems fit on one box.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">✗ "The pipeline delivers each event exactly once"</div>
+        <div class="t">
+            ✓ The wire gives at-least-once; effectively-once = at-least-once + an idempotency key
+        </div>
+    </div>
+    <div class="rule">
+        <span>✅ Memory rule:</span> Faster reads → cache or replicate. Faster writes → partition or
+        queue. Survive a node → replicate. Survive a spike → queue. Name the lever and its cost.
+    </div>
+    <MemoryCheck items={mc9} />
+</section>
+
+{/* ================= INTERACTIVE RECALL ================= */}
+
+<h2 class="sec" id="quiz">
+    Retrieval practice — mix the designs
+</h2>
+
+<p>
+    Reading builds <em>fluency</em> (feels familiar). Recall builds <em>storage</em> (lasts). Answer
+    from memory — instant feedback.
+</p>
+
+<Quiz items={frontmatter.quiz} id="quiz1" />
+
+<h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">
+    Reconstruct the method from a blank page
+</h3>
+
+<Rehearse
+    promptHtml={`Write the seven checklist steps in order, then the five levers, with nothing on screen. Reveal and compare — gaps are your next drill.`}
+    placeholder="Steps: 1. Clarify  2. Estimate  3. …  (to 7)   Levers: cache, …"
+>
+    <p>
+        <b>Steps:</b> 1 Clarify (functional + non-functional) · 2 Estimate (QPS, storage, bandwidth)
+        · 3 API · 4 Data model (the hot query) · 5 High-level design (boxes &amp; arrows) · 6
+        Deep-dive the bottleneck · 7 State the trade-offs. &#160;
+        <b>Levers:</b> cache · replicate · partition/shard · queue (async) · tune consistency.
+        &#160;
+        <b>Reductions:</b> faster reads → cache/replicate · faster writes → partition/queue ·
+        survive a node → replicate · survive a spike → queue.
+    </p>
+</Rehearse>
+
+<div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Say <em>"grill me on these designs"</em>{' '}
+    for mixed no-clue questions, or drop a fresh prompt ("design a chat backend," "design Dropbox")
+    and we'll run the seven-step checklist on it together. Want the next track — spaced, interleaved
+    design drills? Just ask.
+</div>
+
+{/* ================= INTERVIEW QUESTIONS ================= */}
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+{/* ================= CHEAT SHEET (compact) ================= */}
+
+<h2 class="sec" id="cheat">
+    ★ Cheat sheet — prompt → lever
+</h2>
+
+<div class="cheat">
+    <p style="margin-top:0">
+        <strong>The method:</strong> Clarify → Estimate → API → Data model → Draw → Deep-dive →
+        State the trade-off. <strong>The five levers:</strong> cache · replicate · partition · queue
+        · tune consistency. Every prompt = which lever, on which box, at what cost.
+    </p>
+    <h3>Reduction table</h3>
+    <table>
+        <tr>
+            <th>You need…</th>
+            <th>Reach for</th>
+        </tr>
+        <tr>
+            <td>Faster reads</td>
+            <td>Cache (hot set) or read replicas</td>
+        </tr>
+        <tr>
+            <td>Faster writes / more storage</td>
+            <td>Partition / shard (consistent hashing)</td>
+        </tr>
+        <tr>
+            <td>Survive a node loss</td>
+            <td>Replicate (leader/follower or quorum)</td>
+        </tr>
+        <tr>
+            <td>Survive a traffic spike</td>
+            <td>Queue (async, absorb the burst)</td>
+        </tr>
+        <tr>
+            <td>Lower latency, can tolerate staleness</td>
+            <td>Tune consistency (eventual / R+W)</td>
+        </tr>
+        <tr>
+            <td>Read-amplifier (shortener, paste)</td>
+            <td>CDN → cache → replica; immutable = free invalidation</td>
+        </tr>
+        <tr>
+            <td>Many-to-many feed</td>
+            <td>Push for masses, pull for celebrities (hybrid)</td>
+        </tr>
+        <tr>
+            <td>Decouple services + replay</td>
+            <td>Partitioned log; offset = consumer state</td>
+        </tr>
+    </table>
+    <h3>Three rules for the design round</h3>
+    <p style="margin-bottom:0">
+        ① Estimate <strong>before</strong> you draw — the math, not the features, sets the
+        architecture. ② Name the <strong>bottleneck</strong> with a number, then a specific lever
+        and its cost. ③ Senior signal = naming the alternative you <strong>rejected</strong> and
+        what would flip the call.
+    </p>
+    <p style="margin-bottom:0">📄 Full printable version → </p>
+</div>
+
+{/* ================= REVIEW GUIDES ================= */}
+
+<h2 class="sec" id="review">
+    ★ Review guides &amp; what to read next
+</h2>
+
+<div class="facts" style="grid-template-columns:1fr 1fr">
+    <div class="fact">
+        <b>5-min (weekly)</b> Don't re-read — recall. Say the seven steps + five levers; redraw the
+        web-scale shape (CDN→LB→app→cache→DB→queue); pick one design and re-derive its bottleneck
+        from memory.
+    </div>
+    <div class="fact">
+        <b>30-min (when stalled)</b> Blank-page a fresh prompt (chat backend, Dropbox, Twitter
+        search) running the full checklist out loud; for each box, name the lever and its cost, then
+        the alternative you rejected and why.
+    </div>
+</div>
+
+<p style="font-size:.9rem">
+    <strong>Read next, in order:</strong>①{' '}
+    <a href="https://www.amazon.com/System-Design-Interview-insiders-Second/dp/B08CMF2CQF">
+        Alex Xu — <em>System Design Interview</em> vol 1 &amp; 2
+    </a>{' '}
+    (the worked designs) · ②{' '}
+    <a href="https://dataintensive.net">
+        Kleppmann — <em>DDIA</em>
+    </a>{' '}
+    (the theory underneath) · ③{' '}
+    <a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf">Dynamo paper</a>{' '}
+    (Lesson 8) · ④ <a href="https://kafka.apache.org/documentation/#design">Kafka design docs</a>{' '}
+    (Lesson 7). Latency numbers (Jeff Dean) ground every estimate.
+</p>
+
+<p style="font-size:.9rem">
+    📖 <strong>Primary sources:</strong> Alex Xu's <em>System Design Interview</em> and Kleppmann's{' '}
+    <em>DDIA</em> — the two references behind every design here.
+</p>
+
+<Sources items={frontmatter.sources} />

@@ -1,0 +1,121 @@
+---
+/**
+ * production-ai-architecture/0001 · Figure 4 (Module 2) — capacity is the token, and
+ * the ceiling is upstream: requests queue behind a provider token-per-minute limit.
+ *
+ * Verbatim copy of the source SVG (figure + svg + figcaption incl. footnote
+ * <sup> #s3 / id="r3b"). References the shared #arw and #arwG markers from
+ * Defs.astro.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 640 250"
+        role="img"
+        aria-label="Requests queue behind a fixed provider token-per-minute limit; long-output requests consume the budget and cause head-of-line blocking, so admission control and per-tenant budgets are needed before the limit."
+    >
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110"
+            >You queue behind a token limit you don't own</text
+        >
+        <!-- incoming -->
+        <rect x="24" y="56" width="92" height="26" rx="5" fill="#eef2f7" stroke="#1f3a5a"></rect>
+        <text x="70" y="73" text-anchor="middle" font-size="8.5" fill="#111110">short request</text>
+        <rect x="24" y="92" width="92" height="26" rx="5" fill="#fbecec" stroke="#9a2417"></rect>
+        <text x="70" y="109" text-anchor="middle" font-size="8.5" fill="#9a2417"
+            >long-output job</text
+        >
+        <rect x="24" y="128" width="92" height="26" rx="5" fill="#eef2f7" stroke="#1f3a5a"></rect>
+        <text x="70" y="145" text-anchor="middle" font-size="8.5" fill="#111110">short request</text
+        >
+        <!-- admission control -->
+        <line x1="116" y1="105" x2="150" y2="105" stroke="#6b675f" marker-end="url(#arw)"></line>
+        <rect
+            x="152"
+            y="78"
+            width="120"
+            height="56"
+            rx="8"
+            fill="#e9f3ec"
+            stroke="#2f5d3a"
+            stroke-width="1.5"></rect>
+        <text x="212" y="100" text-anchor="middle" font-size="9" font-weight="700" fill="#2f5d3a"
+            >Admission control</text
+        >
+        <text x="212" y="115" text-anchor="middle" font-size="7.5" fill="#6b675f"
+            >per-tenant token budget</text
+        >
+        <text x="212" y="127" text-anchor="middle" font-size="7.5" fill="#6b675f"
+            >+ queue + shed</text
+        >
+        <!-- the limit wall -->
+        <line
+            x1="300"
+            y1="40"
+            x2="300"
+            y2="170"
+            stroke="#9a2417"
+            stroke-width="2.5"
+            stroke-dasharray="6 4"></line>
+        <text x="300" y="184" text-anchor="middle" font-size="8.5" font-weight="700" fill="#9a2417"
+            >provider rate limit</text
+        >
+        <text x="300" y="195" text-anchor="middle" font-size="7.5" fill="#6b675f"
+            >tokens / min · you don't set it</text
+        >
+        <line x1="272" y1="105" x2="297" y2="105" stroke="#2f5d3a" marker-end="url(#arwG)"></line>
+        <!-- model -->
+        <rect
+            x="356"
+            y="78"
+            width="120"
+            height="56"
+            rx="8"
+            fill="#f1eef2"
+            stroke="#b5179e"
+            stroke-width="2"></rect>
+        <text x="416" y="103" text-anchor="middle" font-size="9.5" font-weight="700" fill="#b5179e"
+            >Model</text
+        >
+        <text x="416" y="118" text-anchor="middle" font-size="7.5" fill="#6b675f"
+            >cost &amp; latency scale</text
+        >
+        <text x="416" y="129" text-anchor="middle" font-size="7.5" fill="#6b675f"
+            >with output length</text
+        >
+        <line x1="303" y1="105" x2="354" y2="105" stroke="#6b675f" marker-end="url(#arw)"></line>
+        <!-- self-host note -->
+        <rect x="500" y="62" width="120" height="88" rx="8" fill="#f6f4ef" stroke="#1f3a5a"></rect>
+        <text x="560" y="82" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1f3a5a"
+            >If self-hosted</text
+        >
+        <text x="560" y="100" text-anchor="middle" font-size="7.5" fill="#6b675f">the wall is</text>
+        <text x="560" y="112" text-anchor="middle" font-size="7.5" fill="#6b675f"
+            >KV-cache memory</text
+        >
+        <text x="560" y="128" text-anchor="middle" font-size="7.5" fill="#6b675f"
+            >grows: context len</text
+        >
+        <text x="560" y="140" text-anchor="middle" font-size="7.5" fill="#6b675f"
+            >&times; concurrency</text
+        >
+        <line
+            x1="476"
+            y1="106"
+            x2="498"
+            y2="106"
+            stroke="#6b675f"
+            stroke-dasharray="3 3"
+            marker-end="url(#arw)"></line>
+        <rect x="24" y="206" width="592" height="34" rx="6" fill="#fbecec" stroke="#9a2417"></rect>
+        <text x="320" y="227" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a2417"
+            >&#9888; No admission control &rarr; one long-output job consumes the budget and
+            head-of-line-blocks everyone &rarr; latency cliff, not graceful slowdown.</text
+        >
+    </svg>
+    <figcaption>
+        Model it as a queue with a token budget and a hard upstream ceiling. Capacity planning here
+        is the AI analogue of connection-pool and thread-pool sizing — get it wrong and you get a
+        latency cliff, not a gentle slowdown.<sup><a href="#s3" id="r3b">3</a></sup>
+    </figcaption>
+</figure>

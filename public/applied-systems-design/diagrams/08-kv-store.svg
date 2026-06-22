@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 620" font-family="sans-serif">
+  <defs>
+    <marker id="ak8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+    <style>
+      .title{font-size:16px;font-weight:bold;fill:#111}
+      .ring{fill:none;stroke:#ccc;stroke-width:2}
+      .node{fill:#eef1f4;stroke:#555;stroke-width:1.4}
+      .nodeR{fill:#e9f6ec;stroke:#1f7a1f;stroke-width:2.4}
+      .nodeT{font-size:12px;font-weight:bold;fill:#111}
+      .box{fill:#eef1f4;stroke:#444;stroke-width:1.3}
+      .boxT{font-size:11px;font-weight:bold;fill:#111}
+      .sub{font-size:10px;fill:#555}
+      .wr{stroke:#2a6099;stroke-width:2.2;fill:none}
+      .wrd{stroke:#2a6099;stroke-width:1.2;fill:none;stroke-dasharray:4 3}
+      .rd{stroke:#b06000;stroke-width:2.2;fill:none}
+      .rdd{stroke:#b06000;stroke-width:1.2;fill:none;stroke-dasharray:4 3}
+      .key{font-size:11px;font-weight:bold;fill:#b00000}
+      .overlap{fill:#fff7e6;stroke:#b58a3b;stroke-width:1.5}
+      .note{fill:#f4f4f2;stroke:#aaa;stroke-width:1}
+    </style>
+  </defs>
+  <rect width="1040" height="620" fill="#ffffff"/>
+  <text x="520" y="26" text-anchor="middle" class="title">Key-value store: consistent-hashing ring + quorum (R + W &gt; N)</text>
+
+  <!-- ring -->
+  <circle class="ring" cx="520" cy="320" r="160"/>
+  <text x="520" y="148" text-anchor="middle" class="sub">0 / hash space (clockwise →)</text>
+  <!-- preference wedge A,B,C -->
+  <path d="M520,320 L590,185 A160,160 0 0 1 590,475 Z" fill="#e9f6ec" opacity="0.5"/>
+  <!-- nodes -->
+  <circle class="nodeR" cx="590" cy="185" r="13"/><text x="606" y="176" class="nodeT" fill="#1f7a1f">A</text>
+  <circle class="nodeR" cx="680" cy="320" r="13"/><text x="702" y="324" class="nodeT" fill="#1f7a1f">B</text>
+  <circle class="nodeR" cx="590" cy="455" r="13"/><text x="606" y="476" class="nodeT" fill="#1f7a1f">C</text>
+  <circle class="node" cx="450" cy="455" r="13"/><text x="426" y="476" class="nodeT">D</text>
+  <circle class="node" cx="360" cy="320" r="13"/><text x="334" y="324" class="nodeT">E</text>
+  <circle class="node" cx="450" cy="185" r="13"/><text x="426" y="176" class="nodeT">F</text>
+  <!-- key -->
+  <text x="520" y="178" class="key">★ hash(key)</text>
+  <path d="M520,190 A160,160 0 0 1 588,184" class="wrd" stroke="#b00000" marker-end="url(#ak8)"/>
+  <text x="600" y="240" class="sub" fill="#1f7a1f">N=3: next 3 nodes (A,B,C)</text>
+
+  <!-- write -->
+  <rect class="box" x="40" y="240" width="110" height="36" rx="5"/><text x="95" y="263" text-anchor="middle" class="boxT">Client (put)</text>
+  <rect class="box" x="60" y="300" width="110" height="36" rx="5"/><text x="115" y="323" text-anchor="middle" class="boxT">Coordinator</text>
+  <line class="wr" x1="150" y1="258" x2="115" y2="298" marker-end="url(#ak8)"/>
+  <line class="wr" x1="170" y1="312" x2="578" y2="190" marker-end="url(#ak8)"/>
+  <line class="wr" x1="170" y1="318" x2="668" y2="318" marker-end="url(#ak8)"/>
+  <line class="wrd" x1="170" y1="326" x2="578" y2="450" marker-end="url(#ak8)"/>
+  <text x="300" y="248" class="sub" fill="#2a6099">W = 2 (A, B ack)</text>
+
+  <!-- read -->
+  <rect class="box" x="890" y="240" width="110" height="36" rx="5"/><text x="945" y="263" text-anchor="middle" class="boxT">Client (get)</text>
+  <rect class="box" x="870" y="300" width="110" height="36" rx="5"/><text x="925" y="323" text-anchor="middle" class="boxT">Coordinator</text>
+  <line class="rd" x1="890" y1="258" x2="925" y2="298" marker-end="url(#ak8)"/>
+  <line class="rd" x1="870" y1="318" x2="692" y2="320" marker-end="url(#ak8)"/>
+  <line class="rd" x1="870" y1="326" x2="600" y2="452" marker-end="url(#ak8)"/>
+  <line class="rdd" x1="870" y1="312" x2="600" y2="188" marker-end="url(#ak8)"/>
+  <text x="740" y="248" class="sub" fill="#b06000">R = 2 (B, C respond)</text>
+
+  <!-- overlap -->
+  <rect class="overlap" x="300" y="520" width="440" height="50" rx="8"/>
+  <text x="520" y="542" text-anchor="middle" class="boxT">R + W &gt; N  (2 + 2 &gt; 3)  →  read overlaps write at Node B</text>
+  <text x="520" y="560" text-anchor="middle" class="sub">the read is guaranteed to see the latest write (Part 1: quorums)</text>
+
+  <!-- LSM note -->
+  <rect class="note" x="640" y="120" width="220" height="44" rx="5"/><text x="750" y="140" text-anchor="middle" class="sub">inside each node: LSM-tree</text><text x="750" y="156" text-anchor="middle" class="sub">memtable → SSTables (Part 3)</text>
+  <line x1="660" y1="150" x2="600" y2="182" stroke="#aaa" stroke-width="1" stroke-dasharray="3 2"/>
+
+  <!-- gossip -->
+  <path d="M380,400 Q 410,440 440,440" fill="none" stroke="#888" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <text x="360" y="430" class="sub">gossip: membership</text>
+</svg>

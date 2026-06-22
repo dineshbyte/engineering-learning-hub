@@ -1,0 +1,814 @@
+---
+# ─── domain-agent-design · Lesson 1 — the MDX-hybrid lesson ───────────────────
+# FRONTMATTER = the full lesson contract (head + masthead + wayfinding) PLUS the
+# structured body data lifted out of the prose: the quiz, the 13 leveled
+# interview Q&A (incl. the design rubric) and the footnote sources. Validated at
+# build time by the `lessons` collection schema (src/content.config.ts →
+# src/schema/lesson.ts). The FAQ JSON-LD is emitted by <Interview> from
+# `interview` below — it must NOT also be set on `jsonLd`.
+#
+# HTML-bearing strings (h1Html, interview q/a, rubric, sources.html) use YAML
+# folded block scalars (>-) so the embedded ", ', &, < and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'The Domain Agent Design Method: A 9-Part Template'
+description: 'Your bar: design any business agent with one repeatable 9-part template — responsibilities, tools, context, memory, runtime, eval, security, approval gates, ROI.'
+keywords: 'responsibilities, tool surface, approval gates, build vs buy, roi, domain agent, blast radius, human in the loop, agent runtime, evaluation, owasp, llm, rag, agent loop'
+path: 'domain-agent-design/lessons/the-domain-agent-design-method.html'
+ogImage: 'assets/og/domain-agent-design.png'
+ogImageAlt: 'Domain Agent Design · Engineering Vault learning track'
+accentVar: '--track-domain'
+
+# —— masthead ——
+trackLabel: 'Domain Agent Design'
+publishedAt: '2026-06-21'
+kicker: 'Lesson 1 · Domain Agent Design · Senior'
+h1Html: 'The Domain Agent Design <em>Method</em>'
+metaLine: '~13 min · 3 modules · one repeatable 9-part template for designing any business agent, walked once on a worked example'
+chips:
+    - 'Responsibilities'
+    - 'Tool surface'
+    - 'Approval gates'
+    - 'Build vs buy'
+    - 'ROI'
+
+# —— routing (used only by the dynamic route) ——
+track: 'domain-agent-design'
+number: '0001'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: 'In the 9-part template, what must you design <em>before</em> you choose the agent''s tools?'
+      correct: 2
+      options:
+          - 'The exact prompt wording that tells the model how to behave each turn'
+          - 'The memory backend that will persist state across separate sessions'
+          - 'The responsibility boundary: what it owns, defers, escalates, refuses'
+          - 'The evaluation dashboard you will watch once the agent is in production'
+    - q: "Why does adding one more tool to an agent's surface carry a cost?"
+      correct: 0
+      options:
+          - 'It widens both the agent''s capability and its blast radius if misused'
+          - 'It always forces a full retrain of the underlying language model first'
+          - 'It removes the agent''s ability to refuse requests outside its remit'
+          - 'It converts the agent from a workflow into an unbounded assistant'
+    - q: 'Blast radius is best described as…'
+      correct: 3
+      options:
+          - 'The number of tokens an agent consumes across one full reasoning loop'
+          - 'The latency an agent adds versus a human handling the same request'
+          - "The count of distinct tools wired into the agent's available surface"
+          - 'The worst-case damage if one action is wrong, malicious, or repeated'
+    - q: "Which cost most often makes a domain agent's ROI negative?"
+      correct: 1
+      options:
+          - 'The one-time price of buying the agent runtime platform from a vendor'
+          - 'The human-review time when an approval gate fires on every action'
+          - "The disk storage used to persist the agent's long-term memory state"
+          - "The cost of writing the system prompt that defines the agent's role"
+    - q: 'For a domain agent, the default build-vs-buy split is…'
+      correct: 2
+      options:
+          - 'Build everything in-house because no vendor understands AI agents well'
+          - 'Buy everything from one vendor because the loop is the hard part to get right'
+          - 'Buy the commodity plumbing; build the domain glue (boundary, tools, policies)'
+          - 'Build the model and runtime; buy the business rules from a consultancy'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'What is a domain agent, and how is it different from a general assistant?'
+      a: >-
+          <b>Hit these points:</b> a domain agent is an <b>LLM using tools in a loop</b>, scoped to one
+          business domain (billing, support, SRE) with a defined goal, a fixed tool surface, and an
+          owner &rarr; a general assistant has an open-ended goal and an unbounded surface; the domain
+          agent does <b>one job</b> &rarr; the design artifact is the <b>boundary</b>, not the model
+          &rarr; because the job is narrow you can actually evaluate it, secure it, and size its blast
+          radius &rarr; the model is interchangeable; the boundary, tools, and policies are what you
+          own.
+    - level: 'core'
+      q: 'List the 9 parts of the design template in order, and say which one comes first.'
+      a: >-
+          <b>Hit these points:</b> (1) responsibilities &mdash; the boundary, drawn first &rarr; (2)
+          tools &mdash; the surface &rarr; (3) context &rarr; (4) memory &rarr; (5) runtime &rarr; (6)
+          evaluation &rarr; (7) security &rarr; (8) approval gates &rarr; (9) ROI / build-vs-buy &rarr;
+          <b>responsibilities first</b> because the boundary defines the surface, the surface defines
+          the risk, the risk defines the gates, and value decides whether you ship at all.
+    - level: 'core'
+      q: 'What is blast radius, and how does it relate to approval gates?'
+      a: >-
+          <b>Hit these points:</b> blast radius = the <b>worst-case scope of damage</b> if one action
+          is wrong, malicious, or repeated &rarr; a read-only query has near-zero blast radius; an
+          irreversible write or a fan-out to many records has large blast radius &rarr; the rule: the
+          more an agent can do <b>unsupervised</b>, the more an approval gate matters &rarr; so you gate
+          <b>by action</b> &mdash; auto-allow the safe reads, pause the high-blast writes for a human.
+    - level: 'core'
+      q: "What's the default build-vs-buy answer for a domain agent, and why?"
+      a: >-
+          <b>Hit these points:</b> split the system into <b>commodity plumbing</b> (model, runtime
+          loop, tool protocol, eval harness) and <b>domain glue</b> (boundary, tools, policies, gates)
+          &rarr; the plumbing is the same for every domain &mdash; <b>buy it</b> &rarr; the glue
+          encodes your business rules and risk tolerance, which no vendor can know &mdash; <b>build
+          it</b> &rarr; the call is really "where is our differentiation," and it's in the boundary and
+          policies, not the runtime.
+    - level: 'senior'
+      q: 'A teammate says "we''ll add a system-prompt rule: never refund over $50." Push back.'
+      a: >-
+          <b>Hit these points:</b> a prompt rule is a <b>request to the model, not an enforced
+          control</b> &mdash; it can be ignored, overridden, or jailbroken via injected input &rarr; a
+          refund over $50 is a high-blast, irreversible write; that's exactly where the boundary must
+          be <b>enforced in code</b> &rarr; enforce it in the tool: the refund tool caps the amount, or
+          requires an approval gate above the threshold &rarr; keep the prompt rule as defense-in-depth
+          UX, but the gate is the boundary &rarr; this mirrors authorization in the data layer &mdash;
+          never in a comment asking the query to behave.
+    - level: 'senior'
+      q: "What goes into an agent's ROI calculation, and what's the most common trap?"
+      a: >-
+          <b>Hit these points:</b> ROI = value returned vs <b>all-in cost</b> &rarr; all-in cost =
+          tokens + tool calls + <b>human-review time</b> + failure/cleanup cost, not just the model
+          bill &rarr; the trap: an agent that needs review on <b>every</b> action often costs more than
+          the human it replaced &mdash; you pay the model AND the reviewer &rarr; ROI is coupled to
+          gate design: more gates means more safety but lower ROI &rarr; it's the build-or-kill test
+          &mdash; if deflected work doesn't clear all-in cost, don't ship it.
+    - level: 'senior'
+      q: 'Your agent occasionally loops for dozens of steps, burning budget without resolving. Which template parts failed?'
+      a: >-
+          <b>Hit these points:</b> the symptom is a <b>runaway loop</b>, so the primary gap is part 5
+          (runtime) &mdash; no step cap, no cost cap &rarr; add a hard step limit and a per-session cost
+          ceiling so it terminates and escalates instead of spinning &rarr; it's also an <b>eval
+          gap</b> (part 6): no resolution metric means you didn't catch it &rarr; possibly a <b>context
+          gap</b> (part 3): if the right info never lands in the window, the model keeps retrying &rarr;
+          fix the runtime to stop the bleeding, then instrument eval, then check whether retrieval
+          feeds the loop what it needs.
+    - level: 'senior'
+      q: 'Why is the tool surface the hinge that everything downstream turns on?'
+      a: >-
+          <b>Hit these points:</b> the surface is the agent's <b>reach</b> &mdash; it defines what the
+          agent can do, so it defines what can go wrong &rarr; a read-only surface has near-zero blast
+          radius: no gates, light security, easy ROI &rarr; add one irreversible write and you now need
+          a gate on it (part 8), a tighter security review (part 7: can injected input trigger it?), an
+          eval that checks it fires correctly (part 6), and higher all-in cost from review (part 9)
+          &rarr; so parts 6&ndash;9 are all <b>functions of part 2</b> &rarr; keep the surface as small
+          as the job allows, because every tool cascades cost and risk through the rest of the
+          template.
+    - level: 'staff'
+      q: "You're standing up agents for five business domains at once. How do you avoid five bespoke designs?"
+      a: >-
+          <b>Hit these points:</b> the whole point of a template is that the <b>method is shared and
+          only the instantiation varies</b> &rarr; standardize the commodity layer once: one runtime
+          (loop, retries, limits), one tool protocol (e.g. MCP), one eval harness, one gate mechanism
+          &mdash; buy or build it a single time &rarr; per domain, fill in only parts 1, 2, 8, 9: the
+          boundary, the tool surface, where gates fire, and the ROI test &mdash; the parts that encode
+          that domain's rules &rarr; this gives you consistent security and observability across all
+          five and lets one platform team own the plumbing while domain teams own the glue &rarr; the
+          failure mode to avoid is five teams each rebuilding a loop and a gate &mdash; that's where
+          bespoke creeps in and security drifts.
+    - level: 'staff'
+      q: 'Two proposed agents are identical except one has a read-only surface and the other can also write. Compare the full design implications.'
+      a: >-
+          <b>Hit these points:</b> the surface difference cascades through every later part &rarr;
+          read-only: near-zero blast radius &mdash; no approval gates, security is mostly "don't leak
+          data," eval checks answer quality, ROI is clean because there's no cleanup cost &rarr; the
+          writer: every write is an irreversible action &mdash; now you need a gate sized to its blast
+          radius (part 8), a security review for whether injected input can trigger it (part 7), an
+          eval that the write fires correctly and only when intended (part 6), and a higher all-in cost
+          from human review (part 9) &rarr; the design lesson: <b>capability is not free</b> &mdash; the
+          moment you cross from read to write you've signed up for the gate, the review, and the
+          cleanup-cost line in the ROI &rarr; so justify each write against the deflection it buys, and
+          gate it.
+    - level: 'staff'
+      q: "How does this track build on AI Agents and Context Engineering, and what's genuinely new here?"
+      a: >-
+          <b>Hit these points:</b> AI Agents taught the <b>primitives</b> &mdash; LLM, tool, agent
+          loop, runtime, memory, MCP &mdash; and introduced business-agent archetypes &rarr; Context
+          Engineering taught how to <b>curate the window</b> &mdash; retrieval, assembly, caching,
+          ordering, security &rarr; this track turns those into a <b>design discipline</b>: a
+          repeatable template you instantiate per domain &rarr; parts 3&ndash;4 (context, memory) lean
+          on Context Engineering; parts 2, 5 (tools, runtime) lean on AI Agents &rarr; genuinely new
+          here is the <b>boundary, the approval gates, and the ROI/build-vs-buy test</b> &mdash; the
+          parts specific to a business domain that no general track can hand you.
+    - level: 'design'
+      q: 'Design a Support agent end to end using the 9-part template. Where do the gates go and why?'
+      a: >-
+          <b>A strong answer covers:</b> <b>responsibilities</b> &mdash; answer account/order questions,
+          draft replies, issue small refunds; refuse legal/medical advice and anything outside support
+          &rarr; <b>tools</b> &mdash; read order, read account, search KB, issue refund, escalate;
+          smallest set that covers the job &rarr; <b>context</b> &mdash; the question + retrieved KB +
+          the order record, scoped to the customer; <b>memory</b> &mdash; prior tickets retrieved, not
+          dumped &rarr; <b>runtime</b> &mdash; bounded loop with retries and a step/cost limit &rarr;
+          <b>evaluation</b> &mdash; deflection, resolution quality, escalation correctness on a labelled
+          set &rarr; <b>security</b> &mdash; ticket text and KB are untrusted, scope retrieval by
+          customer, least-privilege tools &rarr; <b>gates</b> &mdash; reads auto-allow (zero blast);
+          refund above a cap and escalate-to-billing pause for a human (high blast) &rarr; <b>ROI</b>
+          &mdash; deflected agent-hours vs tokens + review time; if every refund needs review the gate
+          eats the savings, so set the auto-approve cap where the blast radius is acceptable.
+    - level: 'design'
+      q: "Design an SRE incident-triage agent. Contrast its gates and ROI with the Support agent's."
+      a: >-
+          <b>A strong answer covers:</b> <b>responsibilities</b> &mdash; read alerts/logs/metrics,
+          correlate, summarize, propose remediations; refuse to apply changes it can't reason about
+          &rarr; <b>tools</b> &mdash; query metrics, read logs, read deploy history, (gated) restart
+          service, (gated) roll back; the writes are the high-blast ones &rarr; <b>context/memory</b>
+          &mdash; the firing alert + recent deploys + prior similar incidents retrieved &rarr;
+          <b>runtime</b> &mdash; bounded loop, step/cost cap &rarr; <b>evaluation</b> &mdash;
+          time-to-correct-diagnosis and false-remediation rate, not just deflection &rarr;
+          <b>security</b> &mdash; treat log/alert content as untrusted (it can carry injected text),
+          least-privilege infra tools &rarr; <b>gates vs Support</b> &mdash; SRE's blast radius is far
+          higher: a wrong restart or rollback can take down prod, so far more should be propose-only
+          with a human gate; the Support agent can safely auto-resolve most tickets, the SRE agent
+          should mostly recommend &rarr; <b>ROI</b> &mdash; the value is faster MTTR and analyst time
+          saved, but if every remediation is gated the deflection is in the <em>diagnosis</em>, not the
+          action &mdash; which is fine, because the cleanup cost of an unsupervised bad remediation
+          dwarfs the saving.
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Design-round framework</b> &mdash; narrate a domain agent in template order so the interviewer
+    hears boundary-first, risk-aware, value-last:
+rubric:
+    - 'Clarify scope: what domain, what''s the goal, what''s the cost of a wrong action vs a wrong answer, who owns it?'
+    - 'Part 1 &mdash; <em>responsibilities</em>: state what it owns, what it defers/escalates, what it refuses. This is the contract.'
+    - 'Part 2 &mdash; <em>tools</em>: the smallest surface that covers the boundary; flag each tool''s blast radius as you list it.'
+    - 'Parts 3&ndash;5 &mdash; <em>context, memory, runtime</em>: what''s in the window, what persists, the loop + limits.'
+    - 'Part 6 &mdash; <em>evaluation</em>: the metric that matches the job (deflection, resolution, escalation correctness).'
+    - 'Part 7 &mdash; <em>security</em>: untrusted input, least privilege, map to the OWASP failure modes.'
+    - 'Part 8 &mdash; <em>approval gates</em>: gate by blast radius &mdash; auto-allow reads, cap cheap writes, pause irreversible/fan-out.'
+    - 'Part 9 &mdash; <em>ROI / build-vs-buy</em>: all-in cost vs deflected work; buy plumbing, build glue; ship-or-kill.'
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          Anthropic, "Building effective agents" &mdash; anthropic.com/research/building-effective-agents.
+          Workflow vs agent; start with the simplest thing; agents trade latency/cost for autonomy. The
+          spine for whether to build an agent at all.
+    - id: 's2'
+      html: >-
+          Anthropic, "Effective context engineering for AI agents" &mdash; anthropic.com/engineering.
+          Context as a finite, curated resource; the layer parts 3&ndash;4 of the template depend on.
+          Cross-links to the Engineering Vault Context Engineering track.
+    - id: 's3'
+      html: >-
+          Anthropic, "Writing effective tools for AI agents" &mdash; anthropic.com/engineering. Tool
+          surface design &mdash; how many tools, naming, error shapes; the basis for the "smallest
+          surface that fits the boundary" rule. Smallest-surface framing is editorial.
+    - id: 's4'
+      html: >-
+          Yao et al., 2022, "ReAct: Synergizing Reasoning and Acting in Language Models" &mdash;
+          arXiv:2210.03629 (ICLR 2023). The reason-then-act loop underneath every domain agent;
+          grounding actions in observations is what makes it more than a chatbot.
+    - id: 's5'
+      html: >-
+          OWASP, "Top 10 for LLM Applications" &mdash; owasp.org. Excessive agency, prompt injection,
+          and insecure tool/plugin use &mdash; the failure modes a domain agent's boundary and approval
+          gates must contain.
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import { Fig1, Fig2, Fig3, Fig4 } from '../../../components/figures/domain-agent-design/the-domain-agent-design-method/index.ts';
+
+<div class="mission">
+    <strong>Your bar:</strong> stop designing agents ad hoc. Take <em>any</em> business domain &mdash;
+    billing, support, SRE, research &mdash; and run it through the same nine-part template, in the
+    same order, every time. By the end you can answer the question an architect actually gets asked:
+    <b>given a domain, what does the agent own, what can it touch, where does a human have to sign
+    off, and is it worth building at all?</b>
+    <sup><a href="#s1" id="r1">1</a></sup>
+    The later lessons just instantiate this template per domain &mdash; this is the method they share.
+</div>
+
+<p>
+    This track turns the <em>archetypes</em> from{' '}
+    <a href="../../ai-agents/lessons/agent-systems-and-production.html">
+        AI Agents &middot; Lesson 4 (Business agent architecture)
+    </a>{' '}
+    into a repeatable design discipline. The whole method is four moves:
+</p>
+
+<div class="chips">
+    <span class="chip">
+        Draw the <b>responsibility boundary</b> before any tool
+    </span>
+    <span class="chip c2">
+        size the <b>tool surface</b> &mdash; it is the agent's reach
+    </span>
+    <span class="chip c3">
+        place <b>approval gates</b> by blast radius
+    </span>
+    <span class="chip c4">
+        then run the <b>ROI / build-vs-buy</b> test
+    </span>
+</div>
+
+{/* ============ HERO ============ */}
+<Fig1 />
+
+<nav class="toc">
+    <a href="#m1">1 &middot; The boundary &amp; the surface (parts 1&ndash;2)</a>
+    <a href="#m2">2 &middot; The machinery (parts 3&ndash;7)</a>
+    <a href="#m3">3 &middot; Gates &amp; ROI (parts 8&ndash;9) + worked example</a>
+    <a href="#quiz">&#9733; Retrieval practice</a>
+    <a href="#interview">&#9733; Interview questions</a>
+    <a href="#m3">&#9733; Worked example</a>
+</nav>
+
+{/* ============ MODULE 1 ============ */}
+<section class="lvl" id="m1">
+    <div class="lvltop">
+        <span class="num">1</span>
+        <h2>The Boundary &amp; the Surface</h2>
+    </div>
+    <p class="tagline">
+        A <b>domain agent</b> is an LLM using tools in a loop, scoped to one business domain with a
+        defined goal, a fixed tool surface, and an owner. The design artifact is the <b>boundary</b>,
+        not the model &mdash; and you draw it before you wire a single tool.
+        <sup><a href="#s2" id="r2">2</a></sup>
+    </p>
+
+    <h3>Definition &amp; why it exists</h3>
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> A domain agent does one job: answer billing questions, triage an incident, draft
+            a research brief. Its <em>responsibility boundary</em> is its API contract &mdash; inputs it
+            accepts, actions it owns, things it must defer, escalate, or refuse.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> A general assistant has an open goal and an unbounded surface &mdash;
+            you can't evaluate it, secure it, or size its risk. Narrow the job and all four become
+            tractable.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> A job description. A teller cashes cheques and answers account
+            questions; they don't approve mortgages or give tax advice. The role is the boundary
+            &mdash; written before the desk is built.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> A service interface. You define the contract (accepted requests, owned
+            operations, errors it throws) before you implement the handlers. Tools are the
+            implementation; the boundary is the interface.
+        </div>
+    </div>
+
+    <h3>Boundary &rarr; surface: every tool widens the reach</h3>
+    <Fig2 />
+
+    <div class="myth">
+        <div class="m">&#10007; "Pick the tools first, then figure out what the agent should do."</div>
+        <div class="t">
+            &#10003; Boundary first. Choosing tools first decides the reach before the job &mdash; you
+            end up with a wide surface and no contract for what's out of bounds.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">
+            &#10007; "More tools make the agent more capable, so add everything it might need."
+        </div>
+        <div class="t">
+            &#10003; Every tool added widens capability <em>and</em> blast radius. The smallest surface
+            that covers the job is the goal &mdash; unused reach is pure risk.
+        </div>
+    </div>
+
+    <div class="rule">
+        <span>&#128229; Memory rule:</span> <span>Boundary before tools.</span> The boundary is the
+        agent's <span>contract</span>; the tool surface is the smallest set that <span>fits</span> it.
+    </div>
+
+    <details class="mc">
+        <summary>Memory check</summary>
+        <ul>
+            <li>
+                What is a domain agent's "design artifact"?{' '}
+                <span class="ans">
+                    &rarr; the responsibility boundary &mdash; inputs accepted, actions owned, things
+                    deferred/escalated/refused; not the model
+                </span>
+            </li>
+            <li>
+                Why draw the boundary before choosing tools?{' '}
+                <span class="ans">
+                    &rarr; the boundary tells you the smallest tool surface that covers the job;
+                    tools-first decides the reach before the job
+                </span>
+            </li>
+            <li>
+                What does adding a tool cost you?{' '}
+                <span class="ans">
+                    &rarr; more capability AND more blast radius; an unused tool is risk you carry for
+                    nothing
+                </span>
+            </li>
+        </ul>
+    </details>
+
+    <details class="iq">
+        <summary>
+            M1 &mdash; A teammate wants to give the support agent a "run any SQL" tool "so it can
+            answer anything." Talk them out of it.
+        </summary>
+        <div class="a">
+            <b>Hit these points:</b> "run any SQL" is the widest possible surface &mdash; it can read
+            every tenant's data, mutate rows, drop tables &rarr; that's enormous blast radius for a job
+            that needs three read tools &rarr; the boundary says the agent answers <em>support</em>
+            questions, so the surface is read-order, read-account, search-KB &mdash; scoped,
+            parameterized, least-privilege &rarr; an open SQL tool also makes injection catastrophic:
+            untrusted ticket text could steer a query &rarr; replace it with narrow tools that encode
+            exactly the reads the boundary allows, and the agent loses no real capability while
+            shedding most of the risk.
+        </div>
+    </details>
+</section>
+
+{/* ============ MODULE 2 ============ */}
+<section class="lvl" id="m2">
+    <div class="lvltop">
+        <span class="num">2</span>
+        <h2>The Machinery (Context, Memory, Runtime, Eval, Security)</h2>
+    </div>
+    <p class="tagline">
+        Parts 3&ndash;7 are the machinery the agent runs on. Two of them &mdash; context and memory
+        &mdash; you already designed in{' '}
+        <a href="../../context-engineering/lessons/context-caching-ordering-and-security.html">
+            Context Engineering
+        </a>
+        ; here you just <em>instantiate</em> them per domain.
+        <sup><a href="#s2" id="r4">2</a></sup>
+    </p>
+
+    <h3>The five middle parts, at a glance</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Part</th>
+                <th>What it decides</th>
+                <th>Where it comes from</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>
+                    <b>3 &middot; Context</b>
+                </td>
+                <td>What goes in the window each turn (instructions, retrieved docs, the request)</td>
+                <td>Context Engineering &mdash; curate before the model runs</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>4 &middot; Memory</b>
+                </td>
+                <td>Persisted state retrieved back into context (prior tickets, learned facts)</td>
+                <td>Context Engineering &mdash; reachable only by retrieval</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>5 &middot; Runtime</b>
+                </td>
+                <td>The loop, tool execution, retries, step/cost limits</td>
+                <td>AI Agents &mdash; the orchestration layer</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>6 &middot; Evaluation</b>
+                </td>
+                <td>How you score the agent before and after ship</td>
+                <td>New per domain &mdash; pick the metric that matches the job</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>7 &middot; Security</b>
+                </td>
+                <td>Untrusted input, least privilege, the failure modes</td>
+                <td>OWASP LLM Top 10 &mdash; the threat model</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Internal working: the runtime is the agent loop with guard-rails</h3>
+    <Fig3 />
+
+    <h3>Failure modes: what part 7 (security) has to contain</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Failure mode</th>
+                <th>How it shows up</th>
+                <th>What contains it</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>
+                    <b>Excessive agency</b>
+                </td>
+                <td>Agent takes a high-blast action it shouldn't (refund, delete, deploy)</td>
+                <td>Smallest tool surface + approval gate on the action</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>Prompt injection</b>
+                </td>
+                <td>Untrusted input (ticket, doc) steers the agent off its boundary</td>
+                <td>Treat all input as data; scope tools; least privilege</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>Insecure tool use</b>
+                </td>
+                <td>A tool with too much reach (open SQL, arbitrary egress) is abused</td>
+                <td>Narrow, parameterized tools that encode the boundary</td>
+            </tr>
+            <tr>
+                <td>
+                    <b>Runaway loop</b>
+                </td>
+                <td>Agent loops, burning tokens and tool calls with no progress</td>
+                <td>Step limit + cost cap in the runtime</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="myth">
+        <div class="m">&#10007; "Context and memory are new problems I solve fresh for each agent."</div>
+        <div class="t">
+            &#10003; They're the same problem you already designed in Context Engineering. Per domain
+            you only choose <em>what</em> to retrieve and persist &mdash; the mechanics carry over.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">
+            &#10007; "Evaluation can wait until after we ship &mdash; we'll watch it in prod."
+        </div>
+        <div class="t">
+            &#10003; Pick the metric before you ship (deflection, resolution quality, escalation
+            correctness). Without a score you can't tell a regression from noise, or justify the ROI.
+        </div>
+    </div>
+
+    <div class="rule">
+        <span>&#128229; Memory rule:</span> The runtime holds the <span>limits</span> the prompt can't
+        enforce. A step cap, a cost cap, and a gate on <span>high-blast tools</span> live in code
+        &mdash; not in an instruction asking the model to behave.
+    </div>
+
+    <details class="mc">
+        <summary>Memory check</summary>
+        <ul>
+            <li>
+                Which two template parts come straight from Context Engineering?{' '}
+                <span class="ans">
+                    &rarr; context (3) and memory (4) &mdash; you instantiate them per domain, not
+                    reinvent them
+                </span>
+            </li>
+            <li>
+                Where do limits and approval gates sit in the loop?{' '}
+                <span class="ans">
+                    &rarr; on the "act" step &mdash; the runtime caps steps/cost and pauses high-blast
+                    tool calls for a human
+                </span>
+            </li>
+            <li>
+                Name the OWASP-style failure mode behind an unsupervised refund.{' '}
+                <span class="ans">
+                    &rarr; excessive agency &mdash; contained by the smallest surface plus an approval
+                    gate on the action
+                </span>
+            </li>
+        </ul>
+    </details>
+
+    <details class="iq">
+        <summary>
+            M2 &mdash; Your agent occasionally loops for 40 steps and burns the token budget without
+            resolving the ticket. Which template parts are you missing?
+        </summary>
+        <div class="a">
+            <b>Hit these points:</b> the symptom is a runaway loop, so the gap is in part 5 (runtime)
+            &mdash; no step cap and no cost cap &rarr; add a hard step limit and a per-session
+            token/cost ceiling so the loop terminates and escalates instead of spinning &rarr; but a
+            loop that never resolves is also an eval gap (part 6): you have no resolution metric telling
+            you it's failing &rarr; and possibly a context gap (part 3): if the right info never lands
+            in the window, the model keeps re-trying &rarr; fix the runtime first to stop the bleeding,
+            then instrument eval to catch it earlier, then check whether retrieval is feeding the loop
+            what it needs.
+        </div>
+    </details>
+</section>
+
+{/* ============ MODULE 3 ============ */}
+<section class="lvl" id="m3">
+    <div class="lvltop">
+        <span class="num">3</span>
+        <h2>Gates, ROI &amp; the Worked Example</h2>
+    </div>
+    <p class="tagline">
+        Parts 8&ndash;9 are the decisions that make or break the agent in production: <b>where a human
+        signs off</b> (sized to blast radius) and <b>whether it's worth building at all</b>. Then we
+        walk the whole template once on a Support agent.
+        <sup><a href="#s5" id="r6">6</a></sup>
+    </p>
+
+    <h3>Approval gates &mdash; sized to blast radius</h3>
+    <Fig4 />
+
+    <h3>ROI &mdash; and why the gate design decides it</h3>
+    <div class="facts">
+        <div class="fact">
+            <b>Is</b> ROI = value returned (deflected human work) vs all-in cost: tokens + tool calls +
+            <em>human-review time</em> + failure/cleanup cost. Not just the model bill.
+        </div>
+        <div class="fact">
+            <b>Why it exists</b> An agent that needs review on every action often costs <em>more</em>
+            than the human it replaced &mdash; you pay the model <em>and</em> the reviewer. ROI is the
+            build-or-kill test.
+        </div>
+        <div class="fact blue">
+            <b>Like (world)</b> Hiring an assistant you must double-check on every task. If you re-do
+            everything they do, you've added cost, not capacity.
+        </div>
+        <div class="fact blue">
+            <b>Like (code)</b> A cache with a 0% hit rate: all the machinery, none of the saving. If
+            the gate fires on every action, the deflection never materializes.
+        </div>
+    </div>
+
+    <h3>Build vs buy &mdash; commodity plumbing vs domain glue</h3>
+    <div class="myth">
+        <div class="m">&#10007; "Building an agent platform from scratch is our differentiation."</div>
+        <div class="t">
+            &#10003; The loop, model, tool protocol, and eval harness are commodity &mdash;
+            <em>buy</em> them. Your differentiation is the boundary, tools, and policies no vendor can
+            know &mdash; <em>build</em> those.
+        </div>
+    </div>
+    <div class="myth">
+        <div class="m">&#10007; "Buy the whole thing &mdash; the vendor knows agents better than we do."</div>
+        <div class="t">
+            &#10003; No vendor knows <em>your</em> business rules, refund limits, or risk tolerance.
+            Buy the platform; build the domain glue. That glue is the agent's actual value.
+        </div>
+    </div>
+
+    <h3>The worked example: a Support agent, all nine parts</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Part</th>
+                <th>Support agent instantiation</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>1</td>
+                <td>
+                    <b>Responsibilities</b>
+                </td>
+                <td>
+                    Answer account/order questions, draft replies, issue small refunds; <em>refuse</em>
+                    legal/medical advice and anything outside support
+                </td>
+            </tr>
+            <tr>
+                <td>2</td>
+                <td>
+                    <b>Tools</b>
+                </td>
+                <td>
+                    read order, read account, search KB, issue refund, escalate to human &mdash;
+                    smallest set that covers the job
+                </td>
+            </tr>
+            <tr>
+                <td>3</td>
+                <td>
+                    <b>Context</b>
+                </td>
+                <td>The user's question + retrieved KB articles + the order record, scoped to this customer</td>
+            </tr>
+            <tr>
+                <td>4</td>
+                <td>
+                    <b>Memory</b>
+                </td>
+                <td>Prior tickets for this customer, retrieved into the window &mdash; not dumped wholesale</td>
+            </tr>
+            <tr>
+                <td>5</td>
+                <td>
+                    <b>Runtime</b>
+                </td>
+                <td>Bounded observe&ndash;think&ndash;act loop with retries and a step/cost limit</td>
+            </tr>
+            <tr>
+                <td>6</td>
+                <td>
+                    <b>Evaluation</b>
+                </td>
+                <td>Deflection rate, resolution quality, escalation correctness on a labelled ticket set</td>
+            </tr>
+            <tr>
+                <td>7</td>
+                <td>
+                    <b>Security</b>
+                </td>
+                <td>
+                    Treat ticket text &amp; KB content as untrusted; scope retrieval by customer;
+                    least-privilege tools
+                </td>
+            </tr>
+            <tr>
+                <td>8</td>
+                <td>
+                    <b>Approval gates</b>
+                </td>
+                <td>Reads auto-allow; refund &le; $50 auto; refund &gt; $50 and escalate-to-billing pause for a human</td>
+            </tr>
+            <tr>
+                <td>9</td>
+                <td>
+                    <b>ROI / build-buy</b>
+                </td>
+                <td>Deflected agent-hours vs tokens + review time; buy the runtime, build the boundary/tools/policies</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="rule">
+        <span>&#128229; Memory rule:</span> Gate by <span>blast radius</span>, price by{' '}
+        <span>all-in cost</span>. Every gate adds safety and subtracts ROI &mdash; set the auto-approve
+        threshold where the blast radius is acceptable.
+    </div>
+
+    <details class="mc">
+        <summary>Memory check</summary>
+        <ul>
+            <li>
+                What decides where an approval gate goes?{' '}
+                <span class="ans">
+                    &rarr; the blast radius of the action &mdash; gate the irreversible/fan-out,
+                    auto-allow the zero-blast reads
+                </span>
+            </li>
+            <li>
+                What's in "all-in cost" beyond the model bill?{' '}
+                <span class="ans">
+                    &rarr; tool calls + human-review time + failure/cleanup cost; review time is the one
+                    that quietly kills ROI
+                </span>
+            </li>
+            <li>
+                Default build-vs-buy for a domain agent?{' '}
+                <span class="ans">
+                    &rarr; buy the commodity plumbing (model, runtime, tool protocol, eval), build the
+                    domain glue (boundary, tools, policies)
+                </span>
+            </li>
+        </ul>
+    </details>
+
+    <details class="iq">
+        <summary>
+            M3 &mdash; Leadership wants the support agent to auto-approve all refunds "to maximize
+            deflection and ROI." What do you say?
+        </summary>
+        <div class="a">
+            <b>Hit these points:</b> deflection and ROI aren't the same thing &mdash; auto-approving
+            every refund maximizes deflection but exposes the full blast radius of the refund tool
+            &rarr; a confused or injected agent can now issue unbounded refunds with no human in the
+            path; one incident's cleanup cost can dwarf months of savings &rarr; the right move is a
+            threshold: auto-allow refunds up to a bounded cap where the blast radius is acceptable, gate
+            the rest &rarr; that keeps most of the deflection (most refunds are small) while bounding
+            the worst case &rarr; then measure: if review on the gated tail is eating the savings, raise
+            the cap deliberately with eyes on the blast radius &mdash; don't remove the gate to chase an
+            ROI number.
+        </div>
+    </details>
+</section>
+
+{/* ============ QUIZ ============ */}
+<h2 class="sec" id="quiz">
+    Retrieval practice &mdash; test the method
+</h2>
+
+<Quiz items={frontmatter.quiz} />
+
+{/* ============ INTERVIEW QUESTIONS ============ */}
+<h2 class="sec" id="interview">
+    Interview &mdash; pick your bar
+</h2>
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall &middot; <b>Senior</b> = trade-offs
+    &amp; failure modes &middot; <b>Staff</b> = synthesis under ambiguity &middot; <b>System&nbsp;Design</b>
+    = open design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+<Sources items={frontmatter.sources} />

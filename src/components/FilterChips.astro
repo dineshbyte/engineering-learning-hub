@@ -1,0 +1,55 @@
+---
+// Topic filter chips — nav.filters#filters from docs/index.html. Each chip is a
+// button.fchip[data-cat][aria-pressed]; the ported client script toggles
+// is-active / aria-pressed and shows/hides cards by data-cat (filter_select).
+// data-cat, the .fchip / .fcount classes and aria-pressed are the contract — do
+// NOT rename them.
+//
+// The .fcount badge used to be filled by a DOM count at runtime; we now compute
+// each category's count from the tracks at BUILD time and render it server-side
+// (no count flash, works with JS disabled). The 'all' chip counts every track and
+// starts pressed / is-active.
+//
+// Labels carry source entities (AI &amp; LLMs, Data &amp; storage, APIs &amp;
+// design) and are emitted with set:html to match docs/index.html byte-for-byte.
+import type { Track } from '../schema/track';
+
+interface Props {
+    tracks: Track[];
+}
+
+const { tracks } = Astro.props;
+
+// Chip order + labels are fixed (from docs/index.html); 'all' is first.
+const CHIPS: { cat: Track['category'] | 'all'; label: string }[] = [
+    { cat: 'all', label: 'All tracks' },
+    { cat: 'ai', label: 'AI &amp; LLMs' },
+    { cat: 'ai-eng', label: 'AI Engineering' },
+    { cat: 'distributed', label: 'Distributed' },
+    { cat: 'data', label: 'Data &amp; storage' },
+    { cat: 'design', label: 'APIs &amp; design' },
+];
+
+// Build-time counts: 'all' = every track; each category = tracks in it.
+const countFor = (cat: Track['category'] | 'all'): number =>
+    cat === 'all' ? tracks.length : tracks.filter((t) => t.category === cat).length;
+---
+
+<nav class="filters" id="filters" aria-label="Filter tracks by topic">
+    {
+        CHIPS.map(({ cat, label }) => {
+            const isAll = cat === 'all';
+            return (
+                <button
+                    type="button"
+                    class={isAll ? 'fchip is-active' : 'fchip'}
+                    data-cat={cat}
+                    aria-pressed={isAll ? 'true' : 'false'}
+                >
+                    <Fragment set:html={label} />
+                    <span class="fcount">{countFor(cat)}</span>
+                </button>
+            );
+        })
+    }
+</nav>

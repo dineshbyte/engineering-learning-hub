@@ -1,0 +1,100 @@
+---
+/**
+ * mvcc-internals-deep-dive · Figure 4 — loose ends: indexes carry no version,
+ * SSI ⊃ MVCC, and "which model wins" (neither — they trade).
+ *
+ * Copied VERBATIM from
+ * docs/transactions-isolation/mvcc-internals-deep-dive.html (Level 5 figure).
+ * Component, not inline MDX, for the kebab-case SVG attr reason (see Fig1).
+ * References NO arrowhead markers, so it needs no local <defs>.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 600 170"
+        role="img"
+        aria-label="Secondary indexes carry no version info; SSI is built on top of MVCC snapshots; neither storage model wins, they trade"
+    >
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <rect x="14" y="20" width="180" height="130" rx="9" fill="#fff" stroke="#d8d4c8"></rect>
+            <text
+                x="104"
+                y="42"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#7a1f12">INDEXES</text
+            >
+            <text x="104" y="64" text-anchor="middle" font-size="9" fill="#6b675f"
+                >no version info inside</text
+            >
+            <text x="104" y="84" text-anchor="middle" font-size="9" fill="#6b675f"
+                >PG: visibility map</text
+            >
+            <text x="104" y="100" text-anchor="middle" font-size="9" fill="#6b675f"
+                >for index-only scans</text
+            >
+            <text x="104" y="120" text-anchor="middle" font-size="9" fill="#6b675f"
+                >InnoDB: drop to</text
+            >
+            <text x="104" y="135" text-anchor="middle" font-size="9" fill="#6b675f"
+                >clustered + undo</text
+            >
+            <rect x="210" y="20" width="180" height="130" rx="9" fill="#fff" stroke="#1f3a5a"
+            ></rect>
+            <text
+                x="300"
+                y="42"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#1f3a5a">SSI ⊃ MVCC</text
+            >
+            <text x="300" y="66" text-anchor="middle" font-size="9" fill="#6b675f"
+                >Serializable runs on</text
+            >
+            <text x="300" y="81" text-anchor="middle" font-size="9" fill="#6b675f"
+                >ordinary MVCC snapshots</text
+            >
+            <text x="300" y="101" text-anchor="middle" font-size="9" fill="#6b675f"
+                >+ tracks read/write deps</text
+            >
+            <text x="300" y="121" text-anchor="middle" font-size="9" fill="#6b675f"
+                >aborts on the dangerous</text
+            >
+            <text x="300" y="136" text-anchor="middle" font-size="9" fill="#6b675f"
+                >structure (write skew)</text
+            >
+            <rect x="406" y="20" width="180" height="130" rx="9" fill="#fbfaf2" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="496"
+                y="42"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#2f5d3a">WHICH WINS?</text
+            >
+            <text x="496" y="64" text-anchor="middle" font-size="9" fill="#6b675f"
+                >neither — they trade</text
+            >
+            <text x="496" y="84" text-anchor="middle" font-size="9" fill="#6b675f"
+                >PG: cheap latest reads,</text
+            >
+            <text x="496" y="99" text-anchor="middle" font-size="9" fill="#6b675f"
+                >pay VACUUM + bloat</text
+            >
+            <text x="496" y="119" text-anchor="middle" font-size="9" fill="#6b675f"
+                >InnoDB: compact table,</text
+            >
+            <text x="496" y="134" text-anchor="middle" font-size="9" fill="#6b675f"
+                >pay undo walk + purge</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        The bug is always the same shape — <strong>a long transaction starves cleanup</strong> — but it
+        wears a different costume in each engine.
+    </figcaption>
+</figure>

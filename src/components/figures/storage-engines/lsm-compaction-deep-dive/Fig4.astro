@@ -1,0 +1,146 @@
+---
+/**
+ * lsm-compaction-deep-dive · Figure 4 — Level 3 "Leveled (LCS)": L0 overlapping
+ * flushes, L1/L2 non-overlapping ranges (~10× each), incremental merge of one
+ * table into the few it overlaps below; the SCORE box (read LOW, space LOW,
+ * write HIGH).
+ *
+ * Copied VERBATIM from docs/storage-engines/lsm-compaction-deep-dive.html
+ * (figure + svg + figcaption). It lives as an .astro component, NOT inline in the
+ * MDX, because MDX's JSX parser is unreliable with raw inline SVG that uses
+ * kebab-case attributes (text-anchor, font-size, stroke-width, marker-end, …).
+ *
+ * The source page declared its arrowhead markers (#arw / #arwA / #arwG) ONCE in a
+ * hidden top-of-body <svg defs>. Because each figure is now an isolated component,
+ * the #arwA (fill #7a1f12) marker this figure references via
+ * marker-end="url(#arwA)" is inlined here in a local <defs> so it resolves
+ * standalone (verbatim from the source defs).
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 560 210"
+        role="img"
+        aria-label="Leveled compaction: L0 holds overlapping memtable flushes; L1 and below keep non-overlapping key ranges so any key sits in at most one SSTable per level; each level is about ten times larger than the one above"
+    >
+        <defs>
+            <marker
+                id="arwA"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text x="14" y="30" font-size="10" fill="#9a2417" font-weight="700">L0</text>
+            <g fill="#f7ecea" stroke="#9a2417"
+                ><rect x="40" y="18" width="70" height="18" rx="3"></rect><rect
+                    x="90"
+                    y="18"
+                    width="70"
+                    height="18"
+                    rx="3"></rect><rect x="140" y="18" width="70" height="18" rx="3"></rect></g
+            >
+            <text x="320" y="31" font-size="9" fill="#9a2417"
+                >overlapping — whole memtable flushes</text
+            >
+            <text x="14" y="66" font-size="10" fill="#1f3a5a" font-weight="700">L1</text>
+            <g fill="#fff" stroke="#1f3a5a"
+                ><rect x="40" y="54" width="56" height="18" rx="3"></rect><rect
+                    x="100"
+                    y="54"
+                    width="56"
+                    height="18"
+                    rx="3"></rect><rect x="160" y="54" width="56" height="18" rx="3"></rect><rect
+                    x="220"
+                    y="54"
+                    width="56"
+                    height="18"
+                    rx="3"></rect></g
+            >
+            <text x="320" y="67" font-size="9" fill="#1f3a5a"
+                >non-overlapping — a key in ≤ 1 table here</text
+            >
+            <text x="14" y="106" font-size="10" fill="#1f3a5a" font-weight="700">L2</text>
+            <g fill="#fff" stroke="#1f3a5a"
+                ><rect x="40" y="94" width="40" height="18" rx="3"></rect><rect
+                    x="84"
+                    y="94"
+                    width="40"
+                    height="18"
+                    rx="3"></rect><rect x="128" y="94" width="40" height="18" rx="3"></rect><rect
+                    x="172"
+                    y="94"
+                    width="40"
+                    height="18"
+                    rx="3"></rect><rect x="216" y="94" width="40" height="18" rx="3"></rect><rect
+                    x="260"
+                    y="94"
+                    width="40"
+                    height="18"
+                    rx="3"></rect></g
+            >
+            <text x="360" y="107" font-size="9" fill="#6b675f">~10× larger each level</text>
+            <!-- incremental merge -->
+            <line x1="120" y1="74" x2="150" y2="92" stroke="#7a1f12" marker-end="url(#arwA)"></line>
+            <text x="190" y="86" font-size="8" fill="#7a1f12"
+                >merge 1 table into the few it overlaps below</text
+            >
+            <!-- score box -->
+            <rect
+                x="40"
+                y="128"
+                width="480"
+                height="62"
+                rx="10"
+                fill="#fbfaf2"
+                stroke="#7a1f12"
+                stroke-width="1.4"></rect>
+            <text
+                x="120"
+                y="150"
+                text-anchor="middle"
+                font-size="11"
+                fill="#2f5d3a"
+                font-weight="700">Read amp LOW</text
+            >
+            <text x="120" y="166" text-anchor="middle" font-size="8.5" fill="#6b675f"
+                >≤1 file/level + all L0</text
+            >
+            <text
+                x="280"
+                y="150"
+                text-anchor="middle"
+                font-size="11"
+                fill="#2f5d3a"
+                font-weight="700">Space amp LOW</text
+            >
+            <text x="280" y="166" text-anchor="middle" font-size="8.5" fill="#6b675f"
+                >~1.1×, little duplication</text
+            >
+            <text
+                x="440"
+                y="150"
+                text-anchor="middle"
+                font-size="11"
+                fill="#9a2417"
+                font-weight="700">Write amp HIGH</text
+            >
+            <text x="440" y="166" text-anchor="middle" font-size="8.5" fill="#6b675f"
+                >~T·log_T(N) = 10–30×</text
+            >
+            <text x="280" y="184" text-anchor="middle" font-size="8.5" fill="#6b675f"
+                >every key is rewritten many times on its way to the bottom level</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        The invariant: in every level <strong>except L0</strong>, SSTables have non-overlapping key
+        ranges — so any key lives in <strong>at most one</strong> SSTable per level.
+    </figcaption>
+</figure>

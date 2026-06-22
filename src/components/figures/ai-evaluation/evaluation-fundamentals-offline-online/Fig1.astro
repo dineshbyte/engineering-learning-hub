@@ -1,0 +1,212 @@
+---
+/**
+ * ai-evaluation/0001 · Figure 1 — "The eval loop in one frame" (hero).
+ *
+ * Copied VERBATIM from
+ * docs/ai-evaluation/lessons/0001-evaluation-fundamentals-offline-online.html
+ * (figure + svg + figcaption incl. the footnote <sup>). It lives as an .astro
+ * component, NOT inline in the MDX, because MDX's JSX parser is unreliable with
+ * raw inline SVG that uses kebab-case attributes (text-anchor, font-size,
+ * stroke-width, marker-end, …) and self-referential ids.
+ *
+ * The source page defines four shared arrowhead <marker>s (#arw, #arwG, #arwR,
+ * #arwM) once in a hidden global <svg> in <body>; every figure on the page
+ * references them via marker-end="url(#…)". That hidden defs block is reproduced
+ * here, in the FIRST figure on the page, so the markers resolve document-wide
+ * for Figs 1–5 (ids are kept as-is to match the source DOM and the #s1 anchors).
+ */
+---
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"
+    ><defs>
+        <marker
+            id="arw"
+            viewBox="0 0 10 10"
+            refX="8.5"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+        >
+        <marker
+            id="arwG"
+            viewBox="0 0 10 10"
+            refX="8.5"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker
+        >
+        <marker
+            id="arwR"
+            viewBox="0 0 10 10"
+            refX="8.5"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"></path></marker
+        >
+        <marker
+            id="arwM"
+            viewBox="0 0 10 10"
+            refX="8.5"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3d54c9"></path></marker
+        >
+    </defs></svg
+>
+
+<figure>
+    <svg
+        viewBox="0 0 640 300"
+        role="img"
+        aria-label="The evaluation loop: collect cases, score them, diff against baseline, ship or roll back, and feed failures back into the golden set. Offline gates pre-ship, online measures post-ship."
+    >
+        <!-- the loop spine -->
+        <rect
+            x="26"
+            y="120"
+            width="104"
+            height="46"
+            rx="8"
+            fill="#eef0fb"
+            stroke="#3d54c9"
+            stroke-width="1.5"></rect>
+        <text x="78" y="140" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3d54c9"
+            >1 · Collect</text
+        >
+        <text x="78" y="155" text-anchor="middle" font-size="8" fill="#6b675f">golden cases</text>
+        <rect
+            x="160"
+            y="120"
+            width="104"
+            height="46"
+            rx="8"
+            fill="#eef0fb"
+            stroke="#3d54c9"
+            stroke-width="1.5"></rect>
+        <text x="212" y="140" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3d54c9"
+            >2 · Score</text
+        >
+        <text x="212" y="155" text-anchor="middle" font-size="8" fill="#6b675f"
+            >prog / human / judge</text
+        >
+        <rect
+            x="294"
+            y="120"
+            width="104"
+            height="46"
+            rx="8"
+            fill="#eef0fb"
+            stroke="#3d54c9"
+            stroke-width="1.5"></rect>
+        <text x="346" y="140" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3d54c9"
+            >3 · Diff</text
+        >
+        <text x="346" y="155" text-anchor="middle" font-size="8" fill="#6b675f">vs baseline</text>
+        <rect
+            x="428"
+            y="120"
+            width="104"
+            height="46"
+            rx="8"
+            fill="#eef0fb"
+            stroke="#3d54c9"
+            stroke-width="2"></rect>
+        <text x="480" y="140" text-anchor="middle" font-size="10.5" font-weight="700" fill="#3d54c9"
+            >4 · Ship / roll back</text
+        >
+        <text x="480" y="155" text-anchor="middle" font-size="8" fill="#6b675f"
+            >decide on the number</text
+        >
+        <line x1="130" y1="143" x2="156" y2="143" stroke="#6b675f" marker-end="url(#arw)"></line>
+        <line x1="264" y1="143" x2="290" y2="143" stroke="#6b675f" marker-end="url(#arw)"></line>
+        <line x1="398" y1="143" x2="424" y2="143" stroke="#6b675f" marker-end="url(#arw)"></line>
+
+        <!-- feedback arc 5 -->
+        <path
+            d="M480,166 C480,214 78,214 78,168"
+            fill="none"
+            stroke="#2f5d3a"
+            stroke-width="1.5"
+            stroke-dasharray="4 3"
+            marker-end="url(#arwG)"></path>
+        <text x="279" y="208" text-anchor="middle" font-size="9" font-weight="700" fill="#2f5d3a"
+            >5 · Feed failures back into the golden set &mdash; the loop closes</text
+        >
+
+        <!-- offline vs online bands -->
+        <rect
+            x="26"
+            y="40"
+            width="372"
+            height="58"
+            rx="10"
+            fill="#eef0fb"
+            stroke="#3d54c9"
+            stroke-width="1.5"></rect>
+        <text x="212" y="60" text-anchor="middle" font-size="11" font-weight="700" fill="#3d54c9"
+            >OFFLINE &mdash; before you ship</text
+        >
+        <text x="212" y="78" text-anchor="middle" font-size="8.5" fill="#6b675f"
+            >fixed dataset · repeatable · runs in CI · gates the merge</text
+        >
+        <text x="212" y="91" text-anchor="middle" font-size="8.5" fill="#6b675f"
+            >same inputs every run</text
+        >
+        <rect
+            x="428"
+            y="40"
+            width="186"
+            height="58"
+            rx="10"
+            fill="#e9f3ec"
+            stroke="#2f5d3a"
+            stroke-width="1.5"></rect>
+        <text x="521" y="60" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a"
+            >ONLINE &mdash; after you ship</text
+        >
+        <text x="521" y="78" text-anchor="middle" font-size="8.5" fill="#6b675f"
+            >live traffic · A/B + shadow</text
+        >
+        <text x="521" y="91" text-anchor="middle" font-size="8.5" fill="#6b675f"
+            >real distribution</text
+        >
+
+        <line
+            x1="212"
+            y1="98"
+            x2="280"
+            y2="118"
+            stroke="#3d54c9"
+            stroke-dasharray="3 3"
+            marker-end="url(#arwM)"></line>
+        <line
+            x1="521"
+            y1="98"
+            x2="490"
+            y2="118"
+            stroke="#2f5d3a"
+            stroke-dasharray="3 3"
+            marker-end="url(#arwG)"></line>
+
+        <text x="320" y="244" text-anchor="middle" font-size="11" font-style="italic" fill="#3d54c9"
+            >The model is a commodity. The dataset of what 'good' means for your task is the moat.</text
+        >
+        <text x="320" y="266" text-anchor="middle" font-size="9.5" fill="#6b675f"
+            >Offline tells you it's safe to ship. Online tells you it actually worked.</text
+        >
+        <text x="320" y="290" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110"
+            >You cannot improve what you cannot measure.</text
+        >
+    </svg>
+    <figcaption>
+        The eval loop in one frame. <b>Collect</b> cases, <b>score</b> them, <b>diff</b> against a baseline,
+        <b>ship or roll back</b>, and <b>feed failures back</b>. Offline runs the loop on a fixed
+        dataset before ship; online runs it on live traffic after.<sup
+            ><a href="#s1" id="r1b">1</a></sup
+        >
+    </figcaption>
+</figure>

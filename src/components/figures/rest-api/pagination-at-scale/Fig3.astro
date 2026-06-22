@@ -1,0 +1,160 @@
+---
+/**
+ * rest-api · 0006-pagination-at-scale · Figure 3 — "PAGE DRIFT · ONE INSERT
+ * POISONS EVERY OFFSET" (a head insert shifts every offset, so row E is shown
+ * twice across the page boundary).
+ *
+ * Copied VERBATIM from docs/rest-api/lessons/0006-pagination-at-scale.html
+ * (figure + svg + figcaption). Component, not inline, because MDX's JSX parser
+ * mishandles kebab-case SVG attributes. References the red arrow marker
+ * (url(#arwR)); the source declared it in a shared body <defs>, so it's embedded
+ * locally here to keep the SVG self-contained.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 640 220"
+        role="img"
+        aria-label="A new row inserted at the head shifts every offset down by one, so row E is shown twice across the page boundary and a row is skipped"
+    >
+        <defs>
+            <marker
+                id="arwR"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+            >
+                <path d="M0,0 L10,5 L0,10 z" fill="#9a2417"></path>
+            </marker>
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="320"
+                y="18"
+                text-anchor="middle"
+                font-size="12"
+                font-weight="700"
+                fill="#111110">PAGE DRIFT · ONE INSERT POISONS EVERY OFFSET</text
+            >
+
+            <text
+                x="150"
+                y="42"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#1f3a5a">① fetch page 1 (OFFSET 0)</text
+            >
+            <rect x="92" y="50" width="116" height="22" rx="3" fill="#eef2f5" stroke="#1f3a5a"
+            ></rect><text x="150" y="65" text-anchor="middle" font-size="10">A</text>
+            <rect x="92" y="74" width="116" height="22" rx="3" fill="#eef2f5" stroke="#1f3a5a"
+            ></rect><text x="150" y="89" text-anchor="middle" font-size="10">B</text>
+            <rect x="92" y="98" width="116" height="22" rx="3" fill="#eef2f5" stroke="#1f3a5a"
+            ></rect><text x="150" y="113" text-anchor="middle" font-size="10">C</text>
+            <rect x="92" y="122" width="116" height="22" rx="3" fill="#eef2f5" stroke="#1f3a5a"
+            ></rect><text x="150" y="137" text-anchor="middle" font-size="10">D</text>
+            <rect
+                x="92"
+                y="146"
+                width="116"
+                height="22"
+                rx="3"
+                fill="#fbfaf2"
+                stroke="#9a2417"
+                stroke-width="1.5"></rect><text
+                x="150"
+                y="161"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#9a2417">E ← last on page 1</text
+            >
+
+            <text
+                x="320"
+                y="92"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#9a2417">② row Z inserted</text
+            >
+            <text x="320" y="108" text-anchor="middle" font-size="9" fill="#7a2218"
+                >at the head, before</text
+            >
+            <text x="320" y="120" text-anchor="middle" font-size="9" fill="#7a2218"
+                >page 2 is fetched</text
+            >
+            <line
+                x1="216"
+                y1="135"
+                x2="424"
+                y2="135"
+                stroke="#9a2417"
+                stroke-dasharray="4 3"
+                marker-end="url(#arwR)"></line>
+            <text x="320" y="150" text-anchor="middle" font-size="9" fill="#9a2417"
+                >every offset shifts down by 1</text
+            >
+
+            <text
+                x="490"
+                y="42"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#1f3a5a">③ fetch page 2 (OFFSET 5)</text
+            >
+            <rect x="432" y="50" width="116" height="22" rx="3" fill="#f7ecea" stroke="#9a2417"
+            ></rect><text
+                x="490"
+                y="65"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#9a2417">Z (new, row 0)</text
+            >
+            <rect x="432" y="74" width="116" height="22" rx="3" fill="#fff" stroke="#d8d4c8"
+            ></rect><text x="490" y="89" text-anchor="middle" font-size="9" fill="#6b675f"
+                >A B C D pushed down</text
+            >
+            <rect
+                x="432"
+                y="98"
+                width="116"
+                height="22"
+                rx="3"
+                fill="#fbfaf2"
+                stroke="#9a2417"
+                stroke-width="1.5"></rect><text
+                x="490"
+                y="113"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#9a2417">E shown AGAIN 💥</text
+            >
+            <text x="490" y="138" text-anchor="middle" font-size="9" fill="#7a2218"
+                >E is a duplicate;</text
+            >
+            <text x="490" y="150" text-anchor="middle" font-size="9" fill="#7a2218"
+                >had Z been a delete, a</text
+            >
+            <text x="490" y="162" text-anchor="middle" font-size="9" fill="#7a2218"
+                >row would be skipped</text
+            >
+
+            <text x="320" y="205" text-anchor="middle" font-size="10.5" fill="#7a1f12"
+                >The offset points at a <tspan font-style="italic">position</tspan>, and positions
+                move when the data moves.</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        Insert at the head → duplicate across the boundary. Delete at the head → a skipped row. The
+        bug scales with write rate, so it's invisible in a quiet dev DB.
+    </figcaption>
+</figure>

@@ -1,0 +1,220 @@
+---
+/**
+ * /latest — the date-first index of recently published content (lessons,
+ * references, interview banks, roadmaps), newest first. The hub grid stays
+ * learning-path-first; THIS page is the chronological view, built from the
+ * collections' publishedAt/updatedAt (the sortByLatest order: publishedAt desc →
+ * updatedAt desc → title). Indexable: BaseLayout supplies the full head +
+ * analytics, and it's listed in the sitemap.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { formatDate } from '../lib/formatDate';
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+
+interface Item {
+    kind: string;
+    title: string;
+    trackLabel: string;
+    href: string;
+    publishedAt?: string;
+    updatedAt?: string;
+}
+
+const [lessons, reference, interview, roadmap] = await Promise.all([
+    getCollection('lessons'),
+    getCollection('reference'),
+    getCollection('interview'),
+    getCollection('roadmap'),
+]);
+
+const tag = (entries: any[], kind: string): Item[] =>
+    entries.map((e) => ({
+        kind,
+        title: e.data.title,
+        trackLabel: e.data.trackLabel,
+        href: `${base}${e.data.path}`,
+        publishedAt: e.data.publishedAt,
+        updatedAt: e.data.updatedAt,
+    }));
+
+// publishedAt desc → updatedAt desc → title asc (deterministic; missing date last)
+const byDate = (a: string | undefined, b: string | undefined, dir: 1 | -1) =>
+    a === b ? 0 : !a ? 1 : !b ? -1 : a < b ? -dir : dir;
+
+const items = [
+    ...tag(lessons, 'Lesson'),
+    ...tag(reference, 'Reference'),
+    ...tag(interview, 'Interview'),
+    ...tag(roadmap, 'Roadmap'),
+].sort(
+    (a, b) =>
+        byDate(a.publishedAt, b.publishedAt, -1) ||
+        byDate(a.updatedAt, b.updatedAt, -1) ||
+        a.title.localeCompare(b.title, 'en'),
+);
+
+// Group by "Month YYYY" (one group today; many as dates diverge).
+const MONTHS_FULL = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+];
+const monthLabel = (d: string) => {
+    const [y, mo] = d.split('-');
+    return `${MONTHS_FULL[Number(mo) - 1]} ${y}`;
+};
+
+type Group = { key: string; label: string; items: Item[] };
+const groups: Group[] = [];
+for (const it of items) {
+    const key = it.publishedAt ? it.publishedAt.slice(0, 7) : 'undated';
+    let g = groups.find((x) => x.key === key);
+    if (!g) {
+        g = { key, label: it.publishedAt ? monthLabel(it.publishedAt) : 'Undated', items: [] };
+        groups.push(g);
+    }
+    g.items.push(it);
+}
+---
+
+<BaseLayout
+    title="Latest"
+    description="Recently published lessons, references, interview banks and roadmaps across Engineering Vault — newest first."
+    keywords="latest, recent, new lessons, updates, changelog, engineering vault, stackdepth"
+    path="latest.html"
+    ogImage="assets/og-cover.png"
+    ogImageAlt="Engineering Vault — a free engineering learning hub"
+    skipTarget="#main"
+>
+    <div class="wrap">
+        <nav id="hubbar">
+            <a href={`${base}index.html`}>&#8592; Engineering Vault</a>
+            <span style="display:flex;align-items:center;gap:.6rem">
+                <button
+                    class="themebtn"
+                    onclick="toggleTheme()"
+                    aria-label="Toggle dark mode"
+                    title="Toggle dark / light">&#127763;</button
+                >
+            </span>
+        </nav>
+        <main id="main" tabindex="-1">
+            <div class="kicker">Recently published</div>
+            <h1>Latest</h1>
+            <p class="meta">
+                Everything across the vault, newest first. The <a href={`${base}index.html#grid`}
+                    >hub</a
+                > stays organised by learning path — this is the chronological view.
+            </p>
+
+            {
+                groups.map((g) => (
+                    <section class="lg">
+                        <h2 class="lg-h">{g.label}</h2>
+                        <ul class="lg-list">
+                            {g.items.map((it) => (
+                                <li class="lg-item">
+                                    {it.publishedAt && (
+                                        <time datetime={it.publishedAt} class="lg-date">
+                                            {formatDate(it.publishedAt)}
+                                        </time>
+                                    )}
+                                    <span class="lg-kind">{it.kind}</span>
+                                    <a class="lg-link" href={it.href}>
+                                        {it.title}
+                                    </a>
+                                    <span class="lg-track">{it.trackLabel}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
+                ))
+            }
+        </main>
+    </div>
+</BaseLayout>
+
+<style>
+    .lg {
+        margin-top: 1.7rem;
+    }
+    .lg-h {
+        font-size: 0.78rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 0.3rem;
+        margin: 0 0 0.5rem;
+    }
+    .lg-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+    }
+    .lg-item {
+        display: grid;
+        grid-template-columns: 7rem auto minmax(0, 1fr);
+        align-items: baseline;
+        gap: 0.6rem;
+        padding: 0.4rem 0.5rem;
+        border-radius: 8px;
+    }
+    .lg-item:hover {
+        background: var(--chip);
+    }
+    .lg-date {
+        font-size: 0.72rem;
+        color: var(--text-soft);
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+    .lg-kind {
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--muted);
+        background: var(--bg-soft);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0.1rem 0.4rem;
+        white-space: nowrap;
+    }
+    .lg-link {
+        font-size: 0.92rem;
+        font-weight: 600;
+        color: var(--ink);
+        text-decoration: none;
+    }
+    .lg-link:hover {
+        color: var(--link);
+    }
+    .lg-track {
+        font-size: 0.72rem;
+        color: var(--text-soft);
+    }
+    @media (max-width: 640px) {
+        .lg-item {
+            grid-template-columns: 1fr;
+            gap: 0.15rem;
+        }
+        .lg-track {
+            display: none;
+        }
+    }
+</style>

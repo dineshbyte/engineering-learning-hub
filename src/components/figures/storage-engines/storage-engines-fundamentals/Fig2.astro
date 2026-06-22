@@ -1,0 +1,91 @@
+---
+/**
+ * storage-engines · storage-engines-fundamentals · Figure 2 — Level 1, the
+ * append-only log + in-RAM hash index (Bitcask).
+ *
+ * Copied VERBATIM from the source page (figure + svg + figcaption incl. the
+ * footnote <sup>). The source declared its arrowhead markers ONCE in a hidden
+ * top-of-body <svg defs>; this figure references marker-end="url(#arwG)", so the
+ * green #arwG marker is inlined here in a local <defs> (verbatim from the source
+ * defs block) so it resolves standalone.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 560 170"
+        role="img"
+        aria-label="An append-only log on disk with an in-memory hash index; reads follow the index to an offset, writes append and repoint"
+    >
+        <defs>
+            <marker
+                id="arwG"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <rect x="14" y="14" width="240" height="40" rx="8" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="134"
+                y="32"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#2f5d3a">IN-RAM hash index</text
+            >
+            <text x="134" y="47" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >key → byte offset</text
+            >
+            <g font-size="9" fill="#111110">
+                <text x="30" y="78">foo → 96</text><text x="30" y="94">bar → 32</text>
+            </g>
+            <text
+                x="400"
+                y="14"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#7a1f12">APPEND-ONLY log on disk</text
+            >
+            <g font-size="9.5">
+                <rect x="290" y="24" width="78" height="26" rx="5" fill="#fff" stroke="#d8d4c8"
+                ></rect><text x="329" y="41" text-anchor="middle">bar,9</text>
+                <rect x="372" y="24" width="78" height="26" rx="5" fill="#fff" stroke="#d8d4c8"
+                ></rect><text x="411" y="41" text-anchor="middle">foo,1</text>
+                <rect x="454" y="24" width="92" height="26" rx="5" fill="#f1eee2" stroke="#7a1f12"
+                ></rect><text x="500" y="41" text-anchor="middle" fill="#7a1f12" font-weight="700"
+                    >foo,42 ←tail</text
+                >
+            </g>
+            <!-- read arrow -->
+            <path
+                d="M 90 70 C 200 110, 420 90, 480 52"
+                fill="none"
+                stroke="#2f5d3a"
+                stroke-dasharray="4 3"
+                marker-end="url(#arwG)"></path>
+            <text x="300" y="120" text-anchor="middle" font-size="10" fill="#2f5d3a"
+                >READ: hash lookup (O(1)) → 1 seek to offset → 1 record</text
+            >
+            <!-- write arrow -->
+            <path d="M 540 58 C 545 96, 545 96, 540 96" fill="none" stroke="#7a1f12"></path>
+            <text x="300" y="140" text-anchor="middle" font-size="10" fill="#7a1f12"
+                >WRITE: append 1 record at the tail + repoint 1 map entry</text
+            >
+            <text x="300" y="158" text-anchor="middle" font-size="10" fill="#9a2417"
+                >✗ keyset must fit in RAM&#160;&#160;✗ no range queries</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        Bitcask (Riak's engine): append the data, keep <code>key → offset</code> in RAM. Reads do one
+        lookup + one seek regardless of file size.<sup><a href="#s6" id="r6">6</a></sup>
+    </figcaption>
+</figure>
