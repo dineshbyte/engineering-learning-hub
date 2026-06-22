@@ -1,5 +1,5 @@
 ---
-title: 'Storage Engines & Data Modeling — Learning Track (Book 3)'
+title: 'Storage Engines & Data Modeling — Learning Track (Part 3)'
 description: 'Storage Engines learning track — the roadmap and index of lessons, references, and interview questions for Storage Engines on Engineering Vault.'
 keywords: ['b-trees', 'lsm', 'indexes', 'compaction', 'storage engines', 'b-tree', 'sstable', 'write amplification']
 ogImage: 'assets/og/storage-engines.png'
@@ -10,13 +10,13 @@ trackLabel: 'Storage Engines'
 path: 'storage-engines/README.html'
 ---
 
-# Storage Engines & Data Modeling — Learning Track (Book 3)
+# Storage Engines & Data Modeling — Learning Track (Part 3)
 
-Your map for Book 3 of the series. Book 1 was *Distributed Systems*; Book 2 was *Transactions & Isolation*. This book goes one layer **down**: how a database actually stores bytes on disk and finds them fast, and how to model data.
+Your map for Part 3 of the series. Part 1 was *Distributed Systems*; Part 2 was *Transactions & Isolation*. This part goes one layer **down**: how a database actually stores bytes on disk and finds them fast, and how to model data.
 
-- **Mission:** choose engines, indexes, and data models with judgment — grounds Books 1 and 2 in real machinery.
+- **Mission:** choose engines, indexes, and data models with judgment — grounds Parts 1 and 2 in real machinery.
 - **Format:** structural diagrams + concrete examples. Delivered as a **lean EPUB** for Kindle (glossary kept in the `.md`, out of the book) plus markdown source here.
-- **Level:** builds on Books 1–2; each lesson adds senior-level depth (real-engine behaviour).
+- **Level:** builds on Parts 1–2; each lesson adds senior-level depth (real-engine behaviour).
 
 ---
 
@@ -72,7 +72,7 @@ README.md                                  ← index + roadmap + tracker
 storage-engines-fundamentals.md            ← full source (includes the glossary)
 book-3-storage-engines-fundamentals.epub          ← lean Kindle build (glossary excluded)
 diagrams/
-  00-cover.svg / .png                        ← series cover (Book 3)
+  00-cover.svg / .png                        ← series cover (Part 3)
   01-log-hash-index.svg / .png               ← Lesson 1
   02-btree.svg / .png                        ← Lesson 2
   03-lsm-tree.svg / .png                     ← Lesson 3
@@ -86,4 +86,4 @@ diagrams/
 
 ## Next in the series
 
-**Book 4 — Streaming & Event-Driven Architecture** (Kafka, the log as source of truth, event sourcing, CQRS, stream processing, exactly-once in streams). Then Applied Systems Design.
+**Part 4 — Streaming & Event-Driven Architecture** (Kafka, the log as source of truth, event sourcing, CQRS, stream processing, exactly-once in streams). Then Applied Systems Design.

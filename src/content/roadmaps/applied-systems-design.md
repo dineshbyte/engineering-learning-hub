@@ -1,5 +1,5 @@
 ---
-title: 'Applied Systems Design — Learning Track (Book 5, the capstone)'
+title: 'Applied Systems Design — Learning Track (Part 5, the capstone)'
 description: 'Applied Systems Design learning track — the roadmap and index of lessons, references, and interview questions for Applied Systems Design on Engineering Vault.'
 keywords: ['estimation', 'consistent hashing', 'back-of-envelope', 'applied systems design', 'capacity', 'back of envelope']
 ogImage: 'assets/og/applied-systems-design.png'
@@ -10,13 +10,13 @@ trackLabel: 'Applied Systems Design'
 path: 'applied-systems-design/README.html'
 ---
 
-# Applied Systems Design — Learning Track (Book 5, the capstone)
+# Applied Systems Design — Learning Track (Part 5, the capstone)
 
-Your map for Book 5, the finale. Books 1–4 built the theory; this book applies all of it to design real systems end to end.
+Your map for Part 5, the finale. Parts 1–4 built the theory; this part applies all of it to design real systems end to end.
 
-- **Mission:** turn four books of theory into design judgment.
+- **Mission:** turn four parts of theory into design judgment.
 - **Format:** design case studies with architecture diagrams. Delivered as a **lean EPUB** for Kindle (glossary in the `.md`, out of the book) plus markdown source here.
-- **Level:** the capstone — assumes Books 1–4.
+- **Level:** the capstone — assumes Parts 1–4.
 
 ---
 
@@ -72,7 +72,7 @@ README.md                                       ← index + roadmap + tracker
 applied-systems-design-fundamentals.md          ← full source (includes the glossary)
 book-5-applied-systems-design-fundamentals.epub        ← lean Kindle build (glossary excluded)
 diagrams/
-  00-cover.svg / .png                             ← series cover (Book 5)
+  00-cover.svg / .png                             ← series cover (Part 5)
   01-design-method.svg / .png                     ← Lesson 1
   02-estimation.svg / .png                        ← Lesson 2
   03-url-shortener.svg / .png                     ← Lesson 3
@@ -84,6 +84,6 @@ diagrams/
   09-design-checklist.svg / .png                  ← Lesson 9
 ```
 
-## This is the final book
+## This is the final part
 
-The five-book series is complete. See `../backend-mastery-series.md` for the whole arc.
+The five-part series is complete. See `../backend-mastery-series.md` for the whole arc.

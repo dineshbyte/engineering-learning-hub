@@ -1,5 +1,5 @@
 ---
-title: 'Transactions & Isolation — Learning Track (Book 2)'
+title: 'Transactions & Isolation — Learning Track (Part 2)'
 description: 'Transactions & Isolation learning track — the roadmap and index of lessons, references, and interview questions for Transactions & Isolation on Engineering Vault.'
 keywords: ['acid', 'mvcc', 'isolation levels', 'ssi', 'transactions', 'isolation', 'snapshot', 'serializable', 'anomalies', 'locks']
 ogImage: 'assets/og/transactions-isolation.png'
@@ -10,13 +10,13 @@ trackLabel: 'Transactions & Isolation'
 path: 'transactions-isolation/README.html'
 ---
 
-# Transactions & Isolation — Learning Track (Book 2)
+# Transactions & Isolation — Learning Track (Part 2)
 
-Your map for Book 2 of the series. Book 1 was *Distributed Systems — Fundamentals* (replication consistency); this book is the other half — **transaction isolation**: what happens when concurrent transactions touch the same data.
+Your map for Part 2 of the series. Part 1 was *Distributed Systems — Fundamentals* (replication consistency); this part is the other half — **transaction isolation**: what happens when concurrent transactions touch the same data.
 
 - **Mission:** write backend code that doesn't corrupt data under concurrency — the daily, high-leverage half of "consistency."
 - **Format:** general theory, concrete SQL/scenario examples. Delivered as a **lean EPUB** for Kindle (glossary kept in the `.md`, out of the book) plus markdown source here.
-- **Level:** builds on Book 1; each lesson adds senior-level depth (real-DB gotchas).
+- **Level:** builds on Part 1; each lesson adds senior-level depth (real-DB gotchas).
 
 ---
 
@@ -73,7 +73,7 @@ README.md                                     ← index + roadmap + tracker
 transactions-isolation-fundamentals.md        ← full source (includes the glossary)
 book-2-transactions-isolation-fundamentals.epub      ← lean Kindle build (glossary excluded)
 diagrams/
-  00-cover.svg / .png                          ← series cover (Book 2)
+  00-cover.svg / .png                          ← series cover (Part 2)
   01-acid-atomicity.svg / .png                 ← Lesson 1
   02-lost-update.svg / .png                    ← Lesson 2
   03-isolation-matrix.svg / .png               ← Lesson 3
@@ -87,4 +87,4 @@ diagrams/
 
 ## Next in the series
 
-**Book 3 — Storage Engines & Data Modeling** (LSM-trees vs B-trees, WAL, indexes, row vs column, schema design). Then Streaming & Event-Driven, then Applied Systems Design.
+**Part 3 — Storage Engines & Data Modeling** (LSM-trees vs B-trees, WAL, indexes, row vs column, schema design). Then Streaming & Event-Driven, then Applied Systems Design.

@@ -1,5 +1,5 @@
 ---
-title: 'Streaming & Event-Driven Architecture — Learning Track (Book 4)'
+title: 'Streaming & Event-Driven Architecture — Learning Track (Part 4)'
 description: 'Streaming & Event-Driven learning track — the roadmap and index of lessons, references, and interview questions for Streaming & Event-Driven on Engineering Vault.'
 keywords: ['the log', 'exactly-once', 'watermarks', 'kafka', 'streaming', 'event driven', 'windows', 'exactly once']
 ogImage: 'assets/og/streaming-event-driven.png'
@@ -10,13 +10,13 @@ trackLabel: 'Streaming & Event-Driven'
 path: 'streaming-event-driven/README.html'
 ---
 
-# Streaming & Event-Driven Architecture — Learning Track (Book 4)
+# Streaming & Event-Driven Architecture — Learning Track (Part 4)
 
-Your map for Book 4 of the series. Books 1–3 covered distributed systems, transactions & isolation, and storage engines. This book is about how data **moves** and is processed as it arrives.
+Your map for Part 4 of the series. Parts 1–3 covered distributed systems, transactions & isolation, and storage engines. This part is about how data **moves** and is processed as it arrives.
 
 - **Mission:** design event-driven systems with judgment — the log as a unifying abstraction, Kafka, event sourcing, CQRS, stream processing.
 - **Format:** log/dataflow/event-time diagrams + concrete examples. Delivered as a **lean EPUB** for Kindle (glossary kept in the `.md`, out of the book) plus markdown source here.
-- **Level:** builds on Books 1–3; each lesson adds senior-level depth (real-system behaviour).
+- **Level:** builds on Parts 1–3; each lesson adds senior-level depth (real-system behaviour).
 
 ---
 
@@ -73,7 +73,7 @@ README.md                                       ← index + roadmap + tracker
 streaming-event-driven-fundamentals.md          ← full source (includes the glossary)
 book-4-streaming-event-driven-fundamentals.epub        ← lean Kindle build (glossary excluded)
 diagrams/
-  00-cover.svg / .png                             ← series cover (Book 4)
+  00-cover.svg / .png                             ← series cover (Part 4)
   01-the-log.svg / .png                           ← Lesson 1
   02-kafka-partitions.svg / .png                  ← Lesson 2
   03-offset-commit.svg / .png                     ← Lesson 3
@@ -87,4 +87,4 @@ diagrams/
 
 ## Next in the series
 
-**Book 5 — Applied Systems Design** (the capstone): design a rate limiter, a news feed, a distributed cache, a message queue, a URL shortener — applying all four prior books end-to-end. This is the final book of the series.
+**Part 5 — Applied Systems Design** (the capstone): design a rate limiter, a news feed, a distributed cache, a message queue, a URL shortener — applying all four prior books end-to-end. This is the final book of the series.
