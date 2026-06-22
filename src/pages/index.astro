@@ -75,10 +75,15 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/'); // exactly one trail
 // to show a per-lesson blurb. Derived straight from lessons[].blurb (the 6
 // single-lesson AI-eng tracks have no blurb, so they're simply absent — same as
 // the old prebuilt map).
+//
+// Keys MUST match what openSheet looks up: it reads each lesson chip's literal
+// href attribute, which TrackCard renders as `${base}${lesson.href}`. So we key
+// by the SAME base-prefixed href — otherwise every lookup misses and no blurb
+// shows (regressed when lesson hrefs gained the GitHub-Pages base prefix).
 const cardDetail: Record<string, string> = {};
 for (const track of tracks) {
     for (const lesson of track.lessons) {
-        if (lesson.blurb) cardDetail[lesson.href] = lesson.blurb;
+        if (lesson.blurb) cardDetail[`${base}${lesson.href}`] = lesson.blurb;
     }
 }
 ---
