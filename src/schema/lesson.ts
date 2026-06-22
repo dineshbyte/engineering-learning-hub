@@ -34,6 +34,18 @@ export const lessonMetaSchema = z.object({
     metaLine: z.string(), // e.g. "~7 min · visual-first · …"
     chips: z.array(z.string()).min(1), // topic chips (the leading meta keywords, Title-cased)
 
+    // —— dates (optional) —— shown on the detail page itself (NOT on hub cards),
+    // and available for RSS/SEO/article metadata. publishedAt = first published;
+    // updatedAt = last meaningful revision. Rendered only when present.
+    publishedAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'publishedAt must be YYYY-MM-DD')
+        .optional(),
+    updatedAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'updatedAt must be YYYY-MM-DD')
+        .optional(),
+
     // —— prev/next wayfinding (optional at the ends of a track) ——
     prev: z
         .object({
