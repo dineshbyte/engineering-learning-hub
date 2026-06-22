@@ -229,7 +229,7 @@ for (const track of tracks) {
     gap:1rem; align-items:stretch; margin-top:1.3rem}
   .tile{background:var(--card); border:1px solid var(--line); border-left:3px solid var(--line);
     border-radius:14px; padding:1rem 1.1rem 1.05rem; display:flex; flex-direction:column; gap:.7rem;
-    margin:0; transition:box-shadow .15s, transform .15s, border-color .15s}
+    margin:0; cursor:pointer; transition:box-shadow .15s, transform .15s, border-color .15s}
   /* the curated entry point keeps the warm amber edge — the one card that should
      draw the eye. Every other card stays neutral so amber reads as a highlight,
      not the structural default. */
@@ -468,15 +468,16 @@ for (const track of tracks) {
     background:var(--card); color:var(--ink); border-radius:14px;
     box-shadow:0 20px 60px rgba(0,0,0,.28)}
   dialog.cardsheet::backdrop{background:rgba(0,0,0,.45)}
-  .cs-inner{padding:1.1rem 1.15rem 1.25rem; position:relative}
+  .cs-inner{padding:1.1rem 1.15rem 1.25rem; position:relative; display:flex; flex-direction:column; min-height:0}
   .cs-close{position:absolute; top:.55rem; right:.55rem; border:0; background:var(--chip); color:var(--ink);
-    width:2rem; height:2rem; border-radius:50%; font-size:.95rem; line-height:1; cursor:pointer}
-  .cs-close:hover{background:var(--line)}
+    width:2rem; height:2rem; border-radius:50%; font-size:.95rem; line-height:1; cursor:pointer;
+    transition:background .12s, color .12s}
+  .cs-close:hover{background:var(--accent-soft); color:var(--on-accent)}
   .cs-name{font-weight:700; font-size:1.15rem; letter-spacing:-.01em; padding-right:2rem; line-height:1.15}
   .cs-tag{font-size:.63rem; letter-spacing:.11em; text-transform:uppercase; color:var(--muted); margin-top:.12rem}
   .cs-meta{font-size:.75rem; color:var(--muted); margin-top:.35rem}
   .cs-lessons{list-style:none; margin:.9rem 0 0; padding:0; display:flex; flex-direction:column; gap:.6rem;
-    max-height:52vh; overflow:auto}
+    flex:1 1 auto; min-height:0; max-height:52vh; overflow:auto}
   .cs-lessons li{display:flex; gap:.6rem; align-items:flex-start}
   .cs-n{flex:none; min-width:1.6rem; height:1.6rem; padding:0 .35rem; border-radius:6px; display:grid;
     place-items:center; font-size:.78rem; font-weight:700; background:var(--chip); color:var(--ink)}
@@ -488,10 +489,17 @@ for (const track of tracks) {
   dialog.cardsheet[open]{animation:cs-pop .16s ease-out}
   @keyframes cs-pop{from{opacity:0; transform:translateY(8px) scale(.985)} to{opacity:1; transform:none}}
   @media (max-width:640px){
-    dialog.cardsheet{inset:auto 0 0 0; margin:0; width:100%; max-width:none; border-radius:16px 16px 0 0}
-    dialog.cardsheet[open]{animation:cs-up .2s ease-out}
+    /* bottom sheet: cap at ~70% of the viewport so it never fills the screen
+       (closes via the ✕ button or Esc, not backdrop tap). List scrolls within. */
+    dialog.cardsheet{inset:auto 0 0 0; margin:0; width:100%; max-width:none; max-height:70vh; overflow:hidden; border-radius:16px 16px 0 0}
+    /* display:flex ONLY when open — must not override the UA dialog:not([open])
+       {display:none}, or the sheet stays visible after close (✕/Esc) */
+    dialog.cardsheet[open]{animation:cs-up .2s ease-out; display:flex}
     @keyframes cs-up{from{transform:translateY(100%)} to{transform:translateY(0)}}
-    .cs-lessons{max-height:60vh}
+    /* sheet fills the 50vh; header + footer stay fixed, only .cs-lessons scrolls
+       (same behaviour as desktop) instead of the whole sheet scrolling */
+    .cs-inner{flex:1 1 auto}
+    .cs-lessons{max-height:none}
   }
   @media (prefers-reduced-motion:reduce){
     html{scroll-behavior:auto}
@@ -1050,6 +1058,7 @@ for (const track of tracks) {
                     if (start) csFoot.appendChild(start.cloneNode(true)); // Start/Continue = prominent last element
 
                     sheet.showModal();
+                    document.documentElement.style.overflow = 'hidden'; // lock background scroll
                 }
 
                 grid.addEventListener('click', function (e) {
@@ -1059,14 +1068,18 @@ for (const track of tracks) {
                     e.preventDefault(); // cancel the <details> toggle
                     openSheet(tile);
                 });
-                sheet.addEventListener('click', function (e) {
-                    if (e.target === sheet) sheet.close();
-                }); // backdrop
+                // Intentionally NO backdrop-click close: the sheet closes only
+                // via the ✕ button or Esc (Esc is native to dialog.showModal()),
+                // so an accidental outside tap can't dismiss it.
                 var closeBtn = sheet.querySelector('.cs-close');
                 if (closeBtn)
                     closeBtn.addEventListener('click', function () {
                         sheet.close();
                     });
+                // restore background scroll whenever the sheet closes (✕ or Esc)
+                sheet.addEventListener('close', function () {
+                    document.documentElement.style.overflow = '';
+                });
             }
         })();
     </script>
