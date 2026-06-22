@@ -29,31 +29,31 @@ export const tracks: Track[] = [
         readTime: '~2h 55m read',
         lessons: [
             {
-                href: 'ai-agents/lessons/0001-ai-agents-from-first-principles.html',
+                href: 'ai-agents/lessons/ai-agents-from-first-principles.html',
                 n: 1,
                 title: 'The ten-level stack — LLM → archetypes',
                 blurb: 'AI agents from first principles: how LLMs, tools, the agent loop, planning, and MCP fit together — build the full stack from memory and tell real capability from hype.',
             },
             {
-                href: 'ai-agents/lessons/0002-agent-runtime-and-context.html',
+                href: 'ai-agents/lessons/agent-runtime-and-context.html',
                 n: 2,
                 title: 'Runtime, context &amp; memory',
                 blurb: 'Your bar: explain to an interviewer how an agent runtime orchestrates an LLM loop, why context engineering often matters more than model choice, and how the…',
             },
             {
-                href: 'ai-agents/lessons/0003-how-coding-agents-work.html',
+                href: 'ai-agents/lessons/how-coding-agents-work.html',
                 n: 3,
                 title: 'How coding agents work (Claude Code · Cursor · MCP)',
                 blurb: 'Your bar: explain step-by-step how Claude Code executes a real task, how Cursor retrieves context from a large repo, and how MCP turns any business function…',
             },
             {
-                href: 'ai-agents/lessons/0004-agent-systems-and-production.html',
+                href: 'ai-agents/lessons/agent-systems-and-production.html',
                 n: 4,
                 title: 'Multi-agent systems &amp; production',
                 blurb: 'Your bar: decide when multi-agent is justified vs unnecessary; name five ways production agents fail and how to prevent them; design a business agent…',
             },
             {
-                href: 'ai-agents/lessons/0005-agent-systems-engineering.html',
+                href: 'ai-agents/lessons/agent-systems-engineering.html',
                 n: 5,
                 title: 'Agent systems engineering &mdash; how production AI executes work',
                 blurb: 'How production AI agents actually execute work: planning, state, execution engines, loop control, failure recovery, orchestration, long-running tasks, cost, and observability — from first principles.',
@@ -87,55 +87,55 @@ export const tracks: Track[] = [
         readTime: '~2h 10m read',
         lessons: [
             {
-                href: 'context-engineering/lessons/0001-what-is-context-and-context-as-query.html',
+                href: 'context-engineering/lessons/what-is-context-and-context-as-query.html',
                 n: 1,
                 title: 'What is context — &amp; the new database query',
                 blurb: 'Your bar: explain why an LLM cannot see your whole codebase, what actually fills the context window, and why context retrieval — not the model — is where modern AI systems win or lose.',
             },
             {
-                href: 'context-engineering/lessons/0002-context-selection-and-retrieval.html',
+                href: 'context-engineering/lessons/context-selection-and-retrieval.html',
                 n: 2,
                 title: 'Context selection &amp; retrieval',
                 blurb: 'Your bar: explain how a system decides what to send to the model, and compare lexical, semantic, hybrid search, ranking and re-ranking by purpose, advantages, disadvantages, and failure modes.',
             },
             {
-                href: 'context-engineering/lessons/0003-codebase-context-chunking-and-rag.html',
+                href: 'context-engineering/lessons/codebase-context-chunking-and-rag.html',
                 n: 3,
                 title: 'Codebase context, chunking &amp; RAG',
                 blurb: 'Your bar: explain how Cursor and Claude Code understand large repos, why chunking exists and how it fails, and how RAG works from first principles — and why most RAG bugs are retrieval bugs.',
             },
             {
-                href: 'context-engineering/lessons/0004-memory-compression-and-failure-modes.html',
+                href: 'context-engineering/lessons/memory-compression-and-failure-modes.html',
                 n: 4,
                 title: 'Memory, compression &amp; failure modes',
                 blurb: "Your bar: distinguish memory from a knowledge base, manage a long-running agent's context with summarization and sliding windows, and diagnose the five ways context systems fail — missing, wrong, o…",
             },
             {
-                href: 'context-engineering/lessons/0005-architecture-reviews-and-production-design.html',
+                href: 'context-engineering/lessons/architecture-reviews-and-production-design.html',
                 n: 5,
                 title: 'Architecture reviews &amp; production design',
                 blurb: 'The capstone: review real AI products (Cursor, Claude Code, ChatGPT, Copilot) by their context strategy, design production agents (billing, support, engineering, research), and walk away with the P…',
             },
             {
-                href: 'context-engineering/lessons/0006-retrieval-evaluation-and-observability.html',
+                href: 'context-engineering/lessons/retrieval-evaluation-and-observability.html',
                 n: 6,
                 title: 'Retrieval evaluation &amp; observability',
                 blurb: 'Your bar: measure retrieval separately from generation, name recall@k / precision@k / MRR / nDCG and the RAGAS-style answer-quality metrics, and explain golden sets, offline vs online eval, and the…',
             },
             {
-                href: 'context-engineering/lessons/0007-pre-retrieval-and-advanced-rag.html',
+                href: 'context-engineering/lessons/pre-retrieval-and-advanced-rag.html',
                 n: 7,
                 title: 'Pre-retrieval &amp; advanced RAG',
                 blurb: 'Your bar: transform the query before you retrieve, match the retrieval structure to the question shape, and know when to graduate from a static pipeline to a self-correcting agentic loop.',
             },
             {
-                href: 'context-engineering/lessons/0008-embeddings-indexing-and-cost.html',
+                href: 'context-engineering/lessons/embeddings-indexing-and-cost.html',
                 n: 8,
                 title: 'Embeddings, indexing &amp; cost',
                 blurb: 'Your bar: explain what an embedding actually is, how vector indexes (HNSW / IVF / PQ) trade recall for speed and memory, and how to model the real token and dollar cost of a retrieval pipeline.',
             },
             {
-                href: 'context-engineering/lessons/0009-context-caching-ordering-and-security.html',
+                href: 'context-engineering/lessons/context-caching-ordering-and-security.html',
                 n: 9,
                 title: 'Context caching, ordering &amp; security',
                 blurb: 'Your bar: structure a prompt for KV/prompt caching, order the window so the model actually reads what matters, and defend a retrieval pipeline against prompt injection and cross-tenant leaks.',
@@ -178,7 +178,7 @@ export const tracks: Track[] = [
         readTime: '~15m read',
         lessons: [
             {
-                href: 'ai-evaluation/lessons/0001-evaluation-fundamentals-offline-online.html',
+                href: 'ai-evaluation/lessons/evaluation-fundamentals-offline-online.html',
                 n: 1,
                 title: 'Evaluation fundamentals — offline vs online &amp; the eval loop',
             },
@@ -208,7 +208,7 @@ export const tracks: Track[] = [
         readTime: '~15m read',
         lessons: [
             {
-                href: 'production-ai-architecture/lessons/0001-reviewing-ai-like-a-distributed-system.html',
+                href: 'production-ai-architecture/lessons/reviewing-ai-like-a-distributed-system.html',
                 n: 1,
                 title: 'Reviewing an AI system like a distributed system',
             },
@@ -242,7 +242,7 @@ export const tracks: Track[] = [
         readTime: '~16m read',
         lessons: [
             {
-                href: 'ai-security/lessons/0001-ai-threat-model-and-prompt-injection.html',
+                href: 'ai-security/lessons/ai-threat-model-and-prompt-injection.html',
                 n: 1,
                 title: 'The AI threat model &amp; prompt injection (OWASP LLM Top 10)',
             },
@@ -268,7 +268,7 @@ export const tracks: Track[] = [
         readTime: '~15m read',
         lessons: [
             {
-                href: 'ai-infrastructure/lessons/0001-the-ai-infra-stack-end-to-end.html',
+                href: 'ai-infrastructure/lessons/the-ai-infra-stack-end-to-end.html',
                 n: 1,
                 title: 'The AI infrastructure stack, end to end',
             },
@@ -302,7 +302,7 @@ export const tracks: Track[] = [
         readTime: '~15m read',
         lessons: [
             {
-                href: 'domain-agent-design/lessons/0001-the-domain-agent-design-method.html',
+                href: 'domain-agent-design/lessons/the-domain-agent-design-method.html',
                 n: 1,
                 title: 'The domain-agent design method',
             },
@@ -336,7 +336,7 @@ export const tracks: Track[] = [
         readTime: '~16m read',
         lessons: [
             {
-                href: 'advanced-ai-systems/lessons/0001-multi-agent-systems-when-and-when-not.html',
+                href: 'advanced-ai-systems/lessons/multi-agent-systems-when-and-when-not.html',
                 n: 1,
                 title: 'Multi-agent systems, orchestration &amp; swarms — when &amp; when not',
             },
@@ -369,67 +369,67 @@ export const tracks: Track[] = [
         readTime: '~1h 20m read',
         lessons: [
             {
-                href: 'rest-api/lessons/0001-what-makes-an-api-restful.html',
+                href: 'rest-api/lessons/what-makes-an-api-restful.html',
                 n: 1,
                 title: 'What makes an API RESTful?',
                 blurb: "What makes an API RESTful? Learn Roy Fielding's six REST constraints — statelessness, uniform interface, HATEOAS, cacheability — and how to nail the interview answer.",
             },
             {
-                href: 'rest-api/lessons/0002-http-methods-and-status-codes.html',
+                href: 'rest-api/lessons/http-methods-and-status-codes.html',
                 n: 2,
                 title: 'HTTP methods &amp; status codes',
                 blurb: 'HTTP methods and status codes explained: GET, POST, PUT, PATCH, DELETE semantics, safe vs idempotent methods, and choosing the right 2xx/4xx/5xx code for REST APIs.',
             },
             {
-                href: 'rest-api/lessons/0003-idempotency-in-practice.html',
+                href: 'rest-api/lessons/idempotency-in-practice.html',
                 n: 3,
                 title: 'Idempotency in practice',
                 blurb: 'API idempotency explained: how idempotency keys make POST retries safe, dedupe duplicate requests, and survive network failures without double-charging in REST APIs.',
             },
             {
-                href: 'rest-api/lessons/0004-resource-modeling-and-uri-design.html',
+                href: 'rest-api/lessons/resource-modeling-and-uri-design.html',
                 n: 4,
                 title: 'Resource modeling &amp; URIs',
                 blurb: 'REST resource modeling and URI design: nouns over verbs, collections vs sub-resources, nesting depth, naming conventions, and clean URL patterns for scalable APIs.',
             },
             {
-                href: 'rest-api/lessons/0005-api-versioning-strategies.html',
+                href: 'rest-api/lessons/api-versioning-strategies.html',
                 n: 5,
                 title: 'Versioning &amp; evolution',
                 blurb: 'REST API versioning strategies compared: URI path /v1 vs header and media-type versioning, breaking vs non-breaking changes, deprecation, and evolving APIs safely.',
             },
             {
-                href: 'rest-api/lessons/0006-pagination-at-scale.html',
+                href: 'rest-api/lessons/pagination-at-scale.html',
                 n: 6,
                 title: 'Pagination at scale',
                 blurb: 'API pagination at scale: why offset pagination breaks on large changing datasets, how cursor and keyset pagination work, and stable page design for REST APIs.',
             },
             {
-                href: 'rest-api/lessons/0007-caching-and-conditional-requests.html',
+                href: 'rest-api/lessons/caching-and-conditional-requests.html',
                 n: 7,
                 title: 'Caching &amp; conditional requests',
                 blurb: 'HTTP caching for REST APIs: Cache-Control directives, ETags and Last-Modified, conditional GET with If-None-Match, 304 responses, and optimistic concurrency control.',
             },
             {
-                href: 'rest-api/lessons/0008-authentication-and-authorization.html',
+                href: 'rest-api/lessons/authentication-and-authorization.html',
                 n: 8,
                 title: 'Authentication &amp; authorization',
                 blurb: 'API authentication and authorization: AuthN vs AuthZ, OAuth2 flows, JWT vs opaque tokens, scopes and RBAC, and securing REST endpoints against common attacks.',
             },
             {
-                href: 'rest-api/lessons/0009-error-design-rate-limiting-observability.html',
+                href: 'rest-api/lessons/error-design-rate-limiting-observability.html',
                 n: 9,
                 title: 'Errors, limits &amp; observability',
                 blurb: 'API error design, rate limiting, and observability: consistent error contracts (RFC 7807), 429 with Retry-After, token-bucket throttling, logs, metrics, and tracing.',
             },
             {
-                href: 'rest-api/lessons/0010-async-and-long-running-operations.html',
+                href: 'rest-api/lessons/async-and-long-running-operations.html',
                 n: 10,
                 title: 'Async &amp; long-running ops',
                 blurb: 'Async and long-running REST operations: the 202 Accepted pattern, status polling, job resources, webhooks vs polling, and designing APIs for exports and batch jobs.',
             },
             {
-                href: 'rest-api/lessons/0011-mock-interview-whiteboard-design.html',
+                href: 'rest-api/lessons/mock-interview-whiteboard-design.html',
                 n: 11,
                 title: 'Mock interview: design an API',
                 blurb: 'A REST API design mock interview walkthrough: scope the problem, model resources and URIs, pick status codes, and handle auth, pagination, idempotency, and errors live.',
@@ -475,25 +475,25 @@ export const tracks: Track[] = [
         readTime: '~30 min read',
         lessons: [
             {
-                href: 'bloom-filters/lessons/0001-what-is-a-bloom-filter.html',
+                href: 'bloom-filters/lessons/what-is-a-bloom-filter.html',
                 n: 1,
                 title: 'What a Bloom filter is — the asymmetry',
                 blurb: 'A Bloom filter trades certainty for space: "definitely not in the set" is guaranteed, "probably in the set" is not. Learn the core asymmetry and how it works.',
             },
             {
-                href: 'bloom-filters/lessons/0002-sizing-a-bloom-filter.html',
+                href: 'bloom-filters/lessons/sizing-a-bloom-filter.html',
                 n: 2,
                 title: 'Sizing — pick the error, derive the rest',
                 blurb: "Size a Bloom filter the senior way: start from the false-positive rate you can tolerate, then derive bits (m) and hash functions (k) from n — don't guess.",
             },
             {
-                href: 'bloom-filters/lessons/0003-failure-modes-and-lsm-reads.html',
+                href: 'bloom-filters/lessons/failure-modes-and-lsm-reads.html',
                 n: 3,
                 title: 'Failure modes &amp; the LSM read path',
                 blurb: 'How a Bloom filter earns its keep on the LSM-tree read path to skip disk reads — and how it silently rots when load outgrows its sizing. Real failure modes.',
             },
             {
-                href: 'bloom-filters/lessons/0004-variants-at-scale.html',
+                href: 'bloom-filters/lessons/variants-at-scale.html',
                 n: 4,
                 title: 'Variants at scale — counting · cuckoo · dedup',
                 blurb: 'Counting, scalable, and blocked Bloom filter variants compared. Standard Bloom is the default — reach for a variant only when deletes, unknown n, or speed bite.',

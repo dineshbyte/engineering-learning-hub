@@ -23,6 +23,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..', 'docs');
+const BASE_PREFIX = '/engineering-learning-hub'; // GitHub Pages base — maps to ROOT
 const ATTR_RE = /(?:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
 const SKIP_RE = /^(?:https?:|mailto:|tel:|data:|javascript:|#|\/\/)/i;
 
@@ -42,7 +43,15 @@ function targetExists(fileDir, rawLink) {
     if (!link) return true;                         // was a pure #anchor / query
     try { link = decodeURIComponent(link); } catch (e) { /* use as-is */ }
 
-    const base = path.resolve(fileDir, link);
+    // Root-relative links starting with the GitHub Pages base prefix are
+    // resolved against docs/ (the site root), not the filesystem root.
+    if (link === BASE_PREFIX || link.startsWith(BASE_PREFIX + '/')) {
+        link = link.slice(BASE_PREFIX.length) || '/';
+    }
+    // Any remaining root-relative path (starts with '/') resolves from ROOT.
+    const base = link.startsWith('/')
+        ? path.join(ROOT, link)
+        : path.resolve(fileDir, link);
     const candidates = link.endsWith('/')
         ? [path.join(base, 'index.html')]
         : [base, base + '.html', path.join(base, 'index.html')];
