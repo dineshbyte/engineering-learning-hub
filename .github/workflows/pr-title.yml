@@ -1,0 +1,49 @@
+name: PR title
+
+# A squash merge uses the PR *title* as the commit subject, so the title must
+# pass the same Conventional Commits rules that commitlint enforces on local
+# commit messages. This reuses the repo's commitlint.config.js (one source of
+# truth) instead of a separate action with its own type list.
+#
+# Kept out of deploy.yml on purpose: this must also run when a title is EDITED,
+# and pulling the `edited` type into the build workflow would re-run the full
+# Astro build on every title/description tweak. `synchronize` is included so the
+# check re-stamps each new head SHA — required if you make it a required status
+# check in branch protection.
+on:
+    pull_request:
+        types: [opened, edited, synchronize, reopened]
+
+permissions:
+    contents: read
+
+# Newer runs for the same PR supersede older ones.
+concurrency:
+    group: pr-title-${{ github.event.pull_request.number }}
+    cancel-in-progress: true
+
+jobs:
+    lint-title:
+        name: Conventional PR title
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 10
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Lint PR title with commitlint
+              # The title is attacker-controlled, so pass it via env — never inline it
+              # into the shell command (avoids command injection from a crafted title).
+              env:
+                  PR_TITLE: ${{ github.event.pull_request.title }}
+              run: echo "$PR_TITLE" | pnpm exec commitlint

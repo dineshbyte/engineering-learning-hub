@@ -1,0 +1,113 @@
+---
+// One hub track card — the full <article class="tile"> contract from
+// docs/index.html, rendered SERVER-SIDE from a Track. analytics.js queries this
+// markup by selector/attribute (there is NO CI guard for it), so the classes,
+// data-* and ARIA below are a hard contract — do NOT rename or restructure them.
+//
+// We render the STATIC, viewer-independent skeleton plus the two pieces that the
+// old client script (docs/index.html, the "home redesign" block) computed purely
+// from data-tier / data-here and so are deterministic at build time:
+//   • the .lvl difficulty dots (from tier → Foundation/Intermediate/Advanced)
+//   • the ★ START HERE .badge (when track.startHere)
+// Everything that depends on the VIEWER, the DATE or localStorage is intentionally
+// NOT rendered here and is left for the ported client script to enhance via the
+// data-* hooks we emit:
+//   • the "NEW" pill           → driven by data-added + today's date
+//   • the "Lesson 1 of N: …"   → .cnext-wrap quick-link for not-started tiles
+//   • the Continue / progress  → .is-started state from localStorage
+// See the "concerns" note returned with this work: the ported script MUST stop
+// re-injecting .lvl / .badge (they are now server-rendered) or they double up.
+//
+// Raw-HTML fields (tagline, tags[], description, lessons[].title) carry source
+// entities (&amp;, &mdash;) and are emitted with set:html so the DOM matches
+// docs/index.html byte-for-byte. name and lessonCountLabel are plain text.
+import type { Track } from '../schema/track';
+import { sortLessons } from '../data/sortTracks';
+
+interface Props {
+    track: Track;
+}
+
+const { track } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+// Render lessons in learning sequence (order → publishedAt → title), not raw
+// array order. lessons[0] is therefore the track's entry point (the Start CTA).
+const lessons = sortLessons(track.lessons);
+
+// data-tier → difficulty band label (mirrors SD_LVL in the old home script).
+const LVL_LABEL: Record<1 | 2 | 3, string> = {
+    1: 'Foundation',
+    2: 'Intermediate',
+    3: 'Advanced',
+};
+const lvlLabel = LVL_LABEL[track.tier];
+// 3 dots; the first `tier` of them get the `on` class (i<=tier).
+const dots = [1, 2, 3].map((i) => (i <= track.tier ? 'd on' : 'd'));
+const lvlTitle =
+    'Topic depth — not a prerequisite gate; a “START HERE” track can still be Advanced.';
+const badgeTitle =
+    'Recommended first read — a curated entry point, independent of the difficulty rating.';
+---
+
+<article
+    class="tile"
+    data-tier={track.tier}
+    data-here={track.startHere ? '' : undefined}
+    style={`--tc:var(${track.colorVar})`}
+    data-cat={track.category}
+    data-added={track.publishedAt}
+>
+    <div class="thead">
+        <div class="tmeta">
+            <div class="tnamerow">
+                <span class="tname">{track.name}</span>
+                {
+                    track.startHere && (
+                        <span class="badge" title={badgeTitle}>
+                            ★ START HERE
+                        </span>
+                    )
+                }
+            </div>
+            <div class="ttagrow">
+                <span class="ttag" set:html={track.tagline} />
+                <span class="lvl" title={lvlTitle}>
+                    <span class="dots" aria-hidden="true">
+                        {dots.map((cls) => <span class={cls} />)}
+                    </span>{lvlLabel}
+                </span>
+            </div>
+        </div>
+        <span class="cnt">{track.lessonCountLabel}</span>
+    </div>
+    <div class="tags">
+        {track.tags.map((tag) => <span class="tag" set:html={tag} />)}
+    </div>
+    <p class="tdesc" set:html={track.description} />
+    <details class="lwrap">
+        <summary class="lsum">Lessons</summary>
+        <div class="lessons">
+            {
+                lessons.map((lesson) => (
+                    <a class="lchip" href={`${base}${lesson.href}`}>
+                        <i>{lesson.n}</i>
+                        <span set:html={lesson.title} />
+                    </a>
+                ))
+            }
+        </div>
+    </details>
+    <div class="rtime">{track.readTime}</div>
+    <a class="start" data-track={track.slug} href={`${base}${lessons[0].href}`}
+        ><span class="start-label">Start</span> <span aria-hidden="true">&#8594;</span></a
+    >
+    <div class="tfoot">
+        {
+            track.references.map((ref) => (
+                <a class={ref.md ? 'pill md' : 'pill'} href={`${base}${ref.href}`}>
+                    {ref.label}
+                </a>
+            ))
+        }
+    </div>
+</article>

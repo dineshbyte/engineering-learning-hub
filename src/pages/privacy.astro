@@ -1,0 +1,195 @@
+---
+/**
+ * privacy.astro — the single hand-authored static Privacy & Analytics page.
+ *
+ * Unlike the lessons/interview/reference/roadmap content (which lives in
+ * collections), this is one bespoke page with NO markdown source — so it's a
+ * plain .astro page, not a collection entry. It is LESSON-FAMILY: it links
+ * lesson.css (the default BaseLayout extraCss stack), NOT the Tufte serif skin.
+ *
+ * The <head>/SEO (title/description/keywords) is lifted VERBATIM from the live
+ * docs/privacy.html; ogImage/ogImageAlt match the live page's site-cover OG.
+ * BaseLayout owns the <head> + the leading skip-link; the body markup below
+ * (#hubbar with back-link + theme toggle, the <main> sections, the footer) is the
+ * live page's body, placed verbatim as the slot content (raw HTML is valid in an
+ * .astro template; there are no literal braces to escape here).
+ *
+ * It is INDEXABLE — so it carries the full SEO set + the analytics include (both
+ * from BaseLayout), and is listed in the sitemap alongside the rest of the site.
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+    title="Privacy & Analytics"
+    description="How Engineering Vault uses privacy-respecting Google Analytics 4: what is collected, Consent Mode, no ads or personal data, and how to opt out."
+    keywords="privacy, analytics, google analytics, consent mode, cookies, data collection, opt out, stackdepth"
+    path="privacy.html"
+    ogImage="assets/og-cover.png"
+    ogImageAlt="Engineering Vault — a free engineering learning hub"
+    skipTarget="#main"
+>
+    <div class="wrap">
+        <nav id="hubbar">
+            <a href="index.html">&#8592; Engineering Vault</a>
+            <span style="display:flex;align-items:center;gap:.6rem"
+                ><button
+                    class="themebtn"
+                    onclick="toggleTheme()"
+                    aria-label="Toggle dark mode"
+                    title="Toggle dark / light">&#127763;</button
+                ><span style="color:var(--muted)">Privacy</span></span
+            >
+        </nav>
+        <main id="main" tabindex="-1">
+            <div class="kicker">Engineering Vault · Privacy</div>
+            <h1>Privacy &amp; analytics</h1>
+            <p class="meta">Last updated 2026-06-23</p>
+            <div class="ltags">
+                <span class="lt">Privacy</span><span class="lt">Analytics</span><span class="lt"
+                    >Consent</span
+                ><span class="lt">Cookies</span>
+            </div>
+
+            <p class="lede">
+                Engineering Vault is a free, ad-free learning site. It uses privacy-respecting
+                analytics to understand which content is useful and what to improve — nothing more.
+            </p>
+
+            <h2 class="sec">What is collected</h2>
+            <p>
+                The site uses <strong>Google Analytics 4</strong> (measurement ID
+                <code>G-5VXHVXESPR</code>) to record aggregate, non-identifying usage:
+            </p>
+            <ul>
+                <li>
+                    Pages viewed and basic interactions (search, filters, starting a track,
+                    answering a quiz, opening interview questions, theme toggles, outbound clicks).
+                </li>
+                <li>
+                    Approximate location (country/region), device type, browser, and referrer — as
+                    derived by Google Analytics.
+                </li>
+            </ul>
+            <p>
+                No names, emails, accounts, or other personal identifiers are collected — the site
+                has no login and no forms. Reading progress (which lesson you're on) is stored only
+                in your browser's <code>localStorage</code> and never leaves your device.
+            </p>
+
+            <h2 class="sec">Consent &amp; cookies</h2>
+            <p>
+                Analytics runs under <strong>Google Consent Mode v2</strong>, and analytics cookies
+                are <strong>optional and off by default</strong>. On your first visit a small banner
+                asks whether to enable them; until you choose <em>Accept analytics</em>,
+                <code>analytics_storage</code> stays <strong>denied</strong> and
+                <strong>no analytics cookie (e.g. <code>_ga</code>) is set</strong> — Google Analytics
+                receives only cookieless, aggregate pings. Choosing
+                <em>Reject</em> keeps it that way. <strong
+                    >Advertising signals are always denied</strong
+                > — the site sets no advertising cookies and runs no ad, remarketing, or personalization
+                tags.
+            </p>
+
+            <h2 class="sec">How to change your choice</h2>
+            <ul>
+                <li>
+                    Pick <strong>Accept analytics</strong> or <strong>Reject</strong> on the consent banner.
+                    Your choice is stored in your browser (<code>localStorage</code>, key
+                    <code>sd:consent</code>) and the banner won't show again.
+                </li>
+                <li>
+                    To be asked again, clear this site's site data / <code>localStorage</code> in your
+                    browser, then reload.
+                </li>
+                <li>
+                    You can also use your browser's tracking protection or Google's
+                    <a
+                        href="https://tools.google.com/dlpage/gaoptout"
+                        target="_blank"
+                        rel="noopener">Analytics opt-out add-on</a
+                    > — the site works fully without analytics.
+                </li>
+                <li>Analytics never runs on non-production hosts (local development).</li>
+            </ul>
+
+            <h2 class="sec">Manage analytics on this device</h2>
+            <p id="sd-consent-state" class="meta">Checking your current choice&hellip;</p>
+            <p>
+                <button type="button" id="sd-enable" class="btn">Enable analytics</button>
+                <button type="button" id="sd-disable" class="btn ghost">Disable analytics</button>
+            </p>
+            <p class="src">
+                Your choice is stored only in this browser (<code>localStorage</code>, key
+                <code>sd:consent</code>) and takes effect immediately — no account, no server-side
+                record.
+            </p>
+            <script is:inline>
+                (function () {
+                    var stateEl = document.getElementById('sd-consent-state');
+                    var enableBtn = document.getElementById('sd-enable');
+                    var disableBtn = document.getElementById('sd-disable');
+                    function read() {
+                        try {
+                            return localStorage.getItem('sd:consent');
+                        } catch (e) {
+                            return null;
+                        }
+                    }
+                    function render() {
+                        var v = read();
+                        var label =
+                            v === 'granted'
+                                ? 'enabled — a first-party analytics cookie may be set.'
+                                : v === 'denied'
+                                  ? 'disabled — analytics runs cookieless (no _ga cookie).'
+                                  : 'not set yet — analytics is off until you choose.';
+                        if (stateEl) stateEl.textContent = 'Analytics is currently ' + label;
+                        if (enableBtn) enableBtn.disabled = v === 'granted';
+                        if (disableBtn) disableBtn.disabled = v === 'denied';
+                    }
+                    function set(v) {
+                        try {
+                            localStorage.setItem('sd:consent', v);
+                        } catch (e) {}
+                        if (typeof window.gtag === 'function')
+                            window.gtag('consent', 'update', { analytics_storage: v });
+                        render();
+                    }
+                    if (enableBtn)
+                        enableBtn.addEventListener('click', function () {
+                            set('granted');
+                        });
+                    if (disableBtn)
+                        disableBtn.addEventListener('click', function () {
+                            set('denied');
+                        });
+                    render();
+                })();
+            </script>
+
+            <h2 class="sec">Data sharing &amp; retention</h2>
+            <p>
+                Aggregated analytics data is processed by Google under its
+                <a href="https://policies.google.com/privacy" target="_blank" rel="noopener"
+                    >privacy policy</a
+                >. It is used only to improve Engineering Vault and is not sold or shared with third
+                parties.
+            </p>
+
+            <h2 class="sec">Questions</h2>
+            <p>
+                Open an issue on
+                <a
+                    href="https://github.com/dineshbyte/engineering-learning-hub/issues"
+                    target="_blank"
+                    rel="noopener">GitHub</a
+                >.
+            </p>
+
+            <footer>
+                <p>&#8592; <a href="index.html">Back to Engineering Vault</a></p>
+            </footer>
+        </main>
+    </div>
+</BaseLayout>

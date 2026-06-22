@@ -1,0 +1,159 @@
+---
+/**
+ * rest-api · 0006-pagination-at-scale · Figure 1 — "TWO WAYS TO ASK FOR THE NEXT
+ * PAGE" (OFFSET / LIMIT vs CURSOR / KEYSET, side by side).
+ *
+ * Copied VERBATIM from docs/rest-api/lessons/0006-pagination-at-scale.html
+ * (figure + svg + figcaption). It lives as an .astro component, NOT inline in the
+ * MDX, because MDX's JSX parser is unreliable with raw inline SVG that uses
+ * kebab-case attributes (text-anchor, font-size, stroke-width, marker-end, …).
+ * In an .astro file the SVG is plain HTML, so it renders byte-for-byte.
+ *
+ * The source page declared the arrow markers (arwR red, arwG green) once in a
+ * shared, hidden <defs> SVG in <body>; since each figure is now an isolated
+ * component, the markers this figure references (url(#arwR), url(#arwG)) are
+ * embedded in a local <defs> so the SVG is self-contained and renders standalone.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 640 230"
+        role="img"
+        aria-label="Offset pagination skips N rows and scans-then-discards them; cursor pagination seeks an indexed key and reads forward"
+    >
+        <defs>
+            <marker
+                id="arwR"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+            >
+                <path d="M0,0 L10,5 L0,10 z" fill="#9a2417"></path>
+            </marker>
+            <marker
+                id="arwG"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+            >
+                <path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path>
+            </marker>
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="320"
+                y="18"
+                text-anchor="middle"
+                font-size="12"
+                font-weight="700"
+                fill="#111110">TWO WAYS TO ASK FOR "THE NEXT PAGE"</text
+            >
+
+            <rect x="8" y="32" width="300" height="186" rx="9" fill="#f7ecea" stroke="#9a2417"
+            ></rect>
+            <text
+                x="158"
+                y="52"
+                text-anchor="middle"
+                font-size="12"
+                font-weight="700"
+                fill="#9a2417">OFFSET / LIMIT</text
+            >
+            <text x="158" y="68" text-anchor="middle" font-size="9" fill="#7a2218"
+                >LIMIT 50 OFFSET 100 · "page 3"</text
+            >
+            <rect x="26" y="80" width="22" height="100" rx="2" fill="#fff" stroke="#d8d4c8"></rect>
+            <rect x="50" y="80" width="22" height="100" rx="2" fill="#fff" stroke="#d8d4c8"></rect>
+            <rect x="74" y="80" width="22" height="100" rx="2" fill="#fff" stroke="#d8d4c8"></rect>
+            <rect x="98" y="80" width="22" height="100" rx="2" fill="#fff" stroke="#d8d4c8"></rect>
+            <rect x="122" y="80" width="22" height="100" rx="2" fill="#fff" stroke="#d8d4c8"></rect>
+            <text x="86" y="200" text-anchor="middle" font-size="9" fill="#9a2417"
+                >scan &amp; discard every row first</text
+            >
+            <line x1="26" y1="186" x2="148" y2="186" stroke="#9a2417" marker-end="url(#arwR)"
+            ></line>
+            <rect
+                x="190"
+                y="80"
+                width="108"
+                height="100"
+                rx="4"
+                fill="#fbfaf2"
+                stroke="#9a2417"
+                stroke-width="1.5"></rect>
+            <text
+                x="244"
+                y="126"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#9a2417">page returned</text
+            >
+            <text x="244" y="142" text-anchor="middle" font-size="9" fill="#7a2218"
+                >cost = O(offset)</text
+            >
+
+            <rect x="332" y="32" width="300" height="186" rx="9" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="482"
+                y="52"
+                text-anchor="middle"
+                font-size="12"
+                font-weight="700"
+                fill="#2f5d3a">CURSOR / KEYSET</text
+            >
+            <text x="482" y="68" text-anchor="middle" font-size="9" fill="#244a2e"
+                >WHERE key &gt; last_seen · "after X"</text
+            >
+            <rect x="350" y="80" width="22" height="100" rx="2" fill="#fff" stroke="#d8d4c8"></rect>
+            <rect x="374" y="80" width="22" height="100" rx="2" fill="#fff" stroke="#d8d4c8"></rect>
+            <rect
+                x="398"
+                y="80"
+                width="14"
+                height="100"
+                rx="2"
+                fill="#eef5ee"
+                stroke="#2f5d3a"
+                stroke-dasharray="3 2"></rect>
+            <text x="382" y="200" text-anchor="middle" font-size="9" fill="#2f5d3a"
+                >index seek to anchor</text
+            >
+            <line x1="416" y1="130" x2="448" y2="130" stroke="#2f5d3a" marker-end="url(#arwG)"
+            ></line>
+            <text x="432" y="122" text-anchor="middle" font-size="8" fill="#2f5d3a">read fwd</text>
+            <rect
+                x="452"
+                y="80"
+                width="170"
+                height="100"
+                rx="4"
+                fill="#fbfaf2"
+                stroke="#2f5d3a"
+                stroke-width="1.5"></rect>
+            <text
+                x="537"
+                y="126"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#2f5d3a">page returned</text
+            >
+            <text x="537" y="142" text-anchor="middle" font-size="9" fill="#244a2e"
+                >cost = O(page size)</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        <code>?page=3&amp;per_page=50</code> is trivial to ship and lets a human jump to any page. A cursor
+        remembers <em>where you stopped</em> on a stable, indexed key and range-scans forward.
+    </figcaption>
+</figure>

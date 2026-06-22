@@ -1,13 +1,14 @@
 ---
-name: "✨ New lesson or track"
+name: '✨ New lesson or track'
 about: Propose a new lesson within a track, or a brand-new track
-title: "[new] <topic>"
-labels: ["content", "enhancement"]
+title: '[new] <topic>'
+labels: ['content', 'enhancement']
 ---
 
 ## Proposal
 
 <!-- New lesson in an existing track, or a new track? Name the topic. -->
+
 - **Type:** <!-- new lesson | new track -->
 - **Track:** <!-- existing track name, or "NEW: <proposed track>" -->
 - **Topic:** <!-- e.g. "Reranking strategies" -->
@@ -19,6 +20,7 @@ labels: ["content", "enhancement"]
 ## Difficulty rung
 
 <!-- Where does it sit on the ladder? -->
+
 - [ ] Foundation — the mental model and vocabulary
 - [ ] Core — everyday working knowledge
 - [ ] Senior — trade-offs and failure modes
@@ -31,4 +33,5 @@ labels: ["content", "enhancement"]
 ## Sources
 
 <!-- High-trust references the lesson should be grounded in. -->
+
 - <!-- https://… -->

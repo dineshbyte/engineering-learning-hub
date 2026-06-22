@@ -1,0 +1,108 @@
+---
+/**
+ * context-engineering 0009 · Figure 2 — M1 "stable prefix cached, volatile
+ * suffix reprocessed" diagram.
+ *
+ * Copied VERBATIM from
+ * docs/context-engineering/lessons/0009-context-caching-ordering-and-security.html
+ * (figure + svg + figcaption incl. the footnote <sup>). It lives as an .astro
+ * component, NOT inline in the MDX, because MDX's JSX parser is unreliable with
+ * raw inline SVG that uses kebab-case attributes. In an .astro file the SVG is
+ * plain HTML, so it renders byte-for-byte.
+ *
+ * The source page defined the arrowhead markers ONCE in a shared <defs> block at
+ * the top of the document <body>. This figure references only `arwG`, so that
+ * one marker is inlined into its own <defs>.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 640 250"
+        role="img"
+        aria-label="A stable prefix is cached and reused across calls; the volatile suffix is the only new work."
+    >
+        <defs>
+            <marker
+                id="arwG"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker
+            >
+        </defs>
+        <text x="320" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110"
+            >One window, two zones</text
+        >
+
+        <!-- call 1 -->
+        <text x="40" y="46" font-size="9.5" font-weight="700" fill="#6b675f">Call 1</text>
+        <rect x="90" y="34" width="330" height="30" rx="5" fill="#e9f3ec" stroke="#2f5d3a"></rect>
+        <text x="255" y="53" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a"
+            >STABLE prefix · system + tools + static docs</text
+        >
+        <rect x="424" y="34" width="170" height="30" rx="5" fill="#f6eef7" stroke="#b5179e"></rect>
+        <text x="509" y="53" text-anchor="middle" font-size="9.5" font-weight="700" fill="#b5179e"
+            >volatile · this query</text
+        >
+        <text x="610" y="53" text-anchor="end" font-size="8" fill="#9a2417">processed in full</text>
+
+        <!-- arrow: cache write -->
+        <line
+            x1="255"
+            y1="64"
+            x2="255"
+            y2="96"
+            stroke="#2f5d3a"
+            stroke-dasharray="3 3"
+            marker-end="url(#arwG)"></line>
+        <rect
+            x="150"
+            y="98"
+            width="210"
+            height="28"
+            rx="6"
+            fill="#e9f3ec"
+            stroke="#2f5d3a"
+            stroke-width="1.5"></rect>
+        <text x="255" y="116" text-anchor="middle" font-size="9" font-weight="700" fill="#2f5d3a"
+            >KV-state cached &#128190;</text
+        >
+
+        <!-- call 2 -->
+        <text x="40" y="162" font-size="9.5" font-weight="700" fill="#6b675f">Call 2</text>
+        <rect
+            x="90"
+            y="150"
+            width="330"
+            height="30"
+            rx="5"
+            fill="#e9f3ec"
+            stroke="#2f5d3a"
+            stroke-dasharray="5 3"></rect>
+        <text x="255" y="169" text-anchor="middle" font-size="9.5" font-weight="700" fill="#2f5d3a"
+            >SAME prefix &mdash; reused, not reprocessed</text
+        >
+        <rect x="424" y="150" width="170" height="30" rx="5" fill="#f6eef7" stroke="#b5179e"></rect>
+        <text x="509" y="169" text-anchor="middle" font-size="9.5" font-weight="700" fill="#b5179e"
+            >volatile · new query</text
+        >
+        <text x="610" y="169" text-anchor="end" font-size="8" fill="#2f5d3a">cheaper + faster</text>
+        <line x1="255" y1="126" x2="255" y2="148" stroke="#2f5d3a" marker-end="url(#arwG)"></line>
+
+        <!-- bust warning -->
+        <rect x="90" y="204" width="504" height="34" rx="6" fill="#fbecec" stroke="#9a2417"></rect>
+        <text x="342" y="225" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a2417"
+            >&#9888; Change ONE token in the prefix &rarr; cache busts from that point on. Never
+            reorder the stable zone.</text
+        >
+    </svg>
+    <figcaption>
+        The cache matches on an <em>exact identical prefix</em>. Reusable content goes first so it
+        stays byte-stable; the per-query parts go last so they don't invalidate the cache above
+        them.<sup><a href="#s4" id="r2">2</a></sup>
+    </figcaption>
+</figure>

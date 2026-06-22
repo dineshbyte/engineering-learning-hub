@@ -1,0 +1,165 @@
+---
+/**
+ * lsm-compaction-deep-dive · Figure 5 — Level 5 "WHY A TOMBSTONE MUST OUTLIVE
+ * EVERY OLDER COPY": older SSTable (value) + newer SSTable (tombstone), the
+ * correct "keep tombstone" path vs the "purge too early" resurrection path, plus
+ * the DISTRIBUTED / gc_grace_seconds note.
+ *
+ * Copied VERBATIM from docs/storage-engines/lsm-compaction-deep-dive.html
+ * (figure + svg + figcaption). It lives as an .astro component, NOT inline in the
+ * MDX, because MDX's JSX parser is unreliable with raw inline SVG that uses
+ * kebab-case attributes (text-anchor, font-size, stroke-width, marker-end, …).
+ *
+ * The source page declared its arrowhead markers (#arw / #arwA / #arwG) ONCE in a
+ * hidden top-of-body <svg defs>. Because each figure is now an isolated component,
+ * the #arwG (fill #2f5d3a) and #arwA (fill #7a1f12) markers this figure references
+ * via marker-end="url(#…)" are inlined here in a local <defs> so it resolves
+ * standalone (verbatim from the source defs).
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 560 200"
+        role="img"
+        aria-label="Tombstone resurrection: an older SSTable still holds the value while a newer SSTable holds the tombstone. If the tombstone is purged before the old SSTable is compacted away, the value reappears with nothing to mask it."
+    >
+        <defs>
+            <marker
+                id="arwA"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"></path></marker
+            >
+            <marker
+                id="arwG"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="280"
+                y="20"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#9a2417">WHY A TOMBSTONE MUST OUTLIVE EVERY OLDER COPY</text
+            >
+            <!-- old sstable -->
+            <rect x="20" y="46" width="150" height="50" rx="8" fill="#fff" stroke="#1f3a5a"></rect>
+            <text x="95" y="66" text-anchor="middle" font-size="10" font-weight="700" fill="#1f3a5a"
+                >older SSTable</text
+            >
+            <text x="95" y="84" text-anchor="middle" font-size="10" fill="#111110"
+                >k = "alice" (value)</text
+            >
+            <!-- new sstable -->
+            <rect x="20" y="118" width="150" height="50" rx="8" fill="#f7ecea" stroke="#9a2417"
+            ></rect>
+            <text
+                x="95"
+                y="138"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#9a2417">newer SSTable</text
+            >
+            <text x="95" y="156" text-anchor="middle" font-size="10" fill="#9a2417"
+                >k = ⌧ tombstone</text
+            >
+            <!-- correct path -->
+            <line x1="172" y1="107" x2="218" y2="107" stroke="#2f5d3a" marker-end="url(#arwG)"
+            ></line>
+            <rect x="222" y="44" width="150" height="58" rx="8" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="297"
+                y="64"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#2f5d3a">✓ keep tombstone</text
+            >
+            <text x="297" y="80" text-anchor="middle" font-size="9" fill="#244a2e"
+                >until merged past</text
+            >
+            <text x="297" y="93" text-anchor="middle" font-size="9" fill="#244a2e"
+                >the old copy → read = "not found"</text
+            >
+            <!-- wrong path -->
+            <line
+                x1="172"
+                y1="140"
+                x2="218"
+                y2="140"
+                stroke="#9a2417"
+                stroke-dasharray="4 3"
+                marker-end="url(#arwA)"></line>
+            <rect x="222" y="118" width="150" height="58" rx="8" fill="#f7ecea" stroke="#9a2417"
+            ></rect>
+            <text
+                x="297"
+                y="138"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#9a2417">✗ purge too early</text
+            >
+            <text x="297" y="154" text-anchor="middle" font-size="9" fill="#7a2218"
+                >old value has no mask</text
+            >
+            <text x="297" y="167" text-anchor="middle" font-size="9" fill="#7a2218"
+                >→ deleted data RETURNS</text
+            >
+            <!-- distributed note -->
+            <rect
+                x="392"
+                y="60"
+                width="158"
+                height="100"
+                rx="10"
+                fill="#fbfaf2"
+                stroke="#1f3a5a"
+                stroke-width="1.4"></rect>
+            <text
+                x="471"
+                y="80"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#1f3a5a">DISTRIBUTED</text
+            >
+            <text x="471" y="100" text-anchor="middle" font-size="9" fill="#111110"
+                >delete must reach</text
+            >
+            <text x="471" y="113" text-anchor="middle" font-size="9" fill="#111110"
+                >every replica first</text
+            >
+            <text
+                x="471"
+                y="135"
+                text-anchor="middle"
+                font-size="10"
+                fill="#9a2417"
+                font-weight="700">gc_grace_seconds</text
+            >
+            <text x="471" y="150" text-anchor="middle" font-size="9" fill="#6b675f"
+                >Cassandra default 10 days</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        A tombstone must outlive <em>every</em> older SSTable still holding the value. Purge it too early
+        and the next read finds the old value with nothing to mask it.
+    </figcaption>
+</figure>

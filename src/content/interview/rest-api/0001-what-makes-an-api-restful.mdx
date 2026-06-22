@@ -1,0 +1,163 @@
+---
+publishedAt: '2026-06-21'
+# ─── rest-api · Interview Bank 1 — migrated to the InterviewLayout pattern ─────
+# FRONTMATTER = the full bank contract (head + masthead + nav + footer) PLUS the
+# structured Q&A lifted VERBATIM out of the source <div data-interview>: the
+# level-grouped interview[] {level, q, a} and the design rubric (rubricIntro +
+# rubric[]). Validated at build time by the `interview` collection schema
+# (content.config.ts → schema/interview.ts). <Interview> emits the single FAQPage
+# JSON-LD from `interview` — there is deliberately NO jsonLd field.
+#
+# HTML-bearing strings use YAML folded block scalars (>-) so embedded ", ', &, <
+# and > need NO escaping.
+
+# —— head / SEO ——
+title: 'REST API Interview Questions: RESTful Design'
+description: >-
+    Practice RESTful design with 21 senior and staff REST API interview questions on constraints,
+    statelessness, HATEOAS, and the Richardson maturity model.
+keywords: 'rest api, restful design, status codes, http methods, rest, api, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors'
+path: 'rest-api/interview/what-makes-an-api-restful.html'
+ogImage: 'assets/og/rest-api.png'
+ogImageAlt: 'REST API · Engineering Vault learning track'
+accentVar: '--track-rest'
+
+# —— masthead ——
+trackLabel: 'REST API Mastery · Interview'
+kicker: 'Interview Bank · Lesson 1'
+h1Html: 'REST Foundations — interview questions'
+metaLine: >-
+    21 questions · Core / Senior / Staff · pairs with <a href="../lessons/what-makes-an-api-restful.html">Lesson 1</a>
+chips:
+    - 'REST API'
+    - 'RESTful design'
+    - 'Status codes'
+    - 'HTTP methods'
+    - 'REST'
+
+# —— wayfinding ——
+topNav:
+    refHref: '../reference/rest-constraints-and-maturity.html'
+    refLabel: 'Constraints &amp; Maturity reference'
+    nextHref: 'http-methods-and-status-codes.html'
+    nextLabel: 'Next bank: HTTP methods &amp; status codes ▸'
+
+# —— footer ——
+footerHtml: >-
+    Interview bank · Lesson 1 · answer from memory first, then reveal · <a href="../../index.html">all lessons &amp; banks</a>
+
+# —— routing ——
+track: 'rest-api'
+number: '0001'
+
+# —— interview Q&A (verbatim from <div data-interview>) ——
+interview:
+    - level: 'core'
+      q: 'What is REST, precisely?'
+      a: >-
+          <p>An <strong>architectural style</strong> defined by a set of constraints, coined by Roy Fielding — <em>not</em> a protocol, data format, or "JSON over HTTP." An API is "RESTful" only to the degree it honors the constraints. Naming it as a style (not a spec) is the senior tell.</p>
+    - level: 'core'
+      q: 'Name the six architectural constraints.'
+      a: >-
+          <p>Client–server, stateless, cacheable, uniform interface, layered system, and code-on-demand (the only optional one).</p>
+    - level: 'senior'
+      q: 'Is REST the same thing as HTTP?'
+      a: >-
+          <p>No. REST is a <em>style</em>; HTTP is a <em>protocol</em> that happens to fit it very well. You can apply REST principles over other protocols, and you can absolutely use HTTP <em>un</em>-RESTfully — e.g. tunnelling everything through one <code>POST</code> endpoint (Richardson Level 0).</p>
+    - level: 'senior'
+      q: "Resource vs representation — what's the difference?"
+      a: >-
+          <p>A <strong>resource</strong> is the abstract thing identified by a URI (a user, an order). A <strong>representation</strong> is a snapshot of that resource's state in some format (JSON, XML) transferred over the wire. Clients manipulate representations, never the resource directly — and a resource can have several representations.</p>
+    - level: 'core'
+      q: 'What does the statelessness constraint actually require?'
+      a: >-
+          <p>Each request must carry everything the server needs to process it; the server keeps <strong>no per-client session state between requests</strong>. State lives on the client (or in a shared datastore the request points at), not in server memory tied to a connection.</p>
+    - level: 'senior'
+      q: 'Why does statelessness help you scale?'
+      a: >-
+          <p>Because <em>any</em> node can serve <em>any</em> request — no sticky sessions, no session affinity. You scale horizontally by adding boxes behind a load balancer, and a node dying doesn't lose a user's session. It also improves visibility (each request is self-contained, so caches/proxies/monitoring can reason about it alone).</p>
+    - level: 'senior'
+      q: '"Stateless" means no database and no cookies, right?'
+      a: >-
+          <p>No — a common misconception. It means no <em>server-side session</em> state between requests. Application/resource state in a database is completely fine. Auth state moves into a token sent on every request (e.g. a Bearer/JWT) instead of a server-held session.</p>
+    - level: 'staff'
+      q: 'What are the costs of statelessness, and how do you mitigate them?'
+      a: >-
+          <p>Every request must re-send context (auth, etc.), so requests are larger and you can't lean on cheap in-memory session affinity. You also can't trivially do server-push of session changes. Mitigations: compact signed tokens, caching/CDNs, idempotency keys to make retries safe, and a shared cache/store (Redis) when you genuinely need cross-request state — accepting it's then explicit, not hidden in a node's memory.</p>
+    - level: 'senior'
+      q: 'How does statelessness shape your authentication design?'
+      a: >-
+          <p>It pushes you toward token-based auth: a signed token (JWT) on every request that any node can validate independently, rather than a server-side session looked up from memory. That's why stateless REST and JWT pair so naturally — and why "where does the session live?" is the wrong question for a pure REST API.</p>
+    - level: 'core'
+      q: 'What are the four sub-constraints of the uniform interface?'
+      a: >-
+          <p>(1) Identification of resources (URIs); (2) manipulation of resources through representations; (3) self-descriptive messages (each message carries enough to be understood — method, media type, status); (4) hypermedia as the engine of application state (HATEOAS).</p>
+    - level: 'core'
+      q: 'What is HATEOAS?'
+      a: >-
+          <p>Hypermedia As The Engine Of Application State: responses include <strong>links advertising the valid next actions</strong>, so the client discovers what it can do rather than hard-coding URIs and workflow. The server can then change its URL structure without breaking clients.</p>
+    - level: 'senior'
+      q: 'If HATEOAS is part of REST, why is it so rare in real APIs?'
+      a: >-
+          <p>Because the payoff rarely justifies the cost. Most clients are first-party and version-pinned — they don't dynamically follow links, they're coded against known endpoints. Tooling/codegen and developers expect fixed URLs. So the decoupling HATEOAS buys goes unused, and teams stop at Level 2. The senior move is to <em>know</em> that and say so, not to pretend everyone does L3.</p>
+    - level: 'staff'
+      q: 'When would you actually invest in HATEOAS / Level 3?'
+      a: >-
+          <p>When you have <strong>many third-party clients you can't redeploy</strong> and need to evolve URLs/workflows without breaking them; when the API models a <strong>state machine</strong> where the available actions genuinely change (e.g. a payment that can be captured/refunded/voided depending on state — links express the legal transitions); or where discoverability is a product feature.</p>
+    - level: 'core'
+      q: 'Describe the Richardson Maturity Model.'
+      a: >-
+          <p>A 0–3 ladder of how fully an API uses REST's ideas: <strong>L0</strong> one URI / one verb (RPC-over-HTTP, "Swamp of POX"); <strong>L1</strong> many resources, each a URI; <strong>L2</strong> proper HTTP verbs + status codes; <strong>L3</strong> hypermedia (HATEOAS).</p>
+    - level: 'core'
+      q: 'What level do most production "REST" APIs sit at?'
+      a: >-
+          <p>Level 2 — correct resources, verbs, and status codes, but no hypermedia. That's the pragmatic industry bar.</p>
+    - level: 'senior'
+      q: 'Is a Level 2 API "really REST" by Fielding''s own definition?'
+      a: >-
+          <p>Strictly, no — Fielding argues that without the hypermedia constraint it isn't truly REST. But Level 2 is what the industry pragmatically means by "REST." The strong answer names that tension explicitly and then defends the pragmatic choice for the given context, rather than dodging it.</p>
+    - level: 'senior'
+      q: 'Give a concrete example of a Level 0 system.'
+      a: >-
+          <p>Classic SOAP / XML-RPC: a single endpoint (e.g. <code>POST /api</code>) where the action lives in the request body and HTTP is just a transport tunnel. Status and verbs carry no semantic meaning.</p>
+    - level: 'senior'
+      q: 'REST vs gRPC/RPC — when would you pick each?'
+      a: >-
+          <p><strong>REST</strong>: resource-oriented, leans on HTTP caching, broad client reach, easy to evolve, great for public/edge-facing APIs. <strong>gRPC/RPC</strong>: low-latency internal service-to-service, strict typed contracts (protobuf), bidirectional streaming, high throughput — but binary, less browser/edge-friendly, weaker HTTP-cache story. Rule of thumb: REST at the edge, gRPC between internal services.</p>
+    - level: 'senior'
+      q: 'REST vs GraphQL — what are the trade-offs?'
+      a: >-
+          <p><strong>GraphQL</strong>: client shapes the query, killing over-/under-fetching; one endpoint; excellent for many varied clients. Costs: HTTP caching is hard (usually <code>POST</code>), query-cost/N+1 control, and you lose HTTP-native semantics (status, methods, conditional requests). <strong>REST</strong>: simpler, cache-friendly, ubiquitous, but fixed response shapes lead to over-/under-fetching. Many systems run both.</p>
+    - level: 'staff'
+      q: 'A team says "let''s make our API RESTful." How do you advise them?'
+      a: >-
+          <p>First ask <em>why</em> — what outcome do they want (evolvability, caching, DX, broad reach)? Then assess current maturity. For most, the goal is a clean Level 2: good resource modeling, correct verbs/status codes, real cache headers, consistent errors. Pursue L3/HATEOAS only if uncontrollable third-party clients or a genuine state machine demand it. Don't chase REST purity for its own sake — tie every constraint back to a concrete benefit.</p>
+    - level: 'core'
+      q: 'Why do interviewers open with "what makes an API RESTful?"'
+      a: >-
+          <p>Because the answer reveals whether you understand the <em>why</em> behind design — the constraints and their trade-offs — versus just the surface mechanics (verbs, JSON). It's a fast, reliable predictor of the quality of every downstream design answer you'll give.</p>
+    - level: 'design'
+      q: 'Design a RESTful API for a blogging platform (posts, comments, authors). Walk the resource model and maturity level.'
+      a: >-
+          <p><b>A strong answer covers:</b> resources as nouns — <code>/posts</code>, <code>/posts/{id}</code>, <code>/posts/{id}/comments</code>, <code>/authors/{id}</code> — with nesting only where ownership is real and a flat <code>/comments/{id}</code> for direct access &rarr; verbs mapped cleanly (GET list/read, POST create, PATCH partial edit, DELETE) with correct status codes (201 + <code>Location</code> on create, 404 vs 410, 409 on conflict) &rarr; statelessness: bearer token on every request, authorization checks per resource (an author edits only their own posts) &rarr; caching with <code>ETag</code>/<code>Last-Modified</code> on reads and conditional requests on writes &rarr; pagination + filtering on the collections (cursor-based, bounded page size) &rarr; a consistent error envelope and a versioning/deprecation story &rarr; name the maturity call: deliberately Level 2 (verbs + status codes, no HATEOAS) because clients are first-party, and say <em>when</em> you'd move to L3.</p>
+    - level: 'design'
+      q: 'An interviewer hands you a Level 0 "JSON over HTTP" API (one <code>POST /api</code> with an action field) and asks you to make it RESTful. How do you approach it?'
+      a: >-
+          <p><b>A strong answer covers:</b> first diagnose — it's RPC tunnelled through one endpoint, so HTTP verbs, status codes, and caching all carry zero meaning &rarr; climb the Richardson ladder incrementally rather than big-bang: L1 split the single endpoint into resource URIs, L2 map each action onto the correct method + status code and expose real cache headers &rarr; preserve the old endpoint behind a versioned facade so existing clients don't break; run both during migration &rarr; tie every change to a benefit (cacheability, idempotent retries, intermediary visibility) instead of chasing purity &rarr; stop at L2 unless uncontrollable third-party clients or a genuine state machine justify HATEOAS &rarr; call out migration risks: dual-write/dual-read consistency, client cutover, and a deprecation timeline with metrics on old-endpoint traffic.</p>
+
+# —— design rubric (the <div class="designrubric"> before the first design Q) ——
+rubricIntro: >-
+    <b>REST design-round framework</b> — drive any "design a REST API" prompt through these, out loud:
+rubric:
+    - 'Model resources &amp; URIs — nouns not verbs, collections vs items (<code>/orders</code>, <code>/orders/{id}</code>), nesting only for true ownership.'
+    - 'Map methods &amp; status codes — GET/POST/PUT/PATCH/DELETE to the right semantics; 2xx/4xx/5xx that mean what they say.'
+    - 'Idempotency &amp; caching — safe/idempotent verbs, idempotency keys for POST, <code>ETag</code>/<code>Cache-Control</code>/conditional requests.'
+    - 'Pagination, filtering &amp; sorting — cursor vs offset, bounded page sizes, consistent query params.'
+    - 'AuthN/AuthZ — bearer tokens on every request (stateless), scopes/roles, transport security, rate limits (OWASP API Top 10).'
+    - 'Versioning &amp; evolution — additive changes, deprecation policy, URL vs header versioning.'
+    - 'Errors &amp; contracts — a consistent error envelope (e.g. RFC 9457 problem+json), correlation IDs, documented schema.'
+---
+
+<div class="how">
+    <strong>Use these as active recall, not reading.</strong> Read the question, answer it <em>out loud or in writing from memory first</em>, and only then reveal the model answer to grade yourself. Recognizing an answer ≠ being able to produce it under pressure. Filter by difficulty; reveal-all only for a final review pass.
+</div>

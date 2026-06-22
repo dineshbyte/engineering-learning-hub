@@ -1,0 +1,113 @@
+---
+/**
+ * streaming-event-driven · exactly-once-kafka-deep-dive · Figure 3 — the partition
+ * log, the Last Stable Offset, and the two isolation levels (Level 3).
+ *
+ * Verbatim from the source HTML (figure + svg + figcaption). This figure has no
+ * marker refs, but is kept as a component for the same SVG-in-MDX reason.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 600 168"
+        role="img"
+        aria-label="A partition log with committed records, then aborted records, then an open transaction. read_committed stops at the Last Stable Offset before the open transaction and filters aborted records; read_uncommitted returns everything."
+    >
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="300"
+                y="18"
+                text-anchor="middle"
+                font-size="11.5"
+                font-weight="700"
+                fill="#111110">one partition's log →</text
+            >
+            <!-- committed run -->
+            <g>
+                <rect x="14" y="34" width="44" height="34" rx="5" fill="#eef5ee" stroke="#2f5d3a"
+                ></rect>
+                <rect x="62" y="34" width="44" height="34" rx="5" fill="#eef5ee" stroke="#2f5d3a"
+                ></rect>
+                <rect x="110" y="34" width="44" height="34" rx="5" fill="#eef5ee" stroke="#2f5d3a"
+                ></rect>
+                <text x="84" y="84" text-anchor="middle" font-size="9.5" fill="#2f5d3a"
+                    >committed</text
+                >
+            </g>
+            <!-- aborted -->
+            <g>
+                <rect x="166" y="34" width="44" height="34" rx="5" fill="#f7ecea" stroke="#9a2417"
+                ></rect>
+                <rect x="214" y="34" width="44" height="34" rx="5" fill="#f7ecea" stroke="#9a2417"
+                ></rect>
+                <text x="210" y="84" text-anchor="middle" font-size="9.5" fill="#9a2417"
+                    >aborted (filtered)</text
+                >
+            </g>
+            <!-- open txn -->
+            <g>
+                <rect
+                    x="300"
+                    y="34"
+                    width="44"
+                    height="34"
+                    rx="5"
+                    fill="#fff"
+                    stroke="#6b675f"
+                    stroke-dasharray="3 2"></rect>
+                <rect
+                    x="348"
+                    y="34"
+                    width="44"
+                    height="34"
+                    rx="5"
+                    fill="#fff"
+                    stroke="#6b675f"
+                    stroke-dasharray="3 2"></rect>
+                <text x="346" y="84" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                    >open txn (undecided)</text
+                >
+            </g>
+            <!-- LSO marker -->
+            <line x1="288" y1="26" x2="288" y2="100" stroke="#7a1f12" stroke-width="1.5"></line>
+            <text
+                x="288"
+                y="114"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#7a1f12">LSO</text
+            >
+            <text x="288" y="127" text-anchor="middle" font-size="8.5" fill="#6b675f"
+                >first open txn</text
+            >
+            <!-- readers -->
+            <rect x="40" y="134" width="220" height="28" rx="14" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="150"
+                y="152"
+                text-anchor="middle"
+                font-size="9.5"
+                font-weight="700"
+                fill="#2f5d3a">read_committed → committed only, stops at LSO</text
+            >
+            <rect x="320" y="134" width="260" height="28" rx="14" fill="#f7ecea" stroke="#9a2417"
+            ></rect>
+            <text
+                x="450"
+                y="152"
+                text-anchor="middle"
+                font-size="9.5"
+                font-weight="700"
+                fill="#9a2417">read_uncommitted → everything: committed + aborted + in-flight</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        The LSO is the offset just before the first still-open transaction;
+        <code>read_committed</code> never reads past it, and filters aborted records via the broker's
+        markers.
+    </figcaption>
+</figure>

@@ -1,0 +1,129 @@
+---
+/**
+ * consensus-deep-dive · Figure 5 — naive membership switch (split brain) vs
+ * joint consensus (safe).
+ *
+ * Copied VERBATIM from docs/distributed-systems/consensus-deep-dive.html
+ * (figure + svg + figcaption). Isolated as an .astro component because MDX's JSX
+ * parser is unreliable with raw inline SVG that uses kebab-case attributes. It
+ * references marker-end="url(#arw)" (fill #6b675f), declared once in the source's
+ * top-of-body <svg defs> and inlined here in a local <defs> so the figure
+ * resolves standalone.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 600 250"
+        role="img"
+        aria-label="Naive membership switch lets C_old and C_new each form a majority and elect two leaders; joint consensus requires a majority of both sets so two disjoint majorities cannot form"
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <!-- danger -->
+            <text
+                x="150"
+                y="20"
+                text-anchor="middle"
+                font-size="11.5"
+                font-weight="700"
+                fill="#9a2417">NAIVE SWITCH — split brain</text
+            >
+            <rect x="20" y="36" width="120" height="44" rx="8" fill="#f7ecea" stroke="#9a2417"
+            ></rect>
+            <text x="80" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417"
+                >C_old majority</text
+            >
+            <text x="80" y="71" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >elects leader A</text
+            >
+            <rect x="160" y="36" width="120" height="44" rx="8" fill="#f7ecea" stroke="#9a2417"
+            ></rect>
+            <text
+                x="220"
+                y="56"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#9a2417">C_new majority</text
+            >
+            <text x="220" y="71" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >elects leader B</text
+            >
+            <text x="150" y="100" text-anchor="middle" font-size="10" fill="#9a2417"
+                >two independent majorities → two leaders → diverge ✗</text
+            >
+            <line x1="300" y1="14" x2="300" y2="236" stroke="#d8d4c8" stroke-dasharray="4 4"></line>
+            <!-- joint consensus -->
+            <text
+                x="450"
+                y="20"
+                text-anchor="middle"
+                font-size="11.5"
+                font-weight="700"
+                fill="#2f5d3a">JOINT CONSENSUS — safe</text
+            >
+            <rect x="330" y="36" width="240" height="40" rx="8" fill="#fff" stroke="#1f3a5a"></rect>
+            <text
+                x="450"
+                y="52"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#1f3a5a">1 · commit C_old,new</text
+            >
+            <text x="450" y="68" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >every decision needs maj(C_old) AND maj(C_new)</text
+            >
+            <line x1="450" y1="78" x2="450" y2="98" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <rect x="330" y="100" width="240" height="40" rx="8" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="450"
+                y="116"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#2f5d3a">2 · commit C_new</text
+            >
+            <text x="450" y="132" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >old-only nodes retire</text
+            >
+            <rect x="330" y="160" width="240" height="74" rx="9" fill="#fbfaf2" stroke="#7a1f12"
+            ></rect>
+            <text
+                x="450"
+                y="182"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#7a1f12">because each decision needs BOTH</text
+            >
+            <text x="450" y="198" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >majorities, two disjoint majorities</text
+            >
+            <text x="450" y="212" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >can never form during the transition</text
+            >
+            <text x="450" y="228" text-anchor="middle" font-size="9.5" fill="#2f5d3a"
+                >→ Election Safety preserved ✓</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        The cluster transitions through an intermediate <code>C_old,new</code> where elections <em
+            >and</em
+        > commits each need a majority of both sets, separately and simultaneously.
+    </figcaption>
+</figure>

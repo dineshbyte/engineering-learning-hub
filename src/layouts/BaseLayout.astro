@@ -1,0 +1,129 @@
+---
+/**
+ * BaseLayout — the SINGLE source of truth for every page's <head> and HTML
+ * skeleton. Everything that is currently copy-pasted into all ~96 pages (and
+ * patched after the fact by inject-a11y.py / inject-analytics.js) lives here
+ * exactly once. Change the masthead, a meta tag, or the analytics include here
+ * → every page that uses this layout updates. That is the whole fix for
+ * "fix one, break all".
+ */
+export interface Props {
+    title: string; // sans the "· Engineering Vault" suffix
+    description: string;
+    keywords: string;
+    path: string; // canonical path under the site root
+    ogTitle?: string; // defaults to `title`
+    ogType?: string; // "article" for lessons
+    ogImage?: string; // path under the site, e.g. "assets/og/bloom-filters.png"
+    ogImageAlt?: string;
+    robots?: string; // defaults to "index, follow"; the 404 page overrides to "noindex, follow"
+    accentVar?: string; // e.g. "--track-bloom"
+    jsonLd?: unknown; // structured data object/array → <head>
+    bodyScripts?: string[]; // deferred scripts at end of <body>, paths under the site
+    skipTarget?: string; // skip-link href; lessons use "#main", the hub uses "#grid"
+    extraCss?: string[]; // stylesheets linked AFTER tokens.css; paths under the site.
+    // Defaults to the lesson/hub stack (lesson.css + interview.css). Tufte pages
+    // (interview banks, reference, README) override this — e.g. ['assets/interview.css']
+    // only — because lesson.css would clobber their serif inline design.
+}
+
+const {
+    title,
+    description,
+    keywords,
+    path,
+    ogTitle = title,
+    ogType = 'article',
+    ogImage,
+    ogImageAlt,
+    robots = 'index, follow',
+    accentVar,
+    jsonLd,
+    bodyScripts = [],
+    skipTarget = '#main',
+    extraCss = ['assets/lesson.css', 'assets/interview.css'],
+} = Astro.props;
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/'); // normalize to exactly one trailing slash
+const asset = (p: string) => new URL(`${base}${p}`, Astro.site).href;
+const url = (p: string) => `${base}${p}`; // root-relative link (keeps base)
+
+const canonical = asset(path);
+const ogImageUrl = ogImage ? asset(ogImage) : undefined;
+---
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <link rel="icon" type="image/svg+xml" href={url('assets/favicon.svg')} />
+        <!-- a11y: no maximum-scale / user-scalable=no — pinch-zoom must stay
+             available (WCAG 1.4.4). Dropped per the hub-migration audit. -->
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{title} · Engineering Vault</title>
+        <meta name="description" content={description} />
+        <meta name="keywords" content={keywords} />
+        <meta name="author" content="dineshbyte" />
+        <meta name="robots" content={robots} />
+        <link rel="canonical" href={canonical} />
+        <link
+            rel="alternate"
+            type="application/rss+xml"
+            title="Engineering Vault — Latest"
+            href={url('rss.xml')}
+        />
+        <meta property="og:type" content={ogType} />
+        <meta property="og:site_name" content="Engineering Vault" />
+        <meta property="og:title" content={ogTitle} />
+        <meta property="og:description" content={description} />
+        <meta property="og:url" content={canonical} />
+        {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
+        {ogImageAlt && <meta property="og:image:alt" content={ogImageAlt} />}
+        {ogImageUrl && <meta property="og:image:width" content="1200" />}
+        {ogImageUrl && <meta property="og:image:height" content="630" />}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:site" content="@dineshxbyte" />
+        <meta name="twitter:title" content={ogTitle} />
+        <meta name="twitter:description" content={description} />
+        {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
+        <script is:inline>
+            (function () {
+                try {
+                    var t = localStorage.getItem('theme');
+                    if (t !== 'light' && t !== 'dark') {
+                        t =
+                            window.matchMedia &&
+                            window.matchMedia('(prefers-color-scheme:dark)').matches
+                                ? 'dark'
+                                : 'light';
+                    }
+                    document.documentElement.setAttribute('data-theme', t);
+                } catch (e) {}
+            })();
+        </script>
+        <script is:inline>
+            function toggleTheme() {
+                var d = document.documentElement;
+                var t = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                d.setAttribute('data-theme', t);
+                try {
+                    localStorage.setItem('theme', t);
+                } catch (e) {}
+            }
+        </script>
+        <link rel="stylesheet" href={url('assets/tokens.css')} />
+        {extraCss.map((href) => <link rel="stylesheet" href={url(href)} />)}
+        {accentVar && <style is:inline set:html={`:root{--accent:var(${accentVar})}`} />}
+        {
+            jsonLd && (
+                <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />
+            )
+        }
+        <script src={url('assets/analytics.js')} is:inline defer></script>
+    </head>
+    <body>
+        <a class="skip-link" href={skipTarget}>Skip to content</a>
+        <slot />
+        {bodyScripts.map((s) => <script src={url(s)} is:inline defer />)}
+    </body>
+</html>

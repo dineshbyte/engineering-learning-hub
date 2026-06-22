@@ -1,0 +1,149 @@
+---
+/**
+ * context-engineering 0008 · Figure 1 — the hero "three machines, three cost
+ * dials" diagram (text → embed → vector → ANN index, with the cost band).
+ *
+ * Copied VERBATIM from
+ * docs/context-engineering/lessons/0008-embeddings-indexing-and-cost.html
+ * (figure + svg + figcaption incl. the footnote <sup>). It lives as an .astro
+ * component, NOT inline in the MDX, because MDX's JSX parser is unreliable with
+ * raw inline SVG that uses kebab-case attributes (text-anchor, font-size,
+ * stroke-width, marker-end, …). In an .astro file the SVG is plain HTML, so it
+ * renders byte-for-byte.
+ *
+ * The source page defined the arrowhead markers ONCE in a shared <defs> block at
+ * the top of the document <body> (ids: arw, arwG, arwR, arwM). The MDX has no
+ * such shared block, so the markers this figure references (arw, arwG, arwM) are
+ * inlined into its own <defs>.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 640 290"
+        role="img"
+        aria-label="Text is embedded into a vector, stored in an approximate-nearest-neighbour index, and queried; each stage carries a cost."
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+            <marker
+                id="arwG"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker
+            >
+            <marker
+                id="arwM"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#b5179e"></path></marker
+            >
+        </defs>
+        <!-- text -->
+        <rect
+            x="24"
+            y="40"
+            width="150"
+            height="58"
+            rx="10"
+            fill="#efe7f0"
+            stroke="#111110"
+            stroke-width="1.5"></rect>
+        <text x="99" y="64" text-anchor="middle" font-size="11" font-weight="700" fill="#111110"
+            >Chunk of text</text
+        >
+        <text x="99" y="82" text-anchor="middle" font-size="9" fill="#6b675f"
+            >"reset the user token"</text
+        >
+        <!-- embedder -->
+        <rect
+            x="220"
+            y="40"
+            width="160"
+            height="58"
+            rx="10"
+            fill="#f1eef2"
+            stroke="#b5179e"
+            stroke-width="2"></rect>
+        <text x="300" y="62" text-anchor="middle" font-size="11" font-weight="700" fill="#b5179e"
+            >Embedding model</text
+        >
+        <text x="300" y="80" text-anchor="middle" font-size="9" fill="#6b675f"
+            >text &rarr; vector · costs tokens</text
+        >
+        <!-- vector -->
+        <rect x="430" y="40" width="186" height="58" rx="10" fill="#eef2f7" stroke="#1f3a5a"></rect>
+        <text x="523" y="60" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a"
+            >Vector</text
+        >
+        <text x="523" y="78" text-anchor="middle" font-size="9" fill="#6b675f"
+            >[0.02, -0.41, … ] · 1536 dims</text
+        >
+        <line x1="174" y1="69" x2="216" y2="69" stroke="#6b675f" marker-end="url(#arw)"></line>
+        <line x1="380" y1="69" x2="426" y2="69" stroke="#b5179e" marker-end="url(#arwM)"></line>
+
+        <!-- store -->
+        <rect x="430" y="140" width="186" height="64" rx="10" fill="#e9f3ec" stroke="#2f5d3a"
+        ></rect>
+        <text x="523" y="164" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a"
+            >ANN index (vector store)</text
+        >
+        <text x="523" y="182" text-anchor="middle" font-size="9" fill="#6b675f"
+            >millions of vectors · HNSW / IVF / PQ</text
+        >
+        <text x="523" y="196" text-anchor="middle" font-size="9" fill="#6b675f"
+            >recall &harr; latency &harr; memory</text
+        >
+        <line x1="523" y1="98" x2="523" y2="138" stroke="#2f5d3a" marker-end="url(#arwG)"></line>
+
+        <!-- query -->
+        <rect
+            x="24"
+            y="150"
+            width="150"
+            height="58"
+            rx="10"
+            fill="#efe7f0"
+            stroke="#111110"
+            stroke-width="1.5"></rect>
+        <text x="99" y="174" text-anchor="middle" font-size="11" font-weight="700" fill="#111110"
+            >User query</text
+        >
+        <text x="99" y="192" text-anchor="middle" font-size="9" fill="#6b675f"
+            >embedded the same way</text
+        >
+        <line x1="174" y1="179" x2="426" y2="175" stroke="#6b675f" marker-end="url(#arw)"></line>
+        <text x="300" y="168" text-anchor="middle" font-size="9" font-style="italic" fill="#6b675f"
+            >find the nearest vectors</text
+        >
+
+        <!-- cost band -->
+        <rect x="24" y="240" width="592" height="34" rx="8" fill="#fbecec" stroke="#9a2417"></rect>
+        <text x="320" y="262" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a2417"
+            >Every arrow is a bill: embed tokens · store memory · search compute · then the LLM
+            tokens downstream</text
+        >
+    </svg>
+    <figcaption>
+        Semantic retrieval is three machines with three cost dials. <b>Embed</b> turns meaning into geometry,
+        the <b>index</b> finds neighbours approximately, and the whole loop bills you in tokens, memory,
+        and latency.<sup><a href="#s2" id="r1b">2</a></sup>
+    </figcaption>
+</figure>

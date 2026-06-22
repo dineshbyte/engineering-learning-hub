@@ -1,8 +1,8 @@
 ---
-name: "🐞 Bug report"
+name: '🐞 Bug report'
 about: A broken link, rendering/layout glitch, broken search, or other site bug
-title: "[bug] short description"
-labels: ["bug"]
+title: '[bug] short description'
+labels: ['bug']
 ---
 
 ## What's broken

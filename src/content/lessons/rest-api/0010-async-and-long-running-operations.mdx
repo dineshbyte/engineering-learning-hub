@@ -1,0 +1,477 @@
+---
+publishedAt: '2026-06-21'
+# ─── rest-api · Lesson 10 — converted to the MDX-hybrid lesson pattern ─────────
+# FRONTMATTER = the full lesson contract (head + masthead + wayfinding) PLUS the
+# structured body data lifted out of the prose: the 4-item quiz, the 13 interview
+# Q&A (incl. the 7-step design rubric) and the 3 footnote sources. Validated at
+# build time by the `lessons` collection schema (content.config.ts → schema/lesson.ts).
+# The FAQ JSON-LD is emitted by <Interview> from `interview` below — it must NOT
+# also be set on `jsonLd`, or the page would carry two FAQPage blobs.
+#
+# HTML-bearing strings (h1Html, interview q/a, rubric, sources.html) use YAML
+# folded block scalars (>-) so the embedded ", ', &, < and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'Async & Long-Running REST Operations'
+description: >-
+    Async and long-running REST operations: the 202 Accepted pattern, status polling, job resources,
+    webhooks vs polling, and designing APIs for exports and batch jobs.
+keywords: 'async, long-running rest operations, status codes, http methods, rest, api, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors'
+path: 'rest-api/lessons/async-and-long-running-operations.html'
+ogImage: 'assets/og/rest-api.png'
+ogImageAlt: 'REST API · Engineering Vault learning track'
+accentVar: '--track-rest'
+
+# —— masthead ——
+trackLabel: 'REST API'
+kicker: 'Lesson 10 · Async ops · visual edition'
+h1Html: 'Async &amp; long-running operations'
+metaLine: '~7 min · one diagram per idea · retrieval practice at the end'
+chips:
+    - 'Async'
+    - 'Long-running REST operations'
+    - 'Status codes'
+    - 'HTTP methods'
+    - 'REST'
+
+# —— wayfinding ——
+prev:
+    href: 'error-design-rate-limiting-observability.html'
+    title: 'Errors, rate limiting & observability (visual)'
+next:
+    href: 'mock-interview-whiteboard-design.html'
+    title: 'Mock interview: design an API (visual)'
+
+# —— routing (used only by the dynamic route) ——
+track: 'rest-api'
+number: '0010'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: 'A server returns <code>202 Accepted</code> with a <code>Location</code> header. This signals that…'
+      correct: 1
+      options:
+          - 'the resource was created and persisted at that path now'
+          - 'the work was accepted and a status resource is at that link'
+          - 'the client must resend the identical request once again soon'
+          - 'the request failed and a retry will be queued for later run'
+    - q: 'Webhook delivery is at-least-once, so the consumer must…'
+      correct: 2
+      options:
+          - 'reply with a redirect status to confirm it got the event ok'
+          - 'trust ordering and apply each event strictly as it arrives in'
+          - 'be idempotent and dedupe repeats using a stable event id key'
+          - 'poll the sender first to verify the event is genuine and fresh'
+    - q: 'Why include a timestamp inside the signed webhook payload?'
+      correct: 3
+      options:
+          - 'to let the consumer sort the events into their correct order'
+          - 'to record exactly when the consumer first received the event'
+          - 'to choose which retry backoff interval the sender should use'
+          - 'to reject stale replays of a captured but otherwise valid call'
+    - q: 'A webhook receiver should return a quick <code>2xx</code> ack and…'
+      correct: 0
+      options:
+          - 'do the heavy processing asynchronously after acknowledging it'
+          - 'finish all the heavy work before it sends any response status'
+          - 'return a server error so the sender retries the call once more'
+          - 'hold the open connection until the downstream job has finished'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'What does <code>202 Accepted</code> mean?'
+      a: >-
+          <p>"I've <strong>accepted</strong> the request for processing, but it <em>isn't done</em> and
+          may not even have started." It's deliberately non-committal about the outcome — unlike
+          <code>201 Created</code>, nothing is guaranteed to exist yet. The response points the client
+          at where to check progress.</p>
+    - level: 'core'
+      q: 'What does the <code>Location</code> header point to in a 202 response?'
+      a: >-
+          <p>To the <strong>status/operation resource</strong> the client should poll (e.g.
+          <code>/jobs/{id}</code> or <code>/operations/{id}</code>), <em>not</em> to the final result.
+          Contrast with <code>201 Created</code>, where <code>Location</code> points at the newly
+          created resource itself.</p>
+    - level: 'core'
+      q: 'What is a webhook, and how does it differ from polling?'
+      a: >-
+          <p>A webhook inverts the direction: instead of the client polling, the client
+          <strong>registers a callback URL</strong> and the server <code>POST</code>s an event to it
+          when something happens. It's push-based — efficient and near-real-time — but it makes the
+          client a server and hands it a fistful of distributed-systems problems (duplicates, ordering,
+          auth).</p>
+    - level: 'core'
+      q: 'What delivery guarantee do webhooks give, and what follows from it?'
+      a: >-
+          <p>Delivery is <strong>at-least-once</strong>: failed deliveries are retried, so the same
+          event can arrive more than once. The direct consequence: the <strong>consumer must be
+          idempotent</strong> and <strong>dedupe on a stable event id</strong>. Assuming exactly-once
+          delivery is the classic bug — it's how you bill a customer twice.</p>
+    - level: 'senior'
+      q: "What's the core mental shift when moving from sync to async design?"
+      a: >-
+          <p><strong>Turn the work into a resource.</strong> Instead of returning the result, you create
+          a first-class <em>operation</em>/<em>job</em> resource the client can address, query, and
+          recover against. The request returns fast with a handle to that resource; the result becomes a
+          separate resource the operation links to once it's done.</p>
+    - level: 'senior'
+      q: 'Why keep the operation queryable after it has completed?'
+      a: >-
+          <p>So a client that <strong>crashed or lost the network mid-poll can recover</strong> — it
+          re-queries the operation id and learns the outcome and result link. If you delete the
+          operation the instant it finishes, you create a race where the client never learns it
+          succeeded. Retain completed operations for a sensible TTL.</p>
+    - level: 'senior'
+      q: "Webhooks aren't ordered. How do you build a correct consumer anyway?"
+      a: >-
+          <p>Carry a <strong>timestamp and/or sequence number</strong> in each event and never assume
+          the last event you received is the latest write. Reconcile against current state (e.g.
+          "ignore an update older than what I've already applied"), or fetch authoritative state from a
+          status resource. Design so out-of-order arrival is merely <em>handled</em>, not
+          <em>fatal</em>.</p>
+    - level: 'senior'
+      q: 'A valid signed request can be captured and resent. How do you stop replay?'
+      a: >-
+          <p>Include a <strong>timestamp in the signed payload</strong> and <strong>reject stale
+          ones</strong> (outside a small tolerance window, e.g. a few minutes). A replayed event then
+          fails even though its signature is genuine, because it's too old. Combine with consumer-side
+          dedupe on event id so a replay inside the window is also a no-op.</p>
+    - level: 'staff'
+      q: '"Just give me exactly-once delivery." How do you respond?'
+      a: >-
+          <p>Exactly-once <em>delivery</em> is effectively unachievable over an unreliable network (the
+          two-generals problem). What you can get is exactly-once <strong>effect</strong>: at-least-once
+          delivery plus an idempotent consumer keyed on the event id. The senior framing is "I want
+          exactly-once <em>effect</em>, not exactly-once delivery" — and then you build dedupe rather
+          than chase an impossible guarantee.</p>
+    - level: 'staff'
+      q: 'How do idempotency keys interact with the 202 submission?'
+      a: >-
+          <p>The submitting <code>POST</code> is not idempotent, so a retried submission could spawn a
+          duplicate job. Accept an <code>Idempotency-Key</code>: on a repeat, return the <em>same</em>
+          <code>202</code> and <code>Location</code> for the already-created operation instead of
+          starting a second one. That makes "submit a long job" safely retryable — the client gets one
+          operation no matter how many times the request is replayed.</p>
+    - level: 'staff'
+      q: 'How do you keep one slow or failing consumer from degrading webhook delivery for everyone?'
+      a: >-
+          <p><strong>Isolate per-consumer:</strong> independent delivery queues, per-endpoint
+          concurrency limits and circuit breakers so a timing-out endpoint backs off without starving
+          others; bound and parallelize retries; and dead-letter aggressively rather than letting a
+          black-hole endpoint consume the retry budget. The principle is <strong>bulkheading</strong> —
+          failure of one tenant's endpoint must not become a shared-fate outage of the delivery
+          pipeline.</p>
+    - level: 'design'
+      q: "Design an API for a large data export that can take several minutes, then notifies the client when it's ready."
+      a: >-
+          <p><b>A strong answer covers:</b> don't block &mdash; <code>POST /exports</code> &rarr;
+          <code>202 Accepted</code> + <code>Location</code> to <code>/exports/{id}</code>, a status
+          resource &rarr; client <strong>polls</strong>
+          (<code>pending</code>&rarr;<code>running</code>&rarr;<code>succeeded</code>) honoring
+          <code>Retry-After</code>; on done it links to a <strong>result resource</strong> &mdash; a
+          signed, expiring download URL &rarr; <strong>also</strong> offer a completion webhook: an
+          HMAC-signed event <code>POST</code> &rarr; because delivery is at-least-once, the consumer
+          dedupes on <strong>event id</strong> and stays idempotent, doesn't rely on ordering, and uses
+          a timestamp to reject replays &rarr; receiver acks fast <code>2xx</code> and works async;
+          non-<code>2xx</code> &rarr; retries with backoff &rarr; dead-letter &rarr; protect the result
+          URL with auth + expiry &rarr; keep the operation queryable after completion so a client that
+          crashed mid-poll can recover.</p>
+    - level: 'design'
+      q: 'Design a webhook delivery platform that guarantees every event eventually lands without one bad endpoint taking the system down.'
+      a: >-
+          <p><b>A strong answer covers:</b> persist every event durably first, then deliver from a queue
+          &mdash; never couple producing the event to delivering it &rarr; delivery is
+          <strong>at-least-once</strong>: sign each payload (HMAC over raw bytes, constant-time compare)
+          with a timestamp so consumers verify authenticity and reject replays &rarr; on
+          non-<code>2xx</code>/timeout, retry with exponential backoff + jitter over a bounded window,
+          then <strong>dead-letter</strong> and surface the failing endpoint &rarr; give a
+          webhook-independent recovery path: a list/status API to fetch the gap and a <strong>replay</strong>
+          of dead-lettered events &rarr; isolate per consumer (independent queues, per-endpoint
+          concurrency limits, circuit breakers) so one black-hole endpoint can't starve the fleet
+          &mdash; bulkheading &rarr; coalesce at high fan-out, apply back-pressure, and track
+          delivery/retry/lag per endpoint &rarr; name the trade-off: exactly-once <em>delivery</em> is
+          impossible over an unreliable network, so you ship at-least-once delivery + an idempotent
+          consumer keyed on event id (exactly-once <em>effect</em>).</p>
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Async / long-running design framework</b> &mdash; drive any "design a long-running operation"
+    prompt through these, out loud:
+rubric:
+    - 'Clarify: expected duration, completion SLA, who the client is (can it receive a callback?), idempotency &amp; consistency needs.'
+    - >-
+        Make the work a resource: <code>POST</code> &rarr; <code>202 Accepted</code> +
+        <code>Location</code> to a status/operation resource; keep it queryable after completion
+        (TTL) for crash recovery.
+    - >-
+        Model the operation as a state machine: <code>queued &rarr; running &rarr; succeeded | failed
+        | cancelled</code>; <code>done=true</code> resolves to exactly one of result or error; link
+        the result as its own resource.
+    - >-
+        Choose the notification axis: polling (<code>Retry-After</code> + client backoff, works
+        behind firewalls) vs signed webhooks (push, near-real-time) &mdash; mature APIs offer both,
+        poll as the fallback.
+    - 'Make submission safe: <code>Idempotency-Key</code> so a retried submit returns the same operation, not a duplicate job.'
+    - >-
+        Webhook delivery semantics: at-least-once &amp; unordered &rarr; consumer dedupes on event
+        id, stays idempotent; HMAC-sign + reject stale (replay window); ack fast <code>2xx</code>
+        then work async.
+    - >-
+        Reliability &amp; scale: retries with backoff + jitter &rarr; dead-letter; per-consumer
+        isolation/bulkheading; observability on delivery, retry, and lag.
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          1. Google AIP-151, <em>Long-running operations</em> —
+          <a href="https://google.aip.dev/151">google.aip.dev</a>. <a href="#r1">↩</a>
+    - id: 's2'
+      html: >-
+          2. Stripe, <em>Webhooks</em> (delivery, signatures, retries) —
+          <a href="https://docs.stripe.com/webhooks">docs.stripe.com</a>. <a href="#r2">↩</a>
+    - id: 's3'
+      html: >-
+          3. RFC 9110, HTTP Semantics — <code>202 Accepted</code> —
+          <a href="https://www.rfc-editor.org/rfc/rfc9110.html">rfc-editor.org</a>. <a href="#r3">↩</a>
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import Rehearse from '../../../components/Rehearse.astro';
+import {
+    Fig1,
+    Fig2,
+    Fig3,
+} from '../../../components/figures/rest-api/async-and-long-running-operations/index.ts';
+
+<div class="mission">
+    <strong>Why this, first.</strong> Real APIs can't do everything inside one synchronous request —
+    exports, transcodes, and batch jobs outlive the connection. Senior interviews probe the two
+    async patterns (<strong>202 + polling</strong> and <strong>webhooks</strong>) and, crucially,
+    their
+    <strong>delivery guarantees</strong>. That's where idempotency (Lesson 3) comes back: a webhook
+    you can't dedupe is a bug waiting to bill a customer twice.
+</div>
+
+<div class="chips">
+    <span class="chip">
+        The work <b>outlives the request</b>
+    </span>
+    <span class="chip">
+        so you make it a <b>resource</b>
+    </span>
+    <span class="chip">
+        return <b>202</b> &amp; return now
+    </span>
+    <span class="chip">
+        then <b>poll</b> or get a <b>callback</b>
+    </span>
+</div>
+
+{/* HERO: 202 + polling flow */}
+
+<Fig1 />
+
+<p>
+    The client <strong>polls</strong> the status resource with <code>GET</code>; it returns
+    <code>pending</code>/<code>running</code> and, when finished, a <code>done</code> flag plus a
+    link to the actual <strong>result resource</strong>. This is Google's long-running{' '}
+    <code>Operation</code>
+    model: a uniform envelope carrying <code>name</code>, <code>done</code>, and either an
+    <code>error</code> or a <code>response</code>.
+    <sup><a href="#s1" id="r1">1</a></sup>
+    Keep the operation queryable after completion so a client that crashed mid-poll can recover.
+</p>
+
+## When synchronous stops fitting
+
+<p>
+    Reach for async the moment the work outlives the request. Holding a connection open for minutes
+    is a resource leak and a reliability trap — a dropped socket loses the client's only handle on
+    work that's still running.
+</p>
+
+<div class="facts">
+    <div class="fact">
+        <b>Long jobs</b> Data exports, video transcode, batch recompute — minutes, not milliseconds.
+    </div>
+    <div class="fact">
+        <b>Slow dependencies</b> Third-party calls you don't control and can't speed up.
+    </div>
+    <div class="fact blue">
+        <b>Timeout risk</b> Anything that would blow a gateway or load-balancer timeout window.
+    </div>
+    <div class="fact blue">
+        <b>The senior instinct</b> Turn the work into a <em>resource</em> the client can track, then
+        return now.
+    </div>
+</div>
+
+## The job as a state machine
+
+<p>
+    The status resource is just a small state machine the client reads on each poll. Model it
+    explicitly — terminal states are the recovery story.
+</p>
+
+<Fig2 />
+
+## Polling vs. webhook callback
+
+<p>
+    Polling makes the client chase you. A <strong>webhook</strong> inverts it: the client registers
+    a callback URL, and the server <code>POST</code>s an event when something happens. Efficient and
+    push-based — but it hands the consumer a fistful of distributed-systems problems.
+</p>
+
+<Fig3 />
+
+## Webhook delivery semantics
+
+<p>Naming these — and saying how you'd handle each — is the senior signal.</p>
+
+<div class="steps">
+    <div class="step">
+        <b>1 · Delivery is at-least-once</b> The same event can arrive more than once. The consumer
+        <em>must</em> be idempotent and <strong>dedupe on an event id</strong> — Lesson 3 cashing
+        in.
+        <sup><a href="#s2" id="r2">2</a></sup>
+    </div>
+    <div class="step">
+        <b>2 · Ordering is not guaranteed</b> Events can land out of order. Carry timestamps /
+        sequence numbers; never assume the latest write is the last you received.
+    </div>
+    <div class="step">
+        <b>3 · Authenticity must be verified</b> Anyone can <code>POST</code> a public URL. Sign the
+        payload with an <strong>HMAC</strong> header (shared secret) so the receiver confirms it's
+        really you.
+        <sup><a href="#s2">2</a></sup>
+    </div>
+    <div class="step">
+        <b>4 · Replay must be blocked</b> A captured valid request can be resent. Put a timestamp in
+        the signed payload and <strong>reject stale ones</strong> even when the signature checks
+        out.
+    </div>
+</div>
+
+<p class="pull">
+    <strong>Ack fast, work later.</strong> Return a <code>2xx</code> immediately, do the heavy work
+    async. A non-<code>2xx</code> or timeout triggers retries with backoff; after enough give-ups,
+    route to a <strong>dead-letter</strong> for inspection.
+</p>
+
+<div class="myth">
+    <div class="m">
+        ✗ Myth: "I've signed the webhook, so each event is genuine and safe to apply once."
+    </div>
+    <div class="t">
+        ✓ Truth: the signature proves <em>who</em> sent it — not <em>how often</em>. You still need
+        event-id dedupe and a replay window.
+    </div>
+</div>
+
+<div class="rule">
+    <span>♻️ Memory rule:</span> Outlives the request → make it a resource → <span>202</span> +
+    status to poll, or a <span>signed</span> webhook to call back. Webhooks are at-least-once and
+    out-of-order, so the consumer must be idempotent and time-aware — or it's wrong.
+</div>
+
+## Retrieval practice
+
+<p>
+    Close the lesson in your mind first, then answer from memory. Effortful recall is what converts
+    this from "I read it" to "I own it." Immediate feedback below.
+</p>
+
+<Quiz items={frontmatter.quiz} id="quiz" />
+
+## Rehearse the answer out loud
+
+<Rehearse
+    promptHtml={`Interviewer: <strong>"Design an API for generating a large data export that can take several minutes, and notify the client when it's ready."</strong> ~60 seconds, from memory (no scrolling up) &#8212; <em>then</em> reveal and compare. Don't read the model first.`}
+    placeholder="Your 60-second answer, from memory…"
+>
+    <p>
+        "Don't block the request. <code>POST /exports</code> returns{' '}
+        <strong>
+            <code>202 Accepted</code>
+        </strong>
+        with a <code>Location</code> header to <code>/exports/{'{id}'}</code> — a status resource.
+        The client <strong>polls</strong> that (<code>pending</code> → <code>running</code> →
+        <code>succeeded</code>), honouring <code>Retry-After</code>; when done it links to a
+        downloadable
+        <strong>result resource</strong>, a signed, expiring URL.
+    </p>
+    <p>
+        I'd <strong>also</strong> offer a completion webhook: deliver a{' '}
+        <strong>signed (HMAC)</strong>
+        event <code>POST</code>. Because delivery is <strong>at-least-once</strong>, the consumer
+        dedupes on the <strong>event id</strong> and stays idempotent; it doesn't rely on ordering,
+        and a timestamp lets it reject replays. The receiver acks with a fast <code>2xx</code> and
+        works async — non-<code>2xx</code> triggers retries with backoff, then a dead-letter. And
+        I'd protect the result URL with auth and an expiry."
+    </p>
+    <p class="src">
+        <strong>Why this scores:</strong> it uses <code>202</code> + a status resource correctly
+        <em>and</em> handles webhook delivery semantics — idempotent consumer, signing, retries —
+        instead of assuming perfect delivery. Offering both push and poll, plus securing the result,
+        is the senior signal.
+    </p>
+</Rehearse>
+
+<div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Want to compare the Google{' '}
+    <code>Operation</code>
+    envelope with a hand-rolled jobs API? Curious how to verify a Stripe-style HMAC signature step
+    by step? Want me to grade your rehearsal answer or fire harder follow-ups on dead-lettering and
+    exactly-once myths? Just say so in the chat.
+</div>
+
+<h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">
+    Primary source (read this next)
+</h3>
+
+<p>
+    📖{' '}
+    <a href="https://google.aip.dev/151">
+        <strong>"Long-running operations" — Google AIP-151</strong>
+    </a>
+    : the cleanest spec for the 202-style operation model — the <code>Operation</code> resource,
+    <code>done</code>, polling, and result linkage. For webhook delivery semantics in the wild,
+    <a href="https://docs.stripe.com/webhooks">Stripe's webhooks guide</a> is the high-trust
+    reference.
+</p>
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+<div class="next">
+    <span>
+        📄 Keep handy:{' '}
+        <a href="../reference/api-design-interview-framework.html">API design reference</a>
+    </span>
+    <span>
+        <a href="../lessons/error-design-rate-limiting-observability.html">◂ Prev</a> ·{' '}
+        <a href="../lessons/mock-interview-whiteboard-design.html">
+            <em>Next ▸ Lesson 11</em>
+        </a>
+    </span>
+</div>
+
+<Sources items={frontmatter.sources} />

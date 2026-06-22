@@ -1,0 +1,100 @@
+---
+/**
+ * Dynamic route that renders the content collections one built file per entry.
+ *
+ * One built file per collection entry, at EXACTLY the entry's frontmatter
+ * `path` minus the trailing ".html" — because astro.config sets
+ * build.format:'file', a route param of "rest-api/lessons/0001-…" emits
+ * "rest-api/lessons/0001-….html", byte-identical to the live URL.
+ *
+ * Astro forbids two top-level catch-all routes, so this ONE route handles every
+ * collection: it concatenates each collection's entries, tagging each with a
+ * `kind`, and dispatches to the matching layout. Adding a later type
+ * (reference/glossary/readme) is the same pattern: add it to `entries` with its
+ * own kind, import its layout, branch on it below.
+ *
+ * The whole chrome (head, hubbar, masthead, nav, footer) comes from the layout;
+ * the MDX body is rendered via <Content/> in the slot (lesson prose + figures,
+ * or the interview bank's short `.how` intro).
+ *
+ * FAQ JSON-LD note: <Interview> emits the single FAQPage from the interview
+ * array, so neither layout forwards a jsonLd here — exactly one FAQPage blob
+ * ships per page that has interview Q&A.
+ */
+import { getCollection, render } from 'astro:content';
+import LessonLayout from '../layouts/LessonLayout.astro';
+import InterviewLayout from '../layouts/InterviewLayout.astro';
+import ReferenceLayout from '../layouts/ReferenceLayout.astro';
+import GlossaryLayout from '../layouts/GlossaryLayout.astro';
+import RoadmapLayout from '../layouts/RoadmapLayout.astro';
+
+export async function getStaticPaths() {
+    const [lessons, interview, reference, glossary, resources, roadmap] = await Promise.all([
+        getCollection('lessons'),
+        getCollection('interview'),
+        getCollection('reference'),
+        getCollection('glossary'),
+        getCollection('resources'),
+        getCollection('roadmap'),
+    ]);
+
+    const entries = [
+        ...lessons.map((entry) => ({ entry, kind: 'lesson' as const })),
+        ...interview.map((entry) => ({ entry, kind: 'interview' as const })),
+        ...reference.map((entry) => ({ entry, kind: 'reference' as const })),
+        ...glossary.map((entry) => ({ entry, kind: 'glossary' as const })),
+        ...resources.map((entry) => ({ entry, kind: 'resources' as const })),
+        ...roadmap.map((entry) => ({ entry, kind: 'roadmap' as const })),
+    ];
+
+    return entries.map(({ entry, kind }) => ({
+        // strip the trailing ".html" — build.format:'file' re-adds it, so this
+        // maps each entry to its identical output URL.
+        //   • lesson/interview/reference: the entry's canonical frontmatter `path`.
+        //   • glossary/resources: derived from the entry id (the track slug),
+        //     e.g. "ai-agents" → "ai-agents/GLOSSARY" → ai-agents/GLOSSARY.html.
+        params: {
+            slug:
+                kind === 'glossary'
+                    ? `${entry.id}/GLOSSARY`
+                    : kind === 'resources'
+                      ? `${entry.id}/RESOURCES`
+                      : entry.data.path.replace(/\.html$/, ''),
+        },
+        props: { entry, kind },
+    }));
+}
+
+const { entry, kind } = Astro.props;
+const { Content } = await render(entry);
+
+// Each layout re-validates entry.data with its own schema; pass the whole data
+// object straight through (extra fields are ignored by .parse()).
+const meta = entry.data;
+
+// Pick the layout by kind via a dynamic component tag. Keeping the SAME
+// top-level JSX shape as the original lessons-only route
+// ( <Layout meta={meta}> <Content /> </Layout> ) preserves byte-identical lesson
+// output — a JSX ternary wrapper collapses the surrounding slot whitespace and
+// would change every lesson's bytes.
+//
+// glossary/resources take different props (kind + track + title; all other
+// metadata is derived from the track slug), so they get their own prop object;
+// the JSX wrapper shape is unchanged.
+const isGlossaryKind = kind === 'glossary' || kind === 'resources';
+const Layout = isGlossaryKind
+    ? GlossaryLayout
+    : kind === 'interview'
+      ? InterviewLayout
+      : kind === 'reference'
+        ? ReferenceLayout
+        : kind === 'roadmap'
+          ? RoadmapLayout
+          : LessonLayout;
+
+const layoutProps = isGlossaryKind ? { kind, track: entry.id, title: entry.data.title } : { meta };
+---
+
+<Layout {...layoutProps}>
+    <Content />
+</Layout>

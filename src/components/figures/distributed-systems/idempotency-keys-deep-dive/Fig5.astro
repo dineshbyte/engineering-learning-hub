@@ -1,0 +1,94 @@
+---
+/**
+ * idempotency-keys-deep-dive · Figure 5 — TTL vs retry-horizon timeline (Level 4).
+ *
+ * Copied VERBATIM from docs/distributed-systems/idempotency-keys-deep-dive.html
+ * (figure + svg + figcaption). The one arrowhead marker it references
+ * (#arwA via marker-end="url(#arwA)") is inlined here in a local <defs> so it
+ * resolves standalone (verbatim from the source's hidden top-of-body defs).
+ * Lives as an .astro component because raw inline SVG with kebab-case attrs is
+ * unreliable inside MDX.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 560 180"
+        role="img"
+        aria-label="A timeline showing the retention window must be longer than the worst-case retry horizon; a retry arriving after TTL expiry re-executes and double-charges"
+    >
+        <defs>
+            <marker
+                id="arwA"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="280"
+                y="18"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#111110">retention window vs worst-case retry horizon</text
+            >
+            <!-- safe bar -->
+            <rect x="40" y="40" width="360" height="26" rx="6" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="220"
+                y="57"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#244a2e">RETENTION WINDOW (Stripe ≈ 24h)</text
+            >
+            <rect x="40" y="74" width="220" height="22" rx="6" fill="#f1eee2" stroke="#7a1f12"
+            ></rect>
+            <text x="150" y="89" text-anchor="middle" font-size="9.5" fill="#7a1f12"
+                >queue redelivery + backoff + DLQ replay</text
+            >
+            <text x="40" y="116" font-size="9" fill="#2f5d3a"
+                >✓ retry lands inside the window → key found → replayed safely</text
+            >
+            <line x1="270" y1="68" x2="270" y2="100" stroke="#2f5d3a" stroke-dasharray="3 3"></line>
+            <!-- hazard -->
+            <line x1="400" y1="34" x2="400" y2="100" stroke="#9a2417" stroke-dasharray="3 3"></line>
+            <text x="400" y="32" text-anchor="middle" font-size="8.5" fill="#9a2417"
+                >TTL expiry</text
+            >
+            <path d="M 470 53 L 412 53" stroke="#9a2417" marker-end="url(#arwA)"></path>
+            <text x="500" y="50" text-anchor="middle" font-size="9" fill="#9a2417" font-weight="700"
+                >late retry</text
+            >
+            <text x="500" y="62" text-anchor="middle" font-size="8" fill="#6b675f"
+                >(25h-stuck msg)</text
+            >
+            <rect x="40" y="128" width="480" height="40" rx="8" fill="#f7ecea" stroke="#9a2417"
+            ></rect>
+            <text
+                x="280"
+                y="146"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#7a2218"
+                >✗ retry after expiry → key gone → treated as brand new → executes AGAIN → double
+                charge</text
+            >
+            <text x="280" y="161" text-anchor="middle" font-size="8.5" fill="#6b675f"
+                >weeks of careful idempotency undone by one late redelivery</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        Pick the TTL from your <em>actual</em> redelivery bounds — max queue delay, retry-backoff cap,
+        DLQ replay window — not a round number.
+    </figcaption>
+</figure>

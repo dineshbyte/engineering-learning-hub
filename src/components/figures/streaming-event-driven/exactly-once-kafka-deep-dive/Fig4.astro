@@ -1,0 +1,108 @@
+---
+/**
+ * streaming-event-driven · exactly-once-kafka-deep-dive · Figure 4 — the boundary:
+ * inside Kafka EOS holds, outside it doesn't (Level 5).
+ *
+ * Verbatim from the source HTML (figure + svg + figcaption). Marker refs (#arw,
+ * #arwA) resolve against the shared arrowhead <defs> emitted once in the MDX body.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 600 180"
+        role="img"
+        aria-label="A dashed Kafka boundary contains consume, transaction, and produce; an arrow leaving the boundary to a SQL database, a card charge, and an email is labeled not covered, needs an idempotency key or the outbox pattern."
+    >
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <!-- kafka boundary -->
+            <rect
+                x="10"
+                y="30"
+                width="320"
+                height="120"
+                rx="12"
+                fill="#fbfaf2"
+                stroke="#2f5d3a"
+                stroke-width="1.5"
+                stroke-dasharray="6 4"></rect>
+            <text
+                x="170"
+                y="50"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#2f5d3a">INSIDE KAFKA · EOS holds</text
+            >
+            <rect x="30" y="68" width="80" height="40" rx="8" fill="#fff" stroke="#1f3a5a"
+            ></rect><text x="70" y="92" text-anchor="middle" font-size="10" fill="#1f3a5a"
+                >consume</text
+            >
+            <rect x="130" y="68" width="80" height="40" rx="8" fill="#f1eee2" stroke="#7a1f12"
+            ></rect><text
+                x="170"
+                y="92"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#7a1f12">txn</text
+            >
+            <rect x="230" y="68" width="80" height="40" rx="8" fill="#fff" stroke="#2f5d3a"
+            ></rect><text x="270" y="92" text-anchor="middle" font-size="10" fill="#2f5d3a"
+                >produce</text
+            >
+            <line x1="110" y1="88" x2="128" y2="88" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <line x1="210" y1="88" x2="228" y2="88" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <text x="170" y="134" text-anchor="middle" font-size="9" fill="#6b675f"
+                >dedup · atomic offset · fencing</text
+            >
+            <!-- leaving arrow -->
+            <line
+                x1="310"
+                y1="88"
+                x2="380"
+                y2="88"
+                stroke="#9a2417"
+                stroke-width="1.5"
+                marker-end="url(#arwA)"></line>
+            <text x="345" y="78" text-anchor="middle" font-size="9" fill="#9a2417"
+                >leaves Kafka</text
+            >
+            <!-- external -->
+            <rect
+                x="382"
+                y="40"
+                width="206"
+                height="100"
+                rx="12"
+                fill="#f7ecea"
+                stroke="#9a2417"
+                stroke-width="1.5"></rect>
+            <text
+                x="485"
+                y="60"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#9a2417">OUTSIDE · NOT covered</text
+            >
+            <g font-size="9.5" fill="#7a2218">
+                <text x="485" y="82" text-anchor="middle">SQL write · charge card · send email</text
+                >
+                <text x="485" y="100" text-anchor="middle">a crash-and-retry can repeat it</text>
+            </g>
+            <text
+                x="485"
+                y="126"
+                text-anchor="middle"
+                font-size="9.5"
+                font-weight="700"
+                fill="#2f5d3a">→ idempotency key OR outbox</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        EOS stops at the first byte that leaves Kafka. For that byte you still owe an idempotency
+        key or the outbox pattern (Books 1–2).
+    </figcaption>
+</figure>

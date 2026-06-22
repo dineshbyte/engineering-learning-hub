@@ -1,0 +1,179 @@
+---
+/**
+ * bloom-filters · 0004 · Figure 2 — "The Staff use: a cheap negative filter"
+ * (distributed dedup: Bloom in front of the source of truth).
+ *
+ * Copied VERBATIM from docs/bloom-filters/lessons/0004-variants-at-scale.html
+ * (figure + svg + figcaption). Lives as an .astro component for the same reason
+ * as Fig1: raw inline SVG with kebab-case attributes and self-referential marker
+ * ids (#a, #r) is unreliable inside MDX, but is plain HTML inside .astro.
+ */
+---
+
+<figure>
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 680 330"
+        font-family="ui-sans-serif,system-ui,sans-serif"
+    >
+        <defs
+            ><marker
+                id="a"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#136f63"></path></marker
+            >
+            <marker
+                id="r"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9a2417"></path></marker
+            ></defs
+        >
+        <rect width="680" height="330" fill="#fffff8"></rect>
+        <text x="340" y="26" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold"
+            >Distributed dedup: Bloom in front of the source of truth</text
+        >
+        <!-- ingest nodes -->
+        <text x="92" y="60" text-anchor="middle" font-size="11" fill="#6b675f">N ingest nodes</text>
+        <rect x="20" y="70" width="144" height="40" rx="6" fill="#fff" stroke="#136f63"></rect><text
+            x="92"
+            y="88"
+            text-anchor="middle"
+            font-size="12"
+            fill="#0f4f47"
+            font-weight="bold">Node 1 + local Bloom</text
+        ><text x="92" y="103" text-anchor="middle" font-size="10" fill="#6b675f">cheap, in-RAM</text
+        >
+        <rect x="20" y="120" width="144" height="40" rx="6" fill="#fff" stroke="#136f63"
+        ></rect><text
+            x="92"
+            y="138"
+            text-anchor="middle"
+            font-size="12"
+            fill="#0f4f47"
+            font-weight="bold">Node 2 + local Bloom</text
+        ><text x="92" y="153" text-anchor="middle" font-size="10" fill="#6b675f">cheap, in-RAM</text
+        >
+        <rect x="20" y="170" width="144" height="40" rx="6" fill="#fff" stroke="#136f63"
+        ></rect><text
+            x="92"
+            y="188"
+            text-anchor="middle"
+            font-size="12"
+            fill="#0f4f47"
+            font-weight="bold">Node N + local Bloom</text
+        ><text x="92" y="203" text-anchor="middle" font-size="10" fill="#6b675f">cheap, in-RAM</text
+        >
+        <!-- gate -->
+        <rect
+            x="236"
+            y="110"
+            width="150"
+            height="100"
+            rx="8"
+            fill="#e8f1ef"
+            stroke="#136f63"
+            stroke-width="1.5"></rect>
+        <text x="311" y="138" text-anchor="middle" font-size="13" fill="#0f4f47" font-weight="bold"
+            >Bloom says?</text
+        >
+        <text
+            x="311"
+            y="166"
+            text-anchor="middle"
+            font-size="11.5"
+            fill="#9a2417"
+            font-weight="bold">&#8220;no&#8221; &#8594; drop / accept</text
+        >
+        <text x="311" y="184" text-anchor="middle" font-size="10.5" fill="#6b675f"
+            >certain &#8212; no lookup needed</text
+        >
+        <text
+            x="311"
+            y="202"
+            text-anchor="middle"
+            font-size="11.5"
+            fill="#2f5d3a"
+            font-weight="bold">&#8220;maybe&#8221; &#8594; verify &#8595;</text
+        >
+        <!-- source of truth -->
+        <rect
+            x="470"
+            y="120"
+            width="190"
+            height="80"
+            rx="8"
+            fill="#fbf3e6"
+            stroke="#9a7a17"
+            stroke-width="1.5"></rect>
+        <text x="565" y="150" text-anchor="middle" font-size="13" fill="#7a5e12" font-weight="bold"
+            >Source of truth</text
+        >
+        <text x="565" y="170" text-anchor="middle" font-size="11" fill="#7a5e12"
+            >DB / cross-node lookup</text
+        >
+        <text x="565" y="188" text-anchor="middle" font-size="10.5" fill="#6b675f"
+            >expensive &#183; authoritative</text
+        >
+        <!-- arrows nodes -> gate -->
+        <path
+            d="M164 90 C200 100 210 130 236 140"
+            fill="none"
+            stroke="#136f63"
+            stroke-width="1.4"
+            marker-end="url(#a)"></path>
+        <path
+            d="M164 140 L236 152"
+            fill="none"
+            stroke="#136f63"
+            stroke-width="1.4"
+            marker-end="url(#a)"></path>
+        <path
+            d="M164 190 C200 180 210 170 236 162"
+            fill="none"
+            stroke="#136f63"
+            stroke-width="1.4"
+            marker-end="url(#a)"></path>
+        <!-- maybe -> source -->
+        <path
+            d="M386 175 C420 180 440 165 470 160"
+            fill="none"
+            stroke="#2f5d3a"
+            stroke-width="1.6"
+            marker-end="url(#a)"></path>
+        <text x="430" y="150" text-anchor="middle" font-size="10" fill="#2f5d3a"
+            >few % of traffic</text
+        >
+        <!-- no path dropping -->
+        <path
+            d="M311 210 L311 250"
+            fill="none"
+            stroke="#9a2417"
+            stroke-width="1.6"
+            marker-end="url(#r)"></path>
+        <text x="311" y="268" text-anchor="middle" font-size="11" fill="#9a2417" font-weight="bold"
+            >most traffic stops here</text
+        >
+        <rect x="120" y="290" width="440" height="30" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect>
+        <text
+            x="340"
+            y="310"
+            text-anchor="middle"
+            font-size="12.5"
+            fill="#2f5d3a"
+            font-weight="bold"
+            >Bloom turns the expensive lookup from "every event" into "only maybes"</text
+        >
+    </svg>
+    <figcaption>
+        The filter never decides correctness — it just removes the cheap certainties so the
+        authoritative store handles a fraction of the load.
+    </figcaption>
+</figure>

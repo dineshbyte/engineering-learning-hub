@@ -1,0 +1,158 @@
+---
+/**
+ * consistent-hashing-deep-dive · Figure 1 — the HERO "hash ring" banner.
+ *
+ * Copied VERBATIM from
+ * docs/applied-systems-design/consistent-hashing-deep-dive.html
+ * (figure + svg + figcaption). It lives as an .astro component, NOT inline in the
+ * MDX, because MDX's JSX parser is unreliable with raw inline SVG that uses
+ * kebab-case attributes (text-anchor, font-size, stroke-width, marker-end, …).
+ *
+ * The source page declared its arrowhead markers (#arw / #arwA / #arwG) ONCE in
+ * a hidden top-of-body <svg defs>. Because each figure is now an isolated
+ * component, the #arw marker this figure references via marker-end="url(#arw)"
+ * is inlined here in a local <defs> so it resolves standalone (verbatim from the
+ * source defs block).
+ */
+---
+
+<figure style="margin-top:1.6rem">
+    <svg
+        viewBox="0 0 640 250"
+        role="img"
+        aria-label="The hash ring: keys and nodes share one 0 to 2^32 circle; each key is owned by the first node clockwise; adding a node steals only one arc"
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="320"
+                y="22"
+                text-anchor="middle"
+                font-size="12"
+                font-weight="700"
+                fill="#111110">THE HASH RING — keys &amp; nodes share one circle (0 … 2³²−1)</text
+            >
+            <!-- ring -->
+            <circle cx="320" cy="140" r="86" fill="none" stroke="#6b675f" stroke-width="1.5"
+            ></circle>
+            <text x="320" y="48" text-anchor="middle" font-size="9" fill="#6b675f">0 / 2³²</text>
+            <!-- nodes on ring -->
+            <g>
+                <circle cx="320" cy="54" r="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"
+                ></circle><text
+                    x="320"
+                    y="40"
+                    text-anchor="middle"
+                    font-size="10"
+                    font-weight="700"
+                    fill="#7a1f12">N1</text
+                >
+                <circle cx="406" cy="140" r="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"
+                ></circle><text
+                    x="426"
+                    y="144"
+                    text-anchor="middle"
+                    font-size="10"
+                    font-weight="700"
+                    fill="#7a1f12">N2</text
+                >
+                <circle cx="320" cy="226" r="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"
+                ></circle><text
+                    x="320"
+                    y="244"
+                    text-anchor="middle"
+                    font-size="10"
+                    font-weight="700"
+                    fill="#7a1f12">N3</text
+                >
+                <circle cx="234" cy="140" r="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"
+                ></circle><text
+                    x="214"
+                    y="144"
+                    text-anchor="middle"
+                    font-size="10"
+                    font-weight="700"
+                    fill="#7a1f12">N4</text
+                >
+            </g>
+            <!-- a key -->
+            <circle cx="378" cy="78" r="5" fill="#1f3a5a"></circle><text
+                x="392"
+                y="72"
+                text-anchor="middle"
+                font-size="9"
+                fill="#1f3a5a">key k</text
+            >
+            <!-- clockwise arrow from key to owner N2 -->
+            <path
+                d="M 384 82 A 70 70 0 0 1 401 132"
+                fill="none"
+                stroke="#1f3a5a"
+                stroke-dasharray="3 3"
+                marker-end="url(#arw)"></path>
+            <text x="320" y="120" text-anchor="middle" font-size="9.5" fill="#1f3a5a"
+                >owned by first</text
+            >
+            <text x="320" y="133" text-anchor="middle" font-size="9.5" fill="#1f3a5a"
+                >node clockwise</text
+            >
+            <text x="320" y="148" text-anchor="middle" font-size="9.5" fill="#6b675f">lookup =</text
+            >
+            <text x="320" y="161" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >successor search</text
+            >
+            <!-- callouts -->
+            <g>
+                <rect x="476" y="78" width="156" height="58" rx="8" fill="#eef5ee" stroke="#2f5d3a"
+                ></rect>
+                <text
+                    x="554"
+                    y="98"
+                    text-anchor="middle"
+                    font-size="10"
+                    font-weight="700"
+                    fill="#2f5d3a">Add a node →</text
+                >
+                <text x="554" y="113" text-anchor="middle" font-size="9.5" fill="#244a2e"
+                    >steals ONE arc from</text
+                >
+                <text x="554" y="126" text-anchor="middle" font-size="9.5" fill="#244a2e"
+                    >its neighbour (~K/N)</text
+                >
+            </g>
+            <g>
+                <rect x="8" y="78" width="156" height="58" rx="8" fill="#f7ecea" stroke="#9a2417"
+                ></rect>
+                <text
+                    x="86"
+                    y="98"
+                    text-anchor="middle"
+                    font-size="10"
+                    font-weight="700"
+                    fill="#9a2417">mod N would →</text
+                >
+                <text x="86" y="113" text-anchor="middle" font-size="9.5" fill="#7a2218"
+                    >re-scatter nearly</text
+                >
+                <text x="86" y="126" text-anchor="middle" font-size="9.5" fill="#7a2218"
+                    >EVERY key</text
+                >
+            </g>
+        </g>
+    </svg>
+    <figcaption>
+        Memorise this banner. Every section adds one detail: the price of the ring (uneven arcs),
+        the fix (vnodes), the cap (bounded loads), and the alternatives.
+    </figcaption>
+</figure>

@@ -1,0 +1,441 @@
+---
+publishedAt: '2026-06-21'
+# ─── rest-api · Lesson 2 — converted to the MDX-hybrid lesson pattern ──────────
+# FRONTMATTER = the full lesson contract (head + masthead + wayfinding) PLUS the
+# structured body data lifted out of the prose: the 4-item quiz, the 13 interview
+# Q&A (incl. the 7-step design rubric) and the 3 footnote sources. Validated at
+# build time by the `lessons` collection schema (content.config.ts → schema/lesson.ts).
+# The FAQ JSON-LD is emitted by <Interview> from `interview` below — it must NOT
+# also be set on `jsonLd`, or the page would carry two FAQPage blobs.
+#
+# HTML-bearing strings (h1Html, interview q/a, rubric, sources.html) use YAML
+# folded block scalars (>-) so the embedded ", ', &, < and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'HTTP Methods & Status Codes Explained'
+description: >-
+    HTTP methods and status codes explained: GET, POST, PUT, PATCH, DELETE semantics, safe vs
+    idempotent methods, and choosing the right 2xx/4xx/5xx code for REST APIs.
+keywords: 'http methods, status codes, rest, api, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors, rate, limiting'
+path: 'rest-api/lessons/http-methods-and-status-codes.html'
+ogImage: 'assets/og/rest-api.png'
+ogImageAlt: 'REST API · Engineering Vault learning track'
+accentVar: '--track-rest'
+
+# —— masthead ——
+trackLabel: 'REST API'
+kicker: 'Lesson 2 · HTTP semantics · visual edition'
+h1Html: 'HTTP methods &amp; status codes, done right'
+metaLine: '~7 min · one diagram per idea · retrieval practice at the end'
+chips:
+    - 'HTTP methods'
+    - 'Status codes'
+    - 'REST'
+    - 'API'
+    - 'Idempotency'
+
+# —— wayfinding ——
+prev:
+    href: 'what-makes-an-api-restful.html'
+    title: 'What actually makes an API RESTful? (visual)'
+next:
+    href: 'idempotency-in-practice.html'
+    title: 'Idempotency in practice (visual)'
+
+# —— routing (used only by the dynamic route) ——
+track: 'rest-api'
+number: '0002'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: 'Which property set is correct for the PUT method?'
+      correct: 2
+      options:
+          - 'it is both safe and also fully cacheable'
+          - 'it is safe but it is never idempotent'
+          - 'it is idempotent but it is not safe'
+          - 'it is neither idempotent nor ever cacheable'
+    - q: 'A request body is well-formed JSON but fails business validation. Return…'
+      correct: 3
+      options:
+          - 'a 500 because the request could not complete'
+          - 'a 403 because the data was clearly forbidden'
+          - 'a 400 because the request looked plainly broken'
+          - 'a 422 because the request was semantically invalid'
+    - q: 'Why prefer 307 over 302 when redirecting a POST?'
+      correct: 1
+      options:
+          - 'because 307 permanently caches the redirect target longer'
+          - 'because 307 preserves the original method and body'
+          - 'because 307 tells the client to switch into GET'
+          - 'because 307 signals the resource has been removed'
+    - q: 'A successful 201 Created response MUST include which header?'
+      correct: 0
+      options:
+          - 'a Location header pointing at the new resource'
+          - 'a Retry-After header telling clients when to retry'
+          - 'an Allow header listing every permitted request method'
+          - 'a Cache-Control header marking the response cacheable'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'Define a <em>safe</em> and an <em>idempotent</em> HTTP method.'
+      a: >-
+          <p><strong>Safe</strong> = read-only <em>intent</em>, no intended state change
+          (<code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>). <strong>Idempotent</strong> = N
+          identical requests have the same effect on server state as one (<code>GET</code>,
+          <code>HEAD</code>, <code>OPTIONS</code>, <code>PUT</code>, <code>DELETE</code>). The key word
+          is <em>effect on state</em>, not a byte-identical response.</p>
+    - level: 'core'
+      q: 'Is <code>POST</code> idempotent? Why does it matter?'
+      a: >-
+          <p>No. A retried <code>POST</code> can create a duplicate (a second charge or order). It
+          matters because dropped connections and retries are normal in distributed systems —
+          non-idempotency is exactly why <code>POST</code> creation needs an
+          <code>Idempotency-Key</code> to be retry-safe.</p>
+    - level: 'core'
+      q: '<code>200</code> vs <code>201</code> vs <code>204</code>, and what must a <code>201</code> include?'
+      a: >-
+          <p><code>200 OK</code>: success with a body. <code>201 Created</code>: a new resource was
+          created and <strong>must carry a <code>Location</code></strong> header to it. <code>204 No
+          Content</code>: success with no body (common for <code>DELETE</code> and for
+          <code>PUT</code>/<code>PATCH</code> that don't echo the resource).</p>
+    - level: 'core'
+      q: "<code>401</code> vs <code>403</code> — what's the difference?"
+      a: >-
+          <p><code>401 Unauthorized</code> = <strong>authentication</strong> failed ("we don't know
+          who you are" — credentials missing/invalid/expired; re-authenticate). <code>403
+          Forbidden</code> = <strong>authorization</strong> failed ("we know who you are, you're not
+          allowed" — re-authenticating won't help).</p>
+    - level: 'senior'
+      q: 'Explain "safe &sub; idempotent," and why "safe means secure" is false.'
+      a: >-
+          <p>Every safe method is idempotent (reading changes nothing, so repeating it changes
+          nothing); the reverse fails — <code>PUT</code>/<code>DELETE</code> are idempotent but not
+          safe. "Safe" is about read-only <em>intent</em>, nothing about authn/authz/TLS: a
+          <code>GET</code> can still expose sensitive data and still needs authorization and transport
+          security. Keep safe / idempotent / cacheable as three separate axes.</p>
+    - level: 'senior'
+      q: 'Is <code>PATCH</code> idempotent, and how do JSON Merge Patch vs JSON Patch relate?'
+      a: >-
+          <p>Not guaranteed — it depends on the patch document. A "set field to X" patch is
+          idempotent; "increment by 1" / "add to array" is not. <strong>JSON Merge Patch (RFC
+          7386)</strong> sets values (<code>null</code> = remove), so it tends to be idempotent;
+          <strong>JSON Patch (RFC 6902)</strong> is an op sequence where <code>add</code> isn't. Make
+          <code>PATCH</code> idempotent when you can, and know why a given patch isn't.</p>
+    - level: 'senior'
+      q: 'Why prefer <code>307</code>/<code>308</code> over <code>302</code>/<code>301</code>, and why is <code>304</code> a feature?'
+      a: >-
+          <p><code>307</code>/<code>308</code> <strong>preserve the method and body</strong>; with
+          <code>301</code>/<code>302</code> clients historically rewrote a <code>POST</code> into a
+          <code>GET</code>, dropping the body. <code>304 Not Modified</code> is the payoff of
+          conditional GET: the client revalidates with
+          <code>If-None-Match</code>/<code>If-Modified-Since</code> and, if nothing changed, gets
+          <code>304</code> with no body and reuses its cache — bandwidth saved, not a failure.</p>
+    - level: 'senior'
+      q: 'When should a forbidden resource return <code>404</code> instead of <code>403</code>?'
+      a: >-
+          <p>When the very <em>existence</em> of the resource is sensitive. A <code>403</code> confirms
+          "this exists, you just can't see it," which leaks information (resource enumeration — e.g.
+          private repo names). <code>404</code> hides existence entirely. Trade-off: <code>404</code>
+          is harder to debug for legitimate users, so reserve it for genuinely sensitive resources,
+          not as a blanket policy.</p>
+    - level: 'staff'
+      q: 'A teammate puts "mark as read" behind <code>GET /messages/42?read=true</code>. What breaks?'
+      a: >-
+          <p>It makes a state-changing operation safe-in-name only, and the ecosystem assumes
+          <code>GET</code> is safe: prefetchers, crawlers, link-preview bots, and proxies fire it and
+          silently mutate state, and caches may serve stale results. Intended state change belongs on
+          a non-safe verb — <code>POST</code>, or <code>PATCH</code>/<code>PUT</code> for an idempotent
+          update. The classic casualty was an admin panel where a crawler followed every "delete"
+          link.</p>
+    - level: 'staff'
+      q: "A downstream dependency is timing out under load. Walk the status codes and behavior you'd return."
+      a: >-
+          <p>If a circuit breaker is open / you're shedding load, return <code>503</code> +
+          <code>Retry-After</code> so clients back off. If you actually called upstream and it timed
+          out, <code>504</code> is honest; if it returned garbage, <code>502</code>. Don't let
+          upstream's timeout surface as a <code>500</code> for a valid client request, and never
+          convert it into a <code>4xx</code> — the client did nothing wrong. Combine with idempotency
+          keys so the inevitable retries don't double-act.</p>
+    - level: 'staff'
+      q: 'Status code as the contract, or body error codes — how do you reconcile them?'
+      a: >-
+          <p>Use both at the right layer. The HTTP status is the <strong>coarse, machine-actionable
+          verdict</strong> that infrastructure (caches, LBs, retry logic, alerting) acts on — get it
+          right first. The body carries a <strong>stable, fine-grained error code</strong> plus
+          human/field detail for the application to branch on (e.g. <code>"code":
+          "card_declined"</code> alongside a <code>402</code>/<code>422</code>). Status for the
+          network, body codes for the application — not one instead of the other.</p>
+    - level: 'design'
+      q: 'Design the request/response contract for <code>POST /payments</code> where the connection can drop mid-flight. Walk the methods and status codes.'
+      a: >-
+          <p><b>A strong answer covers:</b> <code>POST</code> is correct because the server assigns the
+          payment id &rarr; sync path returns <code>201 Created</code> + <code>Location</code>; async
+          path returns <code>202 Accepted</code> + a status URL to poll, never <code>200</code> for
+          unfinished work &rarr; the dropped connection is the hard part: <code>POST</code> isn't
+          idempotent, so a client-generated <code>Idempotency-Key</code> lets a retry replay the
+          original result instead of double-charging &rarr; map the failure modes to honest codes:
+          <code>422</code> for validation, <code>409</code> for a state conflict,
+          <code>402</code>/body error code for a declined card,
+          <code>503</code>+<code>Retry-After</code> when shedding load, <code>504</code> if upstream
+          timed out &rarr; never tunnel an error through <code>200</code>, never return
+          <code>5xx</code> for bad client input &rarr; name the contract split: status code for the
+          network/infra, stable body error code for the application.</p>
+    - level: 'design'
+      q: 'Design the update + concurrency story for a resource many clients edit at once (PUT vs PATCH, conditional requests).'
+      a: >-
+          <p><b>A strong answer covers:</b> choose <code>PUT</code> (full replace, idempotent by
+          construction) vs <code>PATCH</code> (partial edit) by resource size and whether "set to
+          null" must differ from "leave untouched" &rarr; for <code>PATCH</code>, pick the format
+          deliberately — JSON Merge Patch (value-setting, tends to be idempotent) vs JSON Patch (op
+          sequence, <code>add</code> isn't idempotent) &rarr; guard lost updates with optimistic
+          concurrency: hand out an <code>ETag</code> on reads, require <code>If-Match</code> on writes,
+          return <code>412 Precondition Failed</code> on a stale version &rarr; distinguish
+          <code>412</code> ("your version is stale") from <code>409</code> ("this action conflicts with
+          current state") &rarr; make retries safe: idempotent verbs retry freely, and a
+          turned-into-explicit conflict is retryable after a re-read &rarr; name the trade-off:
+          <code>PUT</code> is simpler and retry-safe but bandwidth-heavy; <code>PATCH</code> saves
+          bytes but adds format and idempotency nuance.</p>
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>REST design-round framework</b> — drive any "design a REST API" prompt through these, out loud:
+rubric:
+    - 'Model resources &amp; URIs — nouns not verbs, collections vs items (<code>/orders</code>, <code>/orders/{id}</code>), nesting only for true ownership.'
+    - 'Map methods &amp; status codes — GET/POST/PUT/PATCH/DELETE to the right semantics; 2xx/4xx/5xx that mean what they say (201+<code>Location</code>, 401 vs 403, 422 vs 400).'
+    - 'Idempotency &amp; caching — safe/idempotent verbs, idempotency keys for POST, <code>ETag</code>/<code>If-Match</code>/conditional requests.'
+    - 'Pagination, filtering &amp; sorting — cursor vs offset, bounded page sizes, consistent query params.'
+    - 'AuthN/AuthZ — bearer tokens on every request (stateless), scopes/roles, transport security, rate limits with <code>Retry-After</code> (OWASP API Top 10).'
+    - 'Versioning &amp; evolution — additive changes, deprecation policy, URL vs header versioning.'
+    - 'Errors &amp; contracts — status as the machine verdict plus a stable body error code (e.g. RFC 9457 problem+json), correlation IDs.'
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          1. RFC 9110, HTTP Semantics (safe, idempotent, cacheable) —
+          <a href="https://www.rfc-editor.org/rfc/rfc9110.html">rfc-editor.org</a>; method overview on
+          <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods">MDN</a>.
+          <a href="#r1">↩</a>
+    - id: 's2'
+      html: >-
+          2. Method semantics (PUT/POST/PATCH) —
+          <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods">MDN HTTP Methods</a>;
+          normative text in <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC 9110</a>.
+          <a href="#r2">↩</a>
+    - id: 's3'
+      html: >-
+          3. HTTP response status codes —
+          <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status">MDN HTTP Status</a>;
+          definitions in <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC 9110</a>.
+          <a href="#r3">↩</a>
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import Rehearse from '../../../components/Rehearse.astro';
+import {
+    Fig1,
+    Fig2,
+    Fig3,
+    Fig4,
+    Fig5,
+} from '../../../components/figures/rest-api/http-methods-and-status-codes/index.ts';
+
+<div class="mission">
+    <strong>Why this, first.</strong> Anyone can recite "GET reads, POST creates." The senior bar is
+    <em>precise semantics</em>: which methods are safe vs. idempotent, when PUT beats POST, and the
+    exact status code for "well-formed but invalid." These distinctions are the fastest
+    discriminator an interviewer has between a mid and a senior answer — and they're choices you
+    defend in every design review afterward.
+</div>
+
+<div class="chips">
+    <span class="chip">
+        Three axes: <b>safe · idempotent · cacheable</b>
+    </span>
+    <span class="chip">
+        PUT vs POST = <b>who owns the URI</b>
+    </span>
+    <span class="chip">
+        Pick the <b>exact</b> status code
+    </span>
+    <span class="chip">
+        Never tunnel errors through <b>200</b>
+    </span>
+</div>
+
+{/* DIAGRAM 1: three orthogonal properties */}
+
+## Three orthogonal properties (don't conflate them)
+
+<p>
+    Methods are described by three independent axes.
+    <sup><a href="#s1" id="r1">1</a></sup>{' '}
+    Mid-level answers blur them; seniors keep them separate. The containment to remember:{' '}
+    <strong>safe ⊂ idempotent</strong> — every safe method is idempotent, but not the reverse.
+</p>
+
+<Fig1 />
+
+{/* DIAGRAM 2: method-semantics matrix */}
+
+<Fig2 />
+
+## PUT vs POST for creation
+
+<p>
+    The classic probe. The deciding question is <em>who owns the URI</em>:
+    <sup><a href="#s2" id="r2">2</a></sup>
+</p>
+
+<Fig3 />
+
+<div class="myth">
+    <div class="m">✗ Myth: "lead with the verb list — GET reads, POST creates, PUT updates."</div>
+    <div class="t">
+        ✓ Senior: lead with idempotency. POST isn't idempotent, so a dropped-connection retry can
+        double-create — that's why creation uses PUT at a client-known URI, or POST plus an
+        idempotency key.
+    </div>
+</div>
+
+<p class="pull">
+    <strong>Lead with idempotency, not the verb.</strong> That single sentence signals senior; the
+    verb list alone signals junior.
+</p>
+
+{/* DIAGRAM 3: status code families */}
+
+## Status codes that separate seniors
+
+<p>
+    Pick the code that tells the client <em>exactly</em> what happened and what to do next.
+    <sup><a href="#s3" id="r3">3</a></sup>
+</p>
+
+<Fig4 />
+
+{/* DIAGRAM 4: pick the right code decision mini-map */}
+
+<Fig5 />
+
+<div class="facts">
+    <div class="fact">
+        <b>201 vs 202</b> 201 means done and created (with <code>Location</code>); 202 means
+        accepted for async processing — <em>not done yet</em>, hand back a status URL to poll.
+    </div>
+    <div class="fact">
+        <b>304 is a feature</b> Not Modified powers conditional GET / revalidation. It's a cache
+        win, not an error.
+    </div>
+    <div class="fact blue">
+        <b>405 vs 409 vs 410</b> 405 Method Not Allowed adds an <code>Allow</code> header; 409 for a
+        state conflict; 410 Gone for permanently removed.
+    </div>
+    <div class="fact blue">
+        <b>429 + Retry-After</b> Too Many Requests should tell the client when to come back — same
+        courtesy as 503.
+    </div>
+</div>
+
+<div class="rule">
+    <span>🎯 Memory rule:</span> Three axes (safe ⊂ idempotent, cacheable apart); PUT vs POST = who
+    owns the URI; pick the <em>exact</em> code — 422 not 400 for valid-but-invalid, 401 vs 403 for
+    authn vs authz, 404 to hide existence — and never tunnel errors through a 200.
+</div>
+
+## Retrieval practice
+
+<p>
+    Close the lesson in your mind first, then answer from memory. Effortful recall is what converts
+    this from "I read it" to "I own it." Immediate feedback below.
+</p>
+
+<Quiz items={frontmatter.quiz} id="quiz" />
+
+## Rehearse the answer out loud
+
+<Rehearse
+    promptHtml={`Interviewer: <strong>"A client calls <code>POST /payments</code> and the connection drops before they get a response. Walk me through the method and status code design so a retry is safe."</strong> Type your answer from memory (no scrolling up), <em>then</em> reveal and compare — don't read the model first.`}
+    placeholder="Your answer, from memory…"
+>
+    <p>
+        "<code>POST</code> is right here because the <strong>server assigns the payment id</strong>{' '}
+        — the client doesn't know the URI ahead of time. If we process synchronously I return{' '}
+        <strong>201 Created</strong> with a <code>Location</code> header to the new payment; if it's
+        async, <strong>202 Accepted</strong> with a status/Location URL the client can poll.
+    </p>
+    <p>
+        The hard part is the dropped connection. <strong>POST isn't idempotent</strong>, so a blind
+        retry risks a double-charge. The fix is a client-generated <strong>Idempotency-Key</strong>{' '}
+        header: the server records it, and a retry with the same key returns the <em>original</em>{' '}
+        result instead of charging again — that's exactly the idempotency-in-practice pattern we
+        cover next. On a genuine state conflict I'd return <strong>409</strong>; on a validation
+        failure <strong>422</strong>. And I'd never return <code>200</code> with an error tucked in
+        the body."
+    </p>
+    <p class="src">
+        <strong>Why this scores:</strong> it names the non-idempotency problem explicitly and{' '}
+        <em>solves</em> it with an idempotency key, picks the correct codes for sync vs async, and
+        handles the failure branches (409/422) without tunneling errors through 200.
+    </p>
+</Rehearse>
+
+<div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Want to drill the 401-vs-403 and
+    404-leakage trade-offs? Curious how JSON Patch breaks idempotency in practice? Want me to grade
+    your rehearsal answer or fire harder follow-ups at you? Just say so in the chat.
+</div>
+
+<h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">
+    Primary source (read this next)
+</h3>
+
+<p>
+    📖{' '}
+    <a href="https://www.rfc-editor.org/rfc/rfc9110.html">
+        <strong>RFC 9110 — HTTP Semantics</strong>
+    </a>
+    . The authoritative spec for method properties (safe/idempotent/cacheable) and status-code
+    meaning. Keep the{' '}
+    <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods">MDN methods</a> and{' '}
+    <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status">MDN status</a> pages open as
+    fast lookups.
+</p>
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+<div class="next">
+    <span>
+        📄 Keep handy:{' '}
+        <a href="../reference/rest-constraints-and-maturity.html">
+            Constraints &amp; method semantics reference
+        </a>
+    </span>
+    <span>
+        <a href="../lessons/what-makes-an-api-restful.html">◂ Prev</a> ·{' '}
+        <a href="../lessons/idempotency-in-practice.html">
+            <em>Next ▸ Lesson 3</em>
+        </a>
+    </span>
+</div>
+
+<Sources items={frontmatter.sources} />

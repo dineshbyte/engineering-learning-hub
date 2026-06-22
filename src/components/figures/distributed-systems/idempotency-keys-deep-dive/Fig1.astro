@@ -1,0 +1,122 @@
+---
+/**
+ * idempotency-keys-deep-dive · Figure 1 — the HERO "two-line happy path → four
+ * hard edges" banner.
+ *
+ * Copied VERBATIM from docs/distributed-systems/idempotency-keys-deep-dive.html
+ * (figure + svg + figcaption). It lives as an .astro component, NOT inline in the
+ * MDX, because MDX's JSX parser is unreliable with raw inline SVG that uses
+ * kebab-case attributes (text-anchor, font-size, stroke-width, …). This figure
+ * references no arrowhead markers, so it needs no local <defs>.
+ */
+---
+
+<figure style="margin-top:1.6rem">
+    <svg
+        viewBox="0 0 640 230"
+        role="img"
+        aria-label="The two-line happy path expands into four hard edges: the race, atomicity with the side effect, the request fingerprint, and the retention TTL"
+    >
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <rect
+                x="14"
+                y="20"
+                width="612"
+                height="44"
+                rx="9"
+                fill="#f1eee2"
+                stroke="#7a1f12"
+                stroke-width="1.5"></rect>
+            <text
+                x="320"
+                y="40"
+                text-anchor="middle"
+                font-size="12"
+                font-weight="700"
+                fill="#7a1f12">THE HAPPY PATH (correct, and hides everything)</text
+            >
+            <text x="320" y="56" text-anchor="middle" font-size="10.5" fill="#6b675f"
+                >seen this key? &#8594; return saved result&#160;&#160;·&#160;&#160;new? &#8594; do
+                the work, then save</text
+            >
+            <text
+                x="320"
+                y="92"
+                text-anchor="middle"
+                font-size="11"
+                fill="#9a2417"
+                font-weight="700">…but four questions decide demo-vs-production ↓</text
+            >
+            <!-- four hard edges -->
+            <g font-size="9.5">
+                <rect x="14" y="108" width="148" height="98" rx="8" fill="#fff" stroke="#d8d4c8"
+                ></rect>
+                <text
+                    x="88"
+                    y="128"
+                    text-anchor="middle"
+                    font-size="11"
+                    font-weight="700"
+                    fill="#7a1f12">① RACE</text
+                >
+                <text x="88" y="148" text-anchor="middle" fill="#6b675f">two retries, one key,</text
+                >
+                <text x="88" y="162" text-anchor="middle" fill="#6b675f">at the same instant</text>
+                <text x="88" y="184" text-anchor="middle" fill="#111110"
+                    >&#8594; claim atomically</text
+                >
+                <rect x="170" y="108" width="148" height="98" rx="8" fill="#fff" stroke="#d8d4c8"
+                ></rect>
+                <text
+                    x="244"
+                    y="128"
+                    text-anchor="middle"
+                    font-size="11"
+                    font-weight="700"
+                    fill="#7a1f12">② ATOMICITY</text
+                >
+                <text x="244" y="148" text-anchor="middle" fill="#6b675f">crash between work</text>
+                <text x="244" y="162" text-anchor="middle" fill="#6b675f">and recording it</text>
+                <text x="244" y="184" text-anchor="middle" fill="#111110"
+                    >&#8594; record WITH effect</text
+                >
+                <rect x="326" y="108" width="148" height="98" rx="8" fill="#fff" stroke="#d8d4c8"
+                ></rect>
+                <text
+                    x="400"
+                    y="128"
+                    text-anchor="middle"
+                    font-size="11"
+                    font-weight="700"
+                    fill="#7a1f12">③ FINGERPRINT</text
+                >
+                <text x="400" y="148" text-anchor="middle" fill="#6b675f">same key, different</text>
+                <text x="400" y="162" text-anchor="middle" fill="#6b675f">request body</text>
+                <text x="400" y="184" text-anchor="middle" fill="#111110"
+                    >&#8594; hash &amp; reject</text
+                >
+                <rect x="482" y="108" width="144" height="98" rx="8" fill="#fff" stroke="#d8d4c8"
+                ></rect>
+                <text
+                    x="554"
+                    y="128"
+                    text-anchor="middle"
+                    font-size="11"
+                    font-weight="700"
+                    fill="#7a1f12">④ TTL</text
+                >
+                <text x="554" y="148" text-anchor="middle" fill="#6b675f"
+                    >a retry arrives after</text
+                >
+                <text x="554" y="162" text-anchor="middle" fill="#6b675f">the key expired</text>
+                <text x="554" y="184" text-anchor="middle" fill="#111110"
+                    >&#8594; retain &gt; retry</text
+                >
+            </g>
+        </g>
+    </svg>
+    <figcaption>
+        Memorise these four boxes. Each level below is one of them — in the order a request actually
+        moves through them.
+    </figcaption>
+</figure>

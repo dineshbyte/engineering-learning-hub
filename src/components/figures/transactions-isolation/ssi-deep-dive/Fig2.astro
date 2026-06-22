@@ -1,0 +1,71 @@
+---
+/**
+ * transactions-isolation · ssi-deep-dive · Figure 2 — Level 1 write-skew timeline.
+ *
+ * Copied VERBATIM from docs/transactions-isolation/ssi-deep-dive.html (the inline
+ * <svg> timeline figure in §1 + its figcaption). Lives as an .astro component for
+ * the same reason as Fig1: raw inline SVG with kebab-case attributes is unreliable
+ * inside MDX, but is plain HTML inside .astro. This figure uses no markers.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 560 200"
+        role="img"
+        aria-label="Timeline of write skew: Alice and Bob both read count equals 2, each sets their own row off-call, both commit, invariant violated"
+    >
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="120"
+                y="20"
+                text-anchor="middle"
+                font-size="11.5"
+                font-weight="700"
+                fill="#1f3a5a">Tx A (Alice)</text
+            >
+            <text
+                x="440"
+                y="20"
+                text-anchor="middle"
+                font-size="11.5"
+                font-weight="700"
+                fill="#7a1f12">Tx B (Bob)</text
+            >
+            <line x1="120" y1="30" x2="120" y2="178" stroke="#d8d4c8"></line>
+            <line x1="440" y1="30" x2="440" y2="178" stroke="#d8d4c8"></line>
+            <rect x="34" y="40" width="172" height="26" rx="6" fill="#fff" stroke="#1f3a5a"
+            ></rect><text x="120" y="57" text-anchor="middle" font-size="9.5"
+                >SELECT count(*) → 2 ✓</text
+            >
+            <rect x="354" y="70" width="172" height="26" rx="6" fill="#fff" stroke="#7a1f12"
+            ></rect><text x="440" y="87" text-anchor="middle" font-size="9.5"
+                >SELECT count(*) → 2 ✓</text
+            >
+            <rect x="34" y="100" width="172" height="26" rx="6" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect><text x="120" y="117" text-anchor="middle" font-size="9.5"
+                >UPDATE alice off-call</text
+            >
+            <rect x="354" y="100" width="172" height="26" rx="6" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect><text x="440" y="117" text-anchor="middle" font-size="9.5"
+                >UPDATE bob off-call</text
+            >
+            <rect x="34" y="132" width="172" height="22" rx="6" fill="#f1eee2" stroke="#6b675f"
+            ></rect><text x="120" y="147" text-anchor="middle" font-size="9.5">COMMIT ✓</text>
+            <rect x="354" y="132" width="172" height="22" rx="6" fill="#f1eee2" stroke="#6b675f"
+            ></rect><text x="440" y="147" text-anchor="middle" font-size="9.5">COMMIT ✓</text>
+            <text
+                x="280"
+                y="190"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#9a2417">result: 0 doctors on call — invariant broken</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        Both read the same condition on overlapping rows, then each writes a <em>different</em> row. SI
+        sees no conflict.
+    </figcaption>
+</figure>
