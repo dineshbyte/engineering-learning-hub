@@ -79,7 +79,7 @@ export const tracks: Track[] = [
         category: 'ai',
         tier: 3,
         colorVar: '--track-context',
-        startHere: true,
+        startHere: false,
         tags: ['RAG', 'Retrieval', 'Embeddings', 'Chunking', 'Reranking'],
         description:
             'Why one AI system feels far smarter than another on the identical model — selection, retrieval &amp; assembly of context.',
@@ -181,6 +181,7 @@ export const tracks: Track[] = [
                 href: 'ai-evaluation/lessons/evaluation-fundamentals-offline-online.html',
                 n: 1,
                 title: 'Evaluation fundamentals — offline vs online &amp; the eval loop',
+                blurb: 'Why evaluation is the real moat: the offline vs online split, golden sets, LLM-as-judge scoring, and the eval loop that turns failures into a regression suite.',
             },
         ],
         references: [
@@ -211,6 +212,7 @@ export const tracks: Track[] = [
                 href: 'production-ai-architecture/lessons/reviewing-ai-like-a-distributed-system.html',
                 n: 1,
                 title: 'Reviewing an AI system like a distributed system',
+                blurb: 'Review an AI feature the way you review any production service: reliability, scalability, observability — with one new variable, non-determinism, changing every lens.',
             },
         ],
         references: [
@@ -245,6 +247,7 @@ export const tracks: Track[] = [
                 href: 'ai-security/lessons/ai-threat-model-and-prompt-injection.html',
                 n: 1,
                 title: 'The AI threat model &amp; prompt injection (OWASP LLM Top 10)',
+                blurb: 'Why AI security is different: the prompt is not a trust boundary. Direct vs indirect prompt injection, threat-modeling an LLM app, and where the real control belongs.',
             },
         ],
         references: [
@@ -271,6 +274,7 @@ export const tracks: Track[] = [
                 href: 'ai-infrastructure/lessons/the-ai-infra-stack-end-to-end.html',
                 n: 1,
                 title: 'The AI infrastructure stack, end to end',
+                blurb: 'Trace one request through the AI infra stack: text to embeddings to vector DB (HNSW/IVF) to reranker to model gateway to inference server. Where latency, cost, and failure concentrate.',
             },
         ],
         references: [
@@ -305,6 +309,7 @@ export const tracks: Track[] = [
                 href: 'domain-agent-design/lessons/the-domain-agent-design-method.html',
                 n: 1,
                 title: 'The domain-agent design method',
+                blurb: 'Your bar: design any business agent with one repeatable 9-part template — responsibilities, tools, context, memory, runtime, eval, security, approval gates, ROI.',
             },
         ],
         references: [
@@ -339,6 +344,7 @@ export const tracks: Track[] = [
                 href: 'advanced-ai-systems/lessons/multi-agent-systems-when-and-when-not.html',
                 n: 1,
                 title: 'Multi-agent systems, orchestration &amp; swarms — when &amp; when not',
+                blurb: 'The hype-free take on multi-agent systems: orchestrator-worker vs swarms, the coordination tax, when one well-tooled agent wins, and the anti-patterns.',
             },
         ],
         references: [
