@@ -37,9 +37,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULT_TARGET = path.join(__dirname, '..', 'dist', 'index.html');
-const target = process.argv[2]
-    ? path.resolve(process.argv[2])
-    : DEFAULT_TARGET;
+const target = process.argv[2] ? path.resolve(process.argv[2]) : DEFAULT_TARGET;
 
 /**
  * Each assertion: { name, test }.
@@ -115,8 +113,12 @@ const ASSERTIONS = [
     {
         name: 'Theme toggle — button.themebtn with onclick="toggleTheme()"',
         test: (h) =>
-            /<button[^>]*\bclass\s*=\s*["'][^"']*\bthemebtn\b[^>]*\bonclick\s*=\s*["']toggleTheme\(\)["']/i.test(h) ||
-            /<button[^>]*\bonclick\s*=\s*["']toggleTheme\(\)["'][^>]*\bclass\s*=\s*["'][^"']*\bthemebtn\b/i.test(h),
+            /<button[^>]*\bclass\s*=\s*["'][^"']*\bthemebtn\b[^>]*\bonclick\s*=\s*["']toggleTheme\(\)["']/i.test(
+                h,
+            ) ||
+            /<button[^>]*\bonclick\s*=\s*["']toggleTheme\(\)["'][^>]*\bclass\s*=\s*["'][^"']*\bthemebtn\b/i.test(
+                h,
+            ),
     },
     {
         name: 'Hero scroll cue — a.start-here-link',
@@ -135,7 +137,9 @@ const ASSERTIONS = [
     {
         name: 'Skip link — a.skip-link href="#grid"',
         test: (h) =>
-            /<a[^>]*\bclass\s*=\s*["'][^"']*\bskip-link\b[^>]*\bhref\s*=\s*["']#grid["']/i.test(h) ||
+            /<a[^>]*\bclass\s*=\s*["'][^"']*\bskip-link\b[^>]*\bhref\s*=\s*["']#grid["']/i.test(
+                h,
+            ) ||
             /<a[^>]*\bhref\s*=\s*["']#grid["'][^>]*\bclass\s*=\s*["'][^"']*\bskip-link\b/i.test(h),
     },
     {
@@ -160,7 +164,7 @@ function main() {
     console.log(`Checking hub DOM hooks in: ${target}\n`);
 
     let failed = 0;
-    for (const {name, test} of ASSERTIONS) {
+    for (const { name, test } of ASSERTIONS) {
         let ok = false;
         try {
             ok = !!test(html);
@@ -178,12 +182,8 @@ function main() {
         console.log(`PASS — all ${total} hub hooks present.`);
         process.exit(0);
     } else {
-        console.error(
-            `FAIL — ${failed} of ${total} hub hook(s) missing (${passed} present).`
-        );
-        console.error(
-            '  A missing hook silently breaks GA4 analytics and/or the ARIA layer.'
-        );
+        console.error(`FAIL — ${failed} of ${total} hub hook(s) missing (${passed} present).`);
+        console.error('  A missing hook silently breaks GA4 analytics and/or the ARIA layer.');
         process.exit(1);
     }
 }

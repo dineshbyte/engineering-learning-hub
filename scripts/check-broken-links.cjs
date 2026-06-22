@@ -29,7 +29,7 @@ const SKIP_RE = /^(?:https?:|mailto:|tel:|data:|javascript:|#|\/\/)/i;
 
 /** Recursively collect files under `dir` whose name matches `test`. */
 function walk(dir, test, out = []) {
-    for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) walk(full, test, out);
         else if (test(entry.name)) out.push(full);
@@ -40,8 +40,12 @@ function walk(dir, test, out = []) {
 /** True if a link target resolves to a real file, GitHub-Pages style. */
 function targetExists(fileDir, rawLink) {
     let link = rawLink.split('#')[0].split('?')[0];
-    if (!link) return true;                         // was a pure #anchor / query
-    try { link = decodeURIComponent(link); } catch (e) { /* use as-is */ }
+    if (!link) return true; // was a pure #anchor / query
+    try {
+        link = decodeURIComponent(link);
+    } catch (e) {
+        /* use as-is */
+    }
 
     // Root-relative links starting with the GitHub Pages base prefix are
     // resolved against docs/ (the site root), not the filesystem root.
@@ -49,15 +53,17 @@ function targetExists(fileDir, rawLink) {
         link = link.slice(BASE_PREFIX.length) || '/';
     }
     // Any remaining root-relative path (starts with '/') resolves from ROOT.
-    const base = link.startsWith('/')
-        ? path.join(ROOT, link)
-        : path.resolve(fileDir, link);
+    const base = link.startsWith('/') ? path.join(ROOT, link) : path.resolve(fileDir, link);
     const candidates = link.endsWith('/')
         ? [path.join(base, 'index.html')]
         : [base, base + '.html', path.join(base, 'index.html')];
 
     return candidates.some((c) => {
-        try { return fs.statSync(c).isFile(); } catch (e) { return false; }
+        try {
+            return fs.statSync(c).isFile();
+        } catch (e) {
+            return false;
+        }
     });
 }
 
@@ -74,7 +80,8 @@ function main() {
     for (const page of pages) {
         // Strip script/style/comments so we don't scan JS-built strings (e.g.
         // a search script that assembles href="'+d.u+'") as if they were links.
-        const html = fs.readFileSync(page, 'utf8')
+        const html = fs
+            .readFileSync(page, 'utf8')
             .replace(/<script\b[\s\S]*?<\/script>/gi, '')
             .replace(/<style\b[\s\S]*?<\/style>/gi, '')
             .replace(/<!--[\s\S]*?-->/g, '');
@@ -86,7 +93,7 @@ function main() {
             if (!link || SKIP_RE.test(link)) continue;
             linkCount++;
             if (!targetExists(dir, link)) {
-                broken.push({page: path.relative(ROOT, page), link});
+                broken.push({ page: path.relative(ROOT, page), link });
             }
         }
     }

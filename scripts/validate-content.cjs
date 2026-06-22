@@ -34,7 +34,7 @@ const errors = [];
 const fail = (page, msg) => errors.push(`docs/${path.relative(ROOT, page)}: ${msg}`);
 
 function walk(dir, test, out = []) {
-    for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) walk(full, test, out);
         else if (test(entry.name)) out.push(full);
@@ -46,9 +46,9 @@ function walk(dir, test, out = []) {
 function isIndexable(file) {
     const rel = path.relative(ROOT, file);
     if (!rel.endsWith('.html')) return false;
-    if (rel.split(path.sep).includes('epub')) return false;     // EPUB build sources
+    if (rel.split(path.sep).includes('epub')) return false; // EPUB build sources
     if (path.basename(rel).toLowerCase() === 'readme.html') return false;
-    if (path.basename(rel).toLowerCase() === '404.html') return false;   // host 404 page (noindex, not in sitemap)
+    if (path.basename(rel).toLowerCase() === '404.html') return false; // host 404 page (noindex, not in sitemap)
     return true;
 }
 
@@ -58,7 +58,8 @@ function checkSeo(page, html) {
     else if (titles.length > 1) fail(page, `${titles.length} <title> tags (expected 1)`);
     else if (!titles[0].replace(/<\/?title>/gi, '').trim()) fail(page, 'empty <title>');
 
-    if (!/<link[^>]+rel=["']canonical["']/i.test(html)) fail(page, 'missing <link rel="canonical">');
+    if (!/<link[^>]+rel=["']canonical["']/i.test(html))
+        fail(page, 'missing <link rel="canonical">');
     if (!/<meta[^>]+property=["']og:url["']/i.test(html)) fail(page, 'missing og:url meta');
     if (!/<meta[^>]+name=["']description["']/i.test(html)) fail(page, 'missing meta description');
 
@@ -81,42 +82,58 @@ function checkInterviewLevels(page, html) {
     let m;
     while ((m = re.exec(html)) !== null) {
         const lvl = (m[1] !== undefined ? m[1] : m[2]).trim();
-        if (!VALID_LEVELS.has(lvl)) fail(page, `invalid data-level "${lvl}" (expected core|senior|staff|design)`);
+        if (!VALID_LEVELS.has(lvl))
+            fail(page, `invalid data-level "${lvl}" (expected core|senior|staff|design)`);
     }
 }
 
 function checkJsonLd(page, html) {
     const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-    let m, i = 0;
+    let m,
+        i = 0;
     while ((m = re.exec(html)) !== null) {
         i++;
-        try { JSON.parse(m[1].trim()); }
-        catch (e) { fail(page, `JSON-LD block #${i} is invalid JSON (${e.message})`); }
+        try {
+            JSON.parse(m[1].trim());
+        } catch (e) {
+            fail(page, `JSON-LD block #${i} is invalid JSON (${e.message})`);
+        }
     }
 }
 
 function checkSitemap(indexablePages) {
-    if (!fs.existsSync(SITEMAP)) { errors.push('docs/sitemap.xml: missing'); return; }
+    if (!fs.existsSync(SITEMAP)) {
+        errors.push('docs/sitemap.xml: missing');
+        return;
+    }
     const xml = fs.readFileSync(SITEMAP, 'utf8');
     const locs = [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]);
 
     // 1) every sitemap URL resolves to a real file
     const listed = new Set();
     for (const loc of locs) {
-        if (!loc.startsWith(BASE_URL)) { errors.push(`sitemap.xml: <loc> outside base URL: ${loc}`); continue; }
+        if (!loc.startsWith(BASE_URL)) {
+            errors.push(`sitemap.xml: <loc> outside base URL: ${loc}`);
+            continue;
+        }
         let rel = loc.slice(BASE_URL.length);
         if (rel === '' || rel.endsWith('/')) rel += 'index.html';
         const file = path.join(ROOT, rel);
         listed.add(path.resolve(file));
         try {
-            if (!fs.statSync(file).isFile()) errors.push(`sitemap.xml: stale entry (no such file): ${loc}`);
-        } catch (e) { errors.push(`sitemap.xml: stale entry (no such file): ${loc}`); }
+            if (!fs.statSync(file).isFile())
+                errors.push(`sitemap.xml: stale entry (no such file): ${loc}`);
+        } catch (e) {
+            errors.push(`sitemap.xml: stale entry (no such file): ${loc}`);
+        }
     }
 
     // 2) every indexable lesson/reference/interview/hub page is listed
     for (const page of indexablePages) {
         const rel = path.relative(ROOT, page);
-        const inContentDir = /(^|\/)(lessons|reference|interview)\//.test(rel.split(path.sep).join('/'));
+        const inContentDir = /(^|\/)(lessons|reference|interview)\//.test(
+            rel.split(path.sep).join('/'),
+        );
         const isHub = rel === 'index.html';
         if ((inContentDir || isHub) && !listed.has(path.resolve(page))) {
             errors.push(`sitemap.xml: missing entry for docs/${rel}`);
@@ -140,7 +157,8 @@ function isLessonPage(rel) {
 function checkTocFormat(page, html) {
     const toc = html.match(/<nav class="toc">([\s\S]*?)<\/nav>/);
     if (!toc) return;
-    if (/[①-⑳]/.test(toc[1])) fail(page, 'TOC uses circled numerals (①…) — use "N · Title" to match the lesson format');
+    if (/[①-⑳]/.test(toc[1]))
+        fail(page, 'TOC uses circled numerals (①…) — use "N · Title" to match the lesson format');
     if (/◆/.test(toc[1])) fail(page, 'TOC uses the ◆ marker — use ★ to match the lesson format');
 }
 
@@ -157,7 +175,10 @@ function checkTocNumbering(page, html) {
     while ((m = linkRe.exec(toc[1])) !== null) {
         const b = badge[m[1]];
         if (b !== undefined && b !== m[2]) {
-            fail(page, `TOC number "${m[2]} ·" for #${m[1]} doesn't match its section badge (${b})`);
+            fail(
+                page,
+                `TOC number "${m[2]} ·" for #${m[1]} doesn't match its section badge (${b})`,
+            );
         }
     }
 }
@@ -168,18 +189,34 @@ function checkTocNumbering(page, html) {
  *       may follow </main> (a too-early </main> stranded content + broke layout). */
 function checkLessonStructure(page, html, rel) {
     if (!isLessonPage(rel)) return;
-    if (!/class=["']lesson-fb["']/.test(html)) fail(page, 'lesson missing feedback widget (run scripts/inject-lesson-feedback.py)');
-    if (!/class=["']lesson-endnote["']/.test(html)) fail(page, 'lesson missing closing endnote (run scripts/inject-lesson-endnote.py)');
+    if (!/class=["']lesson-fb["']/.test(html))
+        fail(page, 'lesson missing feedback widget (run scripts/inject-lesson-feedback.py)');
+    if (!/class=["']lesson-endnote["']/.test(html))
+        fail(page, 'lesson missing closing endnote (run scripts/inject-lesson-endnote.py)');
     const opens = (html.match(/<main[\s>]/gi) || []).length;
     const closes = (html.match(/<\/main>/gi) || []).length;
-    if (opens !== 1 || closes !== 1) { fail(page, `lesson needs exactly one <main>…</main> (found ${opens} open / ${closes} close)`); return; }
-    const after = html.slice(html.lastIndexOf('</main>') + '</main>'.length)
+    if (opens !== 1 || closes !== 1) {
+        fail(
+            page,
+            `lesson needs exactly one <main>…</main> (found ${opens} open / ${closes} close)`,
+        );
+        return;
+    }
+    const after = html
+        .slice(html.lastIndexOf('</main>') + '</main>'.length)
         .replace(/<\/div>|<\/body>|<\/html>|<!--[\s\S]*?-->|<script[\s\S]*?<\/script>|\s+/gi, '');
-    if (after) fail(page, `content stranded after </main> (landmark closed too early): "${after.slice(0, 60)}"`);
+    if (after)
+        fail(
+            page,
+            `content stranded after </main> (landmark closed too early): "${after.slice(0, 60)}"`,
+        );
 }
 
 function main() {
-    if (!fs.existsSync(ROOT)) { console.error(`✗ docs/ not found at ${ROOT}`); process.exit(1); }
+    if (!fs.existsSync(ROOT)) {
+        console.error(`✗ docs/ not found at ${ROOT}`);
+        process.exit(1);
+    }
 
     const allHtml = walk(ROOT, (n) => n.endsWith('.html'));
     const indexable = allHtml.filter(isIndexable);
@@ -195,7 +232,9 @@ function main() {
     }
     checkSitemap(indexable);
 
-    console.log(`Validated ${indexable.length} indexable pages (of ${allHtml.length} .html files).`);
+    console.log(
+        `Validated ${indexable.length} indexable pages (of ${allHtml.length} .html files).`,
+    );
     if (errors.length) {
         console.error(`\n✗ ${errors.length} problem(s):\n`);
         for (const e of errors) console.error(`  ${e}`);
