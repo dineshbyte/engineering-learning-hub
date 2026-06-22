@@ -1,5 +1,5 @@
 ---
-publishedAt: '2026-04-19'
+publishedAt: '2026-06-21'
 title: 'Transactions & Isolation — Learning Track (Part 2)'
 description: 'Transactions & Isolation learning track — the roadmap and index of lessons, references, and interview questions for Transactions & Isolation on Engineering Vault.'
 keywords: ['acid', 'mvcc', 'isolation levels', 'ssi', 'transactions', 'isolation', 'snapshot', 'serializable', 'anomalies', 'locks']

@@ -1,5 +1,5 @@
 ---
-publishedAt: '2026-06-06'
+publishedAt: '2026-06-21'
 title: 'Applied Systems Design — Learning Track (Part 5, the capstone)'
 description: 'Applied Systems Design learning track — the roadmap and index of lessons, references, and interview questions for Applied Systems Design on Engineering Vault.'
 keywords: ['estimation', 'consistent hashing', 'back-of-envelope', 'applied systems design', 'capacity', 'back of envelope']

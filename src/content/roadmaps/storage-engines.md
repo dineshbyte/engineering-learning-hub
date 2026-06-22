@@ -1,5 +1,5 @@
 ---
-publishedAt: '2026-03-26'
+publishedAt: '2026-06-21'
 title: 'Storage Engines & Data Modeling — Learning Track (Part 3)'
 description: 'Storage Engines learning track — the roadmap and index of lessons, references, and interview questions for Storage Engines on Engineering Vault.'
 keywords: ['b-trees', 'lsm', 'indexes', 'compaction', 'storage engines', 'b-tree', 'sstable', 'write amplification']
