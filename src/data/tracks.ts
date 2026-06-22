@@ -7,9 +7,9 @@ import { type Track, trackSchema } from '../schema/track';
  * - hrefs are copied VERBATIM (relative, GitHub-Pages style).
  * - tagline / description / tags[] / lessons[].title keep their source HTML
  *   entities (&amp;, &mdash;) so the rendered DOM matches byte-for-byte.
- * - lessons[].blurb is folded in from window.CARD_DETAIL (docs/assets/card-detail.js),
- *   keyed by lesson href. The 6 newer single-lesson AI tracks are not in that map,
- *   so their lessons carry no blurb (see anomalies in the foundation report).
+ * - lessons[].blurb is the per-lesson description shown in the card-detail sheet.
+ *   index.astro derives window.CARD_DETAIL { `${base}${href}` → blurb } inline from
+ *   this field (no separate prebuilt asset). Every lesson now carries a blurb.
  *
  * Order matches the DOM order of the cards in <main class="grid">.
  */

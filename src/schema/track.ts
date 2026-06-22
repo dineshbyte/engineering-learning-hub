@@ -23,7 +23,8 @@ import { z } from 'astro/zod';
  *   lessons          → details.lwrap > .lessons > a.lchip[]
  *                        n     → the <i> glyph: a lesson number OR "★" (fundamentals)
  *                        title → the a.lchip > span inner HTML (entities preserved)
- *                        blurb → folded in from window.CARD_DETAIL[href] (card-detail.js)
+ *                        blurb → emitted into window.CARD_DETAIL[href] (derived inline
+ *                                from lessons[].blurb in index.astro; the bottom sheet reads it)
  *   references       → .tfoot > a.pill[] (label = link text; md=true for the
  *                        muted Glossary/Resources/Roadmap pills, i.e. class="pill md")
  *
@@ -45,7 +46,8 @@ export const lessonRefSchema = z.object({
     n: z.union([z.number().int().positive(), z.string().min(1)]),
     /** a.lchip > span inner HTML (HTML entities preserved, e.g. "Memory &amp; …"). */
     title: z.string().min(1),
-    /** Per-lesson blurb folded in from window.CARD_DETAIL (assets/card-detail.js). */
+    /** Per-lesson blurb shown in the card-detail sheet; emitted into
+     *  window.CARD_DETAIL (derived inline from this field in index.astro). */
     blurb: z.string().min(1).optional(),
 });
 
