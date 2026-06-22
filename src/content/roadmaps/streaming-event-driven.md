@@ -1,4 +1,5 @@
 ---
+publishedAt: '2026-06-21'
 title: 'Streaming & Event-Driven Architecture — Learning Track (Part 4)'
 description: 'Streaming & Event-Driven learning track — the roadmap and index of lessons, references, and interview questions for Streaming & Event-Driven on Engineering Vault.'
 keywords: ['the log', 'exactly-once', 'watermarks', 'kafka', 'streaming', 'event driven', 'windows', 'exactly once']

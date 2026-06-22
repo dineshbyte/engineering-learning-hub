@@ -1,4 +1,5 @@
 ---
+publishedAt: '2026-06-21'
 title: 'Distributed Systems — Learning Track (Index & Roadmap)'
 description: 'Distributed Systems learning track — the roadmap and index of lessons, references, and interview questions for Distributed Systems on Engineering Vault.'
 keywords: ['consensus', 'clocks', 'idempotency', 'failure modes', 'distributed systems', 'raft', 'paxos', 'quorum', 'replication', 'cap', 'consistency']
