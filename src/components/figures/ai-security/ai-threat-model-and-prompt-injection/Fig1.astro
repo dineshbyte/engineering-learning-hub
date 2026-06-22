@@ -1,0 +1,263 @@
+---
+/**
+ * ai-security/0001 · Figure 1 — the hero, "The prompt is not a trust boundary".
+ *
+ * Copied VERBATIM from
+ * docs/ai-security/lessons/0001-ai-threat-model-and-prompt-injection.html
+ * (figure + svg + figcaption incl. the footnote <sup>). It lives as an .astro
+ * component, NOT inline in the MDX, because MDX's JSX parser is unreliable with
+ * raw inline SVG that uses kebab-case attributes (text-anchor, font-size,
+ * stroke-width, marker-end, font-style, …). In an .astro file the SVG is plain
+ * HTML, so it renders byte-for-byte.
+ *
+ * The source page defined four shared arrowhead markers (arw, arwG, arwR, arwM)
+ * once in a hidden <svg> at the top of <body>. Since each figure is now a
+ * standalone component, those marker <defs> are embedded inline here (and in
+ * every figure that references them) so the figure renders correctly on its own,
+ * independent of render order. Marker ids are kept as-is to match the source DOM.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 640 320"
+        role="img"
+        aria-label="The agent stack with its trust boundaries: untrusted user input and retrieved content flow into the model, which can act through tools; the real controls sit on the retrieval query and the tool layer, not on the prompt."
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+            <marker
+                id="arwG"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker
+            >
+            <marker
+                id="arwR"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"></path></marker
+            >
+            <marker
+                id="arwM"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#b5179e"></path></marker
+            >
+        </defs>
+        <text x="320" y="20" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111110"
+            >The prompt is not a trust boundary</text
+        >
+
+        <!-- untrusted sources -->
+        <rect
+            x="28"
+            y="44"
+            width="150"
+            height="40"
+            rx="8"
+            fill="#fbecec"
+            stroke="#9a2417"
+            stroke-width="1.5"></rect>
+        <text x="103" y="62" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a2417"
+            >User input</text
+        >
+        <text x="103" y="76" text-anchor="middle" font-size="8" fill="#6b675f"
+            >direct injection</text
+        >
+        <rect
+            x="28"
+            y="96"
+            width="150"
+            height="40"
+            rx="8"
+            fill="#fbecec"
+            stroke="#9a2417"
+            stroke-width="1.5"></rect>
+        <text x="103" y="114" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a2417"
+            >Retrieved docs / web</text
+        >
+        <text x="103" y="128" text-anchor="middle" font-size="8" fill="#6b675f"
+            >indirect injection</text
+        >
+        <text x="103" y="156" text-anchor="middle" font-size="8" font-style="italic" fill="#9a2417"
+            >all attacker-reachable</text
+        >
+
+        <!-- boundary 1: retrieval query -->
+        <line
+            x1="178"
+            y1="116"
+            x2="244"
+            y2="116"
+            stroke="#2f5d3a"
+            stroke-width="2"
+            marker-end="url(#arwG)"></line>
+        <rect
+            x="200"
+            y="168"
+            width="120"
+            height="34"
+            rx="6"
+            fill="#e9f3ec"
+            stroke="#2f5d3a"
+            stroke-width="1.5"></rect>
+        <text x="260" y="184" text-anchor="middle" font-size="8.5" font-weight="700" fill="#2f5d3a"
+            >Boundary 1</text
+        >
+        <text x="260" y="196" text-anchor="middle" font-size="7.5" fill="#6b675f"
+            >retrieval query · ACL</text
+        >
+
+        <!-- the model / context window -->
+        <rect
+            x="244"
+            y="62"
+            width="150"
+            height="74"
+            rx="10"
+            fill="#f1eef2"
+            stroke="#b5179e"
+            stroke-width="2"></rect>
+        <text x="319" y="86" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b5179e"
+            >LLM + context window</text
+        >
+        <text x="319" y="103" text-anchor="middle" font-size="8" fill="#6b675f"
+            >ONE channel: data and</text
+        >
+        <text x="319" y="115" text-anchor="middle" font-size="8" fill="#6b675f"
+            >instructions look identical</text
+        >
+        <text x="319" y="129" text-anchor="middle" font-size="8" font-style="italic" fill="#9a2417"
+            >can't enforce a boundary</text
+        >
+        <line
+            x1="178"
+            y1="64"
+            x2="242"
+            y2="78"
+            stroke="#9a2417"
+            stroke-width="1.3"
+            marker-end="url(#arwR)"></line>
+
+        <!-- boundary 2: tool layer -->
+        <line
+            x1="394"
+            y1="99"
+            x2="460"
+            y2="99"
+            stroke="#2f5d3a"
+            stroke-width="2"
+            marker-end="url(#arwG)"></line>
+        <rect
+            x="412"
+            y="168"
+            width="120"
+            height="34"
+            rx="6"
+            fill="#e9f3ec"
+            stroke="#2f5d3a"
+            stroke-width="1.5"></rect>
+        <text x="472" y="184" text-anchor="middle" font-size="8.5" font-weight="700" fill="#2f5d3a"
+            >Boundary 2</text
+        >
+        <text x="472" y="196" text-anchor="middle" font-size="7.5" fill="#6b675f"
+            >tools · least priv + egress</text
+        >
+
+        <!-- tools / actions -->
+        <rect
+            x="460"
+            y="62"
+            width="150"
+            height="40"
+            rx="8"
+            fill="#eef2f7"
+            stroke="#1f3a5a"
+            stroke-width="1.5"></rect>
+        <text x="535" y="80" text-anchor="middle" font-size="9.5" font-weight="700" fill="#1f3a5a"
+            >Tools take actions</text
+        >
+        <text x="535" y="94" text-anchor="middle" font-size="8" fill="#6b675f"
+            >email · DB · fetch URL</text
+        >
+        <rect
+            x="460"
+            y="112"
+            width="150"
+            height="36"
+            rx="8"
+            fill="#fbecec"
+            stroke="#9a2417"
+            stroke-width="1.2"></rect>
+        <text x="535" y="128" text-anchor="middle" font-size="8.5" font-weight="700" fill="#9a2417"
+            >outbound = exfil path</text
+        >
+        <text x="535" y="141" text-anchor="middle" font-size="7.5" fill="#6b675f"
+            >if egress is open</text
+        >
+
+        <!-- dotted boundary links -->
+        <line
+            x1="260"
+            y1="168"
+            x2="290"
+            y2="138"
+            stroke="#2f5d3a"
+            stroke-dasharray="3 3"
+            marker-end="url(#arwG)"></line>
+        <line
+            x1="472"
+            y1="168"
+            x2="500"
+            y2="104"
+            stroke="#2f5d3a"
+            stroke-dasharray="3 3"
+            marker-end="url(#arwG)"></line>
+
+        <text x="320" y="236" text-anchor="middle" font-size="11" font-style="italic" fill="#b5179e"
+            >The model is in the blast radius, not on the perimeter. You can't secure it from inside
+            the prompt.</text
+        >
+        <text x="320" y="262" text-anchor="middle" font-size="9.5" fill="#6b675f"
+            >Two real boundaries: scope what gets retrieved (ACL in the query) and what tools can do
+            (least privilege + egress).</text
+        >
+        <text x="320" y="290" text-anchor="middle" font-size="9.5" font-weight="700" fill="#111110"
+            >OWASP LLM01 prompt injection · root cause: data and instructions share one channel.</text
+        >
+        <text x="320" y="310" text-anchor="middle" font-size="8.5" fill="#6b675f"
+            >No layer is complete. The posture is layered controls + least privilege +
+            assume-breach.</text
+        >
+    </svg>
+    <figcaption>
+        The hero of the whole track. Untrusted text enters from the user <em>and</em> from anything retrieved;
+        the model can't tell it from your instructions; the only enforceable boundaries are the <b
+            >retrieval query</b
+        > (who can see what) and the <b>tool layer</b> (what the agent can do and where it can send).<sup
+            ><a href="#s1" id="r1b">1</a></sup
+        >
+    </figcaption>
+</figure>

@@ -1,0 +1,105 @@
+---
+/**
+ * mvcc-internals-deep-dive · Figure 2 — the snapshot (xmin/xmax/xip[]) + the
+ * two visibility gates.
+ *
+ * Copied VERBATIM from
+ * docs/transactions-isolation/mvcc-internals-deep-dive.html (Level 2 figure).
+ * Component, not inline MDX, for the kebab-case SVG attr reason (see Fig1).
+ * References NO arrowhead markers, so it needs no local <defs>.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 600 180"
+        role="img"
+        aria-label="A snapshot is xmin oldest running, xmax first unassigned, and xip the in-progress list; visibility needs xmin past-and-committed and xmax not-past"
+    >
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <rect x="14" y="14" width="178" height="56" rx="9" fill="#fff" stroke="#1f3a5a"></rect>
+            <text
+                x="103"
+                y="34"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#1f3a5a">snapshot.xmin</text
+            >
+            <text x="103" y="52" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >oldest xid still running</text
+            >
+            <rect x="211" y="14" width="178" height="56" rx="9" fill="#fff" stroke="#1f3a5a"></rect>
+            <text
+                x="300"
+                y="34"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#1f3a5a">snapshot.xmax</text
+            >
+            <text x="300" y="52" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >first id not yet assigned</text
+            >
+            <rect x="408" y="14" width="178" height="56" rx="9" fill="#fff" stroke="#1f3a5a"></rect>
+            <text
+                x="497"
+                y="34"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#1f3a5a">xip[ ]</text
+            >
+            <text x="497" y="52" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >ids in progress right now</text
+            >
+            <!-- two gates -->
+            <rect x="40" y="100" width="250" height="64" rx="9" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="165"
+                y="122"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#2f5d3a">GATE 1 — xmin is past</text
+            >
+            <text x="165" y="139" text-anchor="middle" font-size="9.5" fill="#244a2e"
+                >xmin committed, &lt; snapshot.xmax,</text
+            >
+            <text x="165" y="153" text-anchor="middle" font-size="9.5" fill="#244a2e"
+                >not in xip[ ] (creator visible)</text
+            >
+            <rect x="310" y="100" width="250" height="64" rx="9" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="435"
+                y="122"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#2f5d3a">GATE 2 — xmax is NOT past</text
+            >
+            <text x="435" y="139" text-anchor="middle" font-size="9.5" fill="#244a2e"
+                >xmax=0/aborted, ≥ snapshot.xmax,</text
+            >
+            <text x="435" y="153" text-anchor="middle" font-size="9.5" fill="#244a2e"
+                >or in xip[ ] (deleter not done)</text
+            >
+            <text
+                x="300"
+                y="92"
+                text-anchor="middle"
+                font-size="10"
+                font-weight="700"
+                fill="#7a1f12">VISIBLE ⇔ both gates pass</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        Plain English: <strong
+            >you see a version created by a txn that committed before your snapshot, and not yet
+            deleted by a txn that committed before your snapshot.</strong
+        > That is the whole of snapshot isolation.
+    </figcaption>
+</figure>

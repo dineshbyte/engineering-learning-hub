@@ -1,0 +1,145 @@
+---
+/**
+ * rest-api/0004 · Figure 3 — "collection vs item · keep nesting ~1 level deep"
+ * (the depth ladder + "prefer filtering for relationships" footer).
+ *
+ * Copied VERBATIM from docs/rest-api/lessons/0004-resource-modeling-and-uri-design.html
+ * (figure + svg + figcaption). Lives as an .astro component because MDX's JSX
+ * parser is unreliable with raw inline SVG using kebab-case attributes.
+ *
+ * The source page defines its arrow markers ONCE in a global hidden <svg> in
+ * <body>; that shared SVG does not travel with an extracted figure, so the one
+ * marker this figure references (#arw) is inlined here in a local <defs> so the
+ * figure renders self-contained. Marker fill/id is kept byte-for-byte.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 640 220"
+        role="img"
+        aria-label="Collection versus item, and shallow nesting up to one level is fine while deep nesting breaks"
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <text
+                x="320"
+                y="18"
+                text-anchor="middle"
+                font-size="12"
+                font-weight="700"
+                fill="#111110">COLLECTION vs ITEM · KEEP NESTING ~1 LEVEL DEEP</text
+            >
+            <!-- collection box -->
+            <rect x="14" y="34" width="180" height="120" rx="10" fill="#fbfaf2" stroke="#6b675f"
+            ></rect>
+            <text
+                x="104"
+                y="54"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#111110">COLLECTION</text
+            >
+            <text
+                x="104"
+                y="70"
+                text-anchor="middle"
+                font-size="11"
+                font-family="ui-monospace,SFMono-Regular,Menlo,monospace"
+                fill="#7a1f12">/orders</text
+            >
+            <rect x="34" y="84" width="140" height="18" rx="4" fill="#fff" stroke="#d8d4c8"
+            ></rect><text x="42" y="97" font-size="9" fill="#6b675f">order 42</text>
+            <rect x="34" y="106" width="140" height="18" rx="4" fill="#fff" stroke="#d8d4c8"
+            ></rect><text x="42" y="119" font-size="9" fill="#6b675f">order 43</text>
+            <rect x="34" y="128" width="140" height="18" rx="4" fill="#fff" stroke="#d8d4c8"
+            ></rect><text x="42" y="141" font-size="9" fill="#6b675f">order 44</text>
+            <line x1="194" y1="94" x2="232" y2="94" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <!-- item box -->
+            <rect x="234" y="64" width="150" height="60" rx="10" fill="#f7ecea" stroke="#7a1f12"
+            ></rect>
+            <text
+                x="309"
+                y="86"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#7a1f12">ITEM (by id)</text
+            >
+            <text
+                x="309"
+                y="104"
+                text-anchor="middle"
+                font-size="11"
+                font-family="ui-monospace,SFMono-Regular,Menlo,monospace"
+                fill="#111110">/orders/42</text
+            >
+            <text x="309" y="118" text-anchor="middle" font-size="8.5" fill="#6b675f"
+                >one thing, addressable</text
+            >
+            <!-- depth ladder -->
+            <g font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5">
+                <rect x="410" y="40" width="222" height="24" rx="6" fill="#eef5ee" stroke="#2f5d3a"
+                ></rect>
+                <text x="420" y="56" fill="#111110">/orders/42</text><text
+                    x="624"
+                    y="56"
+                    text-anchor="end"
+                    font-size="9"
+                    fill="#2f5d3a">✓ 0</text
+                >
+                <rect x="410" y="70" width="222" height="24" rx="6" fill="#eef5ee" stroke="#2f5d3a"
+                ></rect>
+                <text x="420" y="86" fill="#111110">/customers/1/orders</text><text
+                    x="624"
+                    y="86"
+                    text-anchor="end"
+                    font-size="9"
+                    fill="#2f5d3a">✓ 1</text
+                >
+                <rect x="410" y="100" width="222" height="24" rx="6" fill="#f7ecea" stroke="#9a2417"
+                ></rect>
+                <text x="420" y="116" fill="#7a2218">…/orders/42/items/9</text><text
+                    x="624"
+                    y="116"
+                    text-anchor="end"
+                    font-size="9"
+                    fill="#9a2417">✗ 3</text
+                >
+            </g>
+            <!-- filter alternative -->
+            <rect x="14" y="170" width="618" height="38" rx="9" fill="#eef2f5" stroke="#1f3a5a"
+            ></rect>
+            <text x="28" y="186" font-size="10" font-weight="700" fill="#1f3a5a"
+                >PREFER FILTERING FOR RELATIONSHIPS</text
+            >
+            <text
+                x="28"
+                y="201"
+                font-size="10.5"
+                font-family="ui-monospace,SFMono-Regular,Menlo,monospace"
+                fill="#111110">/orders?customer_id=1</text
+            >
+            <text x="624" y="201" text-anchor="end" font-size="9" fill="#1f3a5a"
+                >same query power, no URL coupling to the org chart</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        A collection holds items; an item is addressed by identity. Keep nesting to roughly one
+        level and prefer <code>/orders?customer_id=1</code> over deep paths. Reserve deep paths for genuine
+        ownership where the child has no identity of its own.
+    </figcaption>
+</figure>

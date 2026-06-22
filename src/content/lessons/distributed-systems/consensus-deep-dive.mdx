@@ -1,0 +1,995 @@
+---
+publishedAt: '2026-06-21'
+# ─── distributed-systems · Consensus (deep dive) ──────────────────────────────
+# MDX-hybrid lesson. FRONTMATTER = the full lesson contract (head + masthead +
+# wayfinding) PLUS the structured body data lifted out of the prose: the 6-item
+# quiz, the 13 interview Q&A (incl. the design rubric) and the 6 footnote
+# sources. Validated at build time by the `lessons` collection schema
+# (src/content.config.ts → src/schema/lesson.ts). The FAQ JSON-LD is emitted by
+# <Interview> from `interview` below — it must NOT also be set on `jsonLd`, or
+# the page would carry two FAQPage blobs.
+#
+# HTML-bearing strings (h1Html, interview q/a, rubric, sources.html) use YAML
+# folded block scalars (>-) so the embedded ", ', &, < and > need NO escaping.
+#
+# The 6 per-level "Memory check" disclosures are local `export const` arrays
+# (mc1…mc6) rendered by <MemoryCheck> in the body, since the source has six
+# distinct per-level blocks rather than one flat list. The three raster diagrams
+# (dd-01 / dd-02 / dd-03) stay inline as <figure><img> in the body; only the
+# seven inline-SVG figures are extracted into components.
+
+# —— SEO / <head> ——
+title: 'Consensus Explained: Paxos, Raft & FLP'
+description: >-
+    How distributed consensus works: the FLP impossibility result, Paxos, Raft leader election and
+    safety, quorums, and the commit rules that keep replicated state machines correct.
+keywords: 'consensus, paxos, raft, flp, idempotency keys, distributed systems, failure, time, quorum, replication'
+path: 'distributed-systems/consensus-deep-dive.html'
+ogImage: 'assets/og/distributed-systems.png'
+ogImageAlt: 'Distributed Systems · Engineering Vault learning track'
+accentVar: '--track-distributed'
+
+# —— masthead ——
+trackLabel: 'Distributed Systems'
+kicker: 'Deep Dive · supplement to Part 1, Lesson 8 · visual edition'
+h1Html: 'Consensus — the floor beneath FLP, Raft &amp; BFT'
+metaLine: >-
+    ~30 min · 6 levels · the proofs &amp; the safety bug you'd otherwise ship · interactive recall
+chips:
+    - 'Consensus'
+    - 'Paxos'
+    - 'Raft'
+    - 'FLP'
+    - 'Idempotency keys'
+
+# —— wayfinding ——
+prev:
+    href: 'distributed-systems-fundamentals.html'
+    title: 'Distributed Systems — Fundamentals'
+next:
+    href: 'idempotency-keys-deep-dive.html'
+    title: 'Idempotency Keys — Deep Dive'
+
+# —— routing (used only by the dynamic route) ——
+track: 'distributed-systems'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: "FLP proves consensus can't be guaranteed specifically when the system is…"
+      correct: 0
+      options:
+          - 'deterministic, purely asynchronous, and one node may crash'
+          - 'randomised, synchronous, and every node stays alive'
+          - 'leaderless, partitioned, and messages may be dropped'
+          - 'Byzantine, partly synchronous, and clocks are skewed'
+    - q: 'Which consensus property does FLP make impossible to guarantee?'
+      correct: 2
+      options:
+          - 'agreement — two correct nodes could decide differently'
+          - 'validity — a decided value might never have been proposed'
+          - 'termination — every correct node eventually decides'
+          - 'all three fail together, simultaneously and equally'
+    - q: 'A brand-new Raft leader is guaranteed to hold every committed entry because…'
+      correct: 1
+      options:
+          - 'the previous leader hands its full log over before stopping'
+          - "voters deny their vote unless the candidate's log is up-to-date"
+          - 'committed entries are broadcast to every node before commit'
+          - 'the candidate replays the whole log from the first offset'
+    - q: 'A Raft leader may treat an entry as committed only once it has…'
+      correct: 1
+      options:
+          - 'stored that entry on every single follower in the cluster'
+          - 'replicated an entry from its own current term on a majority'
+          - "received an acknowledgement from the previous term's leader"
+          - 'written the entry to local disk and called fsync on it'
+    - q: 'Joint consensus prevents split-brain during membership change by…'
+      correct: 3
+      options:
+          - 'pausing all client writes until every node adopts C_new'
+          - 'letting only the leader vote during the transition window'
+          - 'picking whichever of C_old or C_new has more live nodes'
+          - 'requiring a majority of both C_old and C_new for each decision'
+    - q: 'Byzantine consensus needs 3f+1 rather than 2f+1 because…'
+      correct: 1
+      options:
+          - 'the extra nodes give the protocol a faster commit path'
+          - 'quorum overlap must contain at least one honest member'
+          - 'lying nodes consume twice the network bandwidth budget'
+          - 'the leader has to sign every message that it broadcasts'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'What problem does consensus solve, and what are its three required properties?'
+      a: >-
+          <b>Hit these points:</b> consensus = a set of nodes agree on a single value (or a single
+          ordering of commands) despite crashes and message delays &rarr; the three properties:
+          <b>Agreement</b> (no two correct nodes decide different values), <b>Validity</b> (the
+          decided value was proposed), <b>Termination</b> (every correct node eventually decides)
+          &rarr; agreement + validity are <em>safety</em>, termination is <em>liveness</em> &rarr;
+          consensus is equivalent to total-order broadcast, which is exactly what a replicated state
+          machine / replicated log needs &rarr; so "build a replicated log" and "solve consensus" are
+          the same problem.
+    - level: 'core'
+      q: 'Why does crash tolerance need 2f+1 nodes but Byzantine tolerance need 3f+1?'
+      a: >-
+          <b>Hit these points:</b> it's all quorum-overlap reasoning &rarr; <b>crash (CFT)</b>: with
+          2f+1 nodes a majority is f+1, and any two majorities overlap in ≥1 node — that shared node
+          is honest (crashed nodes just stop), so it carries the agreed value forward &rarr;
+          <b>Byzantine (BFT)</b>: the overlapping node could be the liar, so a single shared node
+          isn't enough; you need quorums of 2f+1 out of 3f+1 so any two intersect in f+1 nodes,
+          guaranteeing ≥1 honest node in the overlap &rarr; mnemonic: CFT survives nodes that
+          <em>stop</em>, BFT survives nodes that <em>lie</em> &rarr; PBFT does this in three phases;
+          Nakamoto/PoW gives only probabilistic finality.
+    - level: 'core'
+      q: "What does FLP state precisely, and what's the standard escape hatch?"
+      a: >-
+          <b>Hit these points:</b> FLP: no <em>deterministic</em> protocol can <em>guarantee
+          termination</em> in a <em>purely asynchronous</em> model that tolerates even <em>one</em>
+          crash &rarr; it does not say consensus is impossible — safety is fine; it says you can't
+          guarantee both safety and liveness with no timing assumptions &rarr; the escape is partial
+          synchrony (DLS 1988): assume the network is eventually timely, use timeouts for liveness,
+          and never let timeouts compromise safety &rarr; randomization is the other escape (terminate
+          with probability 1) &rarr; that's why every real protocol (Paxos, Raft) keeps safety
+          unconditional and makes liveness depend on the network calming down.
+    - level: 'core'
+      q: 'How does Raft elect a leader and guarantee at most one per term?'
+      a: >-
+          <b>Hit these points:</b> time is divided into <em>terms</em>; a follower whose election
+          timeout fires becomes a candidate, increments the term, votes for itself, and requests votes
+          &rarr; each node grants at most one vote per term &rarr; a candidate wins only with a
+          <em>majority</em>; since two majorities always overlap and the overlap node already voted,
+          two leaders in one term is impossible (Election Safety) &rarr; split votes are resolved by
+          <em>randomized</em> election timeouts so candidates rarely time out together &rarr; the
+          leader sends periodic heartbeats; a higher term seen anywhere makes a node step down.
+    - level: 'senior'
+      q: 'State FLP precisely, then explain why the bivalence argument is sharper than "the adversary delays a message."'
+      a: >-
+          <b>Hit these points:</b> no <em>deterministic</em> protocol can <em>guarantee
+          termination</em> in a purely asynchronous model tolerating one crash &rarr; bivalence is the
+          engine: Lemma 1 shows a <em>bivalent</em> (outcome-undecided) initial configuration must
+          <em>exist</em>, and Lemma 2 shows from any bivalent state the adversary can always reach
+          another bivalent state &rarr; so the protocol can be kept perpetually undecided &rarr; the
+          key subtlety: the adversary only <em>reorders</em> messages, it never drops them or crashes
+          more than one node — far weaker than "messages get lost," which is why the result is so
+          strong &rarr; bonus: names the partial-synchrony escape (DLS) and that randomized protocols
+          sidestep it too.
+    - level: 'senior'
+      q: 'A new Raft leader is never told what was committed. Why is it guaranteed to already hold every committed entry?'
+      a: >-
+          <b>Hit these points:</b> the <em>election restriction</em> — a voter grants its vote only to
+          a candidate whose log is at least as up-to-date (compare last-entry term, then index) &rarr;
+          a committed entry lives on a majority; a winning candidate also needs a majority; those two
+          majorities overlap in ≥1 voter &rarr; that overlapping voter holds the committed entry and
+          would refuse to vote for a candidate missing it &rarr; therefore the winner already has
+          every committed entry — this is Leader Completeness &rarr; red flag answer: "the old leader
+          hands its log over" — there is no handover; safety comes from the vote-time check, not from
+          the predecessor.
+    - level: 'senior'
+      q: "Walk me through Raft's Figure 8 and state the commitment rule that prevents it."
+      a: >-
+          <b>Hit these points:</b> an entry from a <em>previous</em> term can be replicated to a
+          majority and <em>still</em> be overwritten — a later leader (S5) can win with a higher
+          last-term entry and clobber it &rarr; so "replicated on a majority" is <em>not</em>
+          sufficient to call a prior-term entry committed &rarr; the rule: a leader may only mark an
+          entry committed once it has replicated an entry <em>from its current term</em> on a
+          majority; earlier entries then commit indirectly via Log Matching &rarr; the trap is
+          committing by replica count alone &rarr; bonus: this bug hides because it needs a specific
+          crash/election interleaving, so naive tests pass — you need a model checker (TLA+) or
+          targeted fault injection to force it.
+    - level: 'senior'
+      q: 'How does Raft change cluster membership without risking two leaders?'
+      a: >-
+          <b>Hit these points:</b> a naive single-step cutover from C_old to C_new lets each
+          configuration independently form a majority during the overlap → split brain, two leaders
+          &rarr; joint consensus routes through a combined C_old,new in which every election and every
+          commit requires a majority of <em>both</em> the old and new sets simultaneously &rarr;
+          sequence: commit C_old,new, then commit C_new; once C_new is committed the old config can
+          retire &rarr; because both majorities are required during transition, two disjoint
+          majorities can never form &rarr; bonus: single-server add/remove (changing membership one
+          node at a time) is the later, simpler optimization that avoids full joint consensus.
+    - level: 'staff'
+      q: "Your team's homegrown Raft loses a committed write under one rare crash sequence. What's your first hypothesis and how do you confirm it?"
+      a: >-
+          <b>Hit these points:</b> first hypothesis: the Figure-8 commitment bug — committing a
+          prior-term entry by replica count instead of waiting to replicate a current-term entry on a
+          majority &rarr; second candidates: missing fsync-before-ack (durability lost on crash), or a
+          broken election restriction letting a less-up-to-date candidate win &rarr; confirm not by
+          adding logs and hoping the race reappears, but by writing a TLA+/model-checked spec or a
+          deterministic-scheduler test that <em>forces</em> the exact crash-then-elect interleaving
+          &rarr; reproduce → fix the commit rule → keep the model check in CI as a regression &rarr;
+          the staff move is treating safety bugs as specification problems, not log-spelunking
+          problems, because the failing interleaving is too rare to catch by chance.
+    - level: 'staff'
+      q: 'When would you choose Multi-Paxos, Raft, EPaxos, or PBFT — and when none of them?'
+      a: >-
+          <b>Hit these points:</b> all crash-fault options give identical safety, so choose on
+          operational and performance axes &rarr; <b>Raft</b> for implementability and a strong
+          leader's simple mental model (most teams); <b>Multi-Paxos</b> as the battle-tested incumbent
+          where it already exists; <b>EPaxos</b> to remove the single-leader throughput/latency
+          bottleneck for <em>commuting</em> commands, accepting a sharp jump in complexity; <b>PBFT</b>
+          only when you must tolerate <em>lying</em> nodes across a trust boundary (3f+1, 3 phases)
+          &rarr; <b>none</b> when you don't actually need linearizable agreement — if eventual
+          consistency / CRDTs / a single-writer design satisfy correctness, consensus is needless
+          coordination cost &rarr; the principal framing: consensus is the most expensive coordination
+          primitive; justify the need before picking a flavor.
+    - level: 'staff'
+      q: "Distinguish safety from liveness in a replicated log, and which one you're allowed to sacrifice."
+      a: >-
+          <b>Hit these points:</b> <b>safety</b> = nothing bad happens: never two leaders in a term,
+          never lose or reorder an acknowledged committed entry, never let two correct nodes diverge
+          &rarr; <b>liveness</b> = something good eventually happens: a request eventually commits, a
+          new leader is eventually elected &rarr; FLP says you cannot guarantee both under pure
+          asynchrony, so the universal design choice is: <b>safety is unconditional, liveness is
+          best-effort under partial synchrony</b> &rarr; concretely, during a partition a CP log
+          refuses progress (sacrifices liveness/availability) rather than risk two leaders
+          (sacrificing safety) &rarr; the staff point: any protocol that "stays available" through a
+          partition by relaxing majority is silently trading away safety — make that trade explicit
+          and intentional, never accidental.
+    - level: 'design'
+      q: 'Whiteboard the commit path for a replicated log that must never lose an acknowledged write.'
+      a: >-
+          <b>A strong answer covers:</b> replicate to a <em>majority</em> before acking the client,
+          and on each replica <em>fsync</em> the entry to durable storage before counting its vote —
+          an in-memory ack that a power loss erases is not a commit &rarr; mark an entry committed only
+          after a <em>current-term</em> entry reaches a majority (Figure-8 rule), so a later leader
+          can't overwrite a "committed" prior-term entry &rarr; enforce the election restriction so
+          any new leader already holds every committed entry (Leader Completeness) — no log handover
+          &rarr; bound stale reads with a leader lease or read-index so a deposed leader can't serve a
+          linearizable read &rarr; make client requests idempotent (request IDs / dedup) so a retried
+          proposal after a timeout commits at most once &rarr; change membership via joint consensus to
+          preserve Election Safety &rarr; verify the safety properties with a model checker and force
+          the rare crash/election interleavings with fault injection &rarr; name the trade-off:
+          fsync-before-ack and majority replication add tail latency, which you accept as the price of
+          RPO = 0.
+    - level: 'design'
+      q: 'Design a consensus-backed configuration / coordination store (think etcd / ZooKeeper).'
+      a: >-
+          <b>A strong answer covers:</b> a small odd-sized cluster (3 or 5) running a single replicated
+          log via Raft/Multi-Paxos — crash-fault model, 2f+1, since it's inside one trust domain &rarr;
+          all writes go through the leader and the log, giving linearizable, totally-ordered updates;
+          expose compare-and-swap / leases / watches on top of the log &rarr; serve reads via the
+          leader with a read-index or lease so they're linearizable without a full log round-trip, or
+          offer explicitly-stale follower reads as a separate, labeled API &rarr; durability:
+          fsync-before-ack, periodic snapshots + log compaction so the log doesn't grow unbounded
+          &rarr; under partition, the minority side stops serving writes (CP) — correctness over
+          availability, which is right for locks/config &rarr; clients use sessions + fencing tokens so
+          a client that loses its lease (GC pause, partition) can't act on a stale lock &rarr;
+          membership changes via joint consensus; keep the cluster small because write latency =
+          majority round-trip and grows with size &rarr; name the trade-off: this store is deliberately
+          low-throughput and strongly consistent — it coordinates other systems, it is not your data
+          plane.
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Design-round framework</b> — drive any consensus/replicated-log prompt through these, out
+    loud:
+rubric:
+    - 'Clarify the contract: linearizable commits, durability (fsync), RPO = 0?, throughput &amp; latency targets.'
+    - 'Fault model: crash-only (2f+1) or Byzantine/trust boundary (3f+1)? — pick the cluster size from f.'
+    - 'Commit path: majority replication, commit only via a current-term entry, fsync-before-ack.'
+    - 'Leadership: election restriction on votes, randomized timeouts, leader leases to bound stale reads.'
+    - "Membership changes via joint consensus; client dedup/idempotency so retried proposals don't duplicate."
+    - 'Liveness vs safety: what happens under partition (block the minority); how reads stay linearizable.'
+    - 'Verification &amp; ops: TLA+/model check the safety properties; fault-injection for rare interleavings.'
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          1. Fischer, Lynch &amp; Paterson — <em>Impossibility of Distributed Consensus with One
+          Faulty Process</em> (<em>JACM</em> 1985). The bivalence proof. <a href="#r2">↩</a>
+    - id: 's2'
+      html: >-
+          2. Dwork, Lynch &amp; Stockmeyer — <em>Consensus in the Presence of Partial Synchrony</em>
+          (1988). The escape hatch every real protocol uses. <a href="#r2">↩</a>
+    - id: 's3'
+      html: >-
+          3. Ongaro &amp; Ousterhout — <em>In Search of an Understandable Consensus Algorithm
+          (Raft)</em> (USENIX ATC 2014). §5.4 = Leader Completeness &amp; Figure 8. <a href="#r3">↩</a>
+    - id: 's4'
+      html: >-
+          4. Lamport — <em>The Part-Time Parliament</em> (1998) / <em>Paxos Made Simple</em> (2001).
+          <a href="#r3b">↩</a>
+    - id: 's5'
+      html: >-
+          5. Lamport, Shostak &amp; Pease — <em>The Byzantine Generals Problem</em> (1982); Castro
+          &amp; Liskov — <em>Practical Byzantine Fault Tolerance</em> (1999). <a href="#r5">↩</a>
+    - id: 's6'
+      html: >-
+          6. Kleppmann — <em>DDIA</em>, Chapter 9 — ties consensus to total-order broadcast and
+          linearizability.
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import Rehearse from '../../../components/Rehearse.astro';
+import MemoryCheck from '../../../components/MemoryCheck.astro';
+import {
+    Fig1,
+    Fig2,
+    Fig3,
+    Fig4,
+    Fig5,
+    Fig6,
+    Fig7,
+} from '../../../components/figures/distributed-systems/consensus-deep-dive/index.ts';
+
+export const mc1 = [
+    { q: 'What is a "configuration"?', a: 'all node states + all in-flight messages' },
+    {
+        q: 'Which property does FLP make impossible to guarantee?',
+        a: 'termination (safety always holds)',
+    },
+    {
+        q: "The adversary's only power?",
+        a: "choosing message order; it can't drop or extra-crash",
+    },
+];
+export const mc2 = [
+    { q: 'Which property does the real work?', a: 'Leader Completeness (#4)' },
+    { q: 'What enforces it?', a: 'the election restriction + majority overlap' },
+    { q: '"Up-to-date" compares what, in order?', a: 'last-entry term, then index' },
+];
+export const mc3 = [
+    { q: 'When is replica-count commitment safe?', a: 'only for a current-term entry' },
+    {
+        q: 'How do old-term entries get committed?',
+        a: 'indirectly, once a current-term entry above them commits',
+    },
+    { q: "Why won't normal tests catch the bug?", a: 'it needs one exact crash interleaving' },
+];
+export const mc4 = [
+    {
+        q: 'Why is a naive membership switch dangerous?',
+        a: 'C_old and C_new can each form a majority',
+    },
+    {
+        q: 'What does C_old,new require for any decision?',
+        a: 'a majority of both sets, simultaneously',
+    },
+    { q: 'The two-step sequence?', a: 'commit C_old,new, then commit C_new' },
+];
+export const mc5 = [
+    {
+        q: 'Multi-Paxos in one line?',
+        a: 'a stable leader running a sequence of Paxos = a replicated log',
+    },
+    { q: "Raft's main cost?", a: 'strong-leader throughput ceiling' },
+    { q: 'What do CFT protocols assume about failures?', a: 'nodes stop, never lie' },
+];
+export const mc6 = [
+    {
+        q: 'Why 3f+1 not 2f+1?',
+        a: 'overlap must contain an honest node even if the liar is in it',
+    },
+    { q: 'Byzantine quorum size?', a: '2f+1, intersecting in f+1' },
+    { q: "PBFT's three phases?", a: 'pre-prepare, prepare, commit' },
+];
+
+<div class="mission">
+    <strong>Your bar:</strong> from a blank page, redraw <em>why</em> FLP is true (bivalence),{' '}
+    <em>exactly</em> what makes Raft safe (the election restriction), the one commitment rule
+    everyone states wrong (Figure&nbsp;8), and why lying nodes force <code>3f+1</code>. Five
+    sentences from Lesson 8 each hide a subtlety that separates "I read the Raft paper"
+    <sup><a href="#s3" id="r3">3</a></sup>{' '}
+    from "I could implement it without a safety bug."
+</div>
+
+<p>One sentence holds the whole supplement. Each level unpacks one chip of it:</p>
+
+<div class="chips">
+    <span class="chip">
+        Async consensus <b>can't be guaranteed</b> (FLP)
+    </span>
+    <span class="chip c2">
+        so real protocols <b>buy liveness with partial synchrony</b>
+    </span>
+    <span class="chip c3">
+        Raft moves safety <b>into the election</b>
+    </span>
+    <span class="chip c4">
+        and lying nodes raise the wall to <b>3f+1</b>
+    </span>
+</div>
+
+<nav class="toc">
+    <a href="#l1">1 · FLP — bivalence</a>
+    <a href="#l2">2 · Raft's five properties</a>
+    <a href="#l3">3 · Figure-8 commitment</a>
+    <a href="#l4">4 · Membership change</a>
+    <a href="#l5">5 · The landscape</a>
+    <a href="#l6">6 · Byzantine &amp; 3f+1</a>
+    <a href="#usecases">★ Where it shows up</a>
+    <a href="#quiz">★ Retrieval quiz</a>
+    <a href="#interview">★ Interview Qs</a>
+    <a href="#cheat">★ Cheat sheet</a>
+</nav>
+
+{/* ============ HERO: the consensus contract ============ */}
+
+<Fig1 />
+
+{/* ================= LEVEL 1 ================= */}
+
+<section class="lvl" id="l1">
+    <div class="lvltop">
+        <span class="num">1</span>
+        <h2>FLP, actually proved — the bivalence argument</h2>
+    </div>
+    <p class="tagline">
+        "An adversary delays the deciding message forever" is the <em>shape</em>. The real proof says
+        precisely <em>where</em> the impossibility lives.
+    </p>
+
+    <figure>
+        <img
+            src="diagrams/dd-01-flp-bivalence.png"
+            alt="The bivalence argument. Configurations are 0-valent, 1-valent, or bivalent. A bivalent start exists; from any bivalent configuration the adversary can always step to another bivalent one, so it never reaches a decision."
+        />
+        <figcaption>
+            <strong>The bivalence argument.</strong> Configurations are 0-valent, 1-valent, or
+            bivalent. A bivalent start exists; from any bivalent configuration the adversary can
+            always step to another bivalent one, so it never reaches a decision.
+        </figcaption>
+    </figure>
+
+    <p class="tagline">
+        Model the system as a <strong>configuration</strong> = every node's state + every in-flight
+        message. Its <em>valence</em> is which decisions are still reachable:
+    </p>
+
+    <Fig2 />
+
+    <div class="facts">
+        <div class="fact">
+            <b>Lemma 1 — a bivalent start exists</b> Order all initial input vectors so neighbours
+            differ in one node's input. All-0 is 0-valent, all-1 is 1-valent; somewhere two
+            neighbours flip valence. Crash that one differing node and the runs are indistinguishable
+            → must decide alike → one neighbour is bivalent.
+        </div>
+        <div class="fact">
+            <b>Lemma 2 — bivalence is inescapable</b> From a bivalent config, delivering a pending
+            message <code>e</code> can always be arranged to land in <em>another</em> bivalent one. A
+            "critical step" where <code>e</code> vs <code>e'</code> forces opposite valences can't
+            exist: they either commute (different nodes) or one node can crash right after (same node)
+            — indistinguishable.
+        </div>
+    </div>
+
+    <div class="myth">
+        <div class="m">✗ "FLP says consensus is impossible in practice"</div>
+        <div class="t">
+            ✓ It says no <em>deterministic</em> protocol can <em>guarantee termination</em> in a{' '}
+            <em>purely asynchronous</em> model
+        </div>
+    </div>
+
+    <p class="tagline">
+        The dagger: the adversary may not drop messages or crash more than one node — it only chooses
+        message <strong>order</strong>, and every message is still eventually delivered. Impossibility
+        comes from <em>asynchrony alone</em>. Relax any one assumption and consensus is solvable:
+    </p>
+
+    <Fig3 />
+
+    <div class="rule">
+        <span>🔒 Memory rule:</span> FLP kills <em>guaranteed termination</em> in pure async with one
+        crash — order alone is enough; real systems trade liveness for partial synchrony and never
+        give up safety.
+    </div>
+
+    <MemoryCheck items={mc1} />
+
+</section>
+
+{/* ================= LEVEL 2 ================= */}
+
+<section class="lvl" id="l2">
+    <div class="lvltop">
+        <span class="num">2</span>
+        <h2>Raft is safe via five properties — one is subtle</h2>
+    </div>
+    <p class="tagline">
+        Raft (Ongaro &amp; Ousterhout, 2014)
+        <sup><a href="#s3" id="r3b">3</a></sup>{' '}
+        guarantees correctness through five always-true invariants. Four are mechanical; one carries
+        the whole proof.
+    </p>
+
+    <table>
+        <tr>
+            <th>#</th>
+            <th>Property</th>
+            <th>Plain meaning</th>
+        </tr>
+        <tr>
+            <td>1</td>
+            <td>Election Safety</td>
+            <td>at most one leader per term</td>
+        </tr>
+        <tr>
+            <td>2</td>
+            <td>Leader Append-Only</td>
+            <td>a leader never overwrites/deletes its own log, only appends</td>
+        </tr>
+        <tr>
+            <td>3</td>
+            <td>Log Matching</td>
+            <td>
+                same index <em>and</em> term in two logs ⇒ all prior entries identical
+            </td>
+        </tr>
+        <tr>
+            <td>4</td>
+            <td>
+                <b>Leader Completeness</b>
+            </td>
+            <td>a committed entry is present in the log of every later-term leader</td>
+        </tr>
+        <tr>
+            <td>5</td>
+            <td>State Machine Safety</td>
+            <td>
+                no two servers apply a <em>different</em> command at the same index
+            </td>
+        </tr>
+    </table>
+
+    <p class="tagline">
+        <b>Leader Completeness (4)</b> is the one that makes the whole thing work — and it's not
+        obvious. A brand-new leader is <em>never told</em> what was committed, so why must it already
+        hold every committed entry? The answer is the <strong>election restriction</strong> + the
+        quorum-overlap trick:
+    </p>
+
+    <Fig4 />
+
+    <div class="myth">
+        <div class="m">✗ "The previous leader hands its log to the new one"</div>
+        <div class="t">
+            ✓ Nobody hands anything over — the <em>up-to-date check at vote time</em> guarantees it
+        </div>
+    </div>
+
+    <div class="rule">
+        <span>🗳️ Memory rule:</span> Raft moves the hard safety work into the <em>election</em>, not
+        the replication — the up-to-date vote check is what makes a leader complete.
+    </div>
+
+    <MemoryCheck items={mc2} />
+
+</section>
+
+{/* ================= LEVEL 3 ================= */}
+
+<section class="lvl" id="l3">
+    <div class="lvltop">
+        <span class="num">3</span>
+        <h2>The commitment gotcha — Raft's Figure 8</h2>
+    </div>
+    <p class="tagline">
+        The single most important subtlety in Raft, and the rule almost everyone states wrong on a
+        first reading.
+    </p>
+
+    <div class="myth">
+        <div class="m">✗ "An entry is committed once stored on a majority of nodes"</div>
+        <div class="t">
+            ✓ True only for a <em>current-term</em> entry; a <em>previous-term</em> entry on a
+            majority can still be overwritten
+        </div>
+    </div>
+
+    <figure>
+        <img
+            src="diagrams/dd-02-raft-figure8.png"
+            alt="The Figure-8 commitment trap. An entry from an old term, replicated to a majority, can still be overwritten by a later leader. A leader must only count an entry committed once it has replicated an entry from its own term on a majority."
+        />
+        <figcaption>
+            <strong>The Figure-8 commitment trap.</strong> An entry from an old term, replicated to a
+            majority, can still be overwritten by a later leader. A leader must only count an entry
+            committed once it has replicated an entry from its <em>own</em> term on a majority.
+        </figcaption>
+    </figure>
+
+    <p class="tagline">
+        Walk the canonical five-node scenario (S1–S5). At step (c) the old entry is on a{' '}
+        <strong>majority</strong> — and committing it there is the disaster:
+    </p>
+
+    <table>
+        <tr>
+            <th>Step</th>
+            <th>What happens</th>
+            <th>Danger</th>
+        </tr>
+        <tr>
+            <td>(a)</td>
+            <td>
+                S1 is leader in term 2, replicates <code>idx2(t2)</code> to S1,S2
+            </td>
+            <td>—</td>
+        </tr>
+        <tr>
+            <td>(b)</td>
+            <td>
+                S1 crashes. S5 wins term 3 (S3,S4,S5 — short logs pass the check), accepts a{' '}
+                <em>different</em> <code>idx2(t3)</code> on S5 only
+            </td>
+            <td>—</td>
+        </tr>
+        <tr>
+            <td>(c)</td>
+            <td>
+                S5 crashes. S1 restarts, wins term 4, re-replicates old <code>idx2(t2)</code> to
+                S1,S2,S3 — now a majority
+            </td>
+            <td>⚠ tempting to call it committed</td>
+        </tr>
+        <tr>
+            <td>(d)</td>
+            <td>
+                If it did: S1 crashes, S5 wins term 5 (S5's <code>idx2(t3)</code> is a higher term →
+                "more up-to-date"), forces <code>idx2(t3)</code> onto everyone
+            </td>
+            <td>✗ overwrites a "committed" entry — agreement violated</td>
+        </tr>
+    </table>
+
+    <div class="rule">
+        <span>📌 The fix (one sentence in the paper):</span> A leader counts an entry committed only
+        once it has stored an entry from its <em>own current term</em> on a majority; earlier-term
+        entries are then committed <em>indirectly</em>, carried by Log Matching.
+    </div>
+
+    <p class="tagline">
+        So at (c), S1 must <em>not</em> commit <code>idx2(t2)</code> by replica count. It waits to
+        replicate a fresh <code>idx3(t4)</code> on a majority — the instant that commits, S5 (lacking{' '}
+        <code>idx3</code>) can never win again, so <code>idx2</code> is safe too.{' '}
+        <strong>
+            Commitment is only ever decided through a current-term entry; the past rides along.
+        </strong>{' '}
+        Miss this and you ship an implementation that loses committed data under one specific crash
+        interleaving — and it passes every test that doesn't reproduce exactly that order.
+    </p>
+
+    <MemoryCheck items={mc3} />
+
+</section>
+
+{/* ================= LEVEL 4 ================= */}
+
+<section class="lvl" id="l4">
+    <div class="lvltop">
+        <span class="num">4</span>
+        <h2>Membership change without splitting in two</h2>
+    </div>
+    <p class="tagline">
+        Cluster membership isn't fixed. Switch nodes from <code>C_old</code> to <code>C_new</code> at
+        slightly different moments and each set can form a majority independently — two leaders,
+        divergence. Changing membership is itself a consensus problem.
+    </p>
+
+    <Fig5 />
+
+    <div class="myth">
+        <div class="m">✗ "Just point every node at the new config and restart"</div>
+        <div class="t">✓ A naive cutover breaks Election Safety; you need joint (overlapping) consensus</div>
+    </div>
+
+    <div class="rule">
+        <span>🔀 Memory rule:</span> Joint consensus forces every decision to clear a majority of{' '}
+        <em>both</em> old and new sets at once, so two independent majorities can never coexist.
+        (Single-server-at-a-time changes came later; joint consensus is the idea to hold.)
+    </div>
+
+    <MemoryCheck items={mc4} />
+
+</section>
+
+{/* ================= LEVEL 5 ================= */}
+
+<section class="lvl" id="l5">
+    <div class="lvltop">
+        <span class="num">5</span>
+        <h2>The landscape — you don't have to use Raft</h2>
+    </div>
+    <p class="tagline">
+        Raft is one point in a space dominated for decades by Paxos. Same safety; different
+        trade-offs.
+    </p>
+
+    <Fig6 />
+
+    <table>
+        <tr>
+            <th>Protocol</th>
+            <th>Idea</th>
+            <th>Trade-off</th>
+        </tr>
+        <tr>
+            <td>Paxos (single-decree)</td>
+            <td>agree on one value via prepare/promise then accept/accepted, around a quorum</td>
+            <td>proven minimal; famously hard to understand &amp; productionise</td>
+        </tr>
+        <tr>
+            <td>Multi-Paxos</td>
+            <td>a stable leader runs a sequence of Paxos instances — a replicated log</td>
+            <td>the practical form; what most "Paxos" systems mean</td>
+        </tr>
+        <tr>
+            <td>Raft</td>
+            <td>
+                same guarantees, redesigned for understandability: strong leader, terms, election
+                restriction
+            </td>
+            <td>easier to get right; strong-leader bottleneck caps throughput</td>
+        </tr>
+        <tr>
+            <td>EPaxos / leaderless</td>
+            <td>no fixed leader; exploit that commuting commands need no agreed order</td>
+            <td>lower latency, no leader hotspot, at real complexity cost</td>
+        </tr>
+    </table>
+
+    <div class="rule">
+        <span>🗺️ Memory rule:</span> Paxos → Multi-Paxos → Raft are the same CFT family; EPaxos drops
+        the leader. Pick by who you trust to bottleneck (the leader) vs how much complexity you'll
+        pay.
+    </div>
+
+    <MemoryCheck items={mc5} />
+
+</section>
+
+{/* ================= LEVEL 6 ================= */}
+
+<section class="lvl" id="l6">
+    <div class="lvltop">
+        <span class="num">6</span>
+        <h2>When nodes lie — Byzantine consensus &amp; the 3f+1 wall</h2>
+    </div>
+    <p class="tagline">
+        Drop the crash-fault assumption. A <strong>Byzantine</strong> node (Lamport, Shostak &amp;
+        Pease, 1982)
+        <sup><a href="#s5" id="r5">5</a></sup>{' '}
+        can do <em>anything</em> — send conflicting messages, forge values, collude. The model for
+        systems crossing trust boundaries: blockchains, compromised participants.
+    </p>
+
+    <figure>
+        <img
+            src="diagrams/dd-03-bft-quorums.png"
+            alt="Crash vs Byzantine quorums. Tolerating f crashes needs 2f+1 nodes; tolerating f liars needs 3f+1, because quorums must overlap in enough nodes to guarantee at least one honest one in common."
+        />
+        <figcaption>
+            <strong>Crash vs Byzantine quorums.</strong> Tolerating f crashes needs 2f+1 nodes;
+            tolerating f liars needs 3f+1, because quorums must overlap in enough nodes to guarantee
+            at least one honest one in common.
+        </figcaption>
+    </figure>
+
+    <Fig7 />
+
+    <table>
+        <tr>
+            <th>Fault model</th>
+            <th>Nodes</th>
+            <th>Quorum</th>
+            <th>Why</th>
+        </tr>
+        <tr>
+            <td>Crash (CFT — Raft, Paxos)</td>
+            <td>
+                <b>2f + 1</b>
+            </td>
+            <td>f + 1</td>
+            <td>any two majorities overlap in ≥ 1 node, which is correct (didn't lie)</td>
+        </tr>
+        <tr>
+            <td>Byzantine (BFT — PBFT)</td>
+            <td>
+                <b>3f + 1</b>
+            </td>
+            <td>2f + 1</td>
+            <td>any two quorums overlap in ≥ f + 1 nodes, so ≥ 1 of the overlap is honest</td>
+        </tr>
+    </table>
+
+    <div class="myth">
+        <div class="m">✗ "BFT is the safer choice, use it everywhere"</div>
+        <div class="t">
+            ✓ Inside one datacenter, crash faults are the honest model — 2f+1 Raft is right; reach for
+            3f+1 only across trust boundaries
+        </div>
+    </div>
+
+    <div class="rule">
+        <span>🛡️ Memory rule:</span> Crash needs a quorum overlap of one trustworthy node; Byzantine
+        needs the overlap to out-number the liars → 2f+1 of 3f+1, intersecting in f+1 with ≥ 1
+        honest.
+    </div>
+
+    <p class="tagline">
+        <strong>PBFT</strong> (Castro &amp; Liskov, 1999)
+        <sup><a href="#s5" id="r5b">5</a></sup>{' '}
+        made this practical with three phases (pre-prepare, prepare, commit). Nakamoto/Bitcoin reaches{' '}
+        <em>probabilistic</em> Byzantine agreement via proof-of-work instead of fixed quorums;
+        Tendermint and HotStuff are PBFT descendants.
+    </p>
+
+    <MemoryCheck items={mc6} />
+
+</section>
+
+{/* ================= WHERE IT SHOWS UP ================= */}
+
+<h2 class="sec" id="usecases">
+    Where each idea shows up — real systems
+</h2>
+
+<p>Grounding for the theory: the concept, a concrete place it bites, and the lesson it teaches.</p>
+
+<table>
+    <tr>
+        <th>Concept</th>
+        <th>Real system</th>
+        <th>What it teaches</th>
+    </tr>
+    <tr>
+        <td>FLP / partial synchrony</td>
+        <td>Any Raft/Paxos cluster wedging during a network blip, then recovering</td>
+        <td>safety holds; liveness waits for the network to calm</td>
+    </tr>
+    <tr>
+        <td>Election restriction</td>
+        <td>etcd / Consul leader elections refusing stale candidates</td>
+        <td>committed history can't be lost across a leader change</td>
+    </tr>
+    <tr>
+        <td>Figure-8 commitment</td>
+        <td>The classic Raft implementation bug: committing prior-term entries by replica count</td>
+        <td>only current-term entries commit by majority</td>
+    </tr>
+    <tr>
+        <td>Joint consensus</td>
+        <td>Resizing an etcd / CockroachDB raft group safely</td>
+        <td>membership change is itself consensus</td>
+    </tr>
+    <tr>
+        <td>Multi-Paxos vs Raft</td>
+        <td>Google Chubby/Spanner (Paxos) vs etcd/TiKV (Raft)</td>
+        <td>same safety, different ergonomics &amp; bottlenecks</td>
+    </tr>
+    <tr>
+        <td>BFT / 3f+1</td>
+        <td>Tendermint, HotStuff, Bitcoin's probabilistic agreement</td>
+        <td>crossing trust boundaries triples the honest-overlap requirement</td>
+    </tr>
+</table>
+
+<p class="tagline">
+    Pattern to notice: inside one company's datacenter, <strong>2f+1 crash-fault tolerance</strong>{' '}
+    is almost always the right model. The <code>3f+1</code> machinery is for when participants
+    genuinely can't trust each other.
+</p>
+
+{/* ================= INTERACTIVE RECALL ================= */}
+
+<h2 class="sec" id="quiz">
+    Retrieval practice — mix the levels
+</h2>
+
+<p>
+    Reading builds <em>fluency</em> (feels familiar). Recall builds <em>storage</em> (lasts). Answer
+    from memory — instant feedback.
+</p>
+
+<Quiz items={frontmatter.quiz} id="quiz1" />
+
+<h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">
+    Reconstruct the deep dive from a blank page
+</h3>
+
+<Rehearse
+    promptHtml={`Write the six levels in order, one line each, with nothing on screen. Then reveal and compare — gaps are your next drill.`}
+    placeholder="1. FLP = …  2. Raft 5 props = …  3. Figure-8 = …  (keep going to 6, from memory)"
+>
+    <p>
+        <b>1</b> FLP: bivalence — order alone kills guaranteed termination; partial synchrony is the
+        escape · <b>2</b> Raft safety lives in the election: up-to-date check + majority overlap ⇒
+        Leader Completeness · <b>3</b> Figure 8: commit by replica count only for current-term
+        entries; old ones ride along · <b>4</b> Membership: joint consensus needs a majority of both
+        sets ⇒ no split brain · <b>5</b> Landscape: Paxos→Multi-Paxos→Raft (CFT); EPaxos drops the
+        leader · <b>6</b> Byzantine: liars force 3f+1, quorum 2f+1, overlap f+1 with ≥1 honest.
+    </p>
+</Rehearse>
+
+<div class="ask">
+    <strong>I'm your teacher — ask me anything.</strong> Say <em>"grill me on consensus"</em> for
+    mixed no-clue questions, or hand me a real system and I'll place it on CFT↔BFT and
+    leader↔leaderless with you. Want to whiteboard a Raft commit walkthrough or the Figure-8 trace
+    live? Just ask.
+</div>
+
+{/* ================= INTERVIEW QUESTIONS ================= */}
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+{/* ================= CHEAT SHEET ================= */}
+
+<h2 class="sec" id="cheat">
+    ★ Cheat sheet — the numbers &amp; the gotchas
+</h2>
+
+<div class="cheat">
+    <p style="margin-top:0">
+        <strong>Mental models:</strong> FLP = order alone defeats guaranteed termination · safety
+        always, liveness waits · Raft safety lives in the <em>election</em> · commit only via a
+        current-term entry · joint consensus for membership · CFT = 2f+1, BFT = 3f+1.
+    </p>
+    <h3>The numbers</h3>
+    <table>
+        <tr>
+            <th>Quantity</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Crash-fault nodes for f failures</td>
+            <td>2f + 1 (quorum f+1, overlap ≥1 correct)</td>
+        </tr>
+        <tr>
+            <td>Byzantine nodes for f liars</td>
+            <td>3f + 1 (quorum 2f+1, overlap f+1 ⊇ honest)</td>
+        </tr>
+        <tr>
+            <td>Consensus properties</td>
+            <td>Agreement · Validity · Termination</td>
+        </tr>
+        <tr>
+            <td>FLP casualty</td>
+            <td>Termination (in pure async, 1 crash, deterministic)</td>
+        </tr>
+        <tr>
+            <td>Raft safety properties</td>
+            <td>
+                Election Safety · Append-Only · Log Matching · Leader Completeness · State-Machine
+                Safety
+            </td>
+        </tr>
+    </table>
+    <h3>The gotchas that bite</h3>
+    <p style="margin-bottom:0">
+        ① "Majority = committed" is true <strong>only for current-term entries</strong> (Figure 8).
+        ② A new leader is complete because of the <strong>vote-time up-to-date check</strong>, not a
+        handover. ③ Naive membership cutover <strong>breaks Election Safety</strong> — use joint
+        consensus. ④ Don't reach for BFT inside one datacenter;{' '}
+        <strong>crash faults are the honest model</strong>.
+    </p>
+</div>
+
+<div class="nav">
+    <span>📄 Supplement to Part 1, Lesson 8 · DDIA Ch. 9 (Consistency &amp; Consensus)</span>
+    <span>
+        <em>Read next ▸ Raft paper §5.4 (Leader Completeness &amp; Figure 8)</em>
+    </span>
+</div>
+
+<Sources items={frontmatter.sources} />

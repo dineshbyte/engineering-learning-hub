@@ -1,0 +1,109 @@
+---
+/**
+ * idempotency-keys-deep-dive · Figure 4 — fingerprint compare (Level 3).
+ *
+ * Copied VERBATIM from docs/distributed-systems/idempotency-keys-deep-dive.html
+ * (figure + svg + figcaption). The two arrowhead markers it references
+ * (#arwG, #arwA via marker-end="url(#…)") are inlined here in a local <defs> so
+ * they resolve standalone (verbatim from the source's hidden top-of-body defs).
+ * Lives as an .astro component because raw inline SVG with kebab-case attrs is
+ * unreliable inside MDX.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 560 190"
+        role="img"
+        aria-label="On every repeat compare the stored fingerprint to the incoming request: match means genuine retry apply section one logic; differ means key misuse reject with 400"
+    >
+        <defs>
+            <marker
+                id="arwA"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"></path></marker
+            >
+            <marker
+                id="arwG"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <rect
+                x="180"
+                y="12"
+                width="200"
+                height="40"
+                rx="9"
+                fill="#f1eee2"
+                stroke="#7a1f12"
+                stroke-width="1.5"></rect>
+            <text
+                x="280"
+                y="31"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#7a1f12">repeat with same key</text
+            >
+            <text x="280" y="45" text-anchor="middle" font-size="9" fill="#6b675f"
+                >compare hash(body) to stored fingerprint</text
+            >
+            <path d="M 230 52 L 150 96" stroke="#2f5d3a" marker-end="url(#arwG)"></path>
+            <text x="120" y="80" font-size="9.5" fill="#2f5d3a" font-weight="700">matches</text>
+            <rect x="20" y="98" width="220" height="58" rx="8" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="130"
+                y="120"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#244a2e">genuine retry of same op</text
+            >
+            <text x="130" y="138" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >→ apply §1: return saved / 409 in-progress</text
+            >
+            <path d="M 330 52 L 410 96" stroke="#9a2417" marker-end="url(#arwA)"></path>
+            <text x="430" y="80" font-size="9.5" fill="#9a2417" font-weight="700">differs</text>
+            <rect x="320" y="98" width="220" height="58" rx="8" fill="#f7ecea" stroke="#9a2417"
+            ></rect>
+            <text
+                x="430"
+                y="120"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#7a2218">client is misusing the key</text
+            >
+            <text x="430" y="138" text-anchor="middle" font-size="9.5" fill="#6b675f"
+                >→ reject 400 (Stripe). Never replay wrong result.</text
+            >
+            <text
+                x="280"
+                y="180"
+                text-anchor="middle"
+                font-size="10"
+                fill="#1f3a5a"
+                font-weight="700"
+                >one key names one specific operation — the server enforces the contract</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        The fingerprint turns the key into a <em>contract</em>: reuse a key with different
+        parameters and the server rejects it rather than silently returning the first request's
+        response.
+    </figcaption>
+</figure>

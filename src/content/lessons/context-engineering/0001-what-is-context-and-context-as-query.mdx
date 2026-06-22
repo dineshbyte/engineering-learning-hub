@@ -1,0 +1,517 @@
+---
+publishedAt: '2026-06-21'
+# ─── context-engineering · Lesson 1 — What Is Context (Context as Query) ───────
+# Converted from
+# docs/context-engineering/lessons/what-is-context-and-context-as-query.html
+# into the MDX-hybrid lesson pattern (mirrors bloom-filters/0001 and
+# ai-agents/0002). FRONTMATTER carries the full lesson contract (head + masthead +
+# wayfinding) PLUS the structured body data lifted out of the prose: the
+# 5-question quiz, the 13 LEVELLED interview Q&A (incl. the 7-item design rubric),
+# the two per-module memory-check banks, and the four footnote sources. Validated
+# at build time by the `lessons` collection schema (src/content.config.ts →
+# src/schema/lesson.ts). The FAQ JSON-LD is emitted by <Interview> from `interview`
+# below — it must NOT also be set on `jsonLd`.
+#
+# NOTE: the source page ALSO has three UN-LEVELLED <details class="iq"> previews
+# embedded inside the two module sections (one in M1, two in M2; no data-level).
+# The <Interview> component requires levels, so those three are reproduced
+# verbatim in the MDX body (not in this frontmatter). Only the 13 levelled
+# disclosures from the dedicated `#interview` panel feed <Interview> — so the FAQ
+# JSON-LD covers 13 Q&A, whereas the source page hand-duplicated all 16 (13
+# levelled + 3 previews) into its static FAQPage blob.
+#
+# The two per-module memory checks use ad-hoc frontmatter keys (mcM1, mcM2) read
+# via `frontmatter.*` in the body — the schema's single `mc` field is for
+# single-block lessons; the MDX `frontmatter` global still carries these extra
+# keys even though the collection schema strips them from `entry.data`.
+#
+# HTML-bearing strings use YAML folded block scalars (>-) so embedded ", ', &, <
+# and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'What Is Context? Context Windows & Tokens for LLMs'
+description: >-
+    Your bar: explain why an LLM cannot see your whole codebase, what actually fills the context
+    window, and why context retrieval — not the model — is where modern AI systems win or lose.
+keywords: 'context, context windows, tokens for llms, semantic search, retrieval augmented generation, context engineering, context window, working memory, failure modes, rag, embeddings, hybrid, bm25, rerank'
+path: 'context-engineering/lessons/what-is-context-and-context-as-query.html'
+ogImage: 'assets/og/context-engineering.png'
+ogImageAlt: 'Context Engineering · Engineering Vault learning track'
+accentVar: '--track-context'
+
+# —— masthead ——
+trackLabel: 'Context Engineering'
+kicker: 'Lesson 1 · Principal Track · Senior → Staff'
+h1Html: >-
+    What Is Context — and Why It's the <em>New Database Query</em>
+metaLine: '~12 min · 2 modules · the one idea that explains why two systems on the same model feel worlds apart'
+chips:
+    - 'Context'
+    - 'Context windows'
+    - 'Tokens for LLMs'
+    - 'Semantic search'
+    - 'Retrieval augmented generation'
+
+# —— wayfinding ——
+next:
+    href: 'context-selection-and-retrieval.html'
+    title: 'Context Selection & Retrieval'
+
+# —— routing (used only by the dynamic route) ——
+track: 'context-engineering'
+number: '0001'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: '"Context" for an LLM call is best described as…'
+      correct: 2
+      options:
+          - "A persistent connection the model keeps open to your application's primary database"
+          - "The model's long-term memory of every conversation it has previously had with users"
+          - "The complete set of text passed in for one call — the model's entire world for that inference"
+          - 'A cache of recent answers the model replays when it sees a similar question again later'
+    - q: 'Besides retrieved data, what else competes for the same fixed window budget?'
+      correct: 0
+      options:
+          - 'System prompt, tool definitions, conversation history, and reserved room for the answer'
+          - "The model's weights, the GPU memory, the network buffer, and the API rate limiter"
+          - 'The embedding index, the vector database, the reranker, and the chunk overlap setting'
+          - "Only the user's current question — everything else is stored outside the window entirely"
+    - q: 'A bigger context window does NOT fully solve retrieval because…'
+      correct: 3
+      options:
+          - 'Larger windows are only available on open-source models that teams cannot deploy in production'
+          - 'The model refuses to read more than a few thousand tokens regardless of the window size'
+          - 'Token budgets are a billing concept only and have no effect on the quality of the answer'
+          - 'Real systems still exceed it, cost and latency rise, and middle-of-context recall degrades'
+    - q: 'In "context is the new database query," the context-retrieval step plays the role of…'
+      correct: 1
+      options:
+          - 'The database engine itself — the durable store that holds the source-of-truth records'
+          - 'The SQL query — it decides what the answering engine ever gets to see for this request'
+          - 'The connection pool — it throttles how many requests reach the model concurrently'
+          - 'The response cache — it stores prior model outputs so identical questions skip the model'
+    - q: 'Two products use the identical LLM, yet one feels far smarter. The most likely reason is…'
+      correct: 2
+      options:
+          - 'The smarter one secretly fine-tuned the model on a large private proprietary dataset'
+          - 'The smarter one pays for priority API access that returns higher-quality model responses'
+          - 'The smarter one retrieves and assembles better context into the window before each call'
+          - 'The smarter one simply uses a much larger context window for every single request made'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'Define context, context window, token, and working context, and how they relate.'
+      a: >-
+          <b>Hit these points:</b> <b>token</b> = the unit (~&frac34; word) everything is counted in
+          &rarr; <b>context window</b> = the fixed max tokens per call, a hard ceiling like total RAM
+          &rarr; <b>context</b> = the actual text you pass for one call (prompt + history + retrieved +
+          tools + question) &rarr; <b>working context</b> = the curated subset you assemble for
+          <em>this</em> turn, the relevant few not all that exists &rarr; relationship: working context
+          is what you choose to spend the window's budget on, and context engineering is the act of
+          choosing it.
+    - level: 'core'
+      q: 'Besides the documents you retrieve, what else competes for the context window?'
+      a: >-
+          <b>Hit these points:</b> the system prompt and instructions &rarr; the tool / function
+          definitions (grow with the number of tools) &rarr; the running conversation history (grows
+          every turn — the quiet budget eater) &rarr; reserved space for the model's own answer &rarr;
+          only what's left is yours for retrieved context, which is why selection, not window size, is
+          the real constraint.
+    - level: 'core'
+      q: 'What is a token, and why are both the window limit and the bill measured in tokens rather than words or characters?'
+      a: >-
+          <b>Hit these points:</b> a token is the sub-word chunk the model actually processes —
+          roughly &frac34; of an English word, ~4 characters (illustrative) &rarr; the model never sees
+          raw text; the tokenizer splits input into tokens and the model reads and emits those &rarr;
+          so the natural unit for "how much fits" is tokens, which is why the window is a token
+          ceiling, not a character or word count &rarr; cost follows the same unit because you pay per
+          token of input and output processed &rarr; practical consequence: code, JSON, and rare words
+          tokenize less efficiently than plain prose, so a "small" file can spend more budget than
+          you'd guess from its character count.
+    - level: 'core'
+      q: "What's the difference between the context window and the working context?"
+      a: >-
+          <b>Hit these points:</b> the <b>context window</b> is the fixed physical ceiling — the max
+          tokens the model accepts for one call, the same for everyone on that model &rarr; the
+          <b>working context</b> is the curated subset <em>you</em> actually assemble for this specific
+          turn: the relevant few documents, not everything that exists &rarr; the window is capacity;
+          the working context is the choice you make inside it &rarr; you can have a huge window and a
+          terrible working context (dump the whole repo) or a small window and an excellent one (the
+          three right files) &rarr; context engineering is the work of building a good working context,
+          and the window only bounds how much room you have to do it.
+    - level: 'senior'
+      q: 'Why can''t an LLM "just read" a 5-million-line codebase to answer a question about it?'
+      a: >-
+          <b>Hit these points:</b> the model has no I/O — it can't open files; it only sees the window
+          &rarr; the codebase is orders of magnitude larger than any window &rarr; even the largest
+          windows cost more, run slower, and recall the middle poorly &rarr; so the system must
+          <em>select</em> a small relevant subset (files, symbols, dependencies) and pack it &rarr; the
+          problem is "which slice," not "read it all" &rarr; this is why Cursor and Claude Code build
+          retrieval rather than leaning on window size.
+    - level: 'senior'
+      q: 'A context bug and a SQL bug both return wrong data. Why is the context bug operationally scarier?'
+      a: >-
+          <b>Hit these points:</b> a SQL bug usually surfaces loudly — wrong rows, an error, a slow
+          query you can profile &rarr; a context bug is silent: the model gives a fluent, confident
+          answer from the wrong input and nothing throws &rarr; there's no stack trace pointing at
+          "wrong document retrieved" &rarr; so you have to add the observability a DB gives you for
+          free: log exactly what context was assembled per call, make retrieval auditable, and track
+          retrieval hit-rate, not just end-answer vibes.
+    - level: 'senior'
+      q: '"Just use a bigger window and the problem goes away." Why isn''t that a real fix?'
+      a: >-
+          <b>Hit these points:</b> a bigger window raises the ceiling, not the relevance — selection
+          still decides what the model reasons over &rarr; cost and latency scale with tokens sent, so
+          a 5&times; bigger context is roughly a 5&times; bigger bill and a slower response on every
+          call (numbers illustrative) &rarr; recall is uneven across a long window: facts in the middle
+          get "lost in the middle" while the model over-weights the start and end &rarr; irrelevant
+          text is not free padding — it dilutes signal and actively degrades the answer &rarr; and real
+          corpora still exceed any window, so you're choosing a subset regardless &rarr; the fix is a
+          better working context, not more raw capacity; reserve the big window for genuinely large
+          single inputs.
+    - level: 'senior'
+      q: 'An answer is wrong. How do you tell whether the context was wrong versus the model being incapable?'
+      a: >-
+          <b>Hit these points:</b> reproduce the failing case and dump exactly what context was
+          assembled and sent — if the needed fact isn't in the window, it's a retrieval/context problem
+          and a bigger model won't help &rarr; control test: paste the correct context in by hand and
+          re-ask the same model; if it now answers correctly, retrieval was the cause, not reasoning
+          &rarr; conversely, if the right context is present and it still fails, that points at a
+          reasoning/capability ceiling (multi-step logic, long synthesis) &rarr; check for "lost in the
+          middle" — try moving the relevant chunk to the start/end before blaming the model &rarr; the
+          durable version is instrumentation: log assembled context per call and track retrieval
+          hit-rate so you can attribute failures by class instead of guessing.
+    - level: 'staff'
+      q: 'Make the case that retrieval quality matters more than model quality — then steelman the opposite.'
+      a: >-
+          <b>For:</b> the model only reasons over what it's given; wrong context &rarr; wrong answer at
+          any model size; the model is a shared commodity while context is your design; retrieval fixes
+          compound across features and cost less than model upgrades. <b>Steelman against:</b> below a
+          capability floor a weak model can't reason over even perfect context (multi-step logic, long
+          synthesis), so there model choice is the binding constraint. <b>Synthesis:</b> fix retrieval
+          first — it's the common cause and the cheapest lever; pay for model capability once retrieval
+          is verified good and reasoning is provably the bottleneck.
+    - level: 'staff'
+      q: 'A teammate wants to "fix" wrong answers by switching to a 1M-token model and pasting the whole repo in. Where does this break at scale?'
+      a: >-
+          <b>Hit these points:</b> real repos still exceed even 1M tokens, so you're back to choosing a
+          subset &rarr; cost and latency scale with tokens sent, so you pay several-fold for
+          mostly-irrelevant text on every call &rarr; long-context recall is uneven — the relevant
+          lines get lost in the middle &rarr; noise actively lowers answer quality; irrelevant code is
+          not free padding &rarr; the durable fix is selection + retrieval evaluation, not a bigger
+          window; reserve the large window for genuinely large single inputs, not as a substitute for
+          retrieval.
+    - level: 'staff'
+      q: 'A strong engineer wants to spend the quarter upgrading the model to fix quality. Make the principal-level call on model-vs-retrieval investment.'
+      a: >-
+          <b>Hit these points:</b> don't decide by opinion — decide by evidence: instrument the failing
+          cases and attribute them by class (wrong context retrieved vs right context but bad
+          reasoning) before committing a quarter &rarr; in most products the dominant cause is
+          retrieval, not reasoning, so a model upgrade pays a flat tax on every call while leaving the
+          real defect in place &rarr; framing the trade-off: a model swap is a recurring per-token cost
+          increase with a one-time quality bump that any competitor can also rent; retrieval investment
+          is an asset you own that compounds across every feature and lowers cost &rarr; sequence it:
+          fix and evaluate retrieval first because it's the common cause and cheapest lever, then —
+          only if data shows reasoning is the binding constraint — spend on model capability with a
+          clear before/after metric &rarr; redirect the engineer's energy into retrieval evals and
+          observability, which also tells you <em>when</em> the model genuinely is the bottleneck
+          &rarr; the principal move is making it a measured decision with a kill criterion, not a
+          quarter-long bet on a hunch.
+    - level: 'design'
+      q: 'Design the context-retrieval layer for a coding assistant over a 2M-token monorepo with a 200k window.'
+      a: >-
+          <b>A strong answer covers:</b> you can show ~10% of the repo at most, so retrieval is the
+          product &rarr; index symbols + a dependency graph, not just flat text chunks &rarr; on a
+          query, gather candidates by exact symbol match (lexical) <em>and</em> semantic similarity,
+          then walk imports/call-sites for structural context &rarr; re-rank, then pack within budget:
+          signatures and docstrings over full bodies, the files named in the query first &rarr; reserve
+          fixed budget for history + the answer &rarr; keep the index fresh (re-embed/ctags on change)
+          or read on demand for always-fresh precision &rarr; instrument what was retrieved so you can
+          measure and improve hit-rate &rarr; name the trade-off: pre-indexed embeddings (fast, can go
+          stale) vs read-on-demand (fresh, more round-trips).
+    - level: 'design'
+      q: 'Design the context assembly for a customer-support assistant — knowledge base plus per-customer history — under a fixed token budget.'
+      a: >-
+          <b>A strong answer covers:</b> start from the budget — partition the window into fixed slices
+          (system prompt &amp; policy, KB passages, customer history, the current question, reserved
+          answer) so no source can starve the others &rarr; two retrieval sources with different
+          shapes: the KB is semi-static, so pre-embed it and retrieve top-N passages by hybrid lexical
+          + semantic match on the question; the customer's history (tickets, orders, entitlements) is
+          volatile and account-scoped, so fetch it live by customer ID rather than embedding it &rarr;
+          re-rank candidates and pack the highest-precision few — summarize or truncate older history
+          rather than dumping the full transcript &rarr; treat exact, high-stakes facts (current plan,
+          balance, open-ticket status) as live look-ups, never stale embeddings &rarr; freshness &amp;
+          correctness: invalidate KB chunks on article edits; scope every retrieval to the
+          authenticated customer so you never leak another account's data &rarr; observability: log the
+          assembled context per call and measure KB hit-rate and "had-the-right-fact" rate, not just
+          CSAT &rarr; failure modes: missing KB article &rarr; say "I don't know / escalate" rather
+          than hallucinate; conflicting KB vs history &rarr; prefer the customer-specific fact; budget
+          overflow &rarr; drop lowest-ranked KB passages before touching identity/policy &rarr; name
+          the trade-off: pre-indexed KB (fast, can lag edits) vs live history (fresh, exact, more
+          latency), and the privacy line that history must always be retrieved per-customer.
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Design-round framework</b> — drive any context-system prompt through these, out loud:
+rubric:
+    - 'Clarify scale: window size vs total corpus tokens, latency &amp; cost budget.'
+    - 'Candidate generation — lexical (BM25) + semantic (embeddings), hybrid.'
+    - 'Rank, then re-rank the top-N for precision.'
+    - 'Assemble within budget — signatures over full bodies; order for primacy/recency.'
+    - "Freshness — index invalidation; fetch volatile/exact data live, don't embed it."
+    - 'Observability — log the assembled context per call; measure retrieval hit-rate, not just answers.'
+    - 'Failure modes &amp; guardrails — missing / wrong / stale / conflicting / excessive.'
+
+# —— per-module memory-check banks (rendered by two <MemoryCheck> blocks) ——
+mcM1:
+    - q: 'What are the four budget tenants of the window besides retrieved context?'
+      a: 'system prompt, tool/function definitions, conversation history, and the reserve for the answer'
+    - q: "Why can't a bigger window fully fix retrieval?"
+      a: 'real systems exceed any window; bigger costs more + slower; models recall the middle of long contexts poorly (position bias)'
+    - q: 'A token is roughly how many words?'
+      a: '~&frac34; of an English word; ~4 characters'
+mcM2:
+    - q: 'In the pipeline mapping, SQL query corresponds to what?'
+      a: 'the context-retrieval step (it decides what the answering engine sees)'
+    - q: 'Why is a context bug more dangerous than a SQL bug?'
+      a: 'it fails silently — the model answers confidently from wrong input instead of erroring'
+    - q: 'One sentence: why does retrieval often beat model choice?'
+      a: "the model only reasons over what it's given; the model is rentable and shared, the context is yours to design"
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          1. Anthropic, "Effective context engineering for AI agents" &mdash; anthropic.com/engineering.
+          Context as a finite, curated resource; selection over dumping. <a href="#r1">↩</a>
+    - id: 's2'
+      html: >-
+          2. Anthropic, "Building effective agents" &mdash; anthropic.com/engineering. What competes for
+          the window; when retrieval is warranted. <a href="#r2">↩</a>
+    - id: 's3'
+      html: >-
+          3. Liu et al., 2023, "Lost in the Middle: How Language Models Use Long Contexts" &mdash;
+          arXiv:2307.03172. Position bias in long contexts. <a href="#r3">↩</a>
+    - id: 's4'
+      html: >-
+          4. Lewis et al., 2020, "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"
+          &mdash; arXiv:2005.11401; with Martin Fowler on query / read-model patterns &mdash;
+          martinfowler.com. Retrieval as the query layer feeding the model. <a href="#r4">↩</a>
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import MemoryCheck from '../../../components/MemoryCheck.astro';
+import {
+    Fig1,
+    Fig2,
+    Fig3,
+    Fig4,
+} from '../../../components/figures/context-engineering/what-is-context-and-context-as-query/index.ts';
+
+<div class="mission">
+    <strong>Your bar:</strong> explain why an LLM cannot see your whole codebase, name what actually
+    competes for the context window, and argue, against an interviewer pushing back, why{' '}
+    <em>context retrieval usually beats model choice</em>. By the end you can answer the north-star
+    question:{' '}
+    <b>why does one AI system feel far smarter than another when both run the same LLM?</b>
+    <sup><a href="#s1" id="r1">1</a></sup>
+</div>
+
+<p>The whole answer fits in one sentence. Each chip is one thing this lesson makes permanent:</p>
+
+<div class="chips">
+    <span class="chip">
+        An LLM only sees <b>its context window</b>
+    </span>
+    <span class="chip c2">
+        a fixed <b>token budget</b>, not your data
+    </span>
+    <span class="chip c3">
+        so the system must <b>retrieve &amp; assemble</b> what to show it
+    </span>
+    <span class="chip c4">
+        and that retrieval — not the model — <b>decides how smart it looks</b>
+    </span>
+</div>
+
+{/* ============ HERO ============ */}
+
+<Fig1 />
+
+<nav class="toc">
+    <a href="#m1">1 · What is context? (window · tokens · working context)</a>
+    <a href="#m2">2 · Context is the new database query</a>
+    <a href="#quiz">★ Retrieval practice</a>
+    <a href="#interview">★ Interview questions</a>
+</nav>
+
+{/* ============ MODULE 1 ============ */}
+{/* Each module is kept as ONE <section class="lvl" id="mN"> (matching the source
+DOM) so the .lvl top-border divider renders once per module. The figure
+components and the per-module <MemoryCheck> are nested inside the section,
+exactly where the source places them. The single un-levelled
+
+<details class="iq"> preview carries NO data-level, so the <Interview>
+component (which requires levels) cannot render it — it is reproduced verbatim
+inside the section. */}
+
+<section class="lvl" id="m1">
+    <div class="lvltop"><span class="num">1</span><h2>What Is Context?</h2></div>
+    <p class="tagline">Context = the model's <b>entire world</b> for one call. It has no other access to your data — no DB connection, no filesystem, no memory of last time. Only what you pack into the window.</p>
+
+    <h3>The window is a fixed budget — and you don't own all of it</h3>
+
+    <Fig2 />
+
+    <h3>The four words, pinned down</h3>
+    <table>
+        <thead><tr><th>Term</th><th>Simple definition</th><th>Unit / shape</th><th>One-line analogy</th></tr></thead>
+        <tbody>
+            <tr><td><b>Context</b></td><td>Everything the model can see for one call: prompt + history + retrieved data + tools + the question.</td><td>text</td><td>The model's entire RAM at runtime.</td></tr>
+            <tr><td><b>Context&nbsp;window</b></td><td>The fixed maximum tokens per call (input + output together).</td><td>tokens (a hard ceiling)</td><td>Total installed RAM — physical limit.</td></tr>
+            <tr><td><b>Token</b></td><td>The sub-word chunk the model counts in (~4 chars / ~&frac34; of a word).</td><td>~0.75 words</td><td>The byte the budget is measured in.</td></tr>
+            <tr><td><b>Working&nbsp;context</b></td><td>The curated subset you actually assemble for <em>this</em> turn — the relevant few, not all that exists.</td><td>text (selected)</td><td>The pages you put on the desk, not the whole library.</td></tr>
+        </tbody>
+    </table>
+
+    <div class="facts">
+        <div class="fact"><b>Is</b> Context is the complete set of text passed to the model for a single inference. The model is a pure function: <code>answer = f(context)</code>. Change nothing but the context and you change the answer.</div>
+        <div class="fact"><b>Why it exists</b> Models are stateless and have no I/O. They can't open a file, hit a DB, or recall yesterday. The only channel into the model is the window — so anything it must "know" has to be put there, every call.</div>
+        <div class="fact blue"><b>Like (world)</b> A consultant in a windowless room who answers one question from only the documents you slide under the door. Slide the wrong docs and you get a confident, wrong answer.</div>
+        <div class="fact blue"><b>Like (code)</b> A stateless request handler with no database connection — all inputs must arrive in the request body. The window <em>is</em> the request body, capped in size.</div>
+    </div>
+
+    <h3>Why an LLM can't just "see the whole codebase"</h3>
+
+    <Fig3 />
+
+    <div class="myth">
+        <div class="m">&#10007; "Bigger context windows make this problem go away."</div>
+        <div class="t">&#10003; They raise the ceiling, not the relevance. A 1M window still can't hold a 10M-token system, costs more, and suffers position bias — selection still decides quality.</div>
+    </div>
+    <div class="myth">
+        <div class="m">&#10007; "The model remembers our earlier files / last session."</div>
+        <div class="t">&#10003; It remembers nothing. If it isn't re-packed into this call's window, it does not exist to the model.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> The model only knows <span>what's in the window right now</span>. Context = a fixed token budget you must <span>spend wisely</span>, not a pipe to your data.</div>
+
+    <MemoryCheck items={frontmatter.mcM1} />
+
+    <details class="iq">
+        <summary>An engineer says "let's just use the 1M-token model and paste the whole repo in." Where is this wrong?</summary>
+        <div class="a">
+            <b>Hit these points:</b> real repos exceed even 1M tokens, so you still choose a subset &rarr; cost and latency scale with tokens sent, so you'd pay 5&times; for mostly-irrelevant text &rarr; long-context recall is uneven — relevant lines in the middle get "lost in the middle" &rarr; noise lowers signal: irrelevant code actively degrades answers, it isn't free padding &rarr; the right framing is "select the smallest sufficient context," not "fit more in."
+        </div>
+    </details>
+
+</section>
+
+{/* ============ MODULE 2 ============ */}
+
+<section class="lvl" id="m2">
+    <div class="lvltop"><span class="num">2</span><h2>Context Is the New Database Query</h2></div>
+    <p class="tagline">In classic software, the <b>query</b> fetches from the DB and the engine answers. In AI, the model is fixed — so the <b>context-retrieval step is the new query</b>, and that's where the engineering value (and the bugs) moved.</p>
+
+    <Fig4 />
+
+    <h3>The inversion that matters</h3>
+    <table>
+        <thead><tr><th></th><th>Classic software</th><th>AI system</th></tr></thead>
+        <tbody>
+            <tr><td><b>Fixed / commodity part</b></td><td>The query <em>language</em> (SQL is SQL)</td><td>The model (everyone can rent the same LLM)</td></tr>
+            <tr><td><b>Where the value lives</b></td><td>Schema + indexes + the DB's data</td><td>Retrieval + selection + assembly of context</td></tr>
+            <tr><td><b>Your competitive moat</b></td><td>Your data &amp; how you model it</td><td>Your data &amp; how you <em>retrieve and pack</em> it</td></tr>
+            <tr><td><b>A "bad query" causes</b></td><td>Wrong rows / slow scan</td><td>Wrong answer — silently, with full confidence</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Why retrieval quality usually beats model quality</h3>
+    <table>
+        <thead><tr><th>answer quality</th><th>Right context</th><th>Wrong context</th></tr></thead>
+        <tbody>
+            <tr><td><b>Best model</b></td><td>&#10003;&#10003; excellent</td><td>&#10007; confidently wrong</td></tr>
+            <tr><td><b>Smaller model</b></td><td>&#10003; surprisingly good</td><td>&#10007; wrong</td></tr>
+        </tbody>
+    </table>
+    <div class="pull">Read the <em>columns</em>, not the rows. Moving across columns (context) swings the outcome from right to wrong. Moving down the rows (model) only nudges it. <b>The column you control is context.</b></div>
+
+    <div class="facts">
+        <div class="fact"><b>Is</b> "Context as query" means the retrieval pipeline that selects and packs the window plays the exact role SQL plays against a database: it decides what the answering engine ever sees.</div>
+        <div class="fact"><b>Why it exists</b> The model is rentable and roughly the same for every competitor. So the differentiator shifts to the one thing you own and design: which facts reach the model, and how cleanly.</div>
+        <div class="fact blue"><b>Like (world)</b> Two lawyers, same law degree. The one who pulls the three relevant precedents wins; the one who dumps the whole library on the judge loses. Same brain, different brief.</div>
+        <div class="fact blue"><b>Like (code)</b> A read-model / query layer in CQRS: the store is generic, but the projection you build for a screen determines what the UI can show. Context retrieval is that projection for the LLM.</div>
+    </div>
+
+    <div class="myth">
+        <div class="m">&#10007; "To get smarter answers, upgrade the model."</div>
+        <div class="t">&#10003; Past a baseline, upgrade the <em>retrieval</em>. Right context on a mid model usually beats wrong context on the flagship — and costs less.</div>
+    </div>
+    <div class="myth">
+        <div class="m">&#10007; "A wrong answer means the model is dumb."</div>
+        <div class="t">&#10003; Usually it means the wrong context arrived. The failure is silent: the model can't tell you it got the wrong files — it just answers from what it has.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> <span>Context retrieval is the new SQL query.</span> The model is the commodity engine; <span>what you feed it</span> is your product.</div>
+
+    <MemoryCheck items={frontmatter.mcM2} />
+
+    <details class="iq">
+        <summary>Your AI feature gives wrong answers. A teammate wants to swap to the most expensive model. How do you push back as the senior in the room?</summary>
+        <div class="a">
+            <b>Hit these points:</b> first ask "is this a retrieval problem or a reasoning problem?" &rarr; instrument what context was actually sent for the failing cases — usually the right document wasn't retrieved, so a bigger model just reasons better over the wrong input &rarr; "right context + cheaper model often beats wrong context + flagship," and it's cheaper and faster &rarr; only after retrieval is verified good is model capability the bottleneck worth paying for &rarr; name the trade-off: model upgrade is a flat tax on every call; fixing retrieval compounds across every feature.
+        </div>
+    </details>
+
+    <details class="iq">
+        <summary>Frame "context is the new database query" for a VP who knows backend but not LLMs.</summary>
+        <div class="a">
+            <b>Hit these points:</b> in our stack the DB is the source of truth and the SQL query decides what a request sees &rarr; with LLMs the model is a rented, commodity engine — the same one our competitors use &rarr; so the leverage moves to the "query" that feeds it: which of our data we retrieve and how we pack it into a fixed token budget &rarr; that pipeline is where our differentiation, our cost, and most of our bugs now live &rarr; therefore we invest in retrieval &amp; context quality the way we'd invest in schema and indexing, not in chasing model versions.
+        </div>
+    </details>
+
+</section>
+
+{/* ============ QUIZ ============ */}
+
+<h2 class="sec" id="quiz">
+    Retrieval practice — test the two modules
+</h2>
+
+<Quiz items={frontmatter.quiz} />
+
+{/* ============ INTERVIEW PANEL — level tabs ============ */}
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+{/* ============ NAV ============ */}
+
+<div class="nav">
+    <span style="color:var(--muted)">
+        &#8592; <a href="../../index.html#grid">Engineering Vault</a>
+    </span>
+    <span>
+        Lesson 2:{' '}
+        <a href="context-selection-and-retrieval.html">Selection &amp; Retrieval &rarr;</a>
+    </span>
+</div>
+
+<Sources items={frontmatter.sources} />

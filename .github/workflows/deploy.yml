@@ -1,0 +1,71 @@
+name: Build & Deploy
+
+# Flow: feature branch -> PR -> develop -> PR -> main.
+# - PRs into develop or main run build + validate ONLY (no deploy), so errors
+#   are caught before merge.
+# - Deploy to GitHub Pages happens ONLY on push to main (i.e. when a PR merges
+#   into main). It never runs on PRs, and never on develop.
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main, develop]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    pages: write
+    id-token: write
+
+# One deployment at a time; don't cancel an in-progress deploy on main.
+concurrency:
+    group: pages-${{ github.ref }}
+    cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+    build:
+        name: Build & validate
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 10 # any pnpm 10 satisfies the lockfile; bump to match local if needed
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Build site
+              run: pnpm build
+
+            - name: Validate content (SEO, structured-data, sitemap)
+              run: node scripts/validate-content.cjs
+
+            - name: Check internal links
+              run: node scripts/check-broken-links.cjs
+
+            - name: Upload Pages artifact
+              uses: actions/upload-pages-artifact@v3
+              with:
+                  path: docs/
+
+    deploy:
+        name: Deploy to GitHub Pages
+        needs: build
+        # Only deploy on pushes to main, never on PRs or other branches.
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        runs-on: ubuntu-latest
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
+        steps:
+            - name: Deploy
+              id: deployment
+              uses: actions/deploy-pages@v4

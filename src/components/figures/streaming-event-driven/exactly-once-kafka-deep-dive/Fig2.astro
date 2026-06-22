@@ -1,0 +1,81 @@
+---
+/**
+ * streaming-event-driven · exactly-once-kafka-deep-dive · Figure 2 — the broker's
+ * sequence-number verdict (Level 1).
+ *
+ * Verbatim from the source HTML (figure + svg + figcaption). Marker refs (#arw)
+ * resolve against the shared arrowhead <defs> emitted once in the MDX body.
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 600 150"
+        role="img"
+        aria-label="Broker decision on incoming sequence number versus last accepted: less-or-equal is a duplicate ACKed but discarded; one greater is accepted; more than one greater is a gap rejected with OutOfOrderSequence"
+    >
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <rect x="220" y="14" width="160" height="38" rx="9" fill="#fff" stroke="#7a1f12"></rect>
+            <text
+                x="300"
+                y="32"
+                text-anchor="middle"
+                font-size="11"
+                font-weight="700"
+                fill="#7a1f12">broker compares seq vs last</text
+            >
+            <text x="300" y="46" text-anchor="middle" font-size="9" fill="#6b675f"
+                >per (PID, partition)</text
+            >
+            <!-- three branches -->
+            <rect x="14" y="92" width="180" height="48" rx="8" fill="#f7ecea" stroke="#9a2417"
+            ></rect>
+            <text
+                x="104"
+                y="110"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#9a2417">seq ≤ last → DUPLICATE</text
+            >
+            <text x="104" y="126" text-anchor="middle" font-size="9" fill="#6b675f"
+                >ACK producer, do NOT append</text
+            >
+            <rect x="210" y="92" width="180" height="48" rx="8" fill="#eef5ee" stroke="#2f5d3a"
+            ></rect>
+            <text
+                x="300"
+                y="110"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#2f5d3a">seq = last+1 → ACCEPT</text
+            >
+            <text x="300" y="126" text-anchor="middle" font-size="9" fill="#6b675f"
+                >append, advance counter</text
+            >
+            <rect x="406" y="92" width="180" height="48" rx="8" fill="#f7ecea" stroke="#9a2417"
+            ></rect>
+            <text
+                x="496"
+                y="110"
+                text-anchor="middle"
+                font-size="10.5"
+                font-weight="700"
+                fill="#9a2417">seq &gt; last+1 → GAP</text
+            >
+            <text x="496" y="126" text-anchor="middle" font-size="9" fill="#6b675f"
+                >reject: OutOfOrderSequence</text
+            >
+            <g stroke="#6b675f">
+                <line x1="260" y1="52" x2="120" y2="90" marker-end="url(#arw)"></line>
+                <line x1="300" y1="52" x2="300" y2="90" marker-end="url(#arw)"></line>
+                <line x1="340" y1="52" x2="480" y2="90" marker-end="url(#arw)"></line>
+            </g>
+        </g>
+    </svg>
+    <figcaption>
+        The retry vanishes (≤ last); the normal next batch advances (last+1); a hole is refused
+        (&gt; last+1).
+    </figcaption>
+</figure>

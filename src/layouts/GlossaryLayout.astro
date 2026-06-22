@@ -1,0 +1,104 @@
+---
+/**
+ * GlossaryLayout — the shared frame for the on-site GLOSSARY / RESOURCES pages
+ * (<track>/GLOSSARY.html and <track>/RESOURCES.html), replacing
+ * scripts/build-reference-pages.py.
+ *
+ * It serves BOTH the `glossary` and `resources` collections; `kind` selects the
+ * word ("Glossary" | "Resources"), the masthead/kicker label, and the
+ * description template. Everything else (name, accent token, og image, chips,
+ * keywords) is DERIVED from the track slug via src/data/tracks-reference.ts, so
+ * authoring is a plain .md with a single `title:` frontmatter line.
+ *
+ * It wraps BaseLayout with:
+ *   • extraCss={['assets/lesson.css']} — tokens.css + lesson.css ONLY. Matches
+ *     the pandoc-generated pages, which deliberately do NOT link interview.css.
+ *   • bodyScripts={[]}                  — no interview.js / reading-progress.js.
+ * The accent is forwarded via BaseLayout's `accentVar` prop, mirroring the live
+ * pages' `<html style="--accent:var(--track-…)">` (here emitted as a single
+ * :root style by BaseLayout).
+ *
+ * The chrome mirrors the generator's output: #hubbar (back-link + theme button +
+ * "<name> · <Word>"), then <main id="main"> → .kicker ("Reference · <Word>") →
+ * <h1> (the title) → .ltags chips → <slot/> (the rendered Markdown body with its
+ * leading H1 stripped — the layout renders the H1 from the title instead, so it
+ * isn't duplicated).
+ */
+import BaseLayout from './BaseLayout.astro';
+import {
+    TRACKS_REFERENCE,
+    deriveKeywords,
+    glossaryDescription,
+    resourcesDescription,
+} from '../data/tracks-reference';
+
+export interface Props {
+    kind: 'glossary' | 'resources';
+    track: string;
+    title: string;
+}
+
+const { kind, track, title } = Astro.props;
+
+const ref = TRACKS_REFERENCE[track];
+if (!ref) {
+    throw new Error(
+        `GlossaryLayout: no tracks-reference entry for track "${track}" (kind=${kind}). ` +
+            `Add it to src/data/tracks-reference.ts.`,
+    );
+}
+
+const isGlossary = kind === 'glossary';
+const word = isGlossary ? 'Glossary' : 'Resources';
+const fileWord = isGlossary ? 'GLOSSARY' : 'RESOURCES';
+
+const description = isGlossary ? glossaryDescription(ref.name) : resourcesDescription(ref.name);
+const keywords = deriveKeywords(ref);
+const path = `${track}/${fileWord}.html`;
+const ogImage = `assets/og/${ref.ogSlug}.png`;
+const ogImageAlt = `${ref.name} · Engineering Vault learning track`;
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/'); // normalize to one trailing slash
+
+// pandoc-style id for the H1 (matches the live page's <h1 id="…">). The body's
+// own leading H1 is stripped by the markdown component; we render the canonical
+// H1 here so the kicker → h1 → chips → body order matches the generator.
+const h1Id = title
+    .replace(/[^\p{L}\p{N}_\-.\s]/gu, '')
+    .replace(/\s+/g, '-')
+    .toLowerCase()
+    .replace(/^[^a-z]+/, '');
+---
+
+<BaseLayout
+    title={title}
+    description={description}
+    keywords={keywords}
+    path={path}
+    ogImage={ogImage}
+    ogImageAlt={ogImageAlt}
+    accentVar={ref.accentVar}
+    extraCss={['assets/lesson.css']}
+    bodyScripts={[]}
+    skipTarget="#main"
+>
+    <div class="wrap">
+        <nav id="hubbar">
+            <a href={`${base}index.html`}>&#8592; Engineering Vault</a>
+            <span style="display:flex;align-items:center;gap:.6rem"
+                ><button
+                    class="themebtn"
+                    onclick="toggleTheme()"
+                    aria-label="Toggle dark mode"
+                    title="Toggle dark / light">&#127763;</button
+                ><span style="color:var(--muted)">{ref.name} · {word}</span></span
+            >
+        </nav>
+        <main id="main" tabindex="-1">
+            <div class="kicker">Reference · {word}</div>
+            <h1 id={h1Id}>{title}</h1>
+            <div class="ltags">{ref.chips.map((c) => <span class="lt">{c}</span>)}</div>
+            <slot />
+        </main>
+    </div>
+</BaseLayout>

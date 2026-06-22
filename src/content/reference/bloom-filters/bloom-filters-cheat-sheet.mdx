@@ -1,0 +1,64 @@
+---
+publishedAt: '2026-06-21'
+title: "Bloom Filter Cheat Sheet: Formulas & Tuning"
+description: "A one-page Bloom filter reference: the m, k, and false-positive-rate formulas, when to use one (LSM reads, dedup, cache admission), and when to avoid it."
+keywords: "bloom filter, formulas, tuning, bloom filters, data structures, false positive, probabilistic, sizing, lsm, cuckoo, counting, hash, membership"
+path: "bloom-filters/reference/bloom-filters-cheat-sheet.html"
+ogImage: "assets/og/bloom-filters.png"
+ogImageAlt: "Bloom Filters · Engineering Vault learning track"
+accentVar: "--track-bloom"
+trackLabel: "Bloom Filters · Reference"
+kicker: "Bloom filters · quick reference"
+h1Html: "Bloom filter cheat sheet"
+chips:
+    - "Bloom filter"
+    - "Formulas"
+    - "Tuning"
+    - "Bloom filters"
+    - "Data structures"
+skin: "bloom"
+track: "bloom-filters"
+---
+
+  <div class="one"><strong>Never lies about absence; only exaggerates presence.</strong>
+    "Not present" is certain; "present" is probable. That asymmetry is why it guards expensive lookups.</div>
+
+  <h2>What it is</h2>
+  <ul>
+    <li>An <code>m</code>-bit array + <code>k</code> independent hash functions. Stores no keys.</li>
+    <li><code>add(x)</code>: set the k bits x hashes to. <code>contains(x)</code>: "no" if any bit is 0, else "probably".</li>
+    <li><strong>No delete</strong> in the standard form — bits are shared. Use a counting Bloom filter to delete.</li>
+  </ul>
+
+  <h2>The math</h2>
+  <table>
+    <tr><th>Quantity</th><th>Formula</th></tr>
+    <tr><td>False-positive rate</td><td><code>(1 − e^(−kn/m))^k</code></td></tr>
+    <tr><td>Optimal hash count</td><td><code>k = (m/n)·ln 2</code></td></tr>
+    <tr><td>FP rate at optimal k</td><td><code>(0.5)^k</code></td></tr>
+  </table>
+  <table>
+    <tr><th>Bits/item (m/n)</th><th>Optimal k</th><th>≈ FP rate</th></tr>
+    <tr><td>8</td><td>6</td><td>~2%</td></tr>
+    <tr><td>10</td><td>7</td><td>~1%</td></tr>
+    <tr><td>16</td><td>11</td><td>~0.05%</td></tr>
+  </table>
+
+  <h2>Where it lives / when not to</h2>
+  <ul>
+    <li><strong>Use</strong>: skip disk reads in LSM-tree stores (RocksDB, Cassandra), dedup, cache/CDN admission.</li>
+    <li><strong>Avoid</strong>: when you need deletes, exact answers, or to enumerate the set — it can't do any of those.</li>
+    <li>Watch <strong>saturation</strong>: FP rate climbs as it fills past its design n. Rebuild or partition.</li>
+  </ul>
+
+  <h2>Variants (one line each)</h2>
+  <ul>
+    <li><strong>Counting</strong>: counters not bits → supports delete (more space).</li>
+    <li><strong>Scalable</strong>: chain of filters that grows to hold a target FP rate as n rises.</li>
+    <li><strong>Cuckoo filter</strong>: alternative supporting delete with better locality at low FP rates.</li>
+  </ul>
+
+  <footer>
+    Pairs with Lesson 1 · <a href="../lessons/what-is-a-bloom-filter.html">What a Bloom filter is</a>.
+    Sources: Bloom (1970, CACM); Mitzenmacher &amp; Broder survey; NIST FP-rate analysis; RocksDB wiki.
+  </footer>

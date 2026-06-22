@@ -1,0 +1,124 @@
+---
+/**
+ * SiteFooter — the full `<footer>` of docs/index.html, ported verbatim and
+ * composed from the shared atoms (GithubStar + SocialLinks). Reused by lessons,
+ * so the brand copy / disclosure block stay identical site-wide.
+ *
+ * Structure (matches index.html exactly):
+ *   footer
+ *     .fcta   → .msg + GithubStar(footer variant, no title) + 2× a.fpill (Issues / Fork)
+ *     .fgrid  → .fcol.fbrand (avatar.jpg + blurb)
+ *               .fcol.fquick (h4 + quickLinks)
+ *               .fcol.fconnect (h4 + SocialLinks labelled = .socrow)
+ *     .fstart → "Not sure where to start? <track> … start there →"
+ *     .fdisc  → "A Note About These Notes" disclosure
+ *
+ * Props let lessons override the quick-links and the recommended-start track;
+ * the defaults reproduce the home page byte-for-byte. The GitHub repo URL and
+ * the .fdisc copy are NOT props — they are brand-constant across every page.
+ */
+import GithubStar from './GithubStar.astro';
+import SocialLinks from './SocialLinks.astro';
+
+interface QuickLink {
+    href: string;
+    label: string;
+    external?: boolean; // → target="_blank" rel="noopener"
+}
+interface RecommendedStart {
+    name: string; // e.g. "AI Agents"
+    href: string; // first-lesson href (verbatim, relative)
+}
+interface Props {
+    quickLinks?: QuickLink[];
+    recommendedStart?: RecommendedStart;
+}
+
+const REPO = 'https://github.com/dineshbyte/engineering-learning-hub';
+// Base-absolute asset paths (matches BaseLayout's url() convention) so the avatar
+// resolves correctly regardless of page depth — a bare-relative path would 404 if
+// this footer is ever rendered on a nested page (lessons/interview/reference).
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+
+const {
+    quickLinks = [
+        { href: '#grid', label: 'All tracks' },
+        { href: `${base}latest.html`, label: 'Latest' },
+        { href: `${base}rss.xml`, label: 'RSS' },
+        { href: `${base}privacy.html`, label: 'Privacy' },
+        { href: REPO, label: 'Browse on GitHub', external: true },
+    ],
+    recommendedStart = {
+        name: 'AI Agents',
+        href: 'ai-agents/lessons/ai-agents-from-first-principles.html',
+    },
+} = Astro.props;
+---
+
+<footer>
+    <div class="fcta">
+        <span class="msg"
+            ><strong>Found this useful?</strong> A ⭐ on GitHub helps others find it — and issues / PRs
+            are very welcome.</span
+        >
+        <GithubStar href={REPO} />
+        <a class="fpill" href={`${REPO}/issues`} target="_blank" rel="noopener"
+            >🐛 Issues &amp; ideas</a
+        >
+        <a class="fpill" href={`${REPO}/fork`} target="_blank" rel="noopener">🍴 Fork</a>
+    </div>
+    <div class="fgrid">
+        <div class="fcol fbrand">
+            <img
+                src={`${base}assets/avatar.jpg`}
+                alt="Dinesh"
+                width="44"
+                height="44"
+                loading="lazy"
+            />
+            <div class="ftxt">
+                Built by <b>Dinesh</b><br />A public engineering vault — lessons, architecture
+                reviews &amp; AI systems notes, citation-grounded and built while learning.
+            </div>
+        </div>
+        <div class="fcol fquick">
+            <h4>Quick links</h4>
+            {
+                quickLinks.map((l) =>
+                    l.external ? (
+                        <a href={l.href} target="_blank" rel="noopener">
+                            {l.label}
+                        </a>
+                    ) : (
+                        <a href={l.href}>{l.label}</a>
+                    ),
+                )
+            }
+        </div>
+        <div class="fcol fconnect">
+            <h4>Connect</h4>
+            <SocialLinks variant="labelled" />
+        </div>
+    </div>
+    <div class="fstart">
+        Not sure where to start? <a href={recommendedStart.href}>{recommendedStart.name}</a> is the most
+        popular first track — <a href={recommendedStart.href}>start there →</a>
+    </div>
+    <div class="fdisc">
+        <h3>A Note About These Notes</h3>
+        <p>Engineering Vault is my public learning repository.</p>
+        <p>
+            I use it to document engineering concepts, architecture lessons, AI systems, interview
+            topics, and production learnings as I study and explore them.
+        </p>
+        <p>
+            I strive to reference original sources where possible and update content as my
+            understanding evolves. If you find an error or have a better perspective, feel free to {
+                ' '
+            }
+            <a href="mailto:kumardinesh0521@gmail.com?subject=Engineering%20Vault%20feedback"
+                >reach out</a
+            >.
+        </p>
+    </div>
+</footer>

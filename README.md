@@ -29,13 +29,13 @@ No build step, no dependencies, no tracking — just open the pages.
 ## 📚 Tracks
 
 | Track                           | Focus                                                                                                       | Lessons |
-|---------------------------------|-------------------------------------------------------------------------------------------------------------|:-------:|
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------- | :-----: |
 | 🤖 **AI Agents**                | The agent stack bottom-up: LLM → tools → runtime → memory → MCP → multi-agent → production                  |    4    |
 | 🧩 **Context Engineering**      | Why same-LLM systems differ: context, retrieval, RAG, chunking, memory, eval, caching & security            |    9    |
 | 🌐 **REST API**                 | The design decisions a senior interview probes: methods, idempotency, pagination, caching, auth, versioning |   11    |
 | 🧮 **Bloom Filters**            | Probabilistic membership, Foundation → Staff: the asymmetry, sizing math, failure modes, variants           |    4    |
-| 🛰️ **Distributed Systems**     | Failure, time, consensus, idempotency keys                                                                  |    3    |
-| 🗄️ **Storage Engines**         | Indexes, B-trees, LSM compaction                                                                            |    2    |
+| 🛰️ **Distributed Systems**      | Failure, time, consensus, idempotency keys                                                                  |    3    |
+| 🗄️ **Storage Engines**          | Indexes, B-trees, LSM compaction                                                                            |    2    |
 | 🔒 **Transactions & Isolation** | ACID, isolation levels, MVCC, SSI                                                                           |    3    |
 | 🌊 **Streaming & Event-Driven** | The log, exactly-once, watermarks                                                                           |    3    |
 | 📐 **Applied Systems Design**   | A repeatable method, estimation, consistent hashing                                                         |    2    |
@@ -48,7 +48,7 @@ Each track ships **lessons** (infographic-first HTML with an interactive quiz + 
 The lessons are plain HTML with no build step — **open `docs/index.html` in any browser** and click into a track.
 
 > 💡 **Go live:** enable **GitHub Pages** (Settings → Pages → branch `main` / `/docs`) to publish the hub at
-`https://dineshbyte.github.io/engineering-learning-hub/`.
+> `https://dineshbyte.github.io/engineering-learning-hub/`.
 
 ## 🎨 Design
 

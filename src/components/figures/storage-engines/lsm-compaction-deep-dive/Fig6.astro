@@ -1,0 +1,141 @@
+---
+/**
+ * lsm-compaction-deep-dive · Figure 6 — Level 6 "L0, write stalls &
+ * back-pressure": flushes feed L0 (overlapping, files piling up = compaction
+ * debt), compaction drains toward L1/L2…, and the BACK-PRESSURE box
+ * (slowdown_trigger → throttle, stop_trigger → STOP).
+ *
+ * Copied VERBATIM from docs/storage-engines/lsm-compaction-deep-dive.html
+ * (figure + svg + figcaption). It lives as an .astro component, NOT inline in the
+ * MDX, because MDX's JSX parser is unreliable with raw inline SVG that uses
+ * kebab-case attributes (text-anchor, font-size, stroke-width, marker-end, …).
+ *
+ * The source page declared its arrowhead markers (#arw / #arwA / #arwG) ONCE in a
+ * hidden top-of-body <svg defs>. Because each figure is now an isolated component,
+ * the #arw (fill #6b675f) and #arwG (fill #2f5d3a) markers this figure references
+ * via marker-end="url(#…)" are inlined here in a local <defs> so it resolves
+ * standalone (verbatim from the source defs).
+ */
+---
+
+<figure>
+    <svg
+        viewBox="0 0 560 210"
+        role="img"
+        aria-label="Flushes feed L0 from the top; compaction drains it toward L1 and below. If the write rate exceeds the drain rate, L0 files pile up, compaction debt accrues, and the engine throttles then stops writes."
+    >
+        <defs>
+            <marker
+                id="arw"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker
+            >
+            <marker
+                id="arwG"
+                viewBox="0 0 10 10"
+                refX="8.5"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+                ><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker
+            >
+        </defs>
+        <g font-family="ui-sans-serif,system-ui,sans-serif">
+            <rect x="30" y="14" width="120" height="34" rx="8" fill="#f1eee2" stroke="#7a1f12"
+            ></rect>
+            <text x="90" y="35" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12"
+                >writes → flush</text
+            >
+            <line x1="90" y1="48" x2="90" y2="64" stroke="#6b675f" marker-end="url(#arw)"></line>
+            <!-- L0 with piling files -->
+            <rect
+                x="18"
+                y="66"
+                width="270"
+                height="58"
+                rx="8"
+                fill="#f7ecea"
+                stroke="#9a2417"
+                stroke-width="1.4"></rect>
+            <text x="36" y="84" font-size="10" font-weight="700" fill="#9a2417">L0</text>
+            <text x="36" y="98" font-size="8" fill="#9a2417">overlapping</text>
+            <g fill="#fff" stroke="#9a2417"
+                ><rect x="96" y="74" width="26" height="40" rx="3"></rect><rect
+                    x="126"
+                    y="74"
+                    width="26"
+                    height="40"
+                    rx="3"></rect><rect x="156" y="74" width="26" height="40" rx="3"></rect><rect
+                    x="186"
+                    y="74"
+                    width="26"
+                    height="40"
+                    rx="3"></rect><rect x="216" y="74" width="26" height="40" rx="3"></rect><rect
+                    x="246"
+                    y="74"
+                    width="26"
+                    height="40"
+                    rx="3"></rect></g
+            >
+            <text x="200" y="138" text-anchor="middle" font-size="9" fill="#9a2417"
+                >files pile up = "compaction debt" (pending bytes)</text
+            >
+            <!-- drain -->
+            <line x1="288" y1="95" x2="330" y2="95" stroke="#2f5d3a" marker-end="url(#arwG)"></line>
+            <text x="309" y="87" text-anchor="middle" font-size="8" fill="#2f5d3a">drain</text>
+            <rect x="334" y="78" width="100" height="34" rx="8" fill="#fff" stroke="#1f3a5a"></rect>
+            <text x="384" y="99" text-anchor="middle" font-size="10" fill="#1f3a5a">L1, L2, …</text>
+            <!-- back-pressure -->
+            <rect
+                x="448"
+                y="40"
+                width="100"
+                height="120"
+                rx="10"
+                fill="#fbfaf2"
+                stroke="#9a2417"
+                stroke-width="1.4"></rect>
+            <text
+                x="498"
+                y="60"
+                text-anchor="middle"
+                font-size="9.5"
+                font-weight="700"
+                fill="#9a2417">BACK-PRESSURE</text
+            >
+            <text x="498" y="84" text-anchor="middle" font-size="8.5" fill="#111110"
+                >slowdown_trigger</text
+            >
+            <text x="498" y="97" text-anchor="middle" font-size="8" fill="#6b675f"
+                >→ throttle writes</text
+            >
+            <text
+                x="498"
+                y="122"
+                text-anchor="middle"
+                font-size="8.5"
+                fill="#9a2417"
+                font-weight="700">stop_trigger</text
+            >
+            <text x="498" y="135" text-anchor="middle" font-size="8" fill="#6b675f"
+                >→ STOP writes</text
+            >
+            <text x="498" y="152" text-anchor="middle" font-size="7.5" fill="#6b675f"
+                >until L0 drains</text
+            >
+            <text x="200" y="180" text-anchor="middle" font-size="9.5" fill="#111110"
+                >write rate &gt; drain rate ⇒ L0 grows ⇒ engine deliberately throttles, then stops</text
+            >
+        </g>
+    </svg>
+    <figcaption>
+        A read must consult <em>every</em> L0 file (ranges overlap, so binary search can't pick one) —
+        a fat L0 slows every read AND signals the tree is falling behind.
+    </figcaption>
+</figure>

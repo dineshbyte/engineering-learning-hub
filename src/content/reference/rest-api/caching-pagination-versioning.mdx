@@ -1,0 +1,109 @@
+---
+publishedAt: '2026-06-21'
+title: "Caching, Pagination & Versioning Cheat Sheet"
+description: "A REST cheat sheet on the six architectural constraints, the Richardson maturity model, HATEOAS, and HTTP method semantics — quick reference for API interviews."
+keywords: "rest constraints, maturity, status codes, http methods, rest, api, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors"
+path: "rest-api/reference/caching-pagination-versioning.html"
+ogImage: "assets/og/rest-api.png"
+ogImageAlt: "REST API · Engineering Vault learning track"
+ogTitle: "Caching, Pagination & Versioning Cheat Sheet · Engineering Vault"
+accentVar: "--track-rest"
+trackLabel: "REST API Mastery · Reference"
+kicker: "Reference · Performance &amp; Evolution"
+h1Html: "Caching, Pagination &amp; Versioning"
+chips:
+    - "Caching"
+    - "Pagination"
+    - "Versioning"
+    - "Status codes"
+    - "HTTP methods"
+lede: "The compressed essence for quick pre-interview review. Three things that decide whether an API stays fast and stays alive as it grows."
+skin: "rest"
+track: "rest-api"
+---
+
+  <h2>Caching &amp; conditional requests</h2>
+  <p>Cacheability is a core REST constraint: responses label themselves, intermediaries reuse them, round-trips vanish. <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching">MDN</a> · <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC&nbsp;9110</a>.</p>
+  <table>
+    <thead><tr><th>Cache-Control directive</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>max-age=N</code></td><td>Fresh for <code>N</code> seconds; serve without revalidating.</td></tr>
+      <tr><td><code>s-maxage=N</code></td><td>Freshness for <em>shared</em> caches (CDN/proxy); overrides <code>max-age</code> there.</td></tr>
+      <tr><td><code>public</code></td><td>Any cache, including shared, may store it.</td></tr>
+      <tr><td><code>private</code></td><td>Only the end-user's browser may store it — never a shared cache.</td></tr>
+      <tr><td><code>no-store</code></td><td>Never store anywhere. For sensitive data.</td></tr>
+      <tr><td><code>no-cache</code></td><td>May store, but must revalidate with the origin <em>before</em> each reuse.</td></tr>
+      <tr><td><code>must-revalidate</code></td><td>Once stale, must revalidate — no serving stale on error.</td></tr>
+      <tr><td><code>stale-while-revalidate=N</code></td><td>Serve stale instantly for up to <code>N</code>s while refreshing in the background.</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:.86rem;color:var(--muted)"><code>Expires</code> is the legacy absolute-date equivalent of <code>max-age</code>; <code>Cache-Control</code> wins where both appear.</p>
+  <dl>
+    <dt>Validators — freshness ran out, is it still good?</dt>
+    <dd><code>ETag</code> is an opaque version tag (strong, or weak <code>W/"…"</code>). Client echoes it in <code>If-None-Match</code>; if unchanged the server returns <code>304 Not Modified</code> <span class="why">with no body — the cheap win.</span> <code>Last-Modified</code> + <code>If-Modified-Since</code> is the timestamp-based fallback.</dd>
+    <dt>Conditional writes — optimistic concurrency</dt>
+    <dd><code>GET</code> hands back an <code>ETag</code> → client sends <code>If-Match: "…"</code> on <code>PUT</code>/<code>PATCH</code> → server returns <code>412 Precondition Failed</code> if the resource changed underneath. <span class="why">Prevents lost updates without locking.</span> <code>If-None-Match: *</code> = create only if it doesn't already exist.</dd>
+    <dt>Vary — partition the cache key</dt>
+    <dd><code>Vary</code> tells caches which request headers change the response (<code>Accept</code>, <code>Authorization</code>). <span class="why">Pitfall: authenticated responses must be <code>private</code>/<code>no-store</code> or <code>Vary: Authorization</code> — otherwise a shared cache serves one user's data to another.</span></dd>
+  </dl>
+
+  <h2>Pagination</h2>
+  <p>Two strategies, one decision. Pick by access pattern, not habit. <a href="https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api">GitHub</a> · <a href="https://docs.stripe.com/api/pagination">Stripe</a>.</p>
+  <table>
+    <thead><tr><th>&nbsp;</th><th>Offset / limit</th><th>Cursor / keyset</th></tr></thead>
+    <tbody>
+      <tr><td>Deep-page cost</td><td class="n"><code>O(offset)</code> scan-and-discard</td><td class="y">flat, index-backed</td></tr>
+      <tr><td>Consistency under writes</td><td class="n">dups &amp; skips as rows shift</td><td class="y">stable</td></tr>
+      <tr><td>Jump-to-page</td><td class="y">yes</td><td class="n">no</td></tr>
+      <tr><td>Exact total</td><td class="y">easy</td><td class="n">expensive</td></tr>
+      <tr><td>Best for</td><td>human page UIs</td><td>large streaming feeds</td></tr>
+    </tbody>
+  </table>
+  <dl>
+    <dt>Cursor query pattern</dt>
+    <dd><code>WHERE (sort_key, id) &gt; last ORDER BY sort_key, id LIMIT n</code>. Hand back an <strong>opaque cursor</strong> (base64-encoded) plus <code>has_more</code>. <span class="why">The tuple comparison breaks ties on <code>id</code> so no row is skipped or repeated. Keep sort + filter stable for a cursor's lifetime, or it points at nothing meaningful.</span></dd>
+    <dt>Totals</dt>
+    <dd>Exact counts get expensive at scale — omit or approximate them rather than scan the table on every page.</dd>
+    <dt>Exemplars</dt>
+    <dd>GitHub: <code>?page=</code> + a <code>Link</code> header (<code>rel="next"/"prev"/"last"</code>), and <code>before</code>/<code>after</code> cursors. Stripe: <code>starting_after</code>/<code>ending_before</code> + <code>has_more</code>.</dd>
+  </dl>
+
+  <h2>Versioning &amp; evolution</h2>
+  <p>The skill is changing an API thousands of clients depend on without breaking them. <a href="https://www.rfc-editor.org/rfc/rfc8594.html">RFC&nbsp;8594 (Sunset)</a>.</p>
+  <table>
+    <thead><tr><th>Breaking — needs a new version</th><th>Non-breaking — ship freely</th></tr></thead>
+    <tbody>
+      <tr><td>Remove or rename a field</td><td>Add an <em>optional</em> request field</td></tr>
+      <tr><td>Change a field's type or meaning</td><td>Add a response field</td></tr>
+      <tr><td>Make an optional field required</td><td>Add a new endpoint</td></tr>
+      <tr><td>Tighten validation; change defaults</td><td>Add an enum value <span class="why">(if clients tolerate unknowns)</span></td></tr>
+      <tr><td>Remove an endpoint or enum value</td><td>&nbsp;</td></tr>
+    </tbody>
+  </table>
+  <table>
+    <thead><tr><th>Where to put the version</th><th>Pros</th><th>Cons</th></tr></thead>
+    <tbody>
+      <tr><td>URI path <code>/v1/…</code></td><td>Visible; trivial to route, test, cache</td><td>Couples version to URL; "not pure REST"</td></tr>
+      <tr><td>Custom header <code>API-Version</code></td><td>Clean, stable URLs</td><td>Invisible; easy to forget; hard to test in a browser</td></tr>
+      <tr><td>Media type <code>application/vnd.x+json</code></td><td>Most RESTful; HATEOAS-friendly</td><td>Complex; poor tooling support</td></tr>
+    </tbody>
+  </table>
+  <dl>
+    <dt>Senior rules</dt>
+    <dd>Prefer <strong>additive evolution</strong> + the <strong>tolerant reader</strong> (clients ignore unknown fields). Cut a version only on real breakage. Expose only <em>major</em> versions. Pin existing clients <span class="why">— Stripe pins a version per account; GitHub uses a date-based version header.</span></dd>
+    <dt>Deprecation lifecycle</dt>
+    <dd>announce → parallel-run old &amp; new → emit <code>Deprecation</code> + <code>Sunset</code> headers (RFC&nbsp;8594) → publish a migration guide with a long window → monitor real usage → remove.</dd>
+  </dl>
+
+  <footer>
+    Reference doc · part of the REST API teaching workspace ·
+    see <a href="../lessons/api-versioning-strategies.html">Lesson&nbsp;5</a> ·
+    <a href="../lessons/pagination-at-scale.html">Lesson&nbsp;6</a> ·
+    <a href="../lessons/caching-and-conditional-requests.html">Lesson&nbsp;7</a> ·
+    sources:
+    <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching">MDN HTTP caching</a>,
+    <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC&nbsp;9110</a>,
+    <a href="https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api">GitHub pagination</a>,
+    <a href="https://docs.stripe.com/api/pagination">Stripe pagination</a>,
+    <a href="https://www.rfc-editor.org/rfc/rfc8594.html">RFC&nbsp;8594 Sunset</a>.
+  </footer>

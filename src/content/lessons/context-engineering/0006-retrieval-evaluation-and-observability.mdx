@@ -1,0 +1,566 @@
+---
+publishedAt: '2026-06-21'
+# ─── context-engineering · Lesson 6 — Retrieval Evaluation & Observability ─────
+# Converted from
+# docs/context-engineering/lessons/retrieval-evaluation-and-observability.html
+# into the MDX-hybrid lesson pattern (mirrors context-engineering/0001 and
+# bloom-filters/0001). FRONTMATTER carries the full lesson contract (head +
+# masthead + wayfinding) PLUS the structured body data lifted out of the prose:
+# the 5-question quiz, the 13 LEVELLED interview Q&A (incl. the 7-item design
+# rubric), the three per-module memory-check banks, and the five footnote sources.
+# Validated at build time by the `lessons` collection schema
+# (src/content.config.ts → src/schema/lesson.ts). The FAQ JSON-LD is emitted by
+# <Interview> from `interview` below — it must NOT also be set on `jsonLd`.
+#
+# NOTE: the source page ALSO has three UN-LEVELLED <details class="iq"> previews
+# embedded inside the three module sections (one each in M1, M2, M3; no
+# data-level). The <Interview> component requires levels, so those three are
+# reproduced verbatim in the MDX body (not in this frontmatter). Only the 13
+# levelled disclosures from the dedicated `#interview` panel feed <Interview> — so
+# the FAQ JSON-LD covers 13 Q&A, whereas the source page hand-duplicated all 16
+# (13 levelled + 3 previews) into its static FAQPage blob.
+#
+# The three per-module memory checks use ad-hoc frontmatter keys (mcM1, mcM2,
+# mcM3) read via `frontmatter.*` in the body — the schema's single `mc` field is
+# for single-block lessons; the MDX `frontmatter` global still carries these extra
+# keys even though the collection schema strips them from `entry.data`.
+#
+# HTML-bearing strings use YAML folded block scalars (>-) so embedded ", ', &, <
+# and > need NO escaping.
+
+# —— SEO / <head> ——
+title: 'RAG Evaluation: recall@k, RAGAS & Observability'
+description: >-
+    Your bar: measure retrieval separately from generation, name recall@k / precision@k / MRR / nDCG
+    and the RAGAS-style answer-quality metrics, and explain golden sets, offline vs online eval, and
+    the tracing that tells you which stage failed.
+keywords: 'rag evaluation, recall@k, ragas, observability, semantic search, retrieval augmented generation, context engineering, context window, working memory, failure modes, rag, embeddings, hybrid, bm25'
+path: 'context-engineering/lessons/retrieval-evaluation-and-observability.html'
+ogImage: 'assets/og/context-engineering.png'
+ogImageAlt: 'Context Engineering · Engineering Vault learning track'
+accentVar: '--track-context'
+
+# —— masthead ——
+trackLabel: 'Context Engineering'
+kicker: 'Lesson 6 · Principal Track · Senior → Staff'
+h1Html: >-
+    Retrieval Evaluation &amp; <em>Observability</em>
+metaLine: >-
+    ~14 min · 3 modules · you can't improve what you don't measure — how to grade retrieval, grade
+    the answer, and see which stage failed
+chips:
+    - 'RAG evaluation'
+    - 'Recall@k'
+    - 'RAGAS'
+    - 'Observability'
+    - 'Semantic search'
+
+# —— wayfinding ——
+prev:
+    href: 'architecture-reviews-and-production-design.html'
+    title: 'Architecture Reviews & Production Design'
+next:
+    href: 'pre-retrieval-and-advanced-rag.html'
+    title: 'Pre-retrieval & Advanced RAG'
+
+# —— routing (used only by the dynamic route) ——
+track: 'context-engineering'
+number: '0006'
+
+# —— retrieval-practice quiz (rendered by <Quiz>) ——
+quiz:
+    - q: 'Which metric is the most important for first-stage RAG retrieval, and what does it measure?'
+      correct: 3
+      options:
+          - 'precision@k — the fraction of the retrieved top-k results that turn out relevant'
+          - 'nDCG — graded relevance discounted by the rank position of each retrieved item'
+          - 'MRR — the reciprocal rank of the first relevant document averaged over queries'
+          - 'recall@k — whether at least one relevant document is present in the top-k'
+    - q: 'Why must you measure retrieval separately from the generated answer?'
+      correct: 1
+      options:
+          - 'Because the generator is always correct, so any failure must originate in retrieval'
+          - 'Because generation can only use what retrieval surfaced — low recall caps the answer'
+          - 'Because retrieval metrics are cheaper, so the answer metrics can be safely skipped'
+          - 'Because the two halves share one score that already isolates the failing component'
+    - q: 'Which RAGAS-style metric detects hallucination, and against what does it check?'
+      correct: 0
+      options:
+          - 'Faithfulness — every claim in the answer must be supported by the retrieved context'
+          - "Answer relevance — the response must directly address the user's original question"
+          - 'Context precision — the retrieved chunks must be relevant and ranked in a good order'
+          - 'Context recall — retrieval must capture all the facts the ideal answer would require'
+    - q: 'An answer scores high on faithfulness but is still wrong. The most likely cause is…'
+      correct: 2
+      options:
+          - 'The model is too small to reason over the context it was correctly given here'
+          - 'The judge model is biased toward verbose answers and inflated the faithfulness'
+          - 'Retrieval gave wrong or incomplete context, so it faithfully repeated bad input'
+          - 'The answer was off-topic, which faithfulness scoring is specifically built to detect'
+    - q: 'What turns "the bot was wrong" into "document X wasn''t retrieved"?'
+      correct: 1
+      options:
+          - 'A bigger context window that lets the model read far more of the corpus per call'
+          - 'Tracing each call: the query, retrieved IDs+scores, packed chunks, context, answer'
+          - 'Switching to a flagship model so the generation step makes fewer mistakes overall'
+          - 'Averaging thumbs-up rates so a single online signal pinpoints the failing stage'
+
+# —— interview Q&A (rendered by <Interview>; also the FAQPage JSON-LD source) ——
+interview:
+    - level: 'core'
+      q: 'Define recall@k and precision@k, and say which one matters most for first-stage RAG retrieval.'
+      a: >-
+          <b>Hit these points:</b> <b>recall@k</b> = is at least one relevant doc present in the top-k
+          — about <em>presence</em> &rarr; <b>precision@k</b> = what fraction of the top-k are actually
+          relevant — about <em>purity</em> &rarr; recall@k is the most important RAG metric because
+          nothing downstream can use a doc that wasn't retrieved &rarr; so you tune first-stage
+          retrieval to maximize recall@k first, then buy precision later with a reranker &rarr; one
+          line: recall = "did we fetch it at all," precision = "how clean is the top-k."
+    - level: 'core'
+      q: 'What do MRR and nDCG measure, and when do you reach for each?'
+      a: >-
+          <b>Hit these points:</b> <b>MRR</b> (mean reciprocal rank) = how high the <em>first</em>
+          relevant result sits, averaged over queries — reach for it when one good hit is enough, like
+          a lookup &rarr; <b>nDCG</b> = graded, position-discounted relevance — rewards putting the best
+          doc at the top &rarr; nDCG is what you use to judge the <em>reranker</em> / final ordering,
+          not just whether the doc is present &rarr; recall@k says "is it in the cart"; nDCG says "is it
+          on top of the cart."
+    - level: 'core'
+      q: 'Name the four RAGAS-style answer-quality metrics and the one question each answers.'
+      a: >-
+          <b>Hit these points:</b> <b>faithfulness</b>/groundedness — is every claim supported by the
+          retrieved context? (catches hallucination) &rarr; <b>answer relevance</b> — does the answer
+          actually address the question? (catches off-topic/evasive) &rarr; <b>context precision</b> —
+          are the retrieved chunks relevant <em>and</em> well-ranked? (catches noisy/mis-ordered
+          context) &rarr; <b>context recall</b> — did retrieval capture all the info the ideal answer
+          needs? (catches missing facts; needs ground truth) &rarr; first two grade generation, last
+          two grade retrieval.
+    - level: 'core'
+      q: "What is a golden set, and what's the difference between offline and online eval?"
+      a: >-
+          <b>Hit these points:</b> a <b>golden set</b> = labelled triples — (query, relevant doc IDs,
+          ideal answer) — versioned in source control &rarr; <b>offline eval</b> replays that set in CI
+          before deploy and reports recall@k / nDCG / faithfulness vs the last release — a deterministic
+          regression gate &rarr; <b>online eval</b> reads production behaviour after deploy: thumbs,
+          deflection/escalation, citation-clicks, follow-up/rephrase rate &rarr; offline catches
+          regressions you anticipated; online catches the long tail you didn't &rarr; you curate online
+          misses back into the golden set.
+    - level: 'senior'
+      q: 'Your RAG answers look ~90% correct on a spot-check, but users complain on hard queries. Which metric do you pull first, and what would it reveal?'
+      a: >-
+          <b>Hit these points:</b> compute <b>recall@k</b> per query on a labelled set, not aggregate
+          answer accuracy &rarr; the spot-check is biased toward easy queries the model can answer from
+          parametric memory, so it hides the failures &rarr; low recall@k on the hard slice means the
+          relevant doc never reached the window — a retrieval miss, not a reasoning miss &rarr; segment
+          recall by query type / length to find where first-stage drops it &rarr; only after recall is
+          high do precision@k and nDCG (reranker order) become the lever worth pulling.
+    - level: 'senior'
+      q: "Faithfulness scores are high but users still report wrong answers. What's happening, and which metrics confirm it?"
+      a: >-
+          <b>Hit these points:</b> faithful means "grounded in the retrieved context" — but the context
+          can be wrong or incomplete, so the model is faithfully repeating junk &rarr; this is the
+          grounded-but-wrong quadrant: a <em>retrieval</em> bug masquerading as a good answer &rarr;
+          check <b>context recall</b> (did retrieval capture all the ideal answer needs) and <b>context
+          precision</b> (are chunks relevant + well-ranked) &rarr; also check <b>answer relevance</b>
+          for off-topic-but-grounded replies &rarr; conclusion: faithfulness is necessary, not
+          sufficient — pair it with context-side metrics so you don't "fix" generation when retrieval
+          is the cause.
+    - level: 'senior'
+      q: '"Just optimize precision@k everywhere — fewer, cleaner chunks." Where does that advice mislead you?'
+      a: >-
+          <b>Hit these points:</b> first-stage you want <em>recall</em>, not tidiness — dropping chunks
+          to raise precision can drop the one relevant doc and cap the answer &rarr; recall@k is the
+          ceiling; precision can't recover a doc that's no longer in the set &rarr; the right ordering
+          is recall first (first-stage retrieval), then buy precision/nDCG with a reranker on top of
+          high recall &rarr; also: aggregate precision can look great while a hard slice silently misses
+          — always segment &rarr; the metric to optimize depends on the stage; conflating the two stages
+          is the trap.
+    - level: 'senior'
+      q: 'You want to grade faithfulness on every production call. How do you do it, and what are the risks?'
+      a: >-
+          <b>Hit these points:</b> use <b>LLM-as-judge</b> — feed answer + retrieved context, score
+          each claim's support 0&ndash;1 &rarr; it scales where human labelling can't &rarr; risks:
+          judge bias (verbosity, position, self-preference), drift across model versions, and cost per
+          call &rarr; mitigate by calibrating against a human-labelled sample, pinning the prompt +
+          judge version, and spot-auditing disagreements &rarr; frame it: the judge is a calibrated
+          proxy to <em>scale</em> grading, not the definition of truth &rarr; track judge-vs-human
+          agreement as its own metric so you notice drift.
+    - level: 'staff'
+      q: '"The bot gave a wrong answer last Tuesday." With tracing in place, how do you go from that complaint to a specific stage?'
+      a: >-
+          <b>Hit these points:</b> pull the trace by request ID / timestamp &rarr; check the retrieved
+          IDs+scores — was the relevant doc fetched at all? if absent, it's a <b>recall</b> miss (fix
+          first-stage retrieval) &rarr; if present but low-ranked or dropped at packing, it's a
+          <b>ranking/budget</b> bug (add rerank / adjust budget) &rarr; if it made the assembled context
+          yet the answer ignored it, it's a <b>generation/faithfulness</b> bug (prompt/model) &rarr; add
+          the failing query to the <b>golden set</b> so offline eval regresses on it &rarr; the trace is
+          what turns "the bot was wrong" into a specific, fixable stage — without it the context bug is
+          silent.
+    - level: 'staff'
+      q: 'Offline eval is green but users still complain. What does that tell you, and what do you change?'
+      a: >-
+          <b>Hit these points:</b> green offline only means you pass the cases <em>you wrote</em> — the
+          golden set has coverage gaps &rarr; the complaints are the long tail offline never modelled
+          &rarr; lean on <b>online signals</b> (thumbs-down, escalation, rephrase/follow-up rate) to
+          surface failing real queries &rarr; pull their <b>traces</b> to localize the failing stage
+          (recall vs ranking vs generation) &rarr; curate those queries (with correct doc IDs + ideal
+          answers) <em>back into the golden set</em> so the next offline run regresses on them &rarr;
+          the eval set is a living artifact, not a one-time deliverable.
+    - level: 'staff'
+      q: 'A teammate proposes a single end-to-end "answer correctness" score as the one metric to rule them all. Make the principal-level call.'
+      a: >-
+          <b>Hit these points:</b> one number for the whole pipeline hides <em>where</em> it broke —
+          you can't tell a retrieval miss from a hallucination, so you'll fix the wrong half &rarr; a
+          high end-to-end score can mask low recall@k: the model bluffs from parametric memory on easy
+          queries while quietly missing the hard ones &rarr; the durable design measures the two halves
+          separately (retrieval metrics + RAGAS-style answer metrics) plus per-call tracing to attribute
+          failures &rarr; keep a headline end-to-end number for trend-watching, but never as the
+          <em>only</em> signal or the debugging tool &rarr; the principal move: instrument by stage,
+          decide by attribution, not by a single vanity metric.
+    - level: 'design'
+      q: 'Design the eval and observability for a production RAG support assistant from zero. What do you build first and why?'
+      a: >-
+          <b>A strong answer covers:</b> build the <b>golden set</b> first — (query, relevant doc IDs,
+          ideal answer), seeded by synthetic generation + human curation, versioned so it diffs in
+          review &rarr; wire <b>offline eval</b> into CI: replay the set and report recall@k / nDCG for
+          retrieval and faithfulness / answer relevance / context precision-recall for generation,
+          gating deploys on regression vs the last release &rarr; instrument <b>tracing</b> from day one
+          — query, retrieved IDs+scores, packed chunks, assembled context, answer — so any failure maps
+          to a stage &rarr; after launch add <b>online signals</b> (thumbs, deflection/escalation,
+          citation-clicks, rephrase rate) and curate the misses back into the golden set &rarr; scale
+          grading with an <b>LLM-as-judge</b> calibrated against human labels, tracking judge-vs-human
+          agreement &rarr; name the trade-off: offline is deterministic but only covers what you
+          imagined; online is real but lagging and noisy — you need both, plus tracing to connect a
+          complaint to a cause.
+    - level: 'design'
+      q: 'Design a golden-set plus CI gate for retrieval specifically. How do you build it, keep it honest, and decide when to block a deploy?'
+      a: >-
+          <b>A strong answer covers:</b> start from labelled triples — for retrieval the load-bearing
+          part is (query, relevant doc IDs); seed queries from real production logs + synthetic
+          generation, then have humans verify the relevant-doc labels &rarr; version it in source
+          control so additions/edits are reviewable and the set diffs over time &rarr; the CI job
+          replays every query through first-stage retrieval and computes <b>recall@k</b> (the gate
+          metric) plus nDCG for ordering, comparing against the last release &rarr; block the deploy on
+          a recall@k regression beyond a small tolerance, and on per-slice drops (segment by query
+          type/length so an aggregate average can't hide a hard slice cratering) &rarr; keep it honest:
+          refresh labels when the corpus changes (a "relevant" doc can be deleted/edited), guard against
+          the set going stale, and avoid leakage where the index was tuned to the eval queries &rarr;
+          feed online recall misses back in so the gate keeps catching real failures &rarr; trade-off: a
+          tight tolerance catches more regressions but creates flaky/noisy gates; a loose one ships
+          silent recall drops — pick the threshold from the cost of a missed answer in this product.
+
+# —— design-round rubric (rendered by <Interview> above the design questions) ——
+rubricIntro: >-
+    <b>Design-round framework</b> — drive any eval/observability prompt through these, out loud:
+rubric:
+    - 'Clarify scope: measure retrieval and generation <em>separately</em>; what does "good" mean (recall@k target, faithfulness floor)?'
+    - 'Golden set — (query, relevant doc IDs, ideal answer), seeded by synthetic generation + human curation, versioned in source control.'
+    - 'Offline eval in CI — replay the set, report recall@k / nDCG / faithfulness vs last release, gate deploys on regression.'
+    - 'Online signals — thumbs, deflection/escalation, citation-clicks, follow-up/rephrase rate; find what offline missed.'
+    - 'Tracing — log per call: query, retrieved IDs+scores, packed chunks, assembled context, answer.'
+    - 'Scaled grading — LLM-as-judge for faithfulness/relevance, calibrated against a human-labelled sample.'
+    - 'Close the loop &amp; guardrails — curate online failures back into the golden set; alert on recall/faithfulness drops.'
+
+# —— per-module memory-check banks (rendered by three <MemoryCheck> blocks) ——
+mcM1:
+    - q: 'Which metric does first-stage retrieval optimize, and why is it the most important?'
+      a: "recall@k — if the relevant doc isn't in the top-k, nothing downstream can recover it"
+    - q: 'recall@k vs precision@k in one line each?'
+      a: 'recall = is a relevant doc present in top-k; precision = fraction of top-k that are relevant'
+    - q: 'What does nDCG add over recall@k?'
+      a: 'graded, position-discounted relevance — rewards putting the best doc at the top (judging the reranker)'
+mcM2:
+    - q: 'Which metric detects hallucination, and against what does it check?'
+      a: 'faithfulness / groundedness — every claim must be supported by the retrieved context'
+    - q: 'Which of the four metrics needs a ground-truth answer?'
+      a: 'context recall — you can only tell if all needed info was captured against an ideal answer'
+    - q: 'Name two caveats of LLM-as-judge.'
+      a: 'bias (verbosity/position/self-preference) and the need for calibration vs human labels'
+mcM3:
+    - q: 'What three things make up a golden-set entry?'
+      a: 'the query, the relevant doc IDs, and the ideal answer (versioned)'
+    - q: 'Offline vs online eval in one line each?'
+      a: 'offline = regression on the golden set in CI pre-deploy; online = production signals (thumbs, escalation, citation-click, rephrase)'
+    - q: 'What must a trace log to localize a failure?'
+      a: 'query, retrieved doc IDs+scores, chunks packed into the window, the assembled context, and the answer'
+
+# —— footnote sources (rendered by <Sources>; verbatim citation HTML) ——
+sources:
+    - id: 's1'
+      html: >-
+          Anthropic, "Effective context engineering for AI agents" &mdash; anthropic.com/engineering.
+          Context as a finite resource you must measure and curate; evaluating what reaches the model.
+    - id: 's2'
+      html: >-
+          Karpukhin et al., 2020, "Dense Passage Retrieval for Open-Domain QA" &mdash; arXiv:2004.04906.
+          Retrieval evaluated by top-k recall; first-stage retrieval optimizes recall@k.
+    - id: 's3'
+      html: >-
+          Anthropic, "Introducing Contextual Retrieval" &mdash; anthropic.com/news/contextual-retrieval.
+          Measuring retrieval failure rate (recall) to compare retrieval strategies on a labelled set.
+    - id: 's4'
+      html: >-
+          Robertson &amp; Zaragoza, 2009, "The Probabilistic Relevance Framework: BM25 and Beyond."
+          Ranking quality metrics (precision/recall, position-discounted relevance) for ordered
+          retrieval results.
+    - id: 's5'
+      html: >-
+          RAGAS-style RAG evaluation vocabulary &mdash; faithfulness, answer relevance, context
+          precision, context recall; LLM-as-judge as a scaled, calibration-dependent proxy for human
+          grading. Numbers in this lesson are illustrative.
+---
+
+import Quiz from '../../../components/Quiz.astro';
+import Interview from '../../../components/Interview.astro';
+import Sources from '../../../components/Sources.astro';
+import MemoryCheck from '../../../components/MemoryCheck.astro';
+import {
+    Fig1,
+    Fig2,
+    Fig3,
+    Fig4,
+    Fig5,
+    Fig6,
+} from '../../../components/figures/context-engineering/retrieval-evaluation-and-observability/index.ts';
+
+<div class="mission">
+    <strong>Your bar:</strong> measure <em>retrieval separately from generation</em>, name and apply
+    the retrieval metrics (<b>recall@k, precision@k, MRR, nDCG</b>) and the RAGAS-style
+    answer-quality metrics (<b>faithfulness, answer relevance, context precision/recall</b>), and
+    design the eval loop — <em>golden set, offline regression, online signals, and tracing</em>. By
+    the end you can answer:{' '}
+    <b>
+        the bot was wrong — was it retrieval, generation, or the eval set that failed, and how do
+        you know?
+    </b>
+    <sup><a href="#s1" id="r1">1</a></sup>
+</div>
+
+<p>
+    The whole lesson is one loop: measure the two halves, then trace to the failing one. Each chip
+    is one thing it makes permanent:
+</p>
+
+<div class="chips">
+    <span class="chip">
+        Generation can only use <b>what retrieval surfaced</b>
+    </span>
+    <span class="chip c2">
+        so grade <b>retrieval</b> and <b>the answer</b> separately
+    </span>
+    <span class="chip c3">
+        regress on a <b>golden set</b> offline; watch <b>signals</b> online
+    </span>
+    <span class="chip c4">
+        and <b>trace every call</b> to see which stage failed
+    </span>
+</div>
+
+{/* ============ HERO ============ */}
+
+<Fig1 />
+
+<nav class="toc">
+    <a href="#m1">1 · Retrieval metrics (did we fetch the right thing?)</a>
+    <a href="#m2">2 · RAG answer-quality metrics (beyond retrieval)</a>
+    <a href="#m3">3 · Eval sets, offline vs online, observability</a>
+    <a href="#quiz">&#9733; Retrieval practice</a>
+    <a href="#interview">&#9733; Interview questions</a>
+</nav>
+
+{/* ============ MODULE 1 ============ */}
+{/* Each module is kept as ONE <section class="lvl" id="mN"> (matching the source
+DOM) so the .lvl top-border divider renders once per module. The figure
+components and the per-module <MemoryCheck> are nested inside the section,
+exactly where the source places them. The single un-levelled
+<details class="iq"> preview carries NO data-level, so the <Interview>
+component (which requires levels) cannot render it — it is reproduced verbatim
+inside the section. */}
+
+<section class="lvl" id="m1">
+    <div class="lvltop"><span class="num">1</span><h2>Retrieval Metrics — Did We Even Fetch the Right Thing?</h2></div>
+    <p class="tagline">Generation can only reason over what retrieval surfaced. So measure retrieval <b>on its own</b>, before the answer. If the right doc never made the top-k, <em>no model fixes it</em> — you're optimizing the wrong half.</p>
+
+    <h3>Why retrieval gets its own scoreboard</h3>
+
+    <Fig2 />
+
+    <h3>The metrics, pinned down</h3>
+    <table>
+        <thead><tr><th>Metric</th><th>What it measures</th><th>When you care</th></tr></thead>
+        <tbody>
+            <tr><td><b>recall@k</b></td><td>Is at least one relevant doc in the top-k? (Did we fetch it at all.)</td><td>The most important RAG metric; tune <em>first-stage</em> retrieval to maximize it.</td></tr>
+            <tr><td><b>precision@k</b></td><td>What fraction of the top-k are actually relevant?</td><td>When noise crowds the window; junk chunks waste budget &amp; distract.</td></tr>
+            <tr><td><b>MRR</b></td><td>Mean reciprocal rank — how high the <em>first</em> relevant result sits.</td><td>When position matters and one good hit is enough (e.g. lookup).</td></tr>
+            <tr><td><b>nDCG</b></td><td>Graded relevance, position-discounted — rewards best-at-the-top.</td><td>Judging the <em>reranker</em> / final order, not just presence.</td></tr>
+            <tr><td><b>hit-rate</b></td><td>Share of queries with &ge;1 relevant doc retrieved (recall@k averaged).</td><td>A single headline number for "are we fetching the answer?"</td></tr>
+        </tbody>
+    </table>
+
+    <div class="facts">
+        <div class="fact"><b>Is</b> recall@k = "did the relevant doc make the top-k at all"; precision@k = "how clean is the top-k." Recall is about <em>presence</em>, precision is about <em>purity</em>.</div>
+        <div class="fact"><b>Why it exists</b> The two stages of Lesson 2 optimize different things: first-stage retrieval buys <em>recall@k</em>, the reranker buys <em>precision / nDCG@top-n</em>. Separate metrics let you tune each stage independently.</div>
+        <div class="fact blue"><b>Like (world)</b> A library search: recall = "is the right book somewhere in the cart you wheeled out"; nDCG = "is it on top of the cart, not buried under twenty wrong ones."</div>
+        <div class="fact blue"><b>Like (code)</b> Recall@k is like a test asserting the expected row is <em>in</em> the result set; nDCG is asserting it's <em>ordered first</em>. Different assertions, different bugs.</div>
+    </div>
+
+    <div class="myth">
+        <div class="m">&#10007; "A high end-to-end answer score means retrieval is fine."</div>
+        <div class="t">&#10003; It can mask a low recall@k — the model bluffs from parametric memory on easy queries while quietly missing the hard ones. Measure retrieval directly.</div>
+    </div>
+    <div class="myth">
+        <div class="m">&#10007; "Optimize precision@k everywhere; fewer chunks is cleaner."</div>
+        <div class="t">&#10003; First-stage you want <em>recall</em> — don't drop the answer to look tidy. Buy precision later with a reranker (nDCG), on top of high recall.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> <span>recall@k = did we fetch it at all.</span> Everything downstream is wasted if recall is low &mdash; so it's the <span>first metric</span> you optimize.</div>
+
+    <MemoryCheck items={frontmatter.mcM1} />
+
+    <details class="iq">
+        <summary>Your RAG answers look 90% correct on a spot-check, but users complain on hard queries. Which retrieval metric do you pull first, and what would it reveal?</summary>
+        <div class="a">
+            <b>Hit these points:</b> compute <b>recall@k</b> per query on a labelled set, not aggregate answer accuracy &rarr; the spot-check is biased toward easy queries the model can answer from parametric memory &rarr; low recall@k on the hard slice means the relevant doc never reached the window — a retrieval miss, not a reasoning miss &rarr; segment recall by query type / length to find where first-stage drops it &rarr; only after recall is high do precision@k and nDCG (reranker order) become the lever worth pulling.
+        </div>
+    </details>
+
+</section>
+
+{/* ============ MODULE 2 ============ */}
+
+<section class="lvl" id="m2">
+    <div class="lvltop"><span class="num">2</span><h2>RAG Answer-Quality Metrics — Beyond Retrieval</h2></div>
+    <p class="tagline">Once retrieval is good, grade the <b>generation against the retrieved context</b>. Four RAGAS-style metrics answer three questions: is the answer <em>grounded</em>, is it <em>relevant</em>, and is the context that fed it clean and complete?</p>
+
+    <h3>The 2&times;2 that tells you which half to fix</h3>
+
+    <Fig3 />
+
+    <h3>The four RAGAS-style metrics</h3>
+    <table>
+        <thead><tr><th>Metric</th><th>Question it answers</th><th>What it catches</th><th>Needs</th></tr></thead>
+        <tbody>
+            <tr><td><b>Faithfulness</b> / groundedness</td><td>Is every claim supported by the retrieved context?</td><td>Hallucination — invented or unsupported facts.</td><td>answer + context</td></tr>
+            <tr><td><b>Answer relevance</b></td><td>Does the answer actually address the question?</td><td>Off-topic, evasive, or padded answers.</td><td>answer + question</td></tr>
+            <tr><td><b>Context precision</b></td><td>Are the retrieved chunks relevant <em>and</em> well-ranked?</td><td>Noisy / mis-ordered context wasting the window.</td><td>context + question</td></tr>
+            <tr><td><b>Context recall</b></td><td>Did retrieval capture all the info the ideal answer needs?</td><td>Missing facts — incomplete context.</td><td>context + <b>ground truth</b></td></tr>
+        </tbody>
+    </table>
+
+    <h3>Scoring them at scale: LLM-as-judge</h3>
+
+    <Fig4 />
+
+    <div class="facts">
+        <div class="fact"><b>Is</b> Faithfulness checks the answer against the <em>context</em> (hallucination); answer relevance checks it against the <em>question</em> (on-topic). Two independent failure axes.</div>
+        <div class="fact"><b>Why it exists</b> Retrieval metrics say nothing about the text the model wrote. You can fetch perfectly and still hallucinate, or answer fluently but off-topic — so the generation half needs its own scoreboard.</div>
+        <div class="fact blue"><b>Like (world)</b> Grading an essay: faithfulness = "does it stay true to the cited sources"; relevance = "does it answer the actual prompt." A footnoted essay can still miss the question.</div>
+        <div class="fact blue"><b>Like (code)</b> Faithfulness is an integration test (answer vs the real context); relevance is an acceptance test (answer vs the user's intent). Both must pass to ship.</div>
+    </div>
+
+    <div class="myth">
+        <div class="m">&#10007; "If it cites a source, the answer is faithful."</div>
+        <div class="t">&#10003; A citation can be irrelevant or mis-summarized. Faithfulness checks each <em>claim</em> against the context, not whether a citation marker exists.</div>
+    </div>
+    <div class="myth">
+        <div class="m">&#10007; "LLM-as-judge scores are objective ground truth."</div>
+        <div class="t">&#10003; Judges carry bias (verbosity, position, self-preference) and drift. Calibrate against human labels on a sample; use the judge to <em>scale</em>, not to define truth.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> Faithful but irrelevant, or relevant but unfaithful &mdash; <span>measure both halves</span> or you'll fix the wrong one.</div>
+
+    <MemoryCheck items={frontmatter.mcM2} />
+
+    <details class="iq">
+        <summary>Faithfulness scores are high but users still report wrong answers. What's happening, and which metrics confirm it?</summary>
+        <div class="a">
+            <b>Hit these points:</b> faithful means "grounded in the retrieved context" — but the context can be wrong or incomplete, so the model is faithfully repeating junk &rarr; this is the bottom-left quadrant: a <em>retrieval</em> bug masquerading as a good answer &rarr; check <b>context recall</b> (did retrieval capture all the ideal answer needs) and <b>context precision</b> (are chunks relevant + well-ranked) &rarr; also check <b>answer relevance</b> for off-topic-but-grounded replies &rarr; conclusion: faithfulness alone is necessary, not sufficient — pair it with context-side metrics so you don't "fix" generation when retrieval is the cause.
+        </div>
+    </details>
+
+</section>
+
+{/* ============ MODULE 3 ============ */}
+
+<section class="lvl" id="m3">
+    <div class="lvltop"><span class="num">3</span><h2>Eval Sets, Offline vs Online, and Observability</h2></div>
+    <p class="tagline">Metrics need something to run against. Build a <b>golden set</b>, regress on it <em>offline</em> before deploy, watch <em>online</em> signals after, and <b>trace every call</b> so a vague "it was wrong" becomes "doc X wasn't retrieved."</p>
+
+    <h3>The golden set, and the two eval loops it powers</h3>
+
+    <Fig5 />
+
+    <h3>What a trace must capture</h3>
+
+    <Fig6 />
+
+    <div class="facts">
+        <div class="fact"><b>Is</b> A golden set is labelled triples — (query, relevant doc IDs, ideal answer) — versioned in source control. Offline eval replays it; online eval reads production behaviour signals.</div>
+        <div class="fact"><b>Why it exists</b> Offline catches <em>regressions</em> deterministically before deploy; online catches the <em>long tail</em> offline never imagined. Tracing connects a complaint to the exact failing stage.</div>
+        <div class="fact blue"><b>Like (world)</b> Offline = a pre-flight checklist run every time; online = pilots reporting real turbulence; the trace = the black-box recorder that says which system failed.</div>
+        <div class="fact blue"><b>Like (code)</b> Offline eval is your CI test suite (regression gate); online signals are production metrics/alerts; tracing is distributed tracing across the retrieval&rarr;generation spans.</div>
+    </div>
+
+    <div class="myth">
+        <div class="m">&#10007; "Offline eval on the golden set is enough to ship safely."</div>
+        <div class="t">&#10003; The golden set only covers what you imagined. Online signals (thumbs, escalation, rephrase rate) find the real-world misses you must curate back in.</div>
+    </div>
+    <div class="myth">
+        <div class="m">&#10007; "Log the final answer; that's enough to debug."</div>
+        <div class="t">&#10003; The answer alone can't tell retrieval from generation failure. Log doc IDs+scores, packed chunks, and the assembled context — or the bug stays silent.</div>
+    </div>
+
+    <div class="rule"><span>&#128229; Memory rule:</span> <span>Offline eval stops regressions; online signals find what offline missed;</span> tracing tells you <span>which stage failed</span>.</div>
+
+    <MemoryCheck items={frontmatter.mcM3} />
+
+    <details class="iq">
+        <summary>"The bot gave a wrong answer last Tuesday." With tracing in place, how do you go from that complaint to a root cause?</summary>
+        <div class="a">
+            <b>Hit these points:</b> pull the trace by request ID / timestamp &rarr; check layer 2 — was the relevant doc in the retrieved IDs+scores? if absent, it's a <b>recall</b> miss (fix first-stage retrieval) &rarr; if present but low-ranked or dropped at packing (layer 3), it's a <b>ranking/budget</b> bug (add rerank / adjust budget) &rarr; if it was in the assembled context (layer 4) yet the answer ignored it, it's a <b>generation/faithfulness</b> bug (prompt/model) &rarr; add the failing query to the <b>golden set</b> so offline eval catches the regression next time &rarr; the trace is what turns "the bot was wrong" into a specific, fixable stage.
+        </div>
+    </details>
+
+</section>
+
+{/* ============ QUIZ ============ */}
+
+<h2 class="sec" id="quiz">
+    Retrieval practice — test the three modules
+</h2>
+
+<Quiz items={frontmatter.quiz} />
+
+{/* ============ INTERVIEW PANEL — level tabs ============ */}
+
+<h2 class="sec" id="interview">
+    Interview — pick your bar
+</h2>
+
+<p class="tagline">
+    Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+    failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open
+    design round (a different axis, not a harder level).
+</p>
+
+<Interview
+    items={frontmatter.interview}
+    rubricIntro={frontmatter.rubricIntro}
+    rubric={frontmatter.rubric}
+/>
+
+{/* ============ NAV ============ */}
+
+<div class="nav">
+    <span style="color:var(--muted)">
+        &#8592; <a href="../../index.html#grid">Engineering Vault</a>
+    </span>
+    <span>
+        Lesson 7:{' '}
+        <a href="pre-retrieval-and-advanced-rag.html">
+            Pre-retrieval &amp; Advanced RAG &rarr;
+        </a>
+    </span>
+</div>
+
+<Sources items={frontmatter.sources} />

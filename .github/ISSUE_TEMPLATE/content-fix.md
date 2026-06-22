@@ -1,13 +1,14 @@
 ---
-name: "📝 Content fix (accuracy / clarity / typo)"
+name: '📝 Content fix (accuracy / clarity / typo)'
 about: Report a factual error, an unclear explanation, a broken diagram, or a typo in a lesson
-title: "[fix] <track>/<page>: short description"
-labels: ["content", "fix"]
+title: '[fix] <track>/<page>: short description'
+labels: ['content', 'fix']
 ---
 
 ## Where
 
 <!-- Track and page, and the section/heading if you can. -->
+
 - **Track / page:** <!-- e.g. context-engineering/lessons/0003-codebase-context-chunking-and-rag -->
 - **Section:** <!-- e.g. "Chunk overlap" callout -->
 
@@ -26,4 +27,5 @@ labels: ["content", "fix"]
   correction, link the authoritative source: an RFC, a spec, vendor/standards
   docs (MDN, OWASP, Anthropic/MCP, cloud provider AIP), or a primary paper.
 -->
+
 - <!-- https://… -->
