@@ -26,7 +26,14 @@
 Next &#8250;
 </a> </span> <span style="display:flex;align-items:center;gap:.6rem"> <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button> <span style="color:var(--muted)">Streaming &amp; Event-Driven</span> </span> </nav> <main id="main" tabindex="-1"> <div id="reading-progress"></div> <div class="kicker">Book 4 · The whole stack · visual edition</div> <h1>Streaming &amp; Event-Driven, from first principles</h1> <p class="meta">~35 min · 9 levels · real systems + interview questions · interactive recall</p> <div class="ltags"><span class="lt">Streaming</span><span class="lt">Event-driven architecture</span><span class="lt">Event driven</span><span class="lt">Exactly once</span><span class="lt">Logs</span></div>  <div class="mission"><p><strong>Your bar:</strong> reconstruct the whole streaming stack on a whiteboard from memory —
 to tell a sound event-driven design from cargo-culted “we use Kafka.” Every level is built to be 
-<em>seen and redrawn</em>, not read. Grounded in Kleppmann’s <em>DDIA</em> Ch. 11</p><sup><a href="#s1" id="r1"><p>1</p></a></sup><p>, Kreps’s <em>The Log</em></p><sup><a href="#s2" id="r2"><p>2</p></a></sup><p>, Fowler’s pattern essays</p><sup><a href="#s3" id="r3"><p>3</p></a></sup><p>, and the Dataflow paper.</p><sup><a href="#s4" id="r4"><p>4</p></a></sup></div>
+<em>seen and redrawn</em>, not read. Grounded in Kleppmann’s <em>DDIA</em> Ch. 11
+<sup><a href="#s1" id="r1">1</a></sup>
+, Kreps’s <em>The Log</em>
+<sup><a href="#s2" id="r2">2</a></sup>
+, Fowler’s pattern essays
+<sup><a href="#s3" id="r3">3</a></sup>
+, and the Dataflow paper.
+<sup><a href="#s4" id="r4">4</a></sup></p></div>
 <p>One structure holds the whole book. Every level just unpacks one chip of it:</p>
 <div class="chips"><span class="chip"><p>It’s all one <b>append-only log</b></p></span><span class="chip c2"><p>sharded into <b>Kafka partitions</b></p></span><span class="chip c3"><p>read by <b>offset</b>, replayable</p></span><span class="chip c4"><p>into <b>events, state &amp; windows</b></p></span></div>
 <nav class="toc"><a href="#l1">1 · The Log</a><a href="#l2">2 · Kafka</a><a href="#l3">3 · Delivery guarantees</a><a href="#l4">4 · Event vs Command vs State</a><a href="#l5">5 · Event sourcing</a><a href="#l6">6 · CQRS</a><a href="#l7">7 · Stream processing</a><a href="#l8">8 · Time &amp; watermarks</a><a href="#l9">9 · Building it right</a><a href="#usecases">★ Use cases</a><a href="#interview">★ Interview Qs</a><a href="#quiz">★ Quiz</a><a href="#cheat">★ Cheat sheet</a><a href="#review">★ Review guides</a></nav>
@@ -41,9 +48,11 @@ A, B, and C each track their own position, reading the same retained records at 
 own pace.</p></figcaption></figure><div class="facts"><div class="fact"><p><b>Is</b> An <em>append-only, totally-ordered, immutable</em> sequence of records, each
 at a monotonic <em>offset</em> — its identity and its position.</p></div><div class="fact"><p><b>Why it exists</b> The offset is a logical clock for one log: it buys the total order
 Book 1 said you usually can’t have — by giving up distribution.</p></div><div class="fact blue"><p><b>Like (Book 3)</b> The WAL, the LSM commit log, the outbox — Kreps’s insight: the log
-a DB keeps for itself <em>is</em> the log you want between systems.</p><sup><a href="#s2" id="r2b"><p>2</p></a></sup></div><div class="fact blue"><p><b>The payoff</b> Immutable + ordered = <em>deterministically replayable</em>.
+a DB keeps for itself <em>is</em> the log you want between systems.
+<sup><a href="#s2" id="r2b">2</a></sup></p></div><div class="fact blue"><p><b>The payoff</b> Immutable + ordered = <em>deterministically replayable</em>.
 Replication, recovery, event sourcing, reprocessing all stand on it.</p></div></div><table><tr><th></th><th>Message queue</th><th>Log</th></tr><tr><td>On read</td><td>deletes the message</td><td>retains the record</td></tr><tr><td>Consumers / message</td><td>one (competing)</td><td>many (independent)</td></tr><tr><td>Reader’s position</td><td>held by the broker</td><td>an offset per consumer</td></tr><tr><td>Replay history</td><td>not possible</td><td>seek to any offset</td></tr></table><div class="myth"><div class="m">✗ “A log is just a fancy message queue”</div><div class="t"><p>✓ A queue deletes on ack; a log <em>retains</em> and lets many readers each keep an
-offset</p><sup><a href="#s1" id="r1b"><p>1</p></a></sup></div></div><div class="rule"><p><span>🪵 Memory rule:</span> A log is append-only, ordered, immutable, offset-addressed —
+offset
+<sup><a href="#s1" id="r1b">1</a></sup></p></div></div><div class="rule"><p><span>🪵 Memory rule:</span> A log is append-only, ordered, immutable, offset-addressed —
 reading never consumes, so it’s a shared, replayable source of truth.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Four load-bearing properties? <span class="ans">&rarr; append-only, totally-ordered, immutable, offset-addressed</span> </li><li> What does the offset collapse a reader's position to? <span class="ans">&rarr; a single integer</span> </li><li> Log vs queue on read? <span class="ans">&rarr; retain &amp; multi-read vs delete &amp; point-to-point</span> </li> </ul> </details></section>
 <section class="lvl" id="l2"><div class="lvltop"><span class="num">2</span><h2>Kafka — one log becomes many</h2></div><p class="tagline"><p>Cut the log into partitions, spread them across brokers. You scale both directions — at one
 cost: order.</p></p><figure><img src="diagrams/02-kafka-partitions.png" alt="A Kafka topic split into three partitions, each an independent ordered log addressed by offset. Ordering is guaranteed within a partition and nowhere across them."/><figcaption><p>A Kafka topic split into three partitions, each an independent ordered log addressed by
@@ -73,11 +82,13 @@ fact).</p></p><figure><img src="diagrams/04-event-types.png" alt="The same Order
 notification carrying only an id forces a callback; right — event-carried state transfer
 ships the full payload, so the consumer needs no callback.</p></figcaption></figure><div class="facts"><div class="fact"><p><b>Command</b> <code>PlaceOrder</code> — imperative, may be rejected, one handler,
 expects a response. Couples sender to <em>one</em> receiver.</p></div><div class="fact"><p><b>Event</b> <code>OrderPlaced</code> — past-tense fact, cannot be rejected, broadcast.
-Couples the producer to <em>nothing</em>. Honesty rule: true even if no one listens.</p><sup><a href="#s3" id="r3b"><p>3</p></a></sup></div><div class="fact blue"><p><b>Notification (thin)</b> <code>{ orderId: 42 }</code> — consumer calls back for
+Couples the producer to <em>nothing</em>. Honesty rule: true even if no one listens.
+<sup><a href="#s3" id="r3b">3</a></sup></p></div><div class="fact blue"><p><b>Notification (thin)</b> <code>{ orderId: 42 }</code> — consumer calls back for
 detail. Loose coupling, but a round-trip and a sync dependency.</p></div><div class="fact blue"><p><b>State transfer (fat)</b> <code>{ orderId, items, address, total }</code> — no
 callback, survives producer downtime, but binds to the payload schema and freezes a
 snapshot.</p></div></div><table><tr><th></th><th>Notification (thin)</th><th>State transfer (fat)</th></tr><tr><td>Coupling</td><td>loose — pulls what it needs</td><td>tighter — binds to schema</td></tr><tr><td>Availability</td><td>fails if producer is down</td><td>survives producer downtime</td></tr><tr><td>Staleness</td><td>reads latest on callback</td><td>holds a frozen snapshot</td></tr></table><div class="myth"><div class="m">✗ “Dress a command up as a past-tense event”</div><div class="t"><p>✓ If exactly one consumer <em>must</em> run, it’s a command in disguise — you lost the
-decoupling events buy</p><sup><a href="#s3" id="r3c"><p>3</p></a></sup></div></div><div class="rule"><p><span>📣 Memory rule:</span> Command = rejectable request to one handler; event = immutable
+decoupling events buy
+<sup><a href="#s3" id="r3c">3</a></sup></p></div></div><div class="rule"><p><span>📣 Memory rule:</span> Command = rejectable request to one handler; event = immutable
 broadcast fact. Thin events callback; fat events ship a snapshot you must keep evolving.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Tense test for command vs event? <span class="ans">&rarr; imperative verb vs past participle</span> </li><li> Cost of a thin event? <span class="ans">&rarr; a callback + the producer becomes a sync dependency</span> </li><li> Why does event schema evolution bite harder than API? <span class="ans">&rarr; events live forever &amp; get replayed</span> </li> </ul> </details></section>
 <section class="lvl" id="l5"><div class="lvltop"><span class="num">5</span><h2><p>Event sourcing — the log <em>is</em> the state</p></h2></div><p class="tagline"><p>Stop treating the log as a recovery aid behind your “real” state. Make the log the real
 state.</p></p><figure><img src="diagrams/05-event-sourcing.png" alt="Two ways to know an account holds 120. The top row is destructive CRUD; the bottom row is an append-only event log folded into the same answer."/><figcaption><p>Two ways to know an account holds 120. The top row is destructive CRUD; the bottom row
@@ -85,11 +96,13 @@ is an append-only event log folded into the same answer.</p></figcaption></figur
 No <code>balance</code> field anywhere — it's an opinion about the events. A snapshot is an optimization,
         never the source of truth.
 </figcaption> </figure><div class="facts"><div class="fact"><p><b>Is</b> Store every change as an immutable ordered event; current state is 
-<em>derived</em> by folding the log. The events are the truth.</p><sup><a href="#s3" id="r3d"><p>3</p></a></sup></div><div class="fact"><p><b>vs CRUD</b> CRUD overwrites in place — keeps the <em>what</em>, throws away the 
+<em>derived</em> by folding the log. The events are the truth.
+<sup><a href="#s3" id="r3d">3</a></sup></p></div><div class="fact"><p><b>vs CRUD</b> CRUD overwrites in place — keeps the <em>what</em>, throws away the 
 <em>why</em> and <em>when</em>. Event sourcing never overwrites; corrections are new
 events.</p></div><div class="fact blue"><p><b>You gain</b> A complete audit log by construction, time-travel to any past state, and
 freedom to build new read models retroactively.</p></div><div class="fact blue"><p><b>You pay</b> Replay (so you keep <em>snapshots</em>) + eternal schema versioning — you
-can never migrate old events, they’re historical facts.</p><sup><a href="#s1" id="r1c"><p>1</p></a></sup></div></div><div class="facts"><div class="fact"><p><b>Aggregate</b> The consistency boundary (one <code>Account</code>) you rebuild &amp;
+can never migrate old events, they’re historical facts.
+<sup><a href="#s1" id="r1c">1</a></sup></p></div></div><div class="facts"><div class="fact"><p><b>Aggregate</b> The consistency boundary (one <code>Account</code>) you rebuild &amp;
 validate against; the decision reads state, the result writes an event.</p></div><div class="fact"><p><b>Event store</b> Append-only DB keyed by aggregate id; one hard guarantee — per-stream
 order + an optimistic-concurrency (compare-and-set) check on append.</p></div></div><div class="myth"><div class="m">✗ “The snapshot is the source of truth”</div><div class="t"><p>✓ Snapshots are caches that drift; delete every one and rebuild from the log</p></div></div><div class="rule"><p><span>📜 Memory rule:</span> The log is the system of record; state is a fold of it;
 snapshots are caches; old events are facts you version forever, never migrate.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Where does the balance live? <span class="ans">&rarr; derived by folding events</span> </li><li> Purpose of a snapshot? <span class="ans">&rarr; avoid replaying full history each read</span> </li><li> What does the aggregate enforce? <span class="ans">&rarr; invariants before appending</span> </li> </ul> </details></section>
@@ -101,9 +114,11 @@ own store — <code>(read state, next event) → new read state</code>. Two proj
 log, zero coordination.</p></div><div class="fact"><p><b>Eventually consistent</b> A projection trails the latest offset by a small gap — the
 read side is a follower of the log (Book 1). Read-your-writes needs care.</p></div><div class="fact blue"><p><b>The superpower</b> A read model is a pure function of the log → <code>DROP</code> it
 and replay from offset 0 to rebuild, fix a bug, or add a brand-new query shape with no
-write-side change.</p><sup><a href="#s1" id="r1d"><p>1</p></a></sup></div><div class="fact blue"><p><b>The discipline</b> Projections must be <em>deterministic</em> and <em>idempotent</em> 
+write-side change.
+<sup><a href="#s1" id="r1d">1</a></sup></p></div><div class="fact blue"><p><b>The discipline</b> Projections must be <em>deterministic</em> and <em>idempotent</em> 
 — same events → same state, reprocessing never double-applies.</p></div></div><div class="myth"><div class="m">✗ “CQRS everywhere is the modern default”</div><div class="t"><p>✓ It adds eventual-consistency complexity; worth it only where read/write asymmetry is
-severe</p><sup><a href="#s3" id="r3e"><p>3</p></a></sup></div></div><div class="rule"><p><span>🔀 Memory rule:</span> One write model is the source of truth; read models are
+severe
+<sup><a href="#s3" id="r3e">3</a></sup></p></div></div><div class="rule"><p><span>🔀 Memory rule:</span> One write model is the source of truth; read models are
 disposable projections of the log — rebuildable by replay, eventually consistent by design.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Source of truth — write or read model? <span class="ans">&rarr; the write model / log</span> </li><li> Why many read models? <span class="ans">&rarr; one shape per query pattern</span> </li><li> Fix a buggy projection? <span class="ans">&rarr; fix code, clear store, replay from 0</span> </li> </ul> </details></section>
 <section class="lvl" id="l7"><div class="lvltop"><span class="num">7</span><h2>Stream processing — computation on the moving log</h2></div><p class="tagline"><p>Batch reads a bounded file once and stops; a stream job is a long-running graph over an
 unbounded log.</p></p><figure><img src="diagrams/07-stream-processing.png" alt="Stateless keeps nothing; stateful keeps local state. A left-to-right dataflow graph: a Kafka source topic feeds a stateless filter (drawn bare, no store), which feeds a stateful per-user count (drawn with an attached state-store cylinder backed by a changelog topic), which writes to an output sink."/><figcaption><p>Stateless keeps nothing; stateful keeps local state. A dataflow graph: a source topic
@@ -123,10 +138,12 @@ results aren’t reproducible.</p></div><div class="fact"><p><b>Late data is int
 order. A buffered phone delivers a 12:03 event after a 12:05 one. Not an edge case — a
 certainty.</p></div><div class="fact blue"><p><b>Watermark</b> A marker asserting the stream is <em>probably</em> complete up to event
 time T (typically max-seen − allowed lateness). When it passes a window’s end, the
-window fires.</p><sup><a href="#s4" id="r4b"><p>4</p></a></sup></div><div class="fact blue"><p><b>Truly late event</b> Two escape hatches: <em>drop it</em> (accept loss) or 
+window fires.
+<sup><a href="#s4" id="r4b">4</a></sup></p></div><div class="fact blue"><p><b>Truly late event</b> Two escape hatches: <em>drop it</em> (accept loss) or 
 <em>side-output</em> it for a correction / re-fire — which leans on idempotency (re-emit
 must overwrite, not double-count).</p></div></div><div class="myth"><div class="m">✗ “Wait long enough and the window is complete”</div><div class="t"><p>✓ The data carries no “all arrived” signal; the watermark is a <em>tunable</em> 
-completeness↔latency knob, no correct setting</p><sup><a href="#s4" id="r4c"><p>4</p></a></sup></div></div><div class="rule"><p><span>⏱️ Memory rule:</span> Bucket by event time; a watermark is a heuristic “probably
+completeness↔latency knob, no correct setting
+<sup><a href="#s4" id="r4c">4</a></sup></p></div></div><div class="rule"><p><span>⏱️ Memory rule:</span> Bucket by event time; a watermark is a heuristic “probably
 complete to T” that fires windows — trading completeness against latency, the slowest input
 setting the pace.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Why bucket by event time, not processing time? <span class="ans">&rarr; reproducible results despite skew</span> </li><li> What does watermark T assert? <span class="ans">&rarr; probably complete up to event time T</span> </li><li> Options for a late event after firing? <span class="ans">&rarr; drop or side-output for correction</span> </li> </ul> </details></section>
 <section class="lvl" id="l9"><div class="lvltop"><span class="num">9</span><h2>Building it right — the capstone checklist</h2></div><p class="tagline"><p>Assume at-least-once everywhere; make every consumer idempotent — so re-delivery, replay,
@@ -140,7 +157,8 @@ consumers must dedupe.</p></div><div class="fact blue"><p><b>DLQ &amp; backpress
 <code>orders.DLQ</code> (breaks ordering for that key — alert on depth). Kafka’s pull
 model is natural backpressure; a slow consumer just lags.</p></div><div class="fact blue"><p><b>Replay</b> Reset the group offset to earliest and re-consume — but handlers must stay 
 <em>pure</em> (no emails on replay) and schemas must evolve safely (Avro + registry).</p></div></div><div class="myth"><div class="m">✗ “Kafka does exactly-once, so I’m covered”</div><div class="t"><p>✓ EOS is Kafka-to-Kafka only; cross a system boundary and you <em>build</em> 
-exactly-once <em>effects</em> with idempotency</p><sup><a href="#s1" id="r1e"><p>1</p></a></sup></div></div><div class="rule"><p><span>🛡️ Memory rule:</span> Outbox guarantees every event is published; idempotent
+exactly-once <em>effects</em> with idempotency
+<sup><a href="#s1" id="r1e">1</a></sup></p></div></div><div class="rule"><p><span>🛡️ Memory rule:</span> Outbox guarantees every event is published; idempotent
 consumers make re-publication harmless. Exactly-once is a property you build, not a delivery
 you buy.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Why must every consumer be idempotent? <span class="ans">&rarr; at-least-once means dupes are normal</span> </li><li> What does the outbox close? <span class="ans">&rarr; the dual-write gap between DB &amp; broker</span> </li><li> Two disciplines replay demands? <span class="ans">&rarr; pure handlers + safe schema evolution</span> </li> </ul> </details></section>
 <h2 class="sec" id="usecases"><p>Where each layer shows up — real systems</p></h2>
@@ -157,7 +175,8 @@ stream-to-stream order/payment joins</p></td><td>compute</td></tr><tr><td>Window
 completeness</p></td><td>compute</td></tr><tr><td>Building it right</td><td>Outbox → CDC relay → idempotent consumer → DLQ on poison → replay to rebuild a view</td><td>infra</td></tr></table>
 <p class="tagline"><p>Pattern to notice: most production value is a partitioned log + idempotent consumers; event
 sourcing and CQRS are powerful but earn their schema-versioning tax only where
-audit/replay/read-asymmetry are real.</p><sup><a href="#s1" id="r1f"><p>1</p></a></sup></p>
+audit/replay/read-asymmetry are real.
+<sup><a href="#s1" id="r1f">1</a></sup></p></p>
 <h2 class="sec" id="interview"><p>Interview — pick your bar</p></h2>
 <p><p>Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
 failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System Design</b> = open

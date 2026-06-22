@@ -26,7 +26,10 @@
 &#8249; Prev
 </a> <span style="color:var(--muted);opacity:.45">Next &#8250;</span> </span> <span style="display:flex;align-items:center;gap:.6rem"> <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button> <span style="color:var(--muted)">Applied Systems Design</span> </span> </nav> <main id="main" tabindex="-1"> <div id="reading-progress"></div> <div class="kicker">Applied Systems Design · deep dive · visual edition</div> <h1>Consistent Hashing</h1> <p class="meta">~25 min · 7 sections · diagrams + interview questions + interactive recall · supplement to Book 5, Lessons 6 &amp; 8</p> <div class="ltags"><span class="lt">Consistent hashing</span><span class="lt">System design</span><span class="lt">Back of envelope</span><span class="lt">Applied systems design</span><span class="lt">Method</span></div>  <div class="mission"><p><strong>Your bar:</strong> redraw the ring on a whiteboard and explain — from memory — why 
 <code>mod N</code> is catastrophic, why a bare ring is lopsided, how vnodes flatten it, and what
-to reach for when one key still runs hot. Grounded in Karger et al. (STOC 1997)</p><sup><a href="#s1" id="r1"><p>1</p></a></sup> <p>and Dynamo.</p><sup><a href="#s2" id="r2"><p>2</p></a></sup></div>
+to reach for when one key still runs hot. Grounded in Karger et al. (STOC 1997)
+<sup><a href="#s1" id="r1">1</a></sup> 
+and Dynamo.
+<sup><a href="#s2" id="r2">2</a></sup></p></div>
 <p>One sentence holds the whole topic. Each section just unpacks one chip of it:</p>
 <div class="chips"><span class="chip"><p>Consistent hashing maps <b>keys and nodes to one ring</b></p></span><span class="chip c2"><p>so a membership change moves only <b>K/N keys</b></p></span><span class="chip c3"><p>uses <b>virtual nodes</b> to keep load even</p></span><span class="chip c4"><p>and a <b>bounded-load cap</b> when a key runs hot</p></span></div>
 <nav class="toc"><a href="#l1">1 · mod N is the enemy</a><a href="#l2">2 · The ring</a><a href="#l3">3 · Virtual nodes</a><a href="#l4">4 · Bounded loads</a><a href="#l5">5 · You may not need a ring</a><a href="#l6">6 · Replication / preference list</a><a href="#quiz">★ Self-check quiz</a><a href="#interview">★ Interview Qs</a><a href="#cheat">★ Cheat sheet</a><a href="#sources">★ Sources</a></nav>
@@ -89,7 +92,9 @@ New SVG: the overflow walk. The guarantee — <em>no node ever exceeds <code>(1+
 popular. A viral key (or live connections in a cache / LB) hammers its one home node.</p></div><div class="fact"><p><b>The mechanism</b> Pick slack <code>ε &gt; 0</code>; cap each node at <code>(1+ε)×</code> 
 average. A key whose home is at capacity walks clockwise to the next node with room.</p></div><div class="fact blue"><p><b>The knob ε</b> Small ε → tight balance, more overflow reassignment on change. Large ε
 → looser cap, cheaper.</p></div><div class="fact blue"><p><b>In the wild</b> Google Cloud load balancing and HAProxy <code>balance</code> modes use
-exactly this. The answer to “vnodes balanced my keyspace but node 7 is still on fire.”</p></div></div><div class="myth"><div class="m">✗ “Vnodes guarantee even load, so no node can overload”</div><div class="t">✓ Vnodes balance keyspace, not popularity; bounded loads cap actual load</div></div><div class="rule"><p><span>🔥 Memory rule:</span> Bounded loads (Mirrokni–Thorup–Zadimoghaddam 2016)</p><sup><a href="#s3" id="r3">3</a></sup> <p>caps each node at <span>(1+ε)× average</span> and overflows clockwise — guaranteeing the cap
+exactly this. The answer to “vnodes balanced my keyspace but node 7 is still on fire.”</p></div></div><div class="myth"><div class="m">✗ “Vnodes guarantee even load, so no node can overload”</div><div class="t">✓ Vnodes balance keyspace, not popularity; bounded loads cap actual load</div></div><div class="rule"><p><span>🔥 Memory rule:</span> Bounded loads (Mirrokni–Thorup–Zadimoghaddam 2016)
+<sup><a href="#s3" id="r3">3</a></sup> 
+caps each node at <span>(1+ε)× average</span> and overflows clockwise — guaranteeing the cap
 while keeping movement bounded.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Why don't vnodes solve a viral key? <span class="ans">&rarr; they balance keyspace, not popularity; one key = one home</span> </li><li> What does a full node do with a new key? <span class="ans">&rarr; overflow clockwise to the next node with room</span> </li><li> What does ε trade off? <span class="ans">&rarr; tight balance vs overflow churn on change</span> </li> </ul> </details></section>
 
 <section class="lvl" id="l5"><div class="lvltop"><span class="num">5</span><h2>You may not need a ring</h2></div><p class="tagline"><p>The ring is the famous answer, not the only one — and often not the best one. Two
@@ -97,9 +102,11 @@ alternatives that drop the ring entirely.</p></p><figure> <svg viewBox="0 0 560 
 HRW: <code>argmax over nodes of hash(k, node)</code>. Jump hash: a 5-line function mapping k
         to a bucket in <code>0…N−1</code>.
 </figcaption> </figure><table><tr><th>Scheme</th><th>Lookup</th><th>Balance</th><th>Arbitrary removal</th><th>Weights</th></tr><tr><td>Ring + vnodes</td><td>O(log N)</td><td>good (needs vnodes)</td><td>yes</td><td>yes (more vnodes)</td></tr><tr><td>Rendezvous (HRW)</td><td>O(N)</td><td>excellent</td><td>yes</td><td>yes</td></tr><tr><td>Jump hash</td><td>O(log N)</td><td>perfect</td><td><p><strong>no</strong> (high-end only)</p></td><td><strong>no</strong></td></tr></table><div class="facts"><div class="fact blue"><p><b>Rendezvous (HRW) — for free</b> Removing a node only re-homes keys whose top weight
-was that node → exactly K/N move. Uniform argmax → no log N imbalance, no vnodes.</p><sup><a href="#s4" id="r4">4</a></sup></div><div class="fact blue"><p><b>HRW — the cost</b> <code>O(N)</code> per lookup. Fine for tens-to-low-hundreds of
+was that node → exactly K/N move. Uniform argmax → no log N imbalance, no vnodes.
+<sup><a href="#s4" id="r4">4</a></sup></p></div><div class="fact blue"><p><b>HRW — the cost</b> <code>O(N)</code> per lookup. Fine for tens-to-low-hundreds of
 nodes (the common case); for huge N go back to a ring or hierarchy.</p></div><div class="fact"><p><b>Jump hash — the gift</b> 5 lines, zero memory, very fast, perfect balance, minimal
-remap. Ideal for resharding a numbered range (8→10 shards).</p><sup><a href="#s5" id="r5">5</a></sup></div><div class="fact"><p><b>Jump hash — the trap</b> Grows/shrinks only at the <em>high end</em> and has no
+remap. Ideal for resharding a numbered range (8→10 shards).
+<sup><a href="#s5" id="r5">5</a></sup></p></div><div class="fact"><p><b>Jump hash — the trap</b> Grows/shrinks only at the <em>high end</em> and has no
 weights. Wrong for arbitrary cluster membership where any node may fail. Gorgeous and
 narrow.</p></div></div><div class="myth"><div class="m">✗ “Consistent hashing means the ring; reach for it by default”</div><div class="t"><p>✓ For small/medium clusters HRW is often simpler &amp; more balanced; jump hash wins for
 numbered reshards</p></div></div><div class="rule"><p><span>🧰 Memory rule:</span> Ring+vnodes for arbitrary membership at scale · 

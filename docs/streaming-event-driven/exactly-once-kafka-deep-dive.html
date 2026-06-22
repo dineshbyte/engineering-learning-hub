@@ -32,7 +32,10 @@ Next &#8250;
 <em>input offset</em>
 inside the producer’s transaction makes a read-process-write loop exactly-once — and name the
 exact byte where the guarantee evaporates. Grounded in KIP-98, KIP-447, Confluent’s canonical
-write-up,</p><sup><a href="#s3" id="r3"><p>3</p></a></sup><p>and Kleppmann’s DDIA ch.11.</p><sup><a href="#s4" id="r4"><p>4</p></a></sup></div>
+write-up,
+<sup><a href="#s3" id="r3">3</a></sup>
+and Kleppmann’s DDIA ch.11.
+<sup><a href="#s4" id="r4">4</a></sup></p></div>
 <p>One sentence holds the whole lesson. Each level unpacks one chip of it:</p>
 <div class="chips"><span class="chip"><p>Kafka EOS is <b>exactly-once processing</b>, not delivery</p></span><span class="chip c2"><p>for the <b>read-process-write loop</b></p></span><span class="chip c3"><p>built from <b>dedup + atomic txn + read_committed + fencing</b></p></span><span class="chip c4"><p>and it <b>stops at Kafka’s edge</b></p></span></div>
 <nav class="toc"><a href="#l0">★ What EOS actually promises</a><a href="#l1">1 · Idempotent producer</a><a href="#l2">2 · Transactions</a><a href="#l3">3 · read_committed &amp; LSO</a><a href="#l4">4 · Zombie fencing</a><a href="#l5">5 · The boundary</a><a href="#usecases">★ Where it shows up</a><a href="#quiz">★ Retrieval practice</a><a href="#interview">★ Interview Qs</a><a href="#cheat">★ Cheat sheet</a></nav>
@@ -141,7 +144,8 @@ outbox.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> 
 <table><tr><th>Mechanism</th><th>Config / API</th><th>Failure it prevents</th></tr><tr><td>Idempotent producer</td><td><p><code>enable.idempotence=true</code>, <code>acks=all</code></p></td><td>Duplicate from a within-session retry after a network blip</td></tr><tr><td>Transaction</td><td><p><code>transactional.id</code>, <code>sendOffsetsToTransaction</code></p></td><td>Torn write across partitions; offset committed but output lost (or vice-versa)</td></tr><tr><td>Isolation level</td><td><code>isolation.level=read_committed</code></td><td>Downstream reading aborted / in-flight records → leaked duplicates</td></tr><tr><td>Epoch fencing</td><td><p>stable <code>transactional.id</code> + <code>initTransactions()</code></p></td><td>A zombie (slow-not-dead) producer committing a stale transaction</td></tr><tr><td>Streams EOS v2</td><td><code>processing.guarantee=exactly_once_v2</code></td><td>Stateful aggregation/join losing or double-applying on crash</td></tr><tr><td>Outbox / idempotency key</td><td>app-level (DB + relay, or dedup table)</td><td>External side effect (DB, card, email) repeated on retry</td></tr></table>
 <p class="tagline"><p>Pattern to notice: EOS is a <strong>whole-pipeline</strong> property. Three knobs on the
 producer side, one on every consumer — and the moment a side effect leaves Kafka, you are back
-to Book 2’s answers.</p><sup><a href="#s5" id="r5"><p>5</p></a></sup></p>
+to Book 2’s answers.
+<sup><a href="#s5" id="r5">5</a></sup></p></p>
 
 <h2 class="sec" id="quiz"><p>Retrieval practice — mix the mechanisms</p></h2>
 <p><p>Reading builds <em>fluency</em> (feels familiar). Recall builds <em>storage</em> (lasts). Answer

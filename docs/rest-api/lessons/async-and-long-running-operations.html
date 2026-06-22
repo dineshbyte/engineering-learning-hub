@@ -40,7 +40,9 @@ you can’t dedupe is a bug waiting to bill a customer twice.</p></div>
 link to the actual <strong>result resource</strong>. This is Google’s long-running 
 <code>Operation</code>
 model: a uniform envelope carrying <code>name</code>, <code>done</code>, and either an
-<code>error</code> or a <code>response</code>.</p><sup><a href="#s1" id="r1"><p>1</p></a></sup><p>Keep the operation queryable after completion so a client that crashed mid-poll can recover.</p></p>
+<code>error</code> or a <code>response</code>.
+<sup><a href="#s1" id="r1">1</a></sup>
+Keep the operation queryable after completion so a client that crashed mid-poll can recover.</p></p>
 <h2 id="when-synchronous-stops-fitting">When synchronous stops fitting</h2>
 <p><p>Reach for async the moment the work outlives the request. Holding a connection open for minutes
 is a resource leak and a reliability trap — a dropped socket loses the client’s only handle on
@@ -66,10 +68,12 @@ Mature systems offer <strong>both</strong>: the webhook delivers the happy-path 
 <p>Naming these — and saying how you’d handle each — is the senior signal.</p>
 <div class="steps"><div class="step"><p><b>1 · Delivery is at-least-once</b> The same event can arrive more than once. The consumer
 <em>must</em> be idempotent and <strong>dedupe on an event id</strong> — Lesson 3 cashing
-in.</p><sup><a href="#s2" id="r2"><p>2</p></a></sup></div><div class="step"><p><b>2 · Ordering is not guaranteed</b> Events can land out of order. Carry timestamps /
+in.
+<sup><a href="#s2" id="r2">2</a></sup></p></div><div class="step"><p><b>2 · Ordering is not guaranteed</b> Events can land out of order. Carry timestamps /
 sequence numbers; never assume the latest write is the last you received.</p></div><div class="step"><p><b>3 · Authenticity must be verified</b> Anyone can <code>POST</code> a public URL. Sign the
 payload with an <strong>HMAC</strong> header (shared secret) so the receiver confirms it’s
-really you.</p><sup><a href="#s2">2</a></sup></div><div class="step"><p><b>4 · Replay must be blocked</b> A captured valid request can be resent. Put a timestamp in
+really you.
+<sup><a href="#s2">2</a></sup></p></div><div class="step"><p><b>4 · Replay must be blocked</b> A captured valid request can be resent. Put a timestamp in
 the signed payload and <strong>reject stale ones</strong> even when the signature checks
 out.</p></div></div>
 <p class="pull"><p><strong>Ack fast, work later.</strong> Return a <code>2xx</code> immediately, do the heavy work

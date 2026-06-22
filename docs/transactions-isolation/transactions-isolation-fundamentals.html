@@ -27,7 +27,10 @@ Next &#8250;
 </a> </span> <span style="display:flex;align-items:center;gap:.6rem"> <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button> <span style="color:var(--muted)">Transactions &amp; Isolation</span> </span> </nav> <main id="main" tabindex="-1"> <div id="reading-progress"></div> <div class="kicker">Book 2 · The whole stack · visual edition</div> <h1>Transactions &amp; Isolation — fundamentals</h1> <p class="meta">~35 min · 9 levels · real-DB gotchas + interview questions · interactive recall</p> <div class="ltags"><span class="lt">Transaction isolation levels</span><span class="lt">Anomalies</span><span class="lt">Transactions</span><span class="lt">Isolation</span><span class="lt">ACID</span></div>  <div class="mission"><p><strong>Your bar:</strong> redraw the isolation × anomaly matrix on a whiteboard from memory,
 and in a code review name <em>which</em> anomaly a write is exposed to and the exact fix. Every
 level is built to be <em>seen and redrawn</em>, not read. Grounded in Kleppmann’s <em>DDIA</em> 
-ch.7&amp;9</p><sup><a href="#s1" id="r1"><p>1</p></a></sup><p>and Berenson et al. (1995).</p><sup><a href="#s2" id="r2"><p>2</p></a></sup></div>
+ch.7&amp;9
+<sup><a href="#s1" id="r1">1</a></sup>
+and Berenson et al. (1995).
+<sup><a href="#s2" id="r2">2</a></sup></p></div>
 <p>One sentence holds the whole book. Each level unpacks one chip of it:</p>
 <div class="chips"><span class="chip"><p>A transaction is an <b>all-or-nothing unit</b></p></span><span class="chip c2"><p>isolation fakes <b>“ran one at a time”</b></p></span><span class="chip c3"><p>weak levels leak <b>named anomalies</b></p></span><span class="chip c4"><p>you pick the <b>fix per write</b></p></span></div>
 <nav class="toc"><a href="#l1">1 · ACID — the 4 promises</a><a href="#l2">2 · The anomalies</a><a href="#l3">3 · Isolation levels: the menu</a><a href="#l4">4 · Snapshot &amp; MVCC</a><a href="#l5">5 · Lost update &amp; write skew</a><a href="#l6">6 · Serializability</a><a href="#l7">7 · Distributed txns &amp; 2PC</a><a href="#l8">8 · Sagas &amp; outbox</a><a href="#l9">9 · Choosing in practice</a><a href="#interview">★ Interview Qs</a><a href="#quiz">★ Retrieval quiz</a><a href="#cheat">★ Cheat sheet</a></nav>
@@ -106,7 +109,8 @@ specific one, not wall-clock order. Constrains the <em>outcome</em>, not the phy
 execution.</p></div><div class="fact"><p><b>2PL adds predicate locks</b> Row locks can’t lock a row that doesn’t exist yet — so
 index-range / predicate locks stop phantom inserts. (Eswaran et al. 1976.)</p></div><div class="fact blue"><p><b>SSI</b> Start from SI (no read locks), track read-write dependencies, abort one txn
 at commit if a dangerous structure forms. Postgres ships it as SERIALIZABLE. (Cahill et
-al. 2008.)</p><sup><a href="#s3" id="r3"><p>3</p></a></sup></div><div class="fact blue"><p><b>2PL ≠ 2PC</b> Two-phase <em>locking</em> = concurrency control on one node. Two-phase 
+al. 2008.)
+<sup><a href="#s3" id="r3">3</a></sup></p></div><div class="fact blue"><p><b>2PL ≠ 2PC</b> Two-phase <em>locking</em> = concurrency control on one node. Two-phase 
 <em>commit</em> = atomic commit across nodes (Level 7). Same number, unrelated.</p></div></div><div class="myth"><div class="m">✗ “Serializable means transactions can’t overlap in time”</div><div class="t"><p>✓ They still overlap physically — only the <em>result</em> must match some serial order</p></div></div><div class="rule"><p><span>🔒 Memory rule:</span> Serial = forbid concurrency · 2PL = block (pessimistic,
 deadlocks) · SSI = let it run, abort losers (optimistic, retries). Read your workload to
 choose.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> What does serializable constrain? <span class="ans">&rarr; the result equals <em>some</em> serial order, not execution</span> </li><li> What ends 2PL's growing phase? <span class="ans">&rarr; the first lock release; no new lock after it</span> </li><li> How does SSI differ from 2PL on a conflict? <span class="ans">&rarr; optimistic abort at commit vs pessimistic block</span> </li> </ul> </details></section>
@@ -133,7 +137,8 @@ wraps them. So you trade isolation for availability.</p></p><figure><img src="di
 Cⱼ…C₁ backward. A compensation is <em>not</em> a rollback: T₂ already committed, so you
 issue a new offsetting transaction (refund, not delete).</p></figcaption></figure><table><tr><th>Choose 2PC when</th><th>Choose a saga when</th></tr><tr><td>All participants share an XA stack</td><td>Independent services / vendors</td></tr><tr><td>Steps are short; locks held briefly</td><td>The operation is long-running</td></tr><tr><td>You need true isolation between ops</td><td>You can tolerate visible intermediate states</td></tr><tr><td>Operations have no natural undo</td><td>Each step has a clean semantic undo</td></tr></table><div class="facts"><div class="fact"><p><b>Saga</b> Each Tᵢ is a real short local ACID txn; no locks across steps. Not
 serializable — others can see a charged-but-unfulfilled order. (Garcia-Molina &amp;
-Salem 1987.)</p><sup><a href="#s4" id="r4"><p>4</p></a></sup></div><div class="fact"><p><b>Transactional outbox</b> In the <em>same</em> local txn that updates business tables,
+Salem 1987.)
+<sup><a href="#s4" id="r4">4</a></sup></p></div><div class="fact"><p><b>Transactional outbox</b> In the <em>same</em> local txn that updates business tables,
 INSERT the event into an <code>outbox</code> row. One commit, fully atomic. A relay
 publishes later.</p></div><div class="fact blue"><p><b>Idempotency key</b> The relay gives at-least-once → duplicates are inevitable. Stamp
 each step <code>{sagaId}:{step}</code>; dedup on the consumer so retries don’t

@@ -28,7 +28,13 @@
 stale, non-blocking snapshot and <em>still</em> guarantee the result is equivalent to running
 transactions one at a time. The trick is a small piece of graph theory turned into a cheap,
 deliberately
-<em>conservative</em> runtime detector. Grounded in Fekete et al. (2005)</p><sup><a href="#s2" id="r2"><p>2</p></a></sup><p>, Cahill et al. (2008)</p><sup><a href="#s1" id="r1"><p>1</p></a></sup><p>, and the PostgreSQL implementation (Ports &amp; Grittner, VLDB 2012)</p><sup><a href="#s3" id="r3"><p>3</p></a></sup><p>.</p></div>
+<em>conservative</em> runtime detector. Grounded in Fekete et al. (2005)
+<sup><a href="#s2" id="r2">2</a></sup>
+, Cahill et al. (2008)
+<sup><a href="#s1" id="r1">1</a></sup>
+, and the PostgreSQL implementation (Ports &amp; Grittner, VLDB 2012)
+<sup><a href="#s3" id="r3">3</a></sup>
+.</p></div>
 <p>One sentence holds the whole lesson. Each level unpacks one chip of it:</p>
 <div class="chips"><span class="chip"><p>Snapshot isolation’s only hole is <b>write skew</b></p></span><span class="chip c2"><p>every anomaly is a <b>cycle of rw-edges</b></p></span><span class="chip c3"><p>all reduce to one <b>dangerous structure</b></p></span><span class="chip c4"><p>detect &amp; <b>abort, conservatively</b></p></span></div>
 <nav class="toc"><a href="#l1">1 · SI’s blind spot — write skew</a><a href="#l2">2 · Serializability is a graph</a><a href="#l3">3 · The dangerous structure</a><a href="#l4">4 · How Postgres catches it</a><a href="#l5">5 · The price &amp; escape hatch</a><a href="#interview">★ Interview Qs</a><a href="#quiz">★ Retrieval quiz</a><a href="#cheat">★ Cheat sheet</a></nav>
@@ -50,7 +56,8 @@ Both read the same condition on overlapping rows, then each writes a <em>differe
 safety depended on what the other read.</p></div><div class="fact"><p><b>Why SI misses it</b> Different rows → no write-write conflict → first-committer-wins
 (which only catches same-row clashes) never fires.</p></div><div class="fact blue"><p><b>Pattern</b> Any “check a condition, then act on the assumption it still holds.”
 Last-unit inventory, duplicate username, double-booked room.</p></div><div class="fact blue"><p><b>Citation</b> Berenson/Gray “Critique of ANSI SQL Isolation Levels” (1995); Oracle’s
-<code>SERIALIZABLE</code> is really only SI.</p><sup><a href="#s5" id="r5"><p>5</p></a></sup></div></div><div class="myth"><div class="m">✗ “Snapshot isolation is serializable”</div><div class="t"><p>✓ SI permits write skew; only SSI / 2PL / serial execution are truly serializable</p></div></div><div class="rule"><p><span>🩺 Memory rule:</span> Write skew = read an overlapping condition, each write a
+<code>SERIALIZABLE</code> is really only SI.
+<sup><a href="#s5" id="r5">5</a></sup></p></div></div><div class="myth"><div class="m">✗ “Snapshot isolation is serializable”</div><div class="t"><p>✓ SI permits write skew; only SSI / 2PL / serial execution are truly serializable</p></div></div><div class="rule"><p><span>🩺 Memory rule:</span> Write skew = read an overlapping condition, each write a
 different row — SI’s first-committer-wins never sees it.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Why doesn't first-committer-wins catch write skew? <span class="ans">&rarr; the two writes hit different rows</span> </li><li> One real-world instance? <span class="ans">&rarr; both claim the last inventory unit / username</span> </li><li> Does a serial order ever produce zero doctors? <span class="ans">&rarr; no; the 2nd would read count=1 and be refused</span> </li> </ul> </details></section>
 
 <section class="lvl" id="l2"><div class="lvltop"><span class="num">2</span><h2>Serializability is a graph property</h2></div><p class="tagline"><p>To detect non-serializability you first need to define it — and the definition is
@@ -60,7 +67,8 @@ graph-shaped.</p></p><figure><img src="diagrams/ssi-02-dependency-graph.png" alt
 one — T1 didn’t see it, so T1 must precede T2. A history is serializable 
 <strong>iff</strong> this graph is acyclic.</p></figcaption></figure><table><tr><th>Edge</th><th>Meaning</th><th>Orders</th><th>Under SI?</th></tr><tr><td>wr</td><td>T1 writes x; T2 reads that version</td><td>T1 → T2</td><td>Never crosses concurrent txns — you read only committed snapshot versions</td></tr><tr><td>ww</td><td>T1 writes x; T2 overwrites it</td><td>T1 → T2</td><td>Blocked — first-committer-wins stops two concurrent writers of x</td></tr><tr><td>rw</td><td><p>T1 reads x; T2 writes a <em>later</em> x</p></td><td>T1 → T2</td><td><p><strong>The only edge SI can’t prevent</strong> — your snapshot is frozen, later
 writes are invisible yet still order you first</p></td></tr></table><div class="facts"><div class="fact"><p><b>Master theorem</b> A multiversion history is serializable <em>exactly when</em> its
-dependency graph has no cycle. (Adya 1999; Bernstein/Hadzilacos/Goodman.)</p><sup><a href="#s6" id="r6"><p>6</p></a></sup></div><div class="fact"><p><b>Why a cycle is fatal</b> T1→T2→…→T1 asserts each txn is both before and after the
+dependency graph has no cycle. (Adya 1999; Bernstein/Hadzilacos/Goodman.)
+<sup><a href="#s6" id="r6">6</a></sup></p></div><div class="fact"><p><b>Why a cycle is fatal</b> T1→T2→…→T1 asserts each txn is both before and after the
 others — impossible to lay on a line.</p></div><div class="fact blue"><p><b>The narrowing</b> SI already prevents ww and cross-txn wr cycles, so the 
 <em>only</em> way an SI history breaks is a cycle made of <code>rw</code>-edges.</p></div><div class="fact blue"><p><b>Why it matters</b> The whole job of a serializable engine reduces to one rule: 
 <em>don’t let a cycle commit.</em></p></div></div><div class="myth"><div class="m">✗ “You must build and topologically sort the whole graph”</div><div class="t"><p>✓ You only need to prevent <em>rw-cycles</em> — and §3 shrinks even that</p></div></div><div class="rule"><p><span>🔗 Memory rule:</span> Serializable ⟺ acyclic dependency graph; under SI the only
@@ -74,7 +82,8 @@ You don't materialise the graph or wait for the cycle to close — you spot one 
         the meeting point of two rw-edges.
 </figcaption> </figure><blockquote style="margin:1rem 0;padding:.5rem 0 .5rem 1rem;border-left:3px solid var(--rule);font-family:ui-sans-serif,system-ui,sans-serif;font-size:.86rem;color:#3a372f;font-style:italic"><p><strong>Fekete’s theorem (2005):</strong> in any non-serializable SI execution, the cycle
 contains two <em>consecutive</em> rw-edges — a T-pivot with an inbound rw-edge from a T-in
-and an outbound rw-edge to a T-out, both concurrent with the pivot.</p><sup><a href="#s2" id="r2b"><p>2</p></a></sup></blockquote><div class="facts"><div class="fact"><p><b>Necessary…</b> Every real anomaly contains the dangerous structure. Catch the pattern
+and an outbound rw-edge to a T-out, both concurrent with the pivot.
+<sup><a href="#s2" id="r2b">2</a></sup></p></blockquote><div class="facts"><div class="fact"><p><b>Necessary…</b> Every real anomaly contains the dangerous structure. Catch the pattern
 → catch every write skew.</p></div><div class="fact"><p><b>…not sufficient</b> The pattern also appears in <em>perfectly serializable</em> 
 histories (the cycle never closes, or the third edge runs the other way).</p></div><div class="fact blue"><p><b>So a detector is conservative</b> Aborting on the pattern catches every anomaly 
 <em>and</em>
@@ -99,7 +108,9 @@ txns inflate the footprint.</p></td></tr></table><div class="facts"><div class="
 <strong>retry the transaction.</strong> Non-negotiable.</p></div><div class="fact"><p><b>Why retry is safe</b> Idempotency makes the retry harmless — see the Idempotency Keys
 deep dive. An app that doesn’t retry is broken, not unlucky.</p></div><div class="fact blue"><p><b>Conservative, again</b> Fires on the <em>structure</em>, not a confirmed cycle, so
 every genuine write skew is caught — plus a few innocents.</p></div><div class="fact blue"><p><b>Citation</b> Cahill et al. (SIGMOD 2008) gave the algorithm; Ports &amp; Grittner
-(VLDB 2012) shipped it in PostgreSQL.</p><sup><a href="#s1" id="r1b"><p>1</p></a></sup><sup><a href="#s3" id="r3b"><p>3</p></a></sup></div></div><div class="myth"><div class="m">✗ “SIRead locks block writers like real locks”</div><div class="t"><p>✓ They never block — they only record reads so a later write reveals an rw-edge</p></div></div><div class="rule"><p><span>🔍 Memory rule:</span> Reads leave non-blocking SIRead marks; a write on a marked
+(VLDB 2012) shipped it in PostgreSQL.
+<sup><a href="#s1" id="r1b">1</a></sup>
+<sup><a href="#s3" id="r3b">3</a></sup></p></div></div><div class="myth"><div class="m">✗ “SIRead locks block writers like real locks”</div><div class="t"><p>✓ They never block — they only record reads so a later write reveals an rw-edge</p></div></div><div class="rule"><p><span>🔍 Memory rule:</span> Reads leave non-blocking SIRead marks; a write on a marked
 datum is an rw-edge; both flags on one txn → abort with 40001 → retry.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Do SIRead locks block writers? <span class="ans">&rarr; no; they only record what was read</span> </li><li> What's the abort SQLSTATE, and the app's duty? <span class="ans">&rarr; 40001; retry the transaction</span> </li><li> Why retain a SIRead lock past commit? <span class="ans">&rarr; a conflicting writer can arrive later</span> </li><li> How does SSI catch phantoms? <span class="ans">&rarr; index-range / predicate locks</span> </li> </ul> </details></section>
 
 <section class="lvl" id="l5"><div class="lvltop"><span class="num">5</span><h2>The price, the tuning, and the escape hatch</h2></div><p class="tagline"><p>SSI buys serializability at ~SI throughput. “Roughly” and “conservative” each cost something
@@ -113,7 +124,8 @@ connections. Past it, Postgres <em>summarizes</em> to coarser granularity (more 
 positives) rather than failing.</p></div><div class="fact blue"><p><b>The oldest txn sets the cost</b> One long serializable txn holds its SIRead locks the
 whole time — same way a long txn starves VACUUM in MVCC.</p></div><div class="fact blue"><p><b>Safe-snapshot escape hatch</b> A read-only txn that can’t be part of any dangerous
 structure drops to REPEATABLE READ. <code>READ ONLY DEFERRABLE</code> waits for that
-snapshot on purpose.</p><sup><a href="#s3" id="r3c"><p>3</p></a></sup></div></div><div class="myth"><div class="m">✗ “Each node serializable ⇒ the sharded fleet is serializable”</div><div class="t"><p>✓ Postgres SSI is <em>single-node</em>; distributed serializability is a harder problem</p></div></div><div class="rule"><p><span>💸 Memory rule:</span> 2PL pays up front in blocking; SSI pays at the end in
+snapshot on purpose.
+<sup><a href="#s3" id="r3c">3</a></sup></p></div></div><div class="myth"><div class="m">✗ “Each node serializable ⇒ the sharded fleet is serializable”</div><div class="t"><p>✓ Postgres SSI is <em>single-node</em>; distributed serializability is a harder problem</p></div></div><div class="rule"><p><span>💸 Memory rule:</span> 2PL pays up front in blocking; SSI pays at the end in
 conservative aborts — for read-mostly, low-conflict OLTP, optimism wins.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Two costs SSI pays? <span class="ans">&rarr; false-positive aborts + predicate-lock memory</span> </li><li> What does <code>READ ONLY DEFERRABLE</code> buy a long report? <span class="ans">&rarr; a free, abort-proof safe snapshot</span> </li><li> Where does optimism lose to 2PL? <span class="ans">&rarr; high contention — measure the crossover</span> </li><li> Scope of the guarantee? <span class="ans">&rarr; single node only</span> </li> </ul> </details></section>
 
 <h2 class="sec" id="interview"><p>Interview — pick your bar</p></h2>

@@ -27,7 +27,10 @@
 </a> <span style="color:var(--muted);opacity:.45">Next &#8250;</span> </span> <span style="display:flex;align-items:center;gap:.6rem"> <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button> <span style="color:var(--muted)">Streaming &amp; Event-Driven</span> </span> </nav> <main id="main" tabindex="-1"> <div id="reading-progress"></div> <div class="kicker">Deep dive · Book 4 · supplement to Lesson 8 · visual edition</div> <h1>Watermarks — the completeness clock of streaming</h1> <p class="meta">~25 min · 5 levels · 3 reused diagrams + new SVGs · interview Qs · interactive recall</p> <div class="ltags"><span class="lt">Watermarks</span><span class="lt">Event-time windowing</span><span class="lt">Event driven</span><span class="lt">Exactly once</span><span class="lt">Streaming</span></div>  <div class="mission"><p><strong>Your bar:</strong> redraw — from memory — why a watermark is a <em>guess</em>, how it
 advances by a <em>min</em> rule, why one idle input freezes a whole pipeline, and the
 Dataflow-model insight that <em>when a window fires</em> is <strong>not</strong> the watermark.
-Grounded in Akidau et al.’s <em>Dataflow Model</em></p><sup><a href="#s1" id="r1">1</a></sup> <p>and the Flink/Beam docs.</p><sup><a href="#s3" id="r3">3</a></sup></div>
+Grounded in Akidau et al.’s <em>Dataflow Model</em>
+<sup><a href="#s1" id="r1">1</a></sup> 
+and the Flink/Beam docs.
+<sup><a href="#s3" id="r3">3</a></sup></p></div>
 <p>One sentence holds the whole topic. Each level just unpacks one chip of it:</p>
 <div class="chips"><span class="chip"><p>A watermark is a <b>heuristic completeness claim</b> in event time</p></span><span class="chip c2"><p>that advances by the <b>min of its inputs</b></p></span><span class="chip c3"><p>trading <b>completeness vs latency vs cost</b></p></span><span class="chip c4"><p>and it <b>informs</b>, never <b>decides</b>, when a window fires</p></span></div>
 <nav class="toc"><a href="#l1">1 · What it asserts</a><a href="#l2">2 · Perfect vs heuristic</a><a href="#l3">3 · Min rule &amp; idle stall</a><a href="#l4">4 · Triggers ≠ watermark</a><a href="#l5">5 · Allowed lateness</a><a href="#usecases">★ Dial settings</a><a href="#quiz">★ Retrieval quiz</a><a href="#interview">★ Interview Qs</a><a href="#cheat">★ Cheat sheet</a><a href="#review">★ Review guide</a></nav>
@@ -67,7 +70,8 @@ A quiet input's stale watermark pins the min "forever or until it gets data." Th
 further by buffered state with pending timers).</p></div><div class="fact"><p><b>Why min</b> You can’t claim “complete up to W” if even one input might still deliver
 something older than W.</p></div><div class="fact blue"><p><b>The stall</b> An idle input stops advancing → pins the min → downstream windows never
 fire. The classic silent streaming incident.</p></div><div class="fact blue"><p><b>The fix</b> Idleness detection: after a quiet period, mark the source idle and 
-<em>exclude it from the min</em>; re-include on first record.</p><sup><a href="#s3" id="r3b">3</a></sup></div></div><div class="myth"><div class="m">✗ “Pipeline emits nothing → it must be crashing or back-pressured”</div><div class="t"><p>✓ Often a watermark held hostage by one silent input; fix is <code>withIdleness</code>, not
+<em>exclude it from the min</em>; re-include on first record.
+<sup><a href="#s3" id="r3b">3</a></sup></p></div></div><div class="myth"><div class="m">✗ “Pipeline emits nothing → it must be crashing or back-pressured”</div><div class="t"><p>✓ Often a watermark held hostage by one silent input; fix is <code>withIdleness</code>, not
 a restart</p></div></div><div class="rule"><p><span>🧊 Memory rule:</span> An operator’s watermark is the min of its inputs — so one idle
 partition freezes the whole pipeline until idleness detection excludes it.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> How does an operator's watermark advance? <span class="ans">&rarr; as the minimum of all its input watermarks</span> </li><li> Why the min, not the max or average? <span class="ans">&rarr; the slowest input could still deliver old data</span> </li><li> One idle partition's symptom + fix? <span class="ans">&rarr; silent stall; withIdleness to exclude it</span> </li> </ul> </details></section>
 
@@ -98,7 +102,8 @@ triggers, and allowed lateness; pick the two your use case needs.</p></div><deta
 per-workload judgement is the whole point.</p></p>
 <table><tr><th>Workload</th><th>Wants</th><th>Dial settings</th></tr><tr><td>Fraud check</td><td>Low latency; tolerates re-firing &amp; correction</td><td>aggressive watermark · early + late firings · short state</td></tr><tr><td>Billing rollup</td><td>Completeness; accepts delay</td><td>conservative watermark · on-time firing · long allowed lateness</td></tr><tr><td>Live dashboard</td><td>Fast, improving estimate</td><td>frequent early firings · accumulating mode · modest lateness</td></tr><tr><td>Exact financial sum</td><td>Correctness across late updates</td><td>accumulating + retracting · long allowed lateness · side output for the rest</td></tr><tr><td>Multi-source join</td><td>Not freezing on a quiet input</td><td><p><code>withIdleness</code> on every source · watch the min</p></td></tr></table>
 <p class="tagline"><p>Pattern to notice: the dials don’t change the <em>engine</em> — they change which of
-completeness, latency, and cost you pay for. Naming that trade-off out loud is the senior move.</p><sup><a href="#s2" id="r2">2</a></sup></p>
+completeness, latency, and cost you pay for. Naming that trade-off out loud is the senior move.
+<sup><a href="#s2" id="r2">2</a></sup></p></p>
 
 <h2 class="sec" id="quiz"><p>Retrieval practice — mix the levels</p></h2>
 <p><p>Reading builds <em>fluency</em> (feels familiar). Recall builds <em>storage</em> (lasts). Answer
