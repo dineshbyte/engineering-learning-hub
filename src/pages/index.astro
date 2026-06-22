@@ -215,9 +215,13 @@ for (const track of tracks) {
      the slack in shorter cards. */
   .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(22rem,1fr));
     gap:1rem; align-items:stretch; margin-top:1.3rem}
-  .tile{background:var(--card); border:1px solid var(--line); border-left:3px solid var(--tc);
+  .tile{background:var(--card); border:1px solid var(--line); border-left:3px solid var(--line);
     border-radius:14px; padding:1rem 1.1rem 1.05rem; display:flex; flex-direction:column; gap:.7rem;
-    margin:0; transition:box-shadow .15s, transform .15s}
+    margin:0; transition:box-shadow .15s, transform .15s, border-color .15s}
+  /* the curated entry point keeps the warm amber edge — the one card that should
+     draw the eye. Every other card stays neutral so amber reads as a highlight,
+     not the structural default. */
+  .tile[data-here]{border-left-color:var(--accent)}
   .tile:hover{box-shadow:0 12px 34px rgba(0,0,0,.09); transform:translateY(-2px)}
   .thead{display:flex; align-items:center; gap:.6rem}
   .ico{flex:none; width:2.3rem; height:2.3rem; border-radius:10px; display:grid; place-items:center;
@@ -225,32 +229,40 @@ for (const track of tracks) {
   .tname{font-weight:700; font-size:1.06rem; letter-spacing:-.01em; line-height:1.1}
   .ttag{font-size:.63rem; letter-spacing:.11em; text-transform:uppercase; color:var(--muted); margin-top:.12rem}
   .cnt{margin-left:auto; align-self:flex-start; font-size:.7rem; font-weight:700; white-space:nowrap;
-    color:color-mix(in srgb, var(--tc) 70%, var(--ink));
-    background:color-mix(in srgb, var(--tc) 14%, transparent); padding:.22rem .55rem; border-radius:20px}
+    color:var(--muted); background:var(--chip); border:1px solid var(--line);
+    padding:.22rem .55rem; border-radius:20px}
   .tdesc{margin:0; font-size:.85rem; color:var(--muted); line-height:1.45}
   /* per-card keyword tags (scannable + indexable text for SEO) */
   .tags{display:flex; flex-wrap:wrap; gap:.3rem; margin:0}
   .tag{font-size:.66rem; font-weight:600; white-space:nowrap;
-    color:color-mix(in srgb, var(--tg,var(--tc)) 70%, var(--ink));
-    background:color-mix(in srgb, var(--tg,var(--tc)) 15%, transparent);
-    border:1px solid color-mix(in srgb, var(--tg,var(--tc)) 34%, transparent);
+    color:var(--muted); background:var(--bg-soft);
+    border:1px solid var(--line);
     border-radius:6px; padding:.13rem .42rem}
-  /* card tags use the brand indigo — --tg left unset, so it falls back to
-     --tc (= var(--accent)). One recognizable identity, no per-tag rainbow. */
+  /* card tags are neutral metadata, not highlights — slate chips keep the card
+     calm and let the START HERE edge + Start CTA be the only warm accents. */
   /* Start CTA — brand accent (consistent across cards + the resume banner);
      white text in light theme, dark text on the lighter dark-theme accent.
      order:2 places it AFTER the footer pills so the button is the last element,
      pinned to the card bottom → Start/Continue buttons align across every row. */
   .start{order:-2; display:flex; align-items:center; justify-content:center; gap:.4rem; text-decoration:none;
-    font-size:.84rem; font-weight:700; color:#fff; background:var(--accent);
-    border-radius:9px; padding:.55rem .9rem; transition:filter .12s, transform .08s}
-  /* dark mode: dim the bright accent fill so the CTA isn't harsh on the eyes.
-     One rule covers Start (lavender) and Continue (green, via .is-started's
-     --accent override); light text stays legible on the muted fill. */
-  html[data-theme="dark"] .start{color:var(--ink);
-    background:color-mix(in srgb, var(--accent) 60%, var(--card))}
-  .start:hover{filter:brightness(1.06)}
+    font-size:.84rem; font-weight:700; color:var(--accent);
+    background:color-mix(in srgb, var(--accent) 12%, transparent);
+    border:1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+    border-radius:9px; padding:.55rem .9rem;
+    transition:background .12s, color .12s, border-color .12s, transform .08s}
+  /* default Start is a quiet ghost — amber outline, not a solid block — so the
+     grid reads as a calm catalog. Hover fills it; the two cards that ARE the
+     primary action (START HERE, Continue) lead with the filled treatment. */
+  .start:hover{color:#fff; background:var(--accent); border-color:var(--accent)}
+  html[data-theme="dark"] .start:hover{color:var(--bg)}
   .start:active{transform:scale(.99)}
+  .tile[data-here] .start, .tile.is-started .start{
+    color:#fff; background:var(--accent); border-color:var(--accent)}
+  /* dark mode: dim the bright fill on the filled (START HERE / Continue) buttons
+     so the CTA isn't harsh; --accent is green on .is-started via its override. */
+  html[data-theme="dark"] .tile[data-here] .start,
+  html[data-theme="dark"] .tile.is-started .start{color:var(--ink); border-color:transparent;
+    background:color-mix(in srgb, var(--accent) 60%, var(--card))}
   /* estimated read time per track */
   .rtime{display:flex; align-items:center; gap:.34rem; font-size:.73rem; color:var(--muted)}
   .rtime::before{content:""; flex:none; width:.72rem; height:.72rem; border-radius:50%;
@@ -283,7 +295,8 @@ for (const track of tracks) {
     font-size:.85rem; padding:.32rem .4rem; border-radius:8px; transition:background .12s}
   a.lchip:hover{background:var(--chip)}
   a.lchip i{flex:none; font-style:normal; min-width:1.5rem; height:1.5rem; padding:0 .35rem; border-radius:6px;
-    display:grid; place-items:center; font-size:.72rem; font-weight:700; color:#fff; background:var(--tc)}
+    display:grid; place-items:center; font-size:.72rem; font-weight:700;
+    color:var(--link); background:var(--bg-soft); border:1px solid var(--line)}
   a.lchip span{line-height:1.2}
   /* lesson list collapses into a native <details>: on mobile a tap-to-expand
      summary keeps cards short; on desktop the summary is hidden and lessons
