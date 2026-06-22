@@ -25,6 +25,7 @@ export const tracks: Track[] = [
         colorVar: '--track-agents',
         startHere: true,
         order: 1,
+        publishedAt: '2025-07-05',
         tags: ['Agent loop', 'Tool use', 'MCP', 'Memory', 'Runtime'],
         description:
             'The whole agent stack, bottom-up — tell real capability from hype in pitches and reviews.',
@@ -84,6 +85,7 @@ export const tracks: Track[] = [
         colorVar: '--track-context',
         startHere: true,
         order: 2,
+        publishedAt: '2025-07-29',
         tags: ['RAG', 'Retrieval', 'Embeddings', 'Chunking', 'Reranking'],
         description:
             'Why one AI system feels far smarter than another on the identical model — selection, retrieval &amp; assembly of context.',
@@ -175,7 +177,7 @@ export const tracks: Track[] = [
         colorVar: '--track-eval',
         startHere: false,
         order: 3,
-        publishedAt: '2026-06-21',
+        publishedAt: '2025-08-22',
         tags: ['Offline eval', 'Online eval', 'LLM-as-judge', 'Golden sets', 'Eval loop'],
         description:
             'How AI systems are measured and made to improve — offline &amp; online eval, golden sets, LLM-as-judge, and the production eval loop.',
@@ -207,7 +209,7 @@ export const tracks: Track[] = [
         colorVar: '--track-prodai',
         startHere: false,
         order: 4,
-        publishedAt: '2026-06-21',
+        publishedAt: '2025-09-15',
         tags: ['Reliability', 'Scalability', 'Observability', 'Cost control', 'Failure modes'],
         description:
             'Review AI systems with the rigor of production distributed systems — reliability, scalability, observability, cost, governance &amp; failure modes.',
@@ -243,7 +245,7 @@ export const tracks: Track[] = [
         colorVar: '--track-aisec',
         startHere: false,
         order: 5,
-        publishedAt: '2026-06-21',
+        publishedAt: '2025-10-09',
         tags: ['Prompt injection', 'Threat model', 'OWASP LLM', 'Tool egress', 'Defense in depth'],
         description:
             'The AI attack surface — prompt injection, jailbreaks, tool abuse, data leakage &amp; multi-tenant risk — with threat models, detection &amp; mitigation.',
@@ -271,7 +273,7 @@ export const tracks: Track[] = [
         colorVar: '--track-aiinfra',
         startHere: false,
         order: 6,
-        publishedAt: '2026-06-21',
+        publishedAt: '2025-11-02',
         tags: ['Embeddings', 'Vector DBs', 'Rerankers', 'Model gateway', 'Inference'],
         description:
             'The infrastructure powering AI products — embeddings, vector DBs, rerankers, model gateways, inference &amp; caching — with scaling &amp; cost trade-offs.',
@@ -307,7 +309,7 @@ export const tracks: Track[] = [
         colorVar: '--track-domain',
         startHere: false,
         order: 7,
-        publishedAt: '2026-06-21',
+        publishedAt: '2025-11-26',
         tags: ['Responsibilities', 'Tool surface', 'Approval gates', 'Build vs buy', 'ROI'],
         description:
             'A repeatable method to design production agents for real domains — responsibilities, tools, context, memory, runtime, eval, security, approval &amp; ROI.',
@@ -343,7 +345,7 @@ export const tracks: Track[] = [
         colorVar: '--track-advai',
         startHere: false,
         order: 8,
-        publishedAt: '2026-06-21',
+        publishedAt: '2025-12-20',
         tags: ['Multi-agent', 'Orchestration', 'Swarms', 'Coordination cost', 'Anti-patterns'],
         description:
             'Advanced AI systems judged on engineering merit — multi-agent &amp; swarms, fine-tuning, distillation, reasoning models &amp; long-horizon autonomy: when, and when not.',
@@ -379,6 +381,7 @@ export const tracks: Track[] = [
         colorVar: '--track-rest',
         startHere: false,
         order: 9,
+        publishedAt: '2026-01-13',
         tags: ['HTTP', 'Idempotency', 'Pagination', 'Caching', 'Auth'],
         description:
             'The design decisions a senior interview probes — each infographic-first with a quiz and a rehearse-out-loud drill.',
@@ -486,6 +489,7 @@ export const tracks: Track[] = [
         colorVar: '--track-bloom',
         startHere: false,
         order: 10,
+        publishedAt: '2026-02-06',
         tags: ['Probabilistic', 'Hashing', 'Sizing', 'LSM reads'],
         description:
             'Foundation → Staff: the membership-test asymmetry, sizing math, failure modes, and variants at scale.',
@@ -539,6 +543,7 @@ export const tracks: Track[] = [
         colorVar: '--track-distributed',
         startHere: false,
         order: 11,
+        publishedAt: '2026-03-02',
         tags: ['Consensus', 'Clocks', 'Idempotency', 'Failure modes'],
         description:
             'Why distributed systems are hard, and the primitives that tame failure and time.',
@@ -581,6 +586,7 @@ export const tracks: Track[] = [
         colorVar: '--track-storage',
         startHere: false,
         order: 12,
+        publishedAt: '2026-03-26',
         tags: ['B-trees', 'LSM', 'Indexes', 'Compaction'],
         description:
             'How databases actually store and find data — and the read/write/space trade-offs underneath.',
@@ -617,6 +623,7 @@ export const tracks: Track[] = [
         colorVar: '--track-transactions',
         startHere: false,
         order: 13,
+        publishedAt: '2026-04-19',
         tags: ['ACID', 'MVCC', 'Isolation levels', 'SSI'],
         description: 'What isolation levels really promise, and how MVCC and SSI deliver them.',
         lessonCountLabel: '3 lessons',
@@ -658,6 +665,7 @@ export const tracks: Track[] = [
         colorVar: '--track-streaming',
         startHere: false,
         order: 14,
+        publishedAt: '2026-05-13',
         tags: ['The log', 'Exactly-once', 'Watermarks', 'Kafka'],
         description:
             'The log as a primitive, and how exactly-once and event-time processing are really achieved.',
@@ -700,6 +708,7 @@ export const tracks: Track[] = [
         colorVar: '--track-applied',
         startHere: false,
         order: 15,
+        publishedAt: '2026-06-06',
         tags: ['Estimation', 'Consistent hashing', 'Back-of-envelope'],
         description:
             'A repeatable method for system-design rounds, plus the building blocks they lean on.',
