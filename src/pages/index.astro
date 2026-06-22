@@ -488,9 +488,8 @@ for (const track of tracks) {
   dialog.cardsheet[open]{animation:cs-pop .16s ease-out}
   @keyframes cs-pop{from{opacity:0; transform:translateY(8px) scale(.985)} to{opacity:1; transform:none}}
   @media (max-width:640px){
-    /* bottom sheet: cap at ~half the viewport so it never fills the screen and
-       leaves a large, tappable backdrop above it (backdrop click closes via the
-       e.target===sheet handler). The inner list scrolls within. */
+    /* bottom sheet: cap at ~half the viewport so it never fills the screen
+       (closes via the ✕ button or Esc, not backdrop tap). List scrolls within. */
     dialog.cardsheet{inset:auto 0 0 0; margin:0; width:100%; max-width:none; max-height:50vh; overflow:auto; border-radius:16px 16px 0 0}
     dialog.cardsheet[open]{animation:cs-up .2s ease-out}
     @keyframes cs-up{from{transform:translateY(100%)} to{transform:translateY(0)}}
@@ -1062,9 +1061,9 @@ for (const track of tracks) {
                     e.preventDefault(); // cancel the <details> toggle
                     openSheet(tile);
                 });
-                sheet.addEventListener('click', function (e) {
-                    if (e.target === sheet) sheet.close();
-                }); // backdrop
+                // Intentionally NO backdrop-click close: the sheet closes only
+                // via the ✕ button or Esc (Esc is native to dialog.showModal()),
+                // so an accidental outside tap can't dismiss it.
                 var closeBtn = sheet.querySelector('.cs-close');
                 if (closeBtn)
                     closeBtn.addEventListener('click', function () {
