@@ -1,4 +1,4 @@
-import { defineCollection } from 'astro:content';
+import { defineCollection, z } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { lessonMetaSchema, lessonBodyShape, lessonRoutingShape } from './schema/lesson';
 import { interviewSchema } from './schema/interview';
@@ -60,4 +60,32 @@ const reference = defineCollection({
     schema: referenceMetaSchema,
 });
 
-export const collections = { lessons, interview, reference };
+/**
+ * The `glossary` and `resources` collections — the on-site renderings of each
+ * track's GLOSSARY.md / RESOURCES.md (replacing scripts/build-reference-pages.py).
+ *
+ * One plain .md per track under src/content/{glossary,resources}/<track>.md
+ * (SEPARATE base dirs from the .mdx `reference` collection so the globs don't
+ * collide). The only AUTHORED frontmatter is `title:` — the exact pre-suffix
+ * <title> text, which the markdown's own H1 wording is too inconsistent to
+ * supply. ALL other metadata (name/keywords/chips/accent/ogImage/description) is
+ * DERIVED from the track slug via src/data/tracks-reference.ts, so the schema is
+ * deliberately permissive: validate `title`, passthrough anything else.
+ */
+const glossary = defineCollection({
+    loader: glob({
+        pattern: '**/*.md',
+        base: './src/content/glossary',
+    }),
+    schema: z.object({ title: z.string() }).passthrough(),
+});
+
+const resources = defineCollection({
+    loader: glob({
+        pattern: '**/*.md',
+        base: './src/content/resources',
+    }),
+    schema: z.object({ title: z.string() }).passthrough(),
+});
+
+export const collections = { lessons, interview, reference, glossary, resources };

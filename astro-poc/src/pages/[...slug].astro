@@ -25,24 +25,39 @@ import { getCollection, render } from 'astro:content';
 import LessonLayout from '../layouts/LessonLayout.astro';
 import InterviewLayout from '../layouts/InterviewLayout.astro';
 import ReferenceLayout from '../layouts/ReferenceLayout.astro';
+import GlossaryLayout from '../layouts/GlossaryLayout.astro';
 
 export async function getStaticPaths() {
-    const [lessons, interview, reference] = await Promise.all([
+    const [lessons, interview, reference, glossary, resources] = await Promise.all([
         getCollection('lessons'),
         getCollection('interview'),
         getCollection('reference'),
+        getCollection('glossary'),
+        getCollection('resources'),
     ]);
 
     const entries = [
         ...lessons.map((entry) => ({ entry, kind: 'lesson' as const })),
         ...interview.map((entry) => ({ entry, kind: 'interview' as const })),
         ...reference.map((entry) => ({ entry, kind: 'reference' as const })),
+        ...glossary.map((entry) => ({ entry, kind: 'glossary' as const })),
+        ...resources.map((entry) => ({ entry, kind: 'resources' as const })),
     ];
 
     return entries.map(({ entry, kind }) => ({
         // strip the trailing ".html" — build.format:'file' re-adds it, so this
-        // maps the entry's canonical `path` to the identical output URL.
-        params: { slug: entry.data.path.replace(/\.html$/, '') },
+        // maps each entry to its identical output URL.
+        //   • lesson/interview/reference: the entry's canonical frontmatter `path`.
+        //   • glossary/resources: derived from the entry id (the track slug),
+        //     e.g. "ai-agents" → "ai-agents/GLOSSARY" → ai-agents/GLOSSARY.html.
+        params: {
+            slug:
+                kind === 'glossary'
+                    ? `${entry.id}/GLOSSARY`
+                    : kind === 'resources'
+                      ? `${entry.id}/RESOURCES`
+                      : entry.data.path.replace(/\.html$/, ''),
+        },
         props: { entry, kind },
     }));
 }
@@ -59,10 +74,24 @@ const meta = entry.data;
 // ( <Layout meta={meta}> <Content /> </Layout> ) preserves byte-identical lesson
 // output — a JSX ternary wrapper collapses the surrounding slot whitespace and
 // would change every lesson's bytes.
-const Layout =
-    kind === 'interview' ? InterviewLayout : kind === 'reference' ? ReferenceLayout : LessonLayout;
+//
+// glossary/resources take different props (kind + track + title; all other
+// metadata is derived from the track slug), so they get their own prop object;
+// the JSX wrapper shape is unchanged.
+const isGlossaryKind = kind === 'glossary' || kind === 'resources';
+const Layout = isGlossaryKind
+    ? GlossaryLayout
+    : kind === 'interview'
+      ? InterviewLayout
+      : kind === 'reference'
+        ? ReferenceLayout
+        : LessonLayout;
+
+const layoutProps = isGlossaryKind
+    ? { kind, track: entry.id, title: entry.data.title }
+    : { meta };
 ---
 
-<Layout meta={meta}>
+<Layout {...layoutProps}>
     <Content />
 </Layout>
