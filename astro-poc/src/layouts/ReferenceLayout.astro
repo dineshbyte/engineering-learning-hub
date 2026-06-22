@@ -1,0 +1,194 @@
+---
+/**
+ * ReferenceLayout — the shared "frame" for the 10 passive Tufte-styled reference
+ * / cheat-sheet pages (<track>/reference/<slug>.html). Authoring a page means
+ * writing ONLY a typed `meta` object + the bespoke body (tables / .cols grids /
+ * pre.dgm ASCII diagrams / .y/.n cells / .tag/.flag badges / dl·dt·dd) and the
+ * per-page <footer> as the MDX body; the serif chrome (the inline skin, the
+ * fixed theme button, the hubbar, the masthead) lives here exactly once.
+ *
+ * It wraps BaseLayout with:
+ *   • extraCss={[]}     — tokens.css ONLY. Deliberately NO lesson.css /
+ *                         interview.css (either would clobber the bespoke skin).
+ *   • bodyScripts={[]}  — NO interview.js / reading-progress.js. These pages have
+ *                         no quiz/interview/progress to enhance.
+ * BaseLayout still links tokens.css and the shared analytics.js, and emits the
+ * <head> + the leading skip-link.
+ *
+ * accentVar drives the per-track :root{--accent} which is the FIRST line of the
+ * inline skin (matching the live pages, where there is no separate accent <style>
+ * tag) — so accentVar is NOT forwarded to BaseLayout's own accentVar prop, which
+ * would emit a second redundant <style>.
+ *
+ * There is deliberately NO jsonLd: these pages are passive (no FAQPage).
+ */
+import BaseLayout from './BaseLayout.astro';
+import { referenceMetaSchema } from '../schema/reference';
+
+// Validate the contract at build time — bad/missing metadata fails the build.
+const m = referenceMetaSchema.parse(Astro.props.meta);
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/'); // normalize to one trailing slash
+
+// The sticky #hubbar negative top-margin differs per skin (lifted from the live
+// pages): rest -3rem, checklist -2rem, bloom -2.4rem.
+const hubbarMargin =
+    m.skin === 'rest' ? '-3rem -1.5rem 1.4rem' : m.skin === 'bloom' ? '-2.4rem -1.4rem 1.4rem' : '-2rem -1.4rem 1.4rem';
+const hubbarPad = m.skin === 'rest' ? '.6rem 1.5rem' : '.6rem 1.4rem';
+
+// —— The three inline Tufte skins, lifted VERBATIM from the live pages. Each is
+// parameterized only by accentVar (the first :root line) and, for 'checklist',
+// the optional `.flag` badge rule (present on the two review pages, absent on the
+// two cheat-sheets). The shared .ltags chip block is appended to each.
+
+const chipCss = `
+/* topic tag chips (multi-colour, theme-aware) — match the lesson pages */
+.ltags{display:flex;flex-wrap:wrap;gap:.4rem;margin:.7rem 0 .2rem}
+.ltags .lt{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:.7rem;font-weight:600;line-height:1;white-space:nowrap;padding:.32rem .56rem;border-radius:6px;color:color-mix(in srgb,var(--lt-c,var(--accent)) 70%,var(--ink));background:color-mix(in srgb,var(--lt-c,var(--accent)) 14%,transparent);border:1px solid color-mix(in srgb,var(--lt-c,var(--accent)) 32%,transparent)}
+.ltags .lt:nth-child(6n+1){--lt-c:#5b54e6}.ltags .lt:nth-child(6n+2){--lt-c:#0f8a7e}.ltags .lt:nth-child(6n+3){--lt-c:#c2700f}.ltags .lt:nth-child(6n+4){--lt-c:#d6455d}.ltags .lt:nth-child(6n+5){--lt-c:#1f77d0}.ltags .lt:nth-child(6n+6){--lt-c:#8a3fbf}
+`;
+
+const restSkin = `
+  :root{--accent:var(${m.accentVar})}
+  *{box-sizing:border-box}
+  html{font-size:17px}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.45; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:50rem; margin:0 auto; padding:3rem 1.5rem 5rem}
+  .kicker{font-size:.72rem; letter-spacing:.18em; text-transform:uppercase; color:var(--muted); font-family:ui-sans-serif,system-ui,sans-serif}
+  h1{font-size:1.9rem; line-height:1.1; margin:.2rem 0 .3rem; font-weight:600}
+  h2{font-size:1.15rem; margin:2.4rem 0 .6rem; border-bottom:1px solid var(--line); padding-bottom:.25rem}
+  .lede{color:var(--muted); font-style:italic; margin:0 0 1.5rem}
+  table{border-collapse:collapse; width:100%; margin:.6rem 0 1rem; font-size:.92rem}
+  th,td{text-align:left; padding:.45rem .55rem; vertical-align:top; border-bottom:1px solid var(--line)}
+  th{font-family:ui-sans-serif,system-ui,sans-serif; font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600}
+  td code,p code,li code{background:var(--chip); padding:.05rem .3rem; border-radius:3px; font-size:.86em}
+  .y{color:var(--good); font-weight:700}
+  .n{color:var(--bad); font-weight:700}
+  .num{font-family:ui-sans-serif,system-ui,sans-serif; font-weight:700; color:var(--accent)}
+  dl{margin:.4rem 0}
+  dt{font-weight:600; margin-top:.85rem}
+  dd{margin:.1rem 0 0; color:var(--ink)}
+  dd .why{color:var(--muted); font-style:italic}
+  .lvl{display:flex; gap:.7rem; align-items:baseline; margin:.5rem 0; padding-bottom:.5rem; border-bottom:1px dotted var(--line)}
+  .lvl .tag{flex:0 0 3.3rem; font-family:ui-sans-serif,system-ui,sans-serif; font-weight:700; color:var(--accent)}
+  a{color:var(--accent)}
+  footer{margin-top:3rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.8rem; color:var(--muted)}
+  .themebtn{font-family:ui-sans-serif,system-ui,sans-serif;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.1rem .45rem;line-height:1.4;font-size:.9rem;color:var(--ink);}
+  .themebtn:hover{background:var(--chip);}
+  @media print{
+    html{font-size:11pt}
+    .wrap{max-width:none; padding:0}
+    h2{break-after:avoid} table,.lvl,dt{break-inside:avoid}
+    a{color:var(--ink); text-decoration:none}
+    footer{display:none}
+    .themebtn,#hubbar{display:none!important}
+    html[data-theme="dark"]{--bg:#fff;--card:#fff;--ink:#111110}
+  }
+`;
+
+const checklistSkin = `
+  :root{--accent:var(${m.accentVar})}
+  *{box-sizing:border-box}
+  html{font-size:16px}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.4}
+  .wrap{max-width:58rem; margin:0 auto; padding:2rem 1.4rem 4rem}
+  .kicker{font-size:.68rem; letter-spacing:.18em; text-transform:uppercase; color:var(--muted);
+    font-family:ui-sans-serif,system-ui,sans-serif}
+  h1{font-size:1.7rem; margin:.2rem 0 .2rem; font-weight:600; letter-spacing:-.01em}
+  .sub{font-family:ui-sans-serif,system-ui,sans-serif; font-size:.78rem; color:var(--muted); margin-bottom:1rem}
+  h2{font-size:.82rem; letter-spacing:.08em; text-transform:uppercase; font-family:ui-sans-serif,system-ui,sans-serif;
+    color:var(--accent); margin:1.4rem 0 .5rem; border-bottom:1px solid var(--line); padding-bottom:.2rem}
+  .one{background:var(--chip); border-left:3px solid var(--accent); padding:.6rem .9rem; font-size:1rem; margin:.6rem 0 1rem}
+  .cols{display:grid; grid-template-columns:1fr 1fr; gap:0 2rem}
+@media(max-width:640px){.cols{grid-template-columns:1fr; gap:0}}
+  pre.dgm{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.68rem; line-height:1.35;
+    background:var(--chip); border:1px solid var(--line); border-radius:6px; padding:.7rem .8rem; overflow-x:auto; color:var(--ink); margin:.5rem 0}
+  table{width:100%; border-collapse:collapse; font-size:.78rem; margin:.3rem 0 .6rem;
+    font-family:ui-sans-serif,system-ui,sans-serif}
+  th,td{text-align:left; padding:.28rem .4rem; border-bottom:1px solid var(--line); vertical-align:top}
+  th{font-size:.66rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted)}
+  td:first-child{font-weight:700; white-space:nowrap}
+  code{background:var(--chip); padding:.03rem .25rem; border-radius:3px; font-size:.84em;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .rules{font-size:.84rem} .rules li{margin:.22rem 0}
+  .tag{display:inline-block; font-family:ui-sans-serif,system-ui,sans-serif; font-size:.6rem; font-weight:700;
+    color:var(--card); background:var(--track-rest); border-radius:3px; padding:.05rem .3rem; vertical-align:middle}
+${m.flag ? `  .flag{display:inline-block; font-family:ui-sans-serif,system-ui,sans-serif; font-size:.6rem; font-weight:700;
+    color:var(--card); background:var(--accent); border-radius:3px; padding:.05rem .3rem; vertical-align:middle}
+` : ''}  a{color:var(--accent)}
+  footer{margin-top:1.6rem; font-size:.72rem; color:var(--muted); border-top:1px solid var(--line); padding-top:.6rem}
+  .themebtn{font-family:ui-sans-serif,system-ui,sans-serif;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.1rem .45rem;line-height:1.4;font-size:.9rem;color:var(--ink);}
+  .themebtn:hover{background:var(--chip);}
+  @media print{ a{color:var(--ink)} .themebtn,#hubbar{display:none!important} html[data-theme="dark"]{--bg:#fff;--card:#fff;--chip:#fff;--ink:#111110} }
+`;
+
+const bloomSkin = `
+  :root{--accent:var(${m.accentVar})}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.5}
+  .wrap{max-width:46rem;margin:0 auto;padding:2.4rem 1.4rem 4rem}
+  h1{font-size:1.5rem;margin:0 0 .2rem}
+  .kicker{font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  h2{font-size:1rem;margin:1.6rem 0 .4rem;color:var(--accent)}
+  table{border-collapse:collapse;width:100%;margin:.6rem 0;font-size:.86rem}
+  th,td{border:1px solid var(--line);padding:.4rem .55rem;text-align:left;vertical-align:top}
+  th{background:var(--chip)}
+  code{background:var(--chip);padding:.05rem .3rem;border-radius:3px;font-size:.9em}
+  .one{background:var(--chip);border-left:3px solid var(--accent);padding:.7rem 1rem;margin:1rem 0;font-size:.95rem}
+  ul{margin:.4rem 0 .4rem 1.1rem;padding:0;font-size:.88rem}
+  footer{margin-top:2rem;font-size:.76rem;color:var(--muted)}
+  a{color:var(--accent)}
+  .themebtn{position:fixed;top:.7rem;right:.7rem;z-index:60;font-family:ui-sans-serif,system-ui,sans-serif;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.15rem .5rem;font-size:1rem;color:var(--ink)}
+  .themebtn:hover{background:var(--chip)}
+  @media print{body{font-size:12px} a{color:var(--ink)} .themebtn{display:none!important} html[data-theme="dark"]{--bg:#fff;--card:#fff;--ink:#111110}}
+`;
+
+const skinCss = m.skin === 'rest' ? restSkin : m.skin === 'bloom' ? bloomSkin : checklistSkin;
+---
+
+<BaseLayout
+    title={m.title}
+    description={m.description}
+    keywords={m.keywords}
+    path={m.path}
+    ogTitle={m.ogTitle}
+    ogImage={m.ogImage}
+    ogImageAlt={m.ogImageAlt}
+    extraCss={[]}
+    bodyScripts={[]}
+    skipTarget="#main"
+>
+    <style is:inline set:html={skinCss} />
+    <style is:inline set:html={chipCss} />
+
+    <button
+        class="themebtn"
+        onclick="toggleTheme()"
+        aria-label="Toggle dark mode"
+        title="Toggle dark / light"
+        style="position:fixed;top:.7rem;right:.7rem;z-index:60;background:var(--card)">&#127763;</button
+    >
+    <div class="wrap">
+        <nav
+            id="hubbar"
+            style={`position:sticky;top:0;z-index:50;display:flex;justify-content:space-between;align-items:center;gap:1rem;margin:${hubbarMargin};padding:${hubbarPad};background:var(--card);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);font-family:ui-sans-serif,system-ui,sans-serif;font-size:.8rem`}
+            ><a
+                href={`${base}index.html`}
+                style="color:var(--accent);text-decoration:none;font-weight:600">&#8592; Engineering Vault</a
+            ><span style="color:var(--muted)">{m.trackLabel}</span></nav
+        >
+        <main id="main" tabindex="-1">
+            <div class="kicker">{m.kicker}</div>
+            <h1 set:html={m.h1Html} />
+            <div class="ltags">{m.chips.map((c) => <span class="lt" set:html={c} />)}</div>
+            {m.lede && <p class="lede" set:html={m.lede} />}
+            {m.subHtml && <div class="sub" set:html={m.subHtml} />}
+
+            <slot />
+        </main>
+    </div>
+</BaseLayout>

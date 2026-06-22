@@ -24,16 +24,19 @@
 import { getCollection, render } from 'astro:content';
 import LessonLayout from '../layouts/LessonLayout.astro';
 import InterviewLayout from '../layouts/InterviewLayout.astro';
+import ReferenceLayout from '../layouts/ReferenceLayout.astro';
 
 export async function getStaticPaths() {
-    const [lessons, interview] = await Promise.all([
+    const [lessons, interview, reference] = await Promise.all([
         getCollection('lessons'),
         getCollection('interview'),
+        getCollection('reference'),
     ]);
 
     const entries = [
         ...lessons.map((entry) => ({ entry, kind: 'lesson' as const })),
         ...interview.map((entry) => ({ entry, kind: 'interview' as const })),
+        ...reference.map((entry) => ({ entry, kind: 'reference' as const })),
     ];
 
     return entries.map(({ entry, kind }) => ({
@@ -56,7 +59,8 @@ const meta = entry.data;
 // ( <Layout meta={meta}> <Content /> </Layout> ) preserves byte-identical lesson
 // output — a JSX ternary wrapper collapses the surrounding slot whitespace and
 // would change every lesson's bytes.
-const Layout = kind === 'interview' ? InterviewLayout : LessonLayout;
+const Layout =
+    kind === 'interview' ? InterviewLayout : kind === 'reference' ? ReferenceLayout : LessonLayout;
 ---
 
 <Layout meta={meta}>

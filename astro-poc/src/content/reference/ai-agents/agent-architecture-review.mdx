@@ -1,0 +1,147 @@
+---
+title: "AI Agent Architecture-Review Checklist"
+description: "AI agent architecture-review checklist: seven review lenses, trust boundaries, production-readiness checks, common failure modes, and red flags for the design-review chair."
+keywords: "ai agent architecture-review, agent loop, multi-agent, ai, agents, llm, tool, runtime, memory, mcp, claude, cursor, production"
+path: "ai-agents/reference/agent-architecture-review.html"
+ogImage: "assets/og/ai-agents.png"
+ogImageAlt: "AI Agents · Engineering Vault learning track"
+accentVar: "--track-agents"
+trackLabel: "AI Agents · Reference"
+kicker: "Reference · AI Agents · Stage 2"
+h1Html: "Reviewing an agent system — one-page cheat sheet"
+chips:
+    - "AI agent architecture-review"
+    - "Agent loop"
+    - "Multi-agent"
+    - "AI"
+    - "Agents"
+subHtml: 'For the design-review chair · print me · pairs with <a href="../lessons/0005-agent-systems-engineering.html#m12">Lesson 5 (architecture reviews + catalogs)</a> &amp; <a href="../lessons/0004-agent-systems-and-production.html#m8">Lesson 4 (M7–M9)</a> &amp; the <a href="../GLOSSARY.html">glossary</a>'
+skin: "checklist"
+flag: true
+track: "ai-agents"
+---
+
+  <div class="one"><strong>The one sentence:</strong> an agent request is <em>not</em> a web request — it's a
+  <em>long-lived, stateful session that fans out to a non-deterministic, sometimes-failing model and to
+  privileged tools.</em> Almost every risk below flows from that one structural fact.</div>
+
+  <div class="cols">
+    <div>
+      <h2>The seven review lenses</h2>
+      <table>
+        <tr><th>Lens</th><th>The question that finds the risk</th></tr>
+        <tr><td>Scalability</td><td>What's the binding limit at 10k users? (Hint: provider rate limits, not CPU.)</td></tr>
+        <tr><td>Reliability</td><td>Per-step success rate → end-to-end task rate?</td></tr>
+        <tr><td>Security</td><td>Worst single tool call? Control in runtime or prompt?</td></tr>
+        <tr><td>Cost</td><td>Cost per completed task? Kill switch on runaway?</td></tr>
+        <tr><td>Observability</td><td>Debug a bad action from 3 days ago — how?</td></tr>
+        <tr><td>Context eng.</td><td>Retrieval failure vs reasoning failure — tell them apart?</td></tr>
+        <tr><td>Evaluation</td><td>What catches a 5% regression before it ships?</td></tr>
+      </table>
+
+      <h2>Numbers that reframe the review</h2>
+      <pre class="dgm">{`RELIABILITY COMPOUNDS DOWN
+  0.99^40  ≈ 67%   (99% step, 40 steps)
+  0.999^40 ≈ 96%   → steps must be ~99.9%
+
+COST IS DOMINATED BY INPUT TOKENS
+  context is RE-SENT every step →
+  session tokens grow ~quadratically
+  multi-agent ≈ 15× the tokens of a chat
+
+THE BOTTLENECK
+  provider rate limits (TPM/RPM),
+  not your servers' CPU`}</pre>
+
+      <h2>Trust boundaries</h2>
+      <pre class="dgm">TRUSTED    system prompt
+UNTRUSTED  user input
+UNTRUSTED  tool outputs / fetched content
+           (a web page, a DB row, a file)
+ENFORCE    in the runtime / policy layer,
+           NEVER in prompt instructions.
+The model cannot police its own boundary.</pre>
+    </div>
+
+    <div>
+      <h2>Architecture review checklist</h2>
+      <ol class="rules">
+        <li>Loop <strong>durable/resumable</strong> (checkpointed), or work lost on crash?</li>
+        <li>Where does <strong>session state</strong> live — can any worker resume?</li>
+        <li><strong>Provider rate limits</strong> managed (queue, multi-key, backpressure)?</li>
+        <li><strong>Per-tenant isolation</strong> — can one tenant starve the rest?</li>
+        <li>Every tool: <strong>scope, credentials, worst call</strong> enumerated?</li>
+        <li>Authorization in the <strong>runtime/policy layer</strong>, not the prompt?</li>
+        <li><strong>Idempotency</strong> on every mutating tool?</li>
+        <li><strong>Loop cap + wall-clock + token budget</strong> in the runtime?</li>
+        <li><strong>Full per-step traces</strong> (context + output + tool calls + cost)?</li>
+        <li><strong>Eval harness</strong> gating prompt/model changes?</li>
+      </ol>
+
+      <h2>Agent design checklist</h2>
+      <ol class="rules">
+        <li>Smallest viable toolset; <strong>read and write agents split</strong>.</li>
+        <li>Tools have typed schemas + <strong>arg validation</strong>.</li>
+        <li>Retrieval <strong>hybrid + reranked</strong>; recall measured on its own.</li>
+        <li><strong>Context budget</strong> per section; history <strong>compacted</strong>.</li>
+        <li><strong>Model tiering</strong> — cheap to navigate, strong for the hard step.</li>
+        <li><strong>Prompt caching</strong> on the stable prefix.</li>
+        <li>Irreversible actions gated by <strong>approval / HITL</strong>.</li>
+        <li>Tool outputs <strong>tagged as data</strong>, never as instructions.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>Production readiness checklist</h2>
+  <div class="cols">
+    <ol class="rules">
+      <li>Token/cost <strong>budget + kill switch</strong> per session &amp; tenant.</li>
+      <li><strong>Circuit breakers</strong> per tool and per provider.</li>
+      <li><strong>Retries</strong>: bounded, backoff + jitter, idempotency keys.</li>
+      <li>Retryable-vs-not <strong>classified</strong> (retry 429/503/timeout; never 400/auth).</li>
+      <li><strong>Graceful degradation</strong> path (smaller model / cache / escalate).</li>
+    </ol>
+    <ol class="rules" start="6">
+      <li><strong>Immutable audit log</strong> for every mutation.</li>
+      <li><strong>Secret/PII redaction</strong> in logs and traces.</li>
+      <li><strong>Dead-letter + human-escalation</strong> queue.</li>
+      <li>Cost <strong>attribution + alerting</strong> per tenant.</li>
+      <li><strong>Canary/rollback</strong> + <strong>multi-provider failover</strong>.</li>
+    </ol>
+  </div>
+
+  <h2>Common failure modes</h2>
+  <p style="font-size:.84rem;font-family:ui-sans-serif,system-ui,sans-serif">Retry storms · duplicated
+  side effects (charges/emails) from non-idempotent retries · runaway loop → unbounded spend ·
+  noisy-neighbor quota starvation · prompt injection via tool/RAG content → exfiltration or unauthorized
+  action · over-broad token → mass deletion · retrieval recall miss → confident wrong answer ·
+  lost-in-the-middle · context exhaustion on long tasks · silent degradation · "can't reproduce it"
+  (no traces) · silent regression from a prompt tweak.</p>
+
+  <h2><span class="flag">RED FLAGS</span> in an agent architecture</h2>
+  <p style="font-size:.84rem;font-family:ui-sans-serif,system-ui,sans-serif">"Guardrails" that are
+  system-prompt sentences · one omnipotent API key or tool · sync request handling for long tasks ·
+  no per-step tracing or assembled-context capture · no eval set ("we test by trying it") · unbounded
+  retries / no loop cap · no idempotency on writes · always the biggest model, no tiering · full history
+  re-sent with no compaction or caching · no per-tenant cost visibility · tool outputs concatenated
+  straight into instruction context · <em>"the model will know not to do that."</em></p>
+
+  <h2>Eight questions for the design-review chair</h2>
+  <ol class="rules">
+    <li>"Per-step success rate, and therefore end-to-end task rate?" <span class="tag">forces 0.99^40 ≈ 67%</span></li>
+    <li>"Enumerate every tool's blast radius. For each worst case — control in the runtime or the prompt?"</li>
+    <li>"Where does state live if a worker dies at step 20 of 30?"</li>
+    <li>"Cost per completed task, and the kill switch on runaway spend?"</li>
+    <li>"How do you tell a retrieval failure from a reasoning failure in a wrong answer?"</li>
+    <li>"I change one prompt line — what catches a 5% regression before it ships?"</li>
+    <li>"Debug a bad action from three days ago — without re-running it. Show me."</li>
+    <li>"Noisy-neighbor story — can one tenant starve the rest?"</li>
+  </ol>
+
+  <footer>
+    Sources: Anthropic, <a href="https://www.anthropic.com/engineering/building-effective-agents">Building effective agents</a> ·
+    Anthropic, <a href="https://www.anthropic.com/engineering/multi-agent-research-system">Multi-agent research system</a> ·
+    <a href="https://modelcontextprotocol.io">Model Context Protocol</a> ·
+    <a href="https://owasp.org/www-project-top-10-for-large-language-model-applications/">OWASP LLM Top 10</a>.
+    Full annotated list in <a href="../RESOURCES.html">Resources</a>.
+  </footer>

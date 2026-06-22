@@ -2,6 +2,7 @@ import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { lessonMetaSchema, lessonBodyShape, lessonRoutingShape } from './schema/lesson';
 import { interviewSchema } from './schema/interview';
+import { referenceMetaSchema } from './schema/reference';
 
 /**
  * The `lessons` content collection — the MDX-hybrid lesson shape.
@@ -43,4 +44,20 @@ const interview = defineCollection({
     schema: interviewSchema,
 });
 
-export const collections = { lessons, interview };
+/**
+ * The `reference` content collection — the passive Tufte-styled reference /
+ * cheat-sheet pages (<track>/reference/<slug>.html). One .mdx per page under
+ * src/content/reference/<track>/. FRONTMATTER carries the head/masthead `meta`
+ * (validated by referenceMetaSchema) + the inline-skin selector; the MDX BODY
+ * is the bespoke content (tables / grids / ASCII diagrams / badges) authored as
+ * raw HTML plus the per-page <footer>. Schema source of truth: schema/reference.ts.
+ */
+const reference = defineCollection({
+    loader: glob({
+        pattern: '**/*.mdx',
+        base: './src/content/reference',
+    }),
+    schema: referenceMetaSchema,
+});
+
+export const collections = { lessons, interview, reference };
