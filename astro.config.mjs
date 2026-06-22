@@ -100,7 +100,7 @@ function rehypeHeadingIds() {
 export default defineConfig({
     site: 'https://dineshbyte.github.io',
     base: '/engineering-learning-hub',
-    outDir: '../docs',
+    outDir: './docs',
     build: {
         format: 'file',
         emptyOutDir: true,
