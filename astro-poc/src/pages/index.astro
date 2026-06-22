@@ -61,76 +61,16 @@ const jsonLd = {
     license: 'https://opensource.org/licenses/MIT',
 };
 
-// ── Derive window.SEARCH_INDEX + window.CARD_DETAIL from `tracks` ────────────
-// ONE source of truth. The old page loaded prebuilt assets/search-index.js +
-// assets/card-detail.js; we rebuild equivalent shapes from the track data so
-// there is no second, drift-prone copy.
-//
-// SEARCH_INDEX entry shape the ported run() expects: {t, u, g, k, x}
-//   t = title (display), u = href, g = group/track name (plain, no entities),
-//   k = kind label rendered in .rkind ("Lesson" | "Reference"),
-//   x = lowercased searchable body blob (word-boundary matched in run()).
-// Entities (&amp;, &mdash;) are stripped for the searchable/display strings so
-// matching + the rendered .rt/.rg read as plain text (the old prebuilt index
-// also stored decoded text in t/g/x). NOTE: this derivation covers Lessons +
-// Reference pills only — the old prebuilt index ALSO carried interview pages and
-// full lesson-BODY text in `x`. See the integration note returned with this work.
-const decode = (s: string): string =>
-    s
-        .replace(/&amp;/g, '&')
-        .replace(/&mdash;/g, '—')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&#39;/g, "'")
-        .replace(/&quot;/g, '"');
+// ── window.SEARCH_INDEX is now BUILD-GENERATED ───────────────────────────────
+// The search index is no longer derived inline here. It is statically generated
+// (FULL-TEXT, from the `lessons` content collection) by the endpoint
+// src/pages/assets/search-index.js.ts → emitted as assets/search-index.js, which
+// the page loads (non-defer) BEFORE the ported search IIFE runs (see below). The
+// old title+blurb-only derivation lost lesson-body prose from search; the
+// endpoint restores deep search. CARD_DETAIL stays derived inline from `tracks`.
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/'); // exactly one trailing slash
 
-// Reference pill label → .rkind kind. The muted pills (md) are Glossary /
-// Resources / Roadmap; the rest are cheat/review/topic reference sheets.
-const refKind = (label: string): string => {
-    const l = decode(label).toLowerCase();
-    if (l.includes('glossary')) return 'Glossary';
-    if (l.includes('resources')) return 'Resources';
-    if (l.includes('roadmap')) return 'Roadmap';
-    return 'Reference';
-};
-
-// `c` = the track's CSS color var (e.g. "--track-rest"). The OLD script kept a
-// hardcoded TOK map keyed by short group names ("REST API"); that map had no
-// entry for the 6 newer AI-eng tracks and mismatched "REST API Mastery", so
-// those result rows fell back to --accent. Carrying the colorVar per entry keeps
-// ONE source (tracks) and gives every track the correct result-dot color.
-type SearchEntry = { t: string; u: string; g: string; k: string; x: string; c: string };
-
-const searchIndex: SearchEntry[] = [];
-for (const track of tracks) {
-    const group = decode(track.name);
-    for (const lesson of track.lessons) {
-        const t = decode(lesson.title);
-        const blurb = lesson.blurb ? decode(lesson.blurb) : '';
-        searchIndex.push({
-            t,
-            u: lesson.href,
-            g: group,
-            k: 'Lesson',
-            // x = group + title + blurb, lowercased (matches the old index's
-            // "title + description" body for entries without full-text scrape).
-            x: `${group} ${t} ${blurb}`.toLowerCase(),
-            c: track.colorVar,
-        });
-    }
-    for (const ref of track.references) {
-        const t = decode(ref.label);
-        searchIndex.push({
-            t,
-            u: ref.href,
-            g: group,
-            k: refKind(ref.label),
-            x: `${group} ${t}`.toLowerCase(),
-            c: track.colorVar,
-        });
-    }
-}
-
+// ── Derive window.CARD_DETAIL from `tracks` ──────────────────────────────────
 // CARD_DETAIL: { lessonHref → blurb }. The bottom sheet (openSheet) reads this
 // to show a per-lesson blurb. Derived straight from lessons[].blurb (the 6
 // single-lesson AI-eng tracks have no blurb, so they're simply absent — same as
@@ -549,13 +489,19 @@ for (const track of tracks) {
     <CardSheet />
 
     {
-        /* Derived data: ONE source (tracks). Emitted before the IIFE so window.*
-        are set when the script runs. is:inline keeps them un-bundled/global. */
+        /* window.SEARCH_INDEX — loaded from the build-generated asset. A plain
+        (non-defer, non-async) inline-src script placed BEFORE the IIFE script
+        guarantees SEARCH_INDEX is defined when run() executes. The endpoint
+        (src/pages/assets/search-index.js.ts) owns this file now — FULL-TEXT,
+        from the lessons collection. */
     }
-    <script
-        is:inline
-        set:html={`window.SEARCH_INDEX=${JSON.stringify(searchIndex)};window.CARD_DETAIL=${JSON.stringify(cardDetail)};`}
-    />
+    <script src={`${base}assets/search-index.js`} is:inline></script>
+
+    {
+        /* window.CARD_DETAIL — still derived inline from `tracks` (ONE source).
+        Emitted before the IIFE so it is set when the script runs. */
+    }
+    <script is:inline set:html={`window.CARD_DETAIL=${JSON.stringify(cardDetail)};`} />
 
     {
         /* Ported client IIFE from docs/index.html — kept VERBATIM (search/run,
