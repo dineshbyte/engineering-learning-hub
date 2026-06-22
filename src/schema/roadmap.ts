@@ -36,6 +36,16 @@ export const roadmapSchema = z.object({
     trackLabel: z.string(), // hubbar muted label, e.g. "Storage Engines"
     kicker: z.string().default('Learning track · Roadmap'), // eyebrow
 
+    // —— dates (optional) —— shown on the page itself, never on hub cards.
+    publishedAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'publishedAt must be YYYY-MM-DD')
+        .optional(),
+    updatedAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'updatedAt must be YYYY-MM-DD')
+        .optional(),
+
     // —— routing (used by the dynamic route) ——
     path: z.string().min(1), // EXACT, e.g. "storage-engines/README.html" — required (build fails if missing)
 });

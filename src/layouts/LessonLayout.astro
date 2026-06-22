@@ -12,18 +12,11 @@
  */
 import BaseLayout from './BaseLayout.astro';
 import { lessonMetaSchema } from '../schema/lesson';
+import PageDates from '../components/PageDates.astro';
 
 // Validate the contract at build time — bad/missing metadata fails the build.
 const m = lessonMetaSchema.parse(Astro.props.meta);
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/'); // normalize to exactly one trailing slash
-
-// Format a YYYY-MM-DD string for display WITHOUT Date() (avoids any timezone
-// shift; build-deterministic). Returns e.g. "Jun 21, 2026".
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const fmtDate = (d: string) => {
-    const [y, mo, day] = d.split('-');
-    return `${MONTHS[Number(mo) - 1]} ${Number(day)}, ${y}`;
-};
 ---
 
 <BaseLayout
@@ -75,24 +68,7 @@ const fmtDate = (d: string) => {
             <div class="kicker">{m.kicker}</div>
             <h1 set:html={m.h1Html} />
             <p class="meta">{m.metaLine}</p>
-            {
-                (m.publishedAt || m.updatedAt) && (
-                    <p class="lesson-dates">
-                        {m.publishedAt && (
-                            <Fragment>
-                                Published{' '}
-                                <time datetime={m.publishedAt}>{fmtDate(m.publishedAt)}</time>
-                            </Fragment>
-                        )}
-                        {m.publishedAt && m.updatedAt && ' · '}
-                        {m.updatedAt && (
-                            <Fragment>
-                                Updated <time datetime={m.updatedAt}>{fmtDate(m.updatedAt)}</time>
-                            </Fragment>
-                        )}
-                    </p>
-                )
-            }
+            <PageDates publishedAt={m.publishedAt} updatedAt={m.updatedAt} />
             <div class="ltags">{m.chips.map((c) => <span class="lt">{c}</span>)}</div>
 
             <slot />

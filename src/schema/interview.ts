@@ -37,6 +37,16 @@ export const interviewSchema = z
         metaLine: z.string(), // RAW HTML — carries the "pairs with <a>Lesson N</a>" cross-link + &nbsp; (NOT derivable)
         chips: z.array(z.string()).min(1), // the .ltags topic chips (HTML allowed per chip)
 
+        // —— dates (optional) —— shown on the page itself, never on hub cards.
+        publishedAt: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/, 'publishedAt must be YYYY-MM-DD')
+            .optional(),
+        updatedAt: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/, 'updatedAt must be YYYY-MM-DD')
+            .optional(),
+
         // —— wayfinding (data-driven .nav, top + bottom) ——
         topNav: z.object({
             refHref: z.string(), // the "📄 …reference" link href

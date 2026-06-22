@@ -47,6 +47,16 @@ export const referenceMetaSchema = z.object({
     h1Html: z.string(), // headline; may contain inline HTML (&amp;, <em>, …)
     chips: z.array(z.string()).min(1), // the .ltags topic chips (HTML allowed per chip)
 
+    // —— dates (optional) —— shown on the page itself, never on hub cards.
+    publishedAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'publishedAt must be YYYY-MM-DD')
+        .optional(),
+    updatedAt: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'updatedAt must be YYYY-MM-DD')
+        .optional(),
+
     // Exactly one of these renders the optional intro line under the chips:
     lede: z.string().optional(), // <p class="lede"> on the 5 REST pages
     subHtml: z.string().optional(), // <div class="sub"> on the agents/context pages (carries cross-links)
