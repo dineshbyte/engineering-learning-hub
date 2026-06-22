@@ -26,14 +26,16 @@ import LessonLayout from '../layouts/LessonLayout.astro';
 import InterviewLayout from '../layouts/InterviewLayout.astro';
 import ReferenceLayout from '../layouts/ReferenceLayout.astro';
 import GlossaryLayout from '../layouts/GlossaryLayout.astro';
+import RoadmapLayout from '../layouts/RoadmapLayout.astro';
 
 export async function getStaticPaths() {
-    const [lessons, interview, reference, glossary, resources] = await Promise.all([
+    const [lessons, interview, reference, glossary, resources, roadmap] = await Promise.all([
         getCollection('lessons'),
         getCollection('interview'),
         getCollection('reference'),
         getCollection('glossary'),
         getCollection('resources'),
+        getCollection('roadmap'),
     ]);
 
     const entries = [
@@ -42,6 +44,7 @@ export async function getStaticPaths() {
         ...reference.map((entry) => ({ entry, kind: 'reference' as const })),
         ...glossary.map((entry) => ({ entry, kind: 'glossary' as const })),
         ...resources.map((entry) => ({ entry, kind: 'resources' as const })),
+        ...roadmap.map((entry) => ({ entry, kind: 'roadmap' as const })),
     ];
 
     return entries.map(({ entry, kind }) => ({
@@ -85,7 +88,9 @@ const Layout = isGlossaryKind
       ? InterviewLayout
       : kind === 'reference'
         ? ReferenceLayout
-        : LessonLayout;
+        : kind === 'roadmap'
+          ? RoadmapLayout
+          : LessonLayout;
 
 const layoutProps = isGlossaryKind
     ? { kind, track: entry.id, title: entry.data.title }

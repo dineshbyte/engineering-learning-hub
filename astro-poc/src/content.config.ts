@@ -3,6 +3,7 @@ import { glob } from 'astro/loaders';
 import { lessonMetaSchema, lessonBodyShape, lessonRoutingShape } from './schema/lesson';
 import { interviewSchema } from './schema/interview';
 import { referenceMetaSchema } from './schema/reference';
+import { roadmapSchema } from './schema/roadmap';
 
 /**
  * The `lessons` content collection — the MDX-hybrid lesson shape.
@@ -88,4 +89,25 @@ const resources = defineCollection({
     schema: z.object({ title: z.string() }).passthrough(),
 });
 
-export const collections = { lessons, interview, reference, glossary, resources };
+/**
+ * The `roadmap` collection — the on-site renderings of each track's README.md
+ * roadmap/index (5 tracks: storage-engines, distributed-systems,
+ * transactions-isolation, streaming-event-driven, applied-systems-design).
+ *
+ * One plain .md per track under src/content/roadmaps/<track>.md (a SEPARATE base
+ * dir from glossary/resources so the globs don't collide). FRONTMATTER carries
+ * the full roadmap contract (head/SEO lifted verbatim from the live README.html
+ * + the masthead chips/accent/label/kicker + the routing `path`), validated by
+ * roadmapSchema; the .md BODY is the roadmap content (prose + tables + checklist
+ * + file tree), rendered with its leading H1 stripped (the layout renders the
+ * canonical H1 from `title`). Schema source of truth: src/schema/roadmap.ts.
+ */
+const roadmap = defineCollection({
+    loader: glob({
+        pattern: '**/*.md',
+        base: './src/content/roadmaps',
+    }),
+    schema: roadmapSchema,
+});
+
+export const collections = { lessons, interview, reference, glossary, resources, roadmap };

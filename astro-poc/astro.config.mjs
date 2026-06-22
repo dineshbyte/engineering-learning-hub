@@ -43,13 +43,14 @@ function hastText(node) {
  * MDX inherits this base `markdown` config, so the plugin is SCOPED by source
  * path: the 70 lesson/interview/reference .mdx pages keep their existing
  * github-slugger ids and their authored H1s untouched. We no-op unless the file
- * lives under src/content/{glossary,resources}/.
+ * lives under src/content/{glossary,resources,roadmaps}/ (roadmaps are the 5
+ * README pages — same treatment: strip the leading H1, id the rest).
  */
 function rehypeHeadingIds() {
     return (tree, file) => {
         const p = (file && (file.path || file.history?.[0])) || '';
         const norm = p.replace(/\\/g, '/');
-        if (!/\/content\/(glossary|resources)\//.test(norm)) return;
+        if (!/\/content\/(glossary|resources|roadmaps)\//.test(norm)) return;
 
         // 1. drop the FIRST <h1> wherever it sits in the tree (it may be nested
         //    inside a wrapper element, not a direct child of the root). Walk
