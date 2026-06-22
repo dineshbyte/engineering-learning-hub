@@ -20,6 +20,10 @@ export interface Props {
     jsonLd?: unknown; // structured data object/array → <head>
     bodyScripts?: string[]; // deferred scripts at end of <body>, paths under the site
     skipTarget?: string; // skip-link href; lessons use "#main", the hub uses "#grid"
+    extraCss?: string[]; // stylesheets linked AFTER tokens.css; paths under the site.
+    // Defaults to the lesson/hub stack (lesson.css + interview.css). Tufte pages
+    // (interview banks, reference, README) override this — e.g. ['assets/interview.css']
+    // only — because lesson.css would clobber their serif inline design.
 }
 
 const {
@@ -35,6 +39,7 @@ const {
     jsonLd,
     bodyScripts = [],
     skipTarget = '#main',
+    extraCss = ['assets/lesson.css', 'assets/interview.css'],
 } = Astro.props;
 
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/'); // normalize to exactly one trailing slash
@@ -99,8 +104,7 @@ const ogImageUrl = ogImage ? asset(ogImage) : undefined;
             }
         </script>
         <link rel="stylesheet" href={url('assets/tokens.css')} />
-        <link rel="stylesheet" href={url('assets/lesson.css')} />
-        <link rel="stylesheet" href={url('assets/interview.css')} />
+        {extraCss.map((href) => <link rel="stylesheet" href={url(href)} />)}
         {accentVar && <style is:inline set:html={`:root{--accent:var(${accentVar})}`} />}
         {
             jsonLd && (

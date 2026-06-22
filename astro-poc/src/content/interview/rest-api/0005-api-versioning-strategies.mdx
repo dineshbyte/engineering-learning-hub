@@ -1,0 +1,244 @@
+---
+# ─── rest-api · Interview Bank 5 — migrated to the InterviewLayout pattern ─────
+# FRONTMATTER = the full bank contract (head + masthead + nav + footer) PLUS the
+# structured Q&A lifted VERBATIM out of the source <div data-interview>: the
+# level-grouped interview[] {level, q, a} and the design rubric (rubricIntro +
+# rubric[]). Validated at build time by the `interview` collection schema
+# (content.config.ts → schema/interview.ts). <Interview> emits the single FAQPage
+# JSON-LD from `interview` — there is deliberately NO jsonLd field.
+#
+# HTML-bearing strings use YAML folded block scalars (>-) so embedded ", ', &, <
+# and > need NO escaping.
+
+# —— head / SEO ——
+title: 'API Versioning Interview Questions'
+description: >-
+    Practice API versioning and evolution with 36 senior and staff REST API interview questions on URI vs header versioning, breaking changes, and deprecation.
+keywords: 'api versioning, status codes, http methods, rest, api, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors, rate'
+path: 'rest-api/interview/0005-api-versioning-strategies.html'
+ogImage: 'assets/og/rest-api.png'
+ogImageAlt: 'REST API · Engineering Vault learning track'
+accentVar: '--track-rest'
+
+# —— masthead ——
+trackLabel: 'REST API Mastery · Interview'
+kicker: 'Interview Bank · Lesson 5'
+h1Html: 'Versioning &amp; API evolution — interview questions'
+metaLine: >-
+    36 questions · Core / Senior / Staff · pairs with <a href="../lessons/0005-api-versioning-strategies.html">Lesson 5</a>
+chips:
+    - 'API versioning'
+    - 'Status codes'
+    - 'HTTP methods'
+    - 'REST'
+    - 'API'
+
+# —— wayfinding ——
+topNav:
+    refHref: '../reference/caching-pagination-versioning.html'
+    refLabel: 'Caching, Pagination &amp; Versioning reference'
+    prevHref: '0004-resource-modeling-and-uri-design.html'
+    prevLabel: '◂ Prev bank'
+    nextHref: '0006-pagination-at-scale.html'
+    nextLabel: 'Next bank: Pagination at scale ▸'
+
+# —— footer ——
+footerHtml: >-
+    Interview bank · Lesson 5 · answer from memory first, then reveal · <a href="0004-resource-modeling-and-uri-design.html">◂ Prev bank</a> · <a href="../../index.html">all lessons &amp; banks</a>
+
+# —— routing ——
+track: 'rest-api'
+number: '0005'
+
+# —— interview Q&A (verbatim from <div data-interview>) ——
+interview:
+    - level: 'core'
+      q: 'What is a breaking change?'
+      a: >-
+          <p>Any change that can cause a <strong>deployed client to fail</strong> without the client changing its own code. The line that decides versioning: if a change can break an integration silently, it's breaking; if it can't, it's safe to ship in place.</p>
+    - level: 'core'
+      q: 'Name the classic breaking changes.'
+      a: >-
+          <ul>       <li>Removing or renaming a field</li>       <li>Changing a field's type or its meaning</li>       <li>Making an optional field required</li>       <li>Tightening validation</li>       <li>Changing a default behavior</li>       <li>Removing an endpoint, or an enum value clients depend on</li>     </ul><p>Each of these can break a client that did nothing wrong.</p>
+    - level: 'core'
+      q: 'Name the non-breaking changes you can ship freely.'
+      a: >-
+          <ul>       <li>Adding an <em>optional</em> request field</li>       <li>Adding a field to a response</li>       <li>Adding a new endpoint</li>       <li>Adding a new enum value — <em>if</em> clients tolerate unknowns</li>     </ul><p>These are pure additions: no version, no migration, no client action.</p>
+    - level: 'core'
+      q: 'What is a "tolerant reader"?'
+      a: >-
+          <p>A client that <strong>ignores fields and values it doesn't recognize</strong> instead of failing on them. It's the client half of additive evolution: the server only adds, the client only tolerates, and you can ship new fields and enum values without breaking anyone.</p>
+    - level: 'core'
+      q: "What is Postel's law, and how does it apply here?"
+      a: >-
+          <p>"Be conservative in what you send, liberal in what you accept." For APIs: emit a strict, well-formed contract, but parse responses leniently — don't break on additions. It's the principle behind the tolerant reader.</p>
+    - level: 'core'
+      q: 'What are the three places to put a version?'
+      a: >-
+          <p>(1) <strong>URI path</strong> — <code>/v1/users</code>; (2) <strong>custom header</strong> — e.g. <code>Accept-Version: 2</code> or <code>API-Version</code>; (3) <strong>media-type negotiation</strong> — <code>Accept: application/vnd.company.v2+json</code>. None is free; each buys clarity in one dimension and pays for it in another.</p>
+    - level: 'core'
+      q: 'Why is URI-path versioning so popular?'
+      a: >-
+          <p>It's <strong>visible and dead simple</strong>: trivial to route, you can test it in a browser, it's obvious in logs and docs, and it caches cleanly by URL. The pragmatic default for most teams.</p>
+    - level: 'core'
+      q: 'How does Stripe version its API?'
+      a: >-
+          <p>Stripe <strong>pins a version per account</strong>. Your version is fixed when you first integrate; you upgrade explicitly, and a single request can override with a header. So a server-side change never silently reshapes an existing integration's responses.</p>
+    - level: 'core'
+      q: 'How does GitHub version its API?'
+      a: >-
+          <p>GitHub uses a <strong>date-based</strong> version sent in the <code>X-GitHub-Api-Version</code> header — i.e. the header strategy combined with calendar versioning (e.g. <code>2022-11-28</code>).</p>
+    - level: 'core'
+      q: 'Walk through the deprecation lifecycle.'
+      a: >-
+          <p>Announce → run old and new <strong>in parallel</strong> → emit <code>Deprecation</code> + <code>Sunset</code> headers → publish a migration guide with a generous window → <strong>monitor real usage</strong> → remove only once traffic has drained. Deprecation is a lifecycle, not a delete.</p>
+    - level: 'core'
+      q: 'What does the <code>Sunset</code> header do?'
+      a: >-
+          <p>Defined by <strong>RFC 8594</strong>, it carries the <strong>date an endpoint or version will be retired</strong>, in every response on the old version — so even silent clients that never read a changelog carry the warning in-band.</p>
+    - level: 'senior'
+      q: >-
+          Why is "change a field's <em>meaning</em>" breaking even when the type stays the same?
+      a: >-
+          <p>Because the wire format passes validation but the client's <em>interpretation</em> is now wrong, and nothing fails loudly. If <code>amount</code> silently switches from dollars to cents, every consumer keeps parsing an integer and silently computes the wrong number. Semantic changes are the most dangerous breakage precisely because no parser catches them.</p>
+    - level: 'senior'
+      q: 'Why is making an optional field required a breaking change?'
+      a: >-
+          <p>Every existing client that omitted it — legitimately, under the old contract — now gets a <code>400</code>. You've retroactively invalidated requests that were valid when written. Same logic for tightening validation: a previously accepted payload now bounces.</p>
+    - level: 'senior'
+      q: 'Is adding a field to a response <em>always</em> non-breaking?'
+      a: >-
+          <p>Only if clients are tolerant readers. A strict client that validates the response against a closed schema — rejecting any unexpected field — turns your "safe" addition into a breakage. The addition is safe on the server side; whether it's safe end-to-end depends on the <em>client's</em> tolerance. That coupling is the senior nuance.</p>
+    - level: 'senior'
+      q: 'Adding an enum value — safe or breaking?'
+      a: >-
+          <p>It depends entirely on the client. Safe if clients ignore values they don't recognize; breaking if a client switches exhaustively on the enum and throws (or hits a default-deny) on an unknown. This is the canonical case where "non-breaking" is conditional on the tolerant-reader contract holding on both ends.</p>
+    - level: 'senior'
+      q: >-
+          "How do you version a public API?" What's the senior reframe?
+      a: >-
+          <p>The question is really <em>"how do I evolve the API without breaking the clients I can't redeploy?"</em> A new version is a <strong>last resort, not a first move</strong>. Most changes can be made compatibly — additive change plus tolerant readers — with zero version bump. You version only when a change is genuinely impossible to make compatibly. Leading with <code>/v1</code> vs. headers is the mid-level reflex; reframing to <em>evolution</em> is the senior signal.</p>
+    - level: 'senior'
+      q: 'Why is "just cut a new version" the wrong default?'
+      a: >-
+          <p>The cost of a version isn't the URL — it's the <strong>permanent support burden</strong>: a migration imposed on every integrator, a fragmented client base, and a combinatorial testing matrix across parallel surfaces you now maintain forever. Mint one per change and you're running five APIs in perpetuity. Versions are expensive; you spend one only when compatible evolution is genuinely impossible.</p>
+    - level: 'senior'
+      q: 'Give an example of turning a "breaking" change into an additive one.'
+      a: >-
+          <p>Need to rename <code>name</code> to <code>full_name</code>? Don't rename — <em>add</em> <code>full_name</code>, keep <code>name</code> populated alongside it, document <code>name</code> as deprecated, and remove it only in a future major (if ever). Need a new required input? Add it as optional with a sensible default. The discipline is engineering an additive path so the compatible road stays open as long as possible.</p>
+    - level: 'senior'
+      q: "What's the downside of URI-path versioning?"
+      a: >-
+          <p>It <strong>couples the version to the URL</strong> and is "not pure REST" — the same resource shouldn't change <em>identity</em> just because its representation changed. <code>/v1/users/42</code> and <code>/v2/users/42</code> are notionally the same user behind two URIs. Most teams accept this trade for the visibility; the senior move is naming it rather than pretending it's free.</p>
+    - level: 'senior'
+      q: 'Header versioning — pros and cons?'
+      a: >-
+          <p><strong>Pro:</strong> clean, stable, version-free URLs — the resource keeps a single identity. <strong>Con:</strong> the version is <em>invisible</em>: hard to test in a browser, easy to forget to set, easy to miss in logs and docs, and you must remember to <code>Vary</code> caches on it. Power at the cost of ergonomics and discoverability.</p>
+    - level: 'senior'
+      q: 'Media-type versioning — when and why?'
+      a: >-
+          <p><code>Accept: application/vnd.company.v2+json</code> is the most "RESTful" option: HATEOAS-friendly and versioned per <em>representation</em>, not per resource. The cost is real complexity — poor support from tooling, proxies, and casual clients. Worth it mainly for hypermedia-driven APIs where representation negotiation is already first-class; overkill for most.</p>
+    - level: 'senior'
+      q: 'How does each placement strategy interact with caching?'
+      a: >-
+          <p><strong>URI path</strong> caches cleanly — the version is in the cache key for free, no two versions collide. <strong>Header and media-type</strong> versions live <em>off</em> the URL, so a shared cache will serve a <code>v1</code> response to a <code>v2</code> request unless you set <code>Vary: Accept-Version</code> (or <code>Vary: Accept</code>). Forgetting that <code>Vary</code> is a classic cache-poisoning bug — a real reason path versioning stays popular.</p>
+    - level: 'senior'
+      q: 'Why is per-account pinning (Stripe) such a strong pattern?'
+      a: >-
+          <p>It converts <em>"we changed the API"</em> from a client-breaking event into a <strong>client-controlled</strong> one. Existing integrations stay frozen on the version they were built against; nothing reshapes underneath them. New users get the latest; upgrades are opt-in and overridable per request. It's the cleanest way to ship breaking changes without a flag day for every integrator.</p>
+    - level: 'senior'
+      q: 'Date-based vs semver versions — which is "better"?'
+      a: >-
+          <p>It's a <strong>labeling choice, not a strategy</strong>. <code>2024-10-01</code> vs. <code>v2</code> changes how the version reads, not how evolution works. Date-based reads naturally for time-ordered release trains (GitHub); <code>v2</code> reads naturally for discrete major jumps. Don't let the interviewer pull you into a labeling debate as if it were a design decision.</p>
+    - level: 'senior'
+      q: 'Why do APIs expose only the <em>major</em> version?'
+      a: >-
+          <p>Because minor and patch are, <em>by definition</em>, the compatible changes you ship in place — consumers never need to pick them. Exposing <code>v1.4.2</code> would force clients to track and choose versions for changes that don't affect them. Only the breaking jump (the major) is a decision a client makes; everything else flows through transparently.</p>
+    - level: 'senior'
+      q: 'Is semver even the right mental model for a web API?'
+      a: >-
+          <p>Partly. Semver was built for <em>libraries</em>, where the consumer controls when they upgrade. A web API consumer doesn't control the server, so the only number that matters to them is the major. Minor/patch semantics still discipline <em>you</em> internally (what's compatible vs. not), but you surface only the major. Treat semver as a classification of changes, not a public version string.</p>
+    - level: 'senior'
+      q: >-
+          Why signal deprecation <em>in-band</em> via headers when you've already emailed and updated docs?
+      a: >-
+          <p>Because out-of-band reaches <em>humans</em>; in-band reaches the <em>code</em>. The integrator who set this up two years ago and left the company never reads your email — but their service still gets a <code>Deprecation</code> header on every call, which their monitoring or a future maintainer can catch. You need both channels: announcement for people, headers for systems that outlive the people.</p>
+    - level: 'senior'
+      q: >-
+          How do you decide <em>when</em> it's safe to actually remove the old version?
+      a: >-
+          <p><strong>Monitor real traffic, don't guess on a calendar.</strong> Instrument usage per version (and ideally per consumer), watch it drain, and reach out directly to the stragglers still on the old surface. Sunset only when usage has genuinely gone — a date in the <code>Sunset</code> header is a target, not a guillotine. Pulling a version with live traffic on it because "the date arrived" is how you cause an outage you own.</p>
+    - level: 'senior'
+      q: 'How long should the migration window be?'
+      a: >-
+          <p>For a public API, <strong>months, not days</strong> — generous enough that integrators can fit migration into their own roadmaps, not drop everything. The window scales with how many clients you can't redeploy and how deeply they depend on the surface. Internal APIs with first-party clients you control can move far faster. Match the window to your blast radius.</p>
+    - level: 'senior'
+      q: >-
+          "Public API, thousands of integrations. We must change the user object's shape. How?" (60-second answer)
+      a: >-
+          <p>First ask whether it can be <strong>additive</strong> — add the new field alongside the old, deprecate the old, lean on tolerant readers to ignore what they don't use. That's a zero-version, zero-migration outcome for thousands of clients I can't redeploy, so I exhaust it first.</p>     <p>If it's genuinely breaking, I cut a new <strong>major</strong> (date-based or <code>/v2</code>), <strong>pin existing accounts</strong> so nothing reshapes silently, run both in parallel, and emit <code>Deprecation</code> + <code>Sunset</code> (RFC 8594) headers. Then a migration guide, a generous timeline, and I <strong>monitor real usage</strong> before retiring. On placement I default to the URI path for visibility and routing — accepting it's "less pure REST" — or a header for clean URLs at the cost of discoverability.</p>
+    - level: 'senior'
+      q: 'How does versioning interact with HATEOAS?'
+      a: >-
+          <p>HATEOAS reduces the <em>need</em> for URI versioning: if clients follow server-supplied links instead of hard-coding paths, the server can move and restructure URLs without breaking them — one whole class of breaking change disappears. It doesn't help with <em>payload-shape</em> breakage (renamed/retyped fields), which is why media-type versioning pairs with hypermedia: links handle navigation, the media type versions the representation. The catch: almost no real clients are link-following, so in practice you still version as if they hard-code.</p>
+    - level: 'senior'
+      q: 'How does versioning interact with SDKs and codegen?'
+      a: >-
+          <p>SDKs are the main reason additive evolution matters: a generated client often validates responses against a <em>closed</em> schema, so it's a brittle reader by default — your "safe" added field can break it. So you either (a) generate tolerant clients (ignore unknowns, open enums), and (b) align SDK major versions with API major versions so the breaking jump is explicit and intentional on both sides. The SDK is also where you absorb minor changes transparently, shielding the consumer.</p>
+    - level: 'staff'
+      q: 'A field is technically optional but every client has always sent it. You want to drop it from responses. Breaking?'
+      a: >-
+          <p>Treat it as breaking in practice. The <em>contract</em> says optional, but the <em>de facto</em> contract is what clients actually depend on (Hyrum's Law: with enough consumers, every observable behavior is depended on by someone). Seniority is measuring real usage before deciding, not arguing from the spec. Check traffic; if anyone reads it, removing it breaks them.</p>
+    - level: 'staff'
+      q: 'How do you design the system so the additive path stays open longer?'
+      a: >-
+          <p>On the server: never repurpose existing fields, prefer adding over mutating, keep defaults stable, and treat the response schema as append-only. On the client and in your SDKs: enforce tolerant parsing (ignore unknowns), avoid exhaustive enum switches without a default branch, and don't validate responses against closed schemas. Bake tolerance into the SDK so first-party clients can't accidentally become brittle readers — the addition is only as safe as the strictest client.</p>
+    - level: 'staff'
+      q: 'Is there a "right" answer on placement?'
+      a: >-
+          <p>No — and saying so is the point. Even Microsoft's API guidance frames all three and explicitly declines to crown one. The choice follows <em>your clients and your tooling</em>, not dogma. In an interview: state your pick <em>and</em> name its trade-off in the same breath. That pairing — decision plus cost — is the senior signal, not the specific choice. For most public APIs the defensible default is the path for visibility and routing.</p>
+    - level: 'staff'
+      q: "What's the deeper instinct Stripe and GitHub share, beyond their mechanics?"
+      a: >-
+          <p><strong>Never break a deployed client silently.</strong> Different mechanics — Stripe pins per account, GitHub pins per dated header — but the same north star: a change you make on the server must never reshape an existing integration's behavior without that integration opting in. Lead with that principle; the mechanics are just two ways to honor it.</p>
+    - level: 'staff'
+      q: "An old version still has 2% of traffic at the sunset date — but it's expensive to keep running. What do you do?"
+      a: >-
+          <p>Don't blind-pull it. Segment that 2%: who are they, how critical, can they migrate, are they paying? Reach out directly. Options short of a hard cutoff: extend the window for named accounts, offer migration help, throttle or brown-out the old version on a schedule to surface the dependency, or set a firm final date <em>with</em> direct contact. The decision is a business and relationship call informed by data, not a unilateral engineering switch-flip — the cost of the outage often dwarfs the cost of running it a bit longer.</p>
+    - level: 'staff'
+      q: "How do you coordinate a migration across clients you don't control?"
+      a: >-
+          <p>You can't force them, so you make migration cheap and the status visible. Instrument <strong>per-consumer usage</strong> of the old version. Publish a precise migration guide and, ideally, automated diffs or a compatibility shim. Reach the long tail individually — the top consumers by volume are a handful of conversations. Use in-band <code>Deprecation</code>/<code>Sunset</code> headers so even silent clients carry the signal. Then sunset by <em>drained traffic</em>, segmenting stragglers rather than pulling on a date. The work is communication and measurement, not code.</p>
+    - level: 'staff'
+      q: 'How do you keep the support cost of multiple live versions from compounding?'
+      a: >-
+          <p>Hold a hard line on the number of concurrent majors (often N and N−1 only), so the testing matrix and bug-fix surface stay bounded. Where possible, implement old versions as a <strong>translation layer in front of a single current core</strong> — adapters that reshape requests/responses rather than forked codepaths — so business logic isn't duplicated per version. And keep the bar for cutting a version high: every version you don't mint is support cost you never pay. The cheapest version is still no new version.</p>
+    - level: 'staff'
+      q: 'When is forcing a breaking version on everyone the right call, despite the cost?'
+      a: >-
+          <p>When compatible evolution is genuinely impossible <em>and</em> staying compatible has a real cost — a security flaw baked into the contract, a data-correctness bug, a semantic that's actively dangerous, or a compat shim so costly it's strangling the platform. Then you version, pin, communicate hard, give a window, and migrate with help. The judgment is weighing integrator pain against the cost of <em>not</em> changing — sometimes the contract itself is the bug, and the only honest fix is a breaking one.</p>
+    - level: 'design'
+      q: 'Design a versioning &amp; deprecation strategy for a public payments API with thousands of integrators.'
+      a: >-
+          <p><b>A strong answer covers:</b> leading with evolution, not versioning — additive-first so most changes ship in place with zero migration for clients you can't redeploy. For genuinely breaking changes: <strong>pin a version per account</strong> (Stripe's model) so a server change never silently reshapes a live integration; new accounts get the latest, upgrades are explicit and per-request overridable. Choose placement deliberately (URI path for visibility/routing, or a dated header à la GitHub) and name the trade-off. Run the full deprecation lifecycle: parallel old/new, in-band <code>Deprecation</code> + <code>Sunset</code> (RFC 8594) headers plus out-of-band changelog/email, a generous months-not-days window scaled to blast radius. Instrument <strong>per-consumer usage</strong>, retire only on drained traffic, and segment stragglers (reach the high-volume few directly) rather than pulling on a date. Bound concurrent majors (N and N−1) and implement old versions as a translation layer over one core to cap the cost, testing matrix, and operational complexity of running N live surfaces. For payments specifically, weigh data-correctness and security: sometimes the contract itself is the bug and a forced breaking change is the only honest fix — done with pinning, hard comms, and migration help.</p>
+    - level: 'design'
+      q: 'You must make a breaking change to a widely-used response shape — design the rollout so no client breaks.'
+      a: >-
+          <p><b>A strong answer covers:</b> first exhausting the additive path — add the new field/shape alongside the old, keep the old populated, document it deprecated, and rely on tolerant readers to ignore what they don't use, so it's a zero-version outcome. If the change is truly incompatible (renamed/retyped/dropped field, changed meaning): cut a new <strong>major</strong>, <strong>pin existing accounts</strong> to their current version so nothing reshapes underneath them, and run both surfaces in parallel behind a translation layer over a single core. Signal in-band with <code>Deprecation</code> + <code>Sunset</code> (RFC 8594) headers so even silent clients carry the warning, and out-of-band with a migration guide and direct outreach to top consumers. Instrument per-version (ideally per-consumer) traffic, give a generous window, and <strong>retire only once usage has drained</strong> — segmenting the long tail rather than enforcing a calendar date. The discipline throughout: never break a deployed client silently; make migration cheap and the deprecation status visible in both the code path and to the humans who own it.</p>
+
+# —— design rubric (the <div class="designrubric"> before the first design Q) ——
+rubricIntro: >-
+    <b>Designing a REST versioning &amp; evolution strategy — a framework:</b>
+rubric:
+    - '<strong>Classify the change.</strong> Breaking vs non-breaking is the line that decides everything. Apply additive-change discipline first: add optional fields/endpoints, never remove, rename, retype, or repurpose — most "version" requests dissolve here with zero migration.'
+    - '<strong>Decide where the version lives</strong> only if a bump is unavoidable: URI path (visible, routes/caches by URL, but couples version to identity), custom header (clean URLs, but invisible and needs <code>Vary</code>), or media-type negotiation (most RESTful, but poor tooling support). State the pick <em>and</em> its trade-off.'
+    - '<strong>Define the compatibility contract.</strong> Spell out tolerant-reader expectations on both ends — server append-only, clients ignore unknowns and open-enum — so additive evolution actually holds in practice, including in generated SDKs.'
+    - '<strong>Pin to insulate clients.</strong> Per-account (Stripe) or dated-header (GitHub) pinning converts "we changed the API" from a client-breaking event into a client-controlled one; new breaking surfaces never reshape existing integrations silently.'
+    - '<strong>Run a deprecation lifecycle.</strong> Announce → run old + new in parallel → emit in-band <code>Deprecation</code> + <code>Sunset</code> (RFC 8594) headers → publish a migration guide with a generous window → reach humans out-of-band.'
+    - '<strong>Migrate via dual-running / translation layer.</strong> Implement old versions as adapters in front of one current core rather than forked codepaths, so business logic isn''t duplicated per version.'
+    - '<strong>Observe version usage, then retire on drained traffic</strong> — per-version (ideally per-consumer) instrumentation tells you when it''s safe to sunset; never pull on a calendar guess. Bound concurrent majors (often N and N−1) to cap the testing matrix, support, and cost of N live versions.'
+---
+
+<div class="how">
+    <strong>Use these as active recall, not reading.</strong> Read the question, answer it <em>out loud or in writing from memory first</em>, and only then reveal the model answer to grade yourself. Recognizing an answer ≠ being able to produce it under pressure. Filter by difficulty; reveal-all only for a final review pass.
+</div>

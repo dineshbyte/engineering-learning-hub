@@ -1,44 +1,64 @@
 ---
 /**
- * Dynamic route that renders the `lessons` content collection.
+ * Dynamic route that renders the content collections one built file per entry.
  *
  * One built file per collection entry, at EXACTLY the entry's frontmatter
  * `path` minus the trailing ".html" — because astro.config sets
- * build.format:'file', a route param of "bloom-filters/lessons/0001-…" emits
- * "bloom-filters/lessons/0001-….html", byte-identical to the live URL.
+ * build.format:'file', a route param of "rest-api/lessons/0001-…" emits
+ * "rest-api/lessons/0001-….html", byte-identical to the live URL.
  *
- * The whole lesson chrome (head, hubbar, masthead, feedback, endnote, quiz +
- * rehearse scripts) comes from LessonLayout; the MDX body (prose + figures +
- * <Quiz>/<Interview>/<Sources>/<Rehearse>/<Steps>) is rendered via <Content/>.
+ * Astro forbids two top-level catch-all routes, so this ONE route handles every
+ * collection: it concatenates each collection's entries, tagging each with a
+ * `kind`, and dispatches to the matching layout. Adding a later type
+ * (reference/glossary/readme) is the same pattern: add it to `entries` with its
+ * own kind, import its layout, branch on it below.
  *
- * FAQ JSON-LD note: <Interview> emits the FAQPage from the interview array, so
- * we deliberately do NOT forward a jsonLd to LessonLayout here (the schema has
- * no jsonLd for this entry) — exactly one FAQPage blob ships.
+ * The whole chrome (head, hubbar, masthead, nav, footer) comes from the layout;
+ * the MDX body is rendered via <Content/> in the slot (lesson prose + figures,
+ * or the interview bank's short `.how` intro).
+ *
+ * FAQ JSON-LD note: <Interview> emits the single FAQPage from the interview
+ * array, so neither layout forwards a jsonLd here — exactly one FAQPage blob
+ * ships per page that has interview Q&A.
  */
-import { getCollection, render, type CollectionEntry } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 import LessonLayout from '../layouts/LessonLayout.astro';
+import InterviewLayout from '../layouts/InterviewLayout.astro';
 
 export async function getStaticPaths() {
-    const lessons = await getCollection('lessons');
-    return lessons.map((entry) => ({
+    const [lessons, interview] = await Promise.all([
+        getCollection('lessons'),
+        getCollection('interview'),
+    ]);
+
+    const entries = [
+        ...lessons.map((entry) => ({ entry, kind: 'lesson' as const })),
+        ...interview.map((entry) => ({ entry, kind: 'interview' as const })),
+    ];
+
+    return entries.map(({ entry, kind }) => ({
         // strip the trailing ".html" — build.format:'file' re-adds it, so this
         // maps the entry's canonical `path` to the identical output URL.
         params: { slug: entry.data.path.replace(/\.html$/, '') },
-        props: { entry },
+        props: { entry, kind },
     }));
 }
 
-type Props = { entry: CollectionEntry<'lessons'> };
-
-const { entry } = Astro.props as Props;
+const { entry, kind } = Astro.props;
 const { Content } = await render(entry);
 
-// LessonLayout re-validates with lessonMetaSchema; pass the whole entry data
-// (the extra body fields are simply ignored by .parse()). The meta contract is a
-// subset of entry.data, so every field LessonLayout reads is present.
+// Each layout re-validates entry.data with its own schema; pass the whole data
+// object straight through (extra fields are ignored by .parse()).
 const meta = entry.data;
+
+// Pick the layout by kind via a dynamic component tag. Keeping the SAME
+// top-level JSX shape as the original lessons-only route
+// ( <Layout meta={meta}> <Content /> </Layout> ) preserves byte-identical lesson
+// output — a JSX ternary wrapper collapses the surrounding slot whitespace and
+// would change every lesson's bytes.
+const Layout = kind === 'interview' ? InterviewLayout : LessonLayout;
 ---
 
-<LessonLayout meta={meta}>
+<Layout meta={meta}>
     <Content />
-</LessonLayout>
+</Layout>

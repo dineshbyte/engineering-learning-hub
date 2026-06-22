@@ -1,6 +1,7 @@
 import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { lessonMetaSchema, lessonBodyShape, lessonRoutingShape } from './schema/lesson';
+import { interviewSchema } from './schema/interview';
 
 /**
  * The `lessons` content collection — the MDX-hybrid lesson shape.
@@ -27,4 +28,19 @@ const lessons = defineCollection({
     schema: lessonMetaSchema.extend(lessonBodyShape).extend(lessonRoutingShape),
 });
 
-export const collections = { lessons };
+/**
+ * The `interview` content collection — the Tufte-styled standalone interview
+ * banks (rest-api/interview/NNNN-….mdx). FRONTMATTER carries the full bank
+ * contract (head + masthead + nav + footer) plus the structured Q&A data
+ * (interview[] + design rubric); the MDX BODY is just the short `.how` intro.
+ * Schema source of truth is src/schema/interview.ts.
+ */
+const interview = defineCollection({
+    loader: glob({
+        pattern: '**/*.mdx',
+        base: './src/content/interview',
+    }),
+    schema: interviewSchema,
+});
+
+export const collections = { lessons, interview };
