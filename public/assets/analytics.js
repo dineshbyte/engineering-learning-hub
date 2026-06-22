@@ -281,7 +281,7 @@
         '#sd-consent .sd-c-btns{display:flex;gap:.5rem;flex-wrap:wrap}' +
         '#sd-consent button{cursor:pointer;font:inherit;font-weight:700;border-radius:8px;' +
         'padding:.45rem .95rem;border:1px solid var(--line);line-height:1.2}' +
-        '#sd-consent .sd-c-yes{background:var(--accent);border-color:var(--accent);color:#111827}' +
+        '#sd-consent .sd-c-yes{background:var(--accent-soft);border-color:var(--accent-soft);color:var(--on-accent)}' +
         '#sd-consent .sd-c-no{background:transparent;color:var(--text,var(--ink))}' +
         '#sd-consent .sd-c-no:hover{background:var(--chip)}' +
         // ✕ dismiss (top-right): persists 'denied' so the banner shows once and
