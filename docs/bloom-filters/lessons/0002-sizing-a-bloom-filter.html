@@ -1,450 +1,104 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Bloom Filter Sizing: m, k &amp; False-Positive Rate · Engineering Vault</title>
-<meta name="description" content="Size a Bloom filter the senior way: start from the false-positive rate you can tolerate, then derive bits (m) and hash functions (k) from n — don't guess.">
-<meta name="keywords" content="bloom filter sizing, false-positive rate, bloom filters, data structures, false positive, probabilistic, sizing, lsm, cuckoo, counting, hash, membership">
-<meta name="author" content="dineshbyte">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/bloom-filters/lessons/0002-sizing-a-bloom-filter.html">
-<meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Vault">
-<meta property="og:title" content="Bloom Filter Sizing: m, k &amp; False-Positive Rate">
-<meta property="og:description" content="Size a Bloom filter the senior way: start from the false-positive rate you can tolerate, then derive bits (m) and hash functions (k) from n — don't guess.">
-<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/bloom-filters/lessons/0002-sizing-a-bloom-filter.html">
-<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/bloom-filters.png">
-<meta property="og:image:alt" content="Bloom Filters · Engineering Vault learning track">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Bloom Filter Sizing: m, k &amp; False-Positive Rate">
-<meta name="twitter:description" content="Size a Bloom filter the senior way: start from the false-positive rate you can tolerate, then derive bits (m) and hash functions (k) from n — don't guess.">
-<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/bloom-filters.png">
-<script>(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
-<script>function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}</script>
-<link rel="stylesheet" href="../../assets/tokens.css">
-<link rel="stylesheet" href="../../assets/lesson.css">
-<link rel="stylesheet" href="../../assets/interview.css">
-<style>:root{--accent:var(--track-bloom)}</style>
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "FAQPage",
- "mainEntity": [
-  {
-   "@type": "Question",
-   "name": "What two inputs do you need to size a Bloom filter, and what do they give you?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: the number of items n you'll store, and the target false-positive rate p you can tolerate -> from those you derive the bit-array size m = -(n·ln p)/(ln 2) 2 and the hash count k = log (1/p) -> the senior move is to start from the error you accept and back out the memory, not guess a bit count -> everything else (bytes of RAM, bits/item) falls out of those two numbers."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "If you double n but keep p fixed, what changes — m, k, or both?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: only m changes — the bit array roughly doubles -> k stays the same, because k = log (1/p) depends on p alone, not on n -> intuition: the hash count is set by how accurate you want each lookup; the array size is set by how much you're storing -> this separation (\"k from rate, m from volume\") is the cleanest thing to say in an interview."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What's the rule-of-thumb for ~1% false positives, and the cost of going 10× tighter?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: ~1% FP costs about 10 bits per item (more precisely ~9.6) with k = 7 (numbers illustrative) -> each 10× cut in the FP rate adds roughly a fixed slice — about +4.8 bits/item and a few more hashes -> so 0.1% 14.4 bits/item, 0.01% 19.2 bits/item -> the cost is per item and linear: accuracy is cheap but never free -> bits/item 1.44·log (1/p) is the compact form to remember."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Size a filter for 1,000,000 URLs at 1% FP — walk the numbers.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: k = log (1/0.01) 6.6 -> 7 hashes -> bits/item 9.6, so m 9.6 x 1M 9.6 Mbit -> that's ~1.2 MB of RAM (illustrative) -> the whole membership index for a million URLs fits in about a megabyte — that's the headline that sells the structure -> round k to an integer and add a little headroom for growth."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Size a Bloom filter to dedupe 50M event IDs at 0.1% false-dupe rate.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: k = log (1000) 10 hashes, bits/item 14.4 — note k is fixed by the rate, independent of the 50M -> m 14.4 x 50M 720 Mbit 90 MB (illustrative) -> round k to 10, provision ~90–100 MB -> plan to rebuild or shard once the set grows past 50M, because the FP rate climbs as it fills past the design n -> structure the answer as \"derive p first, separate k-from-rate vs m-from-volume, land a number, flag saturation.\""
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "You guessed a bit count instead of starting from p. Why is that the junior move?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: picking m blindly leaves the actual FP rate implicit and load-dependent — you don't know the error you're shipping -> the right direction is goal-first: state the FP rate the system can tolerate, then derive m and k -> this makes the trade-off explicit and reviewable, and ties memory to a business-meaningful number (acceptable error) -> it also forces you to estimate n honestly, which is where saturation bugs hide -> \"choose the error, derive the rest.\""
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Why does k depend only on p and not on n — what's the intuition?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: at the optimal operating point you keep the array about half-full of set bits regardless of scale -> the FP rate at that point is roughly (0.5) k , which depends only on how many independent bits each lookup checks — i.e. k -> so the accuracy per query is governed by k , while n only dictates how big the array must be to stay half-full -> double the items and you grow m to hold the same bit density, but the number of probes per query that yields a given p is unchanged -> hence k = log (1/p) , free of n ."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "You sized for n=10M but the set quietly grew to 30M. What happens, and how do you catch it?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: m and k are fixed, so the array overfills — bits-set fraction climbs past the ~50% sweet spot and the FP rate rises toward 1 -> nothing errors; the filter keeps answering, just worse — silent decay -> downstream the cheap \"no\" nearly vanishes, so the verify/disk path gets hammered -> catch it by monitoring the bits-set fraction and measured FP rate against the design point, and by tracking actual n vs designed n -> fix: rebuild larger, shard, or move to a scalable variant before it saturates, not after the pager fires."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Argue for over-provisioning the filter vs sizing it tight — make the principal call.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "For tight sizing: minimizes RAM, which matters when you run one filter per shard/segment across a fleet — small per-unit savings multiply. For over-provisioning: the FP rate is load-dependent and decays silently; headroom buys margin against under-estimated n and growth, avoiding a saturation incident. Synthesis: size from a realistic peak n (not today's n ) plus a modest factor, pick p from the cost of the verify path, and back it with monitoring + a rebuild/shard runbook so you can correct cheaply — the decision is \"tight with observability and a rebuild plan,\" not a one-time guess."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "How do you pick the target FP rate p in the first place — what drives the number?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: p is an economic choice: it sets how often you pay the expensive verify/disk path on a false \"maybe\" -> quantify the cost of one false positive (a disk read, a cross-node lookup, an over-rejected user) and the query rate, then choose p so the expected wasted-work cost is well under the RAM cost of a tighter filter -> tighter p is roughly linear in bits/item, so there are diminishing returns — going from 1% to 0.01% nearly doubles memory -> the staff answer ties p to a measurable downstream cost, not a round number someone liked."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "A service runs thousands of small Bloom filters (one per tenant). How does that change sizing?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: per-filter fixed overhead and small- n inefficiency dominate — at a few hundred items a filter may be larger than an exact hash set, so check the break-even first -> n varies wildly per tenant, so a single global size either wastes RAM on small tenants or saturates large ones — size per tenant from its own n , or bucket tenants by scale -> many tenants means aggregate RAM is the real budget, so the p -vs-bits trade-off is multiplied by tenant count -> consider scalable filters so each tenant auto-grows instead of being pre-sized -> the staff move: don't apply one sizing; treat it as a distribution of n with a per-tenant or per-bucket policy."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design the sizing + memory budget for per-SSTable Bloom filters in an LSM store with 10,000 SSTables.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "A strong answer covers: one filter per SSTable, each sized from that table's key count n and a target p (~1% -> ~10 bits/key is the common default; numbers illustrative) -> aggregate RAM = sum over tables of bits/key x keys-per-table, so the fleet budget is the real constraint, not any one filter -> tighter p trades RAM for fewer wasted disk reads — pick p from disk-read cost x absent-key query rate -> SSTables are immutable, so filters are built once at flush/compaction and never need deletes — no counting variant -> on compaction, filters merge/rebuild with the new table, naturally avoiding saturation -> cache hot filters in RAM, possibly spill cold ones -> trade-off: bits/key (RAM across thousands of tables) vs read amplification on misses; tune per level if upper levels are hotter."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design sizing for a \"seen this request ID?\" idempotency filter where traffic is bursty and n is hard to predict.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "A strong answer covers: unknown/variable n is the core problem, so don't pre-size a single static filter — use a scalable Bloom (chained layers with geometric error bounds) or time-windowed filters that you roll and rebuild -> pick p from the cost of a false \"seen\" — here a false positive could drop a legitimate request, so it must fall through to an authoritative check, never be the final answer -> if request IDs expire (idempotency windows), roll filters per window so old IDs age out, sidestepping the no-delete limit and capping growth -> size each window's filter from the expected per-window peak n plus burst headroom, and monitor bits-set fraction to trigger an extra layer mid-window -> trade-off: scalable filters grow memory with n and add a probe per layer vs a static filter that saturates silently under a burst; favor scalable/windowed when n is genuinely unpredictable."
-   }
-  }
- ]
-}
-</script>
-<script src="../../assets/analytics.js" defer></script>
-</head>
-<body>
-<a class="skip-link" href="#main">Skip to content</a>
-<div class="wrap">
-  <nav id="hubbar">
-    <a href="../../index.html">&#8592; Engineering Vault</a>
-    <span class="pn"><a href="0001-what-is-a-bloom-filter.html" title="What a Bloom filter is">&#8249; Prev</a><a href="0003-failure-modes-and-lsm-reads.html" title="Failure modes &amp; LSM reads">Next &#8250;</a></span>
-    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Bloom Filters &#183; Core</span></span>
-  </nav>
-<main id="main" tabindex="-1">
-  <div id="reading-progress"></div>
-  <div class="kicker">Lesson 2 · Core</div>
-  <h1>Sizing: pick the error, <em>derive</em> the rest</h1>
-  <p class="meta">~7 min · visual-first · retrieval practice at the end</p>
-  <div class="ltags"><span class="lt">Bloom filter sizing</span><span class="lt">False-positive rate</span><span class="lt">Bloom filters</span><span class="lt">Data structures</span><span class="lt">False positive</span></div>
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><link rel="icon" type="image/svg+xml" href="/engineering-learning-hub/assets/favicon.svg"><!-- a11y: no maximum-scale / user-scalable=no — pinch-zoom must stay
+             available (WCAG 1.4.4). Dropped per the hub-migration audit. --><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bloom Filter Sizing: m, k &amp; False-Positive Rate · Engineering Vault</title><meta name="description" content="Size a Bloom filter the senior way: start from the false-positive rate you can tolerate, then derive bits (m) and hash functions (k) from n — don't guess."><meta name="keywords" content="bloom filter sizing, false-positive rate, bloom filters, data structures, false positive, probabilistic, sizing, lsm, cuckoo, counting, hash, membership"><meta name="author" content="dineshbyte"><meta name="robots" content="index, follow"><link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/bloom-filters/lessons/0002-sizing-a-bloom-filter.html"><meta property="og:type" content="article"><meta property="og:site_name" content="Engineering Vault"><meta property="og:title" content="Bloom Filter Sizing: m, k &#38; False-Positive Rate"><meta property="og:description" content="Size a Bloom filter the senior way: start from the false-positive rate you can tolerate, then derive bits (m) and hash functions (k) from n — don't guess."><meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/bloom-filters/lessons/0002-sizing-a-bloom-filter.html"><meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/bloom-filters.png"><meta property="og:image:alt" content="Bloom Filters · Engineering Vault learning track"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@dineshxbyte"><meta name="twitter:title" content="Bloom Filter Sizing: m, k &#38; False-Positive Rate"><meta name="twitter:description" content="Size a Bloom filter the senior way: start from the false-positive rate you can tolerate, then derive bits (m) and hash functions (k) from n — don't guess."><meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/bloom-filters.png"><script>
+            (function () {
+                try {
+                    var t = localStorage.getItem('theme');
+                    if (t !== 'light' && t !== 'dark') {
+                        t =
+                            window.matchMedia &&
+                            window.matchMedia('(prefers-color-scheme:dark)').matches
+                                ? 'dark'
+                                : 'light';
+                    }
+                    document.documentElement.setAttribute('data-theme', t);
+                } catch (e) {}
+            })();
+        </script><script>
+            function toggleTheme() {
+                var d = document.documentElement;
+                var t = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                d.setAttribute('data-theme', t);
+                try {
+                    localStorage.setItem('theme', t);
+                } catch (e) {}
+            }
+        </script><link rel="stylesheet" href="/engineering-learning-hub/assets/tokens.css"><link rel="stylesheet" href="/engineering-learning-hub/assets/lesson.css"><link rel="stylesheet" href="/engineering-learning-hub/assets/interview.css"><style>:root{--accent:var(--track-bloom)}</style><script src="/engineering-learning-hub/assets/analytics.js" defer></script></head> <body> <a class="skip-link" href="#main">Skip to content</a>  <div class="wrap"> <nav id="hubbar"> <a href="/engineering-learning-hub/index.html">&#8592; Engineering Vault</a> <span class="pn"> <a href="0001-what-is-a-bloom-filter.html" title="What a Bloom filter is">
+&#8249; Prev
+</a> <a href="0003-failure-modes-and-lsm-reads.html" title="Failure modes &#38; LSM reads">
+Next &#8250;
+</a> </span> <span style="display:flex;align-items:center;gap:.6rem"> <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button> <span style="color:var(--muted)">Bloom Filters · Core</span> </span> </nav> <main id="main" tabindex="-1"> <div id="reading-progress"></div> <div class="kicker">Lesson 2 · Core</div> <h1>Sizing: pick the error, <em>derive</em> the rest</h1> <p class="meta">~7 min · visual-first · retrieval practice at the end</p> <div class="ltags"><span class="lt">Bloom filter sizing</span><span class="lt">False-positive rate</span><span class="lt">Bloom filters</span><span class="lt">Data structures</span><span class="lt">False positive</span></div>  <div class="mission"><p><strong>Why this, first.</strong> The senior move is to start from the false-positive rate you
+can tolerate and back out the memory — not guess a bit count.</p></div>
+<figure> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 300" font-family="ui-sans-serif,system-ui,sans-serif"> <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#136f63"></path></marker></defs> <rect width="680" height="300" fill="#fffff8"></rect> <text x="340" y="28" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">Two inputs decide everything</text> <rect x="16" y="70" width="150" height="46" rx="8" fill="#e8f1ef" stroke="#136f63"></rect> <text x="91" y="92" text-anchor="middle" font-size="14" fill="#0f4f47">n = # items</text> <text x="91" y="108" text-anchor="middle" font-size="11" fill="#6b675f">how many you store</text> <rect x="16" y="170" width="150" height="46" rx="8" fill="#e8f1ef" stroke="#136f63"></rect> <text x="91" y="192" text-anchor="middle" font-size="14" fill="#0f4f47">p = target FP</text> <text x="91" y="208" text-anchor="middle" font-size="11" fill="#6b675f">error you accept</text> <rect x="200" y="60" width="256" height="56" rx="8" fill="#fff" stroke="#9a7a17"></rect> <text x="328" y="84" text-anchor="middle" font-size="15" fill="#7a5e12">m = &#8722;(n &#183; ln p) / (ln 2)&#178;</text> <text x="328" y="104" text-anchor="middle" font-size="11" fill="#6b675f">bit-array size &#8212; uses n AND p</text> <rect x="200" y="170" width="256" height="56" rx="8" fill="#fff" stroke="#2f5d3a"></rect> <text x="328" y="194" text-anchor="middle" font-size="15" fill="#2f5d3a">k = log&#8322;(1 / p)</text> <text x="328" y="214" text-anchor="middle" font-size="11" fill="#6b675f">hash count &#8212; uses p ONLY</text> <rect x="496" y="64" width="168" height="48" rx="8" fill="#fbf3e6" stroke="#9a7a17"></rect> <text x="580" y="84" text-anchor="middle" font-size="13" fill="#7a5e12">bit-array size m</text> <text x="580" y="102" text-anchor="middle" font-size="11" fill="#6b675f">grows with n</text> <rect x="496" y="174" width="168" height="48" rx="8" fill="#eef5ee" stroke="#2f5d3a"></rect> <text x="580" y="194" text-anchor="middle" font-size="13" fill="#2f5d3a"># hashes k</text> <text x="580" y="212" text-anchor="middle" font-size="11" fill="#6b675f">fixed by p alone</text> <path d="M166 90 L200 86" fill="none" stroke="#136f63" stroke-width="1.5" marker-end="url(#a)"></path> <path d="M166 193 L200 198" fill="none" stroke="#136f63" stroke-width="1.5" marker-end="url(#a)"></path> <path d="M120 170 C150 150 170 130 200 110" fill="none" stroke="#136f63" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#a)"></path> <path d="M456 88 L496 88" fill="none" stroke="#9a7a17" stroke-width="1.5" marker-end="url(#a)"></path> <path d="M456 198 L496 198" fill="none" stroke="#2f5d3a" stroke-width="1.5" marker-end="url(#a)"></path> <rect x="200" y="252" width="256" height="34" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect> <text x="328" y="274" text-anchor="middle" font-size="13" fill="#2f5d3a" font-weight="bold">k ignores n &#8212; double the items, same k</text> </svg> <figcaption>
+Choose <code>p</code>, count <code>n</code>; the two formulas hand you <code>m</code> and
+<code>k</code>.
+</figcaption> </figure>
+<h2 id="worked-example-in-three-moves">Worked example, in three moves</h2>
+<div class="steps"> <div class="step"> <div class="lab">Given</div> <div class="big">1,000,000 URLs</div> <div class="sub">want p = 1% false positives</div> </div> <div class="arrow">&#8594;</div><div class="step"> <div class="lab">Bits</div> <div class="big">m &#8776; 9.6 Mbit</div> <div class="sub">9.6 bits/item &#215; 1M &#8776; 1.2 MB</div> </div> <div class="arrow">&#8594;</div><div class="step"> <div class="lab">Hashes</div> <div class="big">k = 7</div> <div class="sub">log&#8322;(1/0.01) &#8776; 6.6 &#8594; 7</div> </div>  </div>
+<h2 id="the-cost-ladder">The cost ladder</h2>
+<figure> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 250" font-family="ui-sans-serif,system-ui,sans-serif"> <rect width="660" height="250" fill="#fffff8"></rect> <text x="330" y="26" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">10&#215; fewer false positives &#8594; +4.8 bits/item, +3 hashes</text> <text x="16" y="74" font-size="14" fill="#111110">p = 1%</text> <rect x="96" y="58" width="173" height="26" rx="4" fill="#9fe7da" stroke="#0f4f47"></rect> <text x="104" y="76" font-size="13" fill="#0f4f47">9.6 bits/item</text> <rect x="290" y="58" width="86" height="26" rx="4" fill="#eef5ee" stroke="#2f5d3a"></rect> <text x="333" y="76" text-anchor="middle" font-size="13" fill="#2f5d3a">k = 7</text> <text x="16" y="134" font-size="14" fill="#111110">p = 0.1%</text> <rect x="96" y="118" width="259" height="26" rx="4" fill="#5fb3a6" stroke="#0f4f47"></rect> <text x="104" y="136" font-size="13" fill="#053b34">14.4 bits/item</text> <rect x="376" y="118" width="86" height="26" rx="4" fill="#eef5ee" stroke="#2f5d3a"></rect> <text x="419" y="136" text-anchor="middle" font-size="13" fill="#2f5d3a">k = 10</text> <text x="16" y="194" font-size="14" fill="#111110">p = 0.01%</text> <rect x="96" y="178" width="345" height="26" rx="4" fill="#136f63" stroke="#0f4f47"></rect> <text x="104" y="196" font-size="13" fill="#ffffff">19.2 bits/item</text> <rect x="462" y="178" width="86" height="26" rx="4" fill="#eef5ee" stroke="#2f5d3a"></rect> <text x="505" y="196" text-anchor="middle" font-size="13" fill="#2f5d3a">k = 13</text> <text x="330" y="234" text-anchor="middle" font-size="12" fill="#6b675f">Cost is per item and linear &#8212; accuracy is cheap, but never free.</text> </svg> <figcaption>Each 10&#215; cut in error adds a fixed slice of bits and a few hashes.</figcaption> </figure>
+<div class="cards"><div class="card"><div class="v">~10 bits</div><div class="l">per item ≈ 1% FP</div></div><div class="card"><div class="v">k = log₂(1/p)</div><div class="l">hashes, set by p</div></div><div class="card"><div class="v">+4.8 bits</div><div class="l">per 10× fewer FPs</div></div></div>
+<table><tr><th>You want</th><th>Formula</th></tr><tr><td>Bit-array size m</td><td><code>−(n · ln p) / (ln 2)²</code></td></tr><tr><td>Hash count k</td><td><code>log₂(1 / p)</code></td></tr><tr><td>Bits per item</td><td><code>≈ 1.44 · log₂(1 / p)</code></td></tr></table>
+<p class="rule"><strong>k is set by the error you accept; only m grows with how much you store.</strong></p>
+<hr class="note"/>
+<h2 id="retrieval-practice">Retrieval practice</h2>
+<p>Answer from memory — feedback is instant.</p>
+<div class="quiz" id="quiz"> <div class="qitem" data-correct="0"> <p class="q"> <span class="qn">Q1.</span> Doubling n, keeping p fixed, changes… </p> <button class="opt">only m (the bit array), not k</button><button class="opt">only k (the hash count), not m</button><button class="opt">both m and k go up together</button><button class="opt">neither m nor k need to move</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="3"> <p class="q"> <span class="qn">Q2.</span> The optimal hash count k depends on… </p> <button class="opt">the number of items n stored</button><button class="opt">the bit-array size m chosen</button><button class="opt">both the item count and rate</button><button class="opt">the target FP rate you accept</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="0"> <p class="q"> <span class="qn">Q3.</span> Cutting the FP rate 10× raises bits/item by… </p> <button class="opt">around five more bits per item</button><button class="opt">around fifty more bits per item</button><button class="opt">around half a bit per item only</button><button class="opt">almost no extra bits per item</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="2"> <p class="q"> <span class="qn">Q4.</span> 1M items at ~1% FP needs roughly… </p> <button class="opt">about 1.2 kilobytes of memory</button><button class="opt">about 120 megabytes of memory</button><button class="opt">about 1.2 megabytes of memory</button><button class="opt">about 12 gigabytes of memory</button> <p class="fb" role="status" aria-live="polite"></p> </div> </div>
+<h2 id="rehearse-out-loud">Rehearse out loud</h2>
+<p class="rehearse">Interviewer: <strong>"Size a Bloom filter to dedupe 50M event IDs at 0.1% false-dupe rate."</strong> ~60 seconds, from memory &#8212; then reveal and compare.</p> <div class="rehearse"> <textarea placeholder="Your 60-second answer, from memory…"></textarea><br> <button class="btn ghost" data-reveal>Reveal model answer</button> <div class="model"><p><p>At p = 0.1%, k = log₂(1000) ≈ 10 hashes, and bits/item ≈ 14.4 — note k is
+fixed by the rate, independent of the 50M. So m ≈ 14.4 × 50M ≈ 720 Mbit
+≈ 90 MB. I’d round k to 10, provision ~90–100 MB, and plan to rebuild or shard once
+the set grows past 50M, because the FP rate climbs as it fills past the size I designed for.</p></p><p class="src"><p><strong>Why this scores:</strong> derives from p first, separates “k from rate” vs “m from
+volume,” lands a concrete number, and flags saturation on growth.</p></p></div> </div>
+<div class="ask"><p><strong>I’m your teacher — ask me anything.</strong> Want the derivation of why 
+<code>k = log₂(1/p)</code>, a drill on saturation as the filter fills, or the next lesson
+(Senior: failure modes &amp; the LSM read path)? Say so.</p></div>
+<h3 id="primary-source-read-this-next">Primary source (read this next)</h3>
+<p><p>📖 </p><a href="https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf"><strong><p>Mitzenmacher &amp; Broder, “Network Applications of Bloom Filters: A Survey”</p></strong></a><sup><a href="#s1" id="r1"><p>1</p></a></sup><p>. The clean derivation of the sizing formulas in one trusted place.</p></p>
+<h2 class="sec" id="interview"><p>Interview — pick your bar</p></h2>
+<p class="tagline"><p>Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System Design</b> = open
+design round (a different axis, not a harder level).</p></p>
+<div data-interview> <details class="iq" data-level="core"> <summary>What two inputs do you need to size a Bloom filter, and what do they give you?</summary> <div class="a"><b>Hit these points:</b> the number of items <code>n</code> you'll store, and the target false-positive rate <code>p</code> you can tolerate &rarr; from those you derive the bit-array size <code>m = &minus;(n&middot;ln p)/(ln 2)<sup>2</sup></code> and the hash count <code>k = log&#8322;(1/p)</code> &rarr; the senior move is to start from the error you accept and back out the memory, not guess a bit count &rarr; everything else (bytes of RAM, bits/item) falls out of those two numbers.</div> </details> <details class="iq" data-level="core"> <summary>If you double n but keep p fixed, what changes — m, k, or both?</summary> <div class="a"><b>Hit these points:</b> only <code>m</code> changes — the bit array roughly doubles &rarr; <code>k</code> stays the same, because <code>k = log&#8322;(1/p)</code> depends on <code>p</code> alone, not on <code>n</code> &rarr; intuition: the hash count is set by how accurate you want each lookup; the array size is set by how much you're storing &rarr; this separation ("k from rate, m from volume") is the cleanest thing to say in an interview.</div> </details> <details class="iq" data-level="core"> <summary>What's the rule-of-thumb for ~1% false positives, and the cost of going 10× tighter?</summary> <div class="a"><b>Hit these points:</b> ~1% FP costs about 10 bits per item (more precisely ~9.6) with <code>k = 7</code> (numbers illustrative) &rarr; each 10× cut in the FP rate adds roughly a fixed slice — about +4.8 bits/item and a few more hashes &rarr; so 0.1% &asymp; 14.4 bits/item, 0.01% &asymp; 19.2 bits/item &rarr; the cost is per item and linear: accuracy is cheap but never free &rarr; bits/item &asymp; <code>1.44&middot;log&#8322;(1/p)</code> is the compact form to remember.</div> </details> <details class="iq" data-level="core"> <summary>Size a filter for 1,000,000 URLs at 1% FP — walk the numbers.</summary> <div class="a"><b>Hit these points:</b> <code>k = log&#8322;(1/0.01) &asymp; 6.6 &rarr; 7</code> hashes &rarr; bits/item &asymp; 9.6, so <code>m &asymp; 9.6 &times; 1M &asymp; 9.6 Mbit</code> &rarr; that's ~1.2 MB of RAM (illustrative) &rarr; the whole membership index for a million URLs fits in about a megabyte — that's the headline that sells the structure &rarr; round <code>k</code> to an integer and add a little headroom for growth.</div> </details> <details class="iq" data-level="senior"> <summary>Size a Bloom filter to dedupe 50M event IDs at 0.1% false-dupe rate.</summary> <div class="a"><b>Hit these points:</b> <code>k = log&#8322;(1000) &asymp; 10</code> hashes, bits/item &asymp; 14.4 — note <code>k</code> is fixed by the rate, independent of the 50M &rarr; <code>m &asymp; 14.4 &times; 50M &asymp; 720 Mbit &asymp; 90 MB</code> (illustrative) &rarr; round <code>k</code> to 10, provision ~90–100 MB &rarr; plan to rebuild or shard once the set grows past 50M, because the FP rate climbs as it fills past the design <code>n</code> &rarr; structure the answer as "derive p first, separate k-from-rate vs m-from-volume, land a number, flag saturation."</div> </details> <details class="iq" data-level="senior"> <summary>You guessed a bit count instead of starting from p. Why is that the junior move?</summary> <div class="a"><b>Hit these points:</b> picking <code>m</code> blindly leaves the actual FP rate implicit and load-dependent — you don't know the error you're shipping &rarr; the right direction is goal-first: state the FP rate the system can tolerate, then derive <code>m</code> and <code>k</code> &rarr; this makes the trade-off explicit and reviewable, and ties memory to a business-meaningful number (acceptable error) &rarr; it also forces you to estimate <code>n</code> honestly, which is where saturation bugs hide &rarr; "choose the error, derive the rest."</div> </details> <details class="iq" data-level="senior"> <summary>Why does k depend only on p and not on n — what's the intuition?</summary> <div class="a"><b>Hit these points:</b> at the optimal operating point you keep the array about half-full of set bits regardless of scale &rarr; the FP rate at that point is roughly <code>(0.5)<sup>k</sup></code>, which depends only on how many independent bits each lookup checks — i.e. <code>k</code> &rarr; so the accuracy per query is governed by <code>k</code>, while <code>n</code> only dictates how big the array must be to <em>stay</em> half-full &rarr; double the items and you grow <code>m</code> to hold the same bit density, but the number of probes per query that yields a given <code>p</code> is unchanged &rarr; hence <code>k = log&#8322;(1/p)</code>, free of <code>n</code>.</div> </details> <details class="iq" data-level="senior"> <summary>You sized for n=10M but the set quietly grew to 30M. What happens, and how do you catch it?</summary> <div class="a"><b>Hit these points:</b> <code>m</code> and <code>k</code> are fixed, so the array overfills — bits-set fraction climbs past the ~50% sweet spot and the FP rate rises toward 1 &rarr; nothing errors; the filter keeps answering, just worse — silent decay &rarr; downstream the cheap "no" nearly vanishes, so the verify/disk path gets hammered &rarr; catch it by monitoring the bits-set fraction and measured FP rate against the design point, and by tracking actual <code>n</code> vs designed <code>n</code> &rarr; fix: rebuild larger, shard, or move to a scalable variant before it saturates, not after the pager fires.</div> </details> <details class="iq" data-level="staff"> <summary>Argue for over-provisioning the filter vs sizing it tight — make the principal call.</summary> <div class="a"><b>For tight sizing:</b> minimizes RAM, which matters when you run one filter per shard/segment across a fleet — small per-unit savings multiply. <b>For over-provisioning:</b> the FP rate is load-dependent and decays silently; headroom buys margin against under-estimated <code>n</code> and growth, avoiding a saturation incident. <b>Synthesis:</b> size from a realistic peak <code>n</code> (not today's <code>n</code>) plus a modest factor, pick <code>p</code> from the cost of the verify path, and back it with monitoring + a rebuild/shard runbook so you can correct cheaply — the decision is "tight with observability and a rebuild plan," not a one-time guess.</div> </details> <details class="iq" data-level="staff"> <summary>How do you pick the target FP rate p in the first place — what drives the number?</summary> <div class="a"><b>Hit these points:</b> <code>p</code> is an economic choice: it sets how often you pay the expensive verify/disk path on a false "maybe" &rarr; quantify the cost of one false positive (a disk read, a cross-node lookup, an over-rejected user) and the query rate, then choose <code>p</code> so the expected wasted-work cost is well under the RAM cost of a tighter filter &rarr; tighter <code>p</code> is roughly linear in bits/item, so there are diminishing returns — going from 1% to 0.01% nearly doubles memory &rarr; the staff answer ties <code>p</code> to a measurable downstream cost, not a round number someone liked.</div> </details> <details class="iq" data-level="staff"> <summary>A service runs thousands of small Bloom filters (one per tenant). How does that change sizing?</summary> <div class="a"><b>Hit these points:</b> per-filter fixed overhead and small-<code>n</code> inefficiency dominate — at a few hundred items a filter may be larger than an exact hash set, so check the break-even first &rarr; <code>n</code> varies wildly per tenant, so a single global size either wastes RAM on small tenants or saturates large ones — size per tenant from its own <code>n</code>, or bucket tenants by scale &rarr; many tenants means aggregate RAM is the real budget, so the <code>p</code>-vs-bits trade-off is multiplied by tenant count &rarr; consider scalable filters so each tenant auto-grows instead of being pre-sized &rarr; the staff move: don't apply one sizing; treat it as a distribution of <code>n</code> with a per-tenant or per-bucket policy.</div> </details> <div class="designrubric" data-level="design"> <b>Design-round framework</b> — drive any "size and place a filter" prompt through these, out loud: <ol> <li>Estimate peak <code>n</code> honestly (with growth), not today's count.</li><li>Choose <code>p</code> from the cost of one false positive &times; the query rate, vs RAM.</li><li>Derive <code>m = &minus;(n&middot;ln p)/(ln 2)<sup>2</sup></code> and <code>k = log&#8322;(1/p)</code>; convert to bytes.</li><li>Decide static vs scalable: known bounded <code>n</code> &rarr; static; unknown/growing &rarr; scalable or sharded.</li><li>Saturation plan: rebuild/shard thresholds tied to bits-set fraction.</li><li>Deletes/churn: counting/cuckoo or time-windowed rebuild if the set turns over.</li><li>Observe: measured FP rate, bits-set fraction, verify-path hit rate vs the design point.</li> </ol> </div><details class="iq" data-level="design"> <summary>Design the sizing + memory budget for per-SSTable Bloom filters in an LSM store with 10,000 SSTables.</summary> <div class="a"><b>A strong answer covers:</b> one filter per SSTable, each sized from that table's key count <code>n</code> and a target <code>p</code> (~1% &rarr; ~10 bits/key is the common default; numbers illustrative) &rarr; aggregate RAM = sum over tables of bits/key &times; keys-per-table, so the fleet budget is the real constraint, not any one filter &rarr; tighter <code>p</code> trades RAM for fewer wasted disk reads — pick <code>p</code> from disk-read cost &times; absent-key query rate &rarr; SSTables are immutable, so filters are built once at flush/compaction and never need deletes — no counting variant &rarr; on compaction, filters merge/rebuild with the new table, naturally avoiding saturation &rarr; cache hot filters in RAM, possibly spill cold ones &rarr; trade-off: bits/key (RAM across thousands of tables) vs read amplification on misses; tune per level if upper levels are hotter.</div> </details> <details class="iq" data-level="design"> <summary>Design sizing for a "seen this request ID?" idempotency filter where traffic is bursty and n is hard to predict.</summary> <div class="a"><b>A strong answer covers:</b> unknown/variable <code>n</code> is the core problem, so don't pre-size a single static filter — use a <em>scalable</em> Bloom (chained layers with geometric error bounds) or time-windowed filters that you roll and rebuild &rarr; pick <code>p</code> from the cost of a false "seen" — here a false positive could drop a legitimate request, so it must fall through to an authoritative check, never be the final answer &rarr; if request IDs expire (idempotency windows), roll filters per window so old IDs age out, sidestepping the no-delete limit and capping growth &rarr; size each window's filter from the expected per-window peak <code>n</code> plus burst headroom, and monitor bits-set fraction to trigger an extra layer mid-window &rarr; trade-off: scalable filters grow memory with <code>n</code> and add a probe per layer vs a static filter that saturates silently under a burst; favor scalable/windowed when <code>n</code> is genuinely unpredictable.</div> </details>  </div> <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What two inputs do you need to size a Bloom filter, and what do they give you?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: the number of items n you'll store, and the target false-positive rate p you can tolerate → from those you derive the bit-array size m = −(n·ln p)/(ln 2)2 and the hash count k = log&#8322;(1/p) → the senior move is to start from the error you accept and back out the memory, not guess a bit count → everything else (bytes of RAM, bits/item) falls out of those two numbers."}},{"@type":"Question","name":"If you double n but keep p fixed, what changes — m, k, or both?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: only m changes — the bit array roughly doubles → k stays the same, because k = log&#8322;(1/p) depends on p alone, not on n → intuition: the hash count is set by how accurate you want each lookup; the array size is set by how much you're storing → this separation (\"k from rate, m from volume\") is the cleanest thing to say in an interview."}},{"@type":"Question","name":"What's the rule-of-thumb for ~1% false positives, and the cost of going 10× tighter?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: ~1% FP costs about 10 bits per item (more precisely ~9.6) with k = 7 (numbers illustrative) → each 10× cut in the FP rate adds roughly a fixed slice — about +4.8 bits/item and a few more hashes → so 0.1% ≈ 14.4 bits/item, 0.01% ≈ 19.2 bits/item → the cost is per item and linear: accuracy is cheap but never free → bits/item ≈ 1.44·log&#8322;(1/p) is the compact form to remember."}},{"@type":"Question","name":"Size a filter for 1,000,000 URLs at 1% FP — walk the numbers.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: k = log&#8322;(1/0.01) ≈ 6.6 → 7 hashes → bits/item ≈ 9.6, so m ≈ 9.6 &times; 1M ≈ 9.6 Mbit → that's ~1.2 MB of RAM (illustrative) → the whole membership index for a million URLs fits in about a megabyte — that's the headline that sells the structure → round k to an integer and add a little headroom for growth."}},{"@type":"Question","name":"Size a Bloom filter to dedupe 50M event IDs at 0.1% false-dupe rate.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: k = log&#8322;(1000) ≈ 10 hashes, bits/item ≈ 14.4 — note k is fixed by the rate, independent of the 50M → m ≈ 14.4 &times; 50M ≈ 720 Mbit ≈ 90 MB (illustrative) → round k to 10, provision ~90–100 MB → plan to rebuild or shard once the set grows past 50M, because the FP rate climbs as it fills past the design n → structure the answer as \"derive p first, separate k-from-rate vs m-from-volume, land a number, flag saturation.\""}},{"@type":"Question","name":"You guessed a bit count instead of starting from p. Why is that the junior move?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: picking m blindly leaves the actual FP rate implicit and load-dependent — you don't know the error you're shipping → the right direction is goal-first: state the FP rate the system can tolerate, then derive m and k → this makes the trade-off explicit and reviewable, and ties memory to a business-meaningful number (acceptable error) → it also forces you to estimate n honestly, which is where saturation bugs hide → \"choose the error, derive the rest.\""}},{"@type":"Question","name":"Why does k depend only on p and not on n — what's the intuition?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: at the optimal operating point you keep the array about half-full of set bits regardless of scale → the FP rate at that point is roughly (0.5)k, which depends only on how many independent bits each lookup checks — i.e. k → so the accuracy per query is governed by k, while n only dictates how big the array must be to stay half-full → double the items and you grow m to hold the same bit density, but the number of probes per query that yields a given p is unchanged → hence k = log&#8322;(1/p), free of n."}},{"@type":"Question","name":"You sized for n=10M but the set quietly grew to 30M. What happens, and how do you catch it?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: m and k are fixed, so the array overfills — bits-set fraction climbs past the ~50% sweet spot and the FP rate rises toward 1 → nothing errors; the filter keeps answering, just worse — silent decay → downstream the cheap \"no\" nearly vanishes, so the verify/disk path gets hammered → catch it by monitoring the bits-set fraction and measured FP rate against the design point, and by tracking actual n vs designed n → fix: rebuild larger, shard, or move to a scalable variant before it saturates, not after the pager fires."}},{"@type":"Question","name":"Argue for over-provisioning the filter vs sizing it tight — make the principal call.","acceptedAnswer":{"@type":"Answer","text":"For tight sizing: minimizes RAM, which matters when you run one filter per shard/segment across a fleet — small per-unit savings multiply. For over-provisioning: the FP rate is load-dependent and decays silently; headroom buys margin against under-estimated n and growth, avoiding a saturation incident. Synthesis: size from a realistic peak n (not today's n) plus a modest factor, pick p from the cost of the verify path, and back it with monitoring + a rebuild/shard runbook so you can correct cheaply — the decision is \"tight with observability and a rebuild plan,\" not a one-time guess."}},{"@type":"Question","name":"How do you pick the target FP rate p in the first place — what drives the number?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: p is an economic choice: it sets how often you pay the expensive verify/disk path on a false \"maybe\" → quantify the cost of one false positive (a disk read, a cross-node lookup, an over-rejected user) and the query rate, then choose p so the expected wasted-work cost is well under the RAM cost of a tighter filter → tighter p is roughly linear in bits/item, so there are diminishing returns — going from 1% to 0.01% nearly doubles memory → the staff answer ties p to a measurable downstream cost, not a round number someone liked."}},{"@type":"Question","name":"A service runs thousands of small Bloom filters (one per tenant). How does that change sizing?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: per-filter fixed overhead and small-n inefficiency dominate — at a few hundred items a filter may be larger than an exact hash set, so check the break-even first → n varies wildly per tenant, so a single global size either wastes RAM on small tenants or saturates large ones — size per tenant from its own n, or bucket tenants by scale → many tenants means aggregate RAM is the real budget, so the p-vs-bits trade-off is multiplied by tenant count → consider scalable filters so each tenant auto-grows instead of being pre-sized → the staff move: don't apply one sizing; treat it as a distribution of n with a per-tenant or per-bucket policy."}},{"@type":"Question","name":"Design the sizing + memory budget for per-SSTable Bloom filters in an LSM store with 10,000 SSTables.","acceptedAnswer":{"@type":"Answer","text":"A strong answer covers: one filter per SSTable, each sized from that table's key count n and a target p (~1% → ~10 bits/key is the common default; numbers illustrative) → aggregate RAM = sum over tables of bits/key &times; keys-per-table, so the fleet budget is the real constraint, not any one filter → tighter p trades RAM for fewer wasted disk reads — pick p from disk-read cost &times; absent-key query rate → SSTables are immutable, so filters are built once at flush/compaction and never need deletes — no counting variant → on compaction, filters merge/rebuild with the new table, naturally avoiding saturation → cache hot filters in RAM, possibly spill cold ones → trade-off: bits/key (RAM across thousands of tables) vs read amplification on misses; tune per level if upper levels are hotter."}},{"@type":"Question","name":"Design sizing for a \"seen this request ID?\" idempotency filter where traffic is bursty and n is hard to predict.","acceptedAnswer":{"@type":"Answer","text":"A strong answer covers: unknown/variable n is the core problem, so don't pre-size a single static filter — use a scalable Bloom (chained layers with geometric error bounds) or time-windowed filters that you roll and rebuild → pick p from the cost of a false \"seen\" — here a false positive could drop a legitimate request, so it must fall through to an authoritative check, never be the final answer → if request IDs expire (idempotency windows), roll filters per window so old IDs age out, sidestepping the no-delete limit and capping growth → size each window's filter from the expected per-window peak n plus burst headroom, and monitor bits-set fraction to trigger an extra layer mid-window → trade-off: scalable filters grow memory with n and add a probe per layer vs a static filter that saturates silently under a burst; favor scalable/windowed when n is genuinely unpredictable."}}]}</script>
+<div class="next"><span><p>📄 Keep handy: 
+<a href="../reference/bloom-filters-cheat-sheet.html">Bloom filters reference</a></p></span><span><em><p>Next ▸ </p><a href="0003-failure-modes-and-lsm-reads.html"><p>Lesson 3: Failure modes &amp; the LSM read path (Senior)</p></a></em></span></div>
+<footer id="sources"> <strong>Sources</strong><br>  <span id="s1">1. Mitzenmacher &amp; Broder, "Network Applications of Bloom Filters: A Survey", Internet Mathematics 1(4) — <a href="https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf">harvard.edu</a>. <a href="#r1">↩</a></span> <br>  </footer>  <!-- standardized bottom pager — guarantees the `.nav a` hook that
+                 analytics.js uses for lesson_nav_* + lesson_complete on every lesson --> <nav class="nav"> <span>&#8592; <a href="/engineering-learning-hub/index.html#grid">Engineering Vault</a></span> <span>
+Next: <a href="0003-failure-modes-and-lsm-reads.html">Failure modes &amp; LSM reads &#8594;</a> </span> </nav> <div class="lesson-fb" aria-live="polite"> <span class="lesson-fb-q">Was this lesson helpful?</span> <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">
+👍 Yes
+</button> <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No
+</button> <span class="lesson-fb-thanks">Thanks &mdash; noted.</span> </div> <p class="lesson-endnote">
+These notes reflect my current understanding and are updated as I learn, build, and
+                discover better explanations.
+</p> </main> </div>  <script>
+        document.querySelectorAll('.qitem').forEach(function (item) {
+            var correct = +item.dataset.correct;
+            var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+            var fb = item.querySelector('.fb');
+            opts.forEach(function (opt, i) {
+                opt.addEventListener('click', function () {
+                    opts.forEach(function (o) {
+                        o.disabled = true;
+                    });
+                    opts[correct].classList.add('correct');
+                    if (i === correct) {
+                        fb.textContent = '✓ Correct.';
+                        fb.className = 'fb ok';
+                    } else {
+                        opt.classList.add('wrong');
+                        fb.textContent =
+                            '✗ Not quite — the right answer is highlighted. Re-read it, then say it back out loud.';
+                        fb.className = 'fb no';
+                    }
+                });
+            });
+        });
 
-  <div class="mission">
-    <strong>Why this, first.</strong> The senior move is to start from the false-positive rate you
-    can tolerate and back out the memory — not guess a bit count.
-  </div>
-
-  <figure>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 300" font-family="ui-sans-serif,system-ui,sans-serif">
-      <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#136f63"/></marker></defs>
-      <rect width="680" height="300" fill="#fffff8"/>
-      <text x="340" y="28" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">Two inputs decide everything</text>
-      <rect x="16" y="70" width="150" height="46" rx="8" fill="#e8f1ef" stroke="#136f63"/>
-      <text x="91" y="92" text-anchor="middle" font-size="14" fill="#0f4f47">n = # items</text>
-      <text x="91" y="108" text-anchor="middle" font-size="11" fill="#6b675f">how many you store</text>
-      <rect x="16" y="170" width="150" height="46" rx="8" fill="#e8f1ef" stroke="#136f63"/>
-      <text x="91" y="192" text-anchor="middle" font-size="14" fill="#0f4f47">p = target FP</text>
-      <text x="91" y="208" text-anchor="middle" font-size="11" fill="#6b675f">error you accept</text>
-      <rect x="200" y="60" width="256" height="56" rx="8" fill="#fff" stroke="#9a7a17"/>
-      <text x="328" y="84" text-anchor="middle" font-size="15" fill="#7a5e12">m = &#8722;(n &#183; ln p) / (ln 2)&#178;</text>
-      <text x="328" y="104" text-anchor="middle" font-size="11" fill="#6b675f">bit-array size &#8212; uses n AND p</text>
-      <rect x="200" y="170" width="256" height="56" rx="8" fill="#fff" stroke="#2f5d3a"/>
-      <text x="328" y="194" text-anchor="middle" font-size="15" fill="#2f5d3a">k = log&#8322;(1 / p)</text>
-      <text x="328" y="214" text-anchor="middle" font-size="11" fill="#6b675f">hash count &#8212; uses p ONLY</text>
-      <rect x="496" y="64" width="168" height="48" rx="8" fill="#fbf3e6" stroke="#9a7a17"/>
-      <text x="580" y="84" text-anchor="middle" font-size="13" fill="#7a5e12">bit-array size m</text>
-      <text x="580" y="102" text-anchor="middle" font-size="11" fill="#6b675f">grows with n</text>
-      <rect x="496" y="174" width="168" height="48" rx="8" fill="#eef5ee" stroke="#2f5d3a"/>
-      <text x="580" y="194" text-anchor="middle" font-size="13" fill="#2f5d3a"># hashes k</text>
-      <text x="580" y="212" text-anchor="middle" font-size="11" fill="#6b675f">fixed by p alone</text>
-      <path d="M166 90 L200 86" fill="none" stroke="#136f63" stroke-width="1.5" marker-end="url(#a)"/>
-      <path d="M166 193 L200 198" fill="none" stroke="#136f63" stroke-width="1.5" marker-end="url(#a)"/>
-      <path d="M120 170 C150 150 170 130 200 110" fill="none" stroke="#136f63" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#a)"/>
-      <path d="M456 88 L496 88" fill="none" stroke="#9a7a17" stroke-width="1.5" marker-end="url(#a)"/>
-      <path d="M456 198 L496 198" fill="none" stroke="#2f5d3a" stroke-width="1.5" marker-end="url(#a)"/>
-      <rect x="200" y="252" width="256" height="34" rx="6" fill="#eef5ee" stroke="#2f5d3a"/>
-      <text x="328" y="274" text-anchor="middle" font-size="13" fill="#2f5d3a" font-weight="bold">k ignores n &#8212; double the items, same k</text>
-    </svg>
-    <figcaption>Choose <code>p</code>, count <code>n</code>; the two formulas hand you <code>m</code> and <code>k</code>.</figcaption>
-  </figure>
-
-  <h2>Worked example, in three moves</h2>
-  <div class="steps">
-    <div class="step"><div class="lab">Given</div><div class="big">1,000,000 URLs</div><div class="sub">want p = 1% false positives</div></div>
-    <div class="arrow">&#8594;</div>
-    <div class="step"><div class="lab">Bits</div><div class="big">m &#8776; 9.6 Mbit</div><div class="sub">9.6 bits/item &#215; 1M &#8776; 1.2 MB</div></div>
-    <div class="arrow">&#8594;</div>
-    <div class="step"><div class="lab">Hashes</div><div class="big">k = 7</div><div class="sub">log&#8322;(1/0.01) &#8776; 6.6 &#8594; 7</div></div>
-  </div>
-
-  <h2>The cost ladder</h2>
-  <figure>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 250" font-family="ui-sans-serif,system-ui,sans-serif">
-      <rect width="660" height="250" fill="#fffff8"/>
-      <text x="330" y="26" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">10&#215; fewer false positives &#8594; +4.8 bits/item, +3 hashes</text>
-      <text x="16" y="74" font-size="14" fill="#111110">p = 1%</text>
-      <rect x="96" y="58" width="173" height="26" rx="4" fill="#9fe7da" stroke="#0f4f47"/><text x="104" y="76" font-size="13" fill="#0f4f47">9.6 bits/item</text>
-      <rect x="290" y="58" width="86" height="26" rx="4" fill="#eef5ee" stroke="#2f5d3a"/><text x="333" y="76" text-anchor="middle" font-size="13" fill="#2f5d3a">k = 7</text>
-      <text x="16" y="134" font-size="14" fill="#111110">p = 0.1%</text>
-      <rect x="96" y="118" width="259" height="26" rx="4" fill="#5fb3a6" stroke="#0f4f47"/><text x="104" y="136" font-size="13" fill="#053b34">14.4 bits/item</text>
-      <rect x="376" y="118" width="86" height="26" rx="4" fill="#eef5ee" stroke="#2f5d3a"/><text x="419" y="136" text-anchor="middle" font-size="13" fill="#2f5d3a">k = 10</text>
-      <text x="16" y="194" font-size="14" fill="#111110">p = 0.01%</text>
-      <rect x="96" y="178" width="345" height="26" rx="4" fill="#136f63" stroke="#0f4f47"/><text x="104" y="196" font-size="13" fill="#ffffff">19.2 bits/item</text>
-      <rect x="462" y="178" width="86" height="26" rx="4" fill="#eef5ee" stroke="#2f5d3a"/><text x="505" y="196" text-anchor="middle" font-size="13" fill="#2f5d3a">k = 13</text>
-      <text x="330" y="234" text-anchor="middle" font-size="12" fill="#6b675f">Cost is per item and linear &#8212; accuracy is cheap, but never free.</text>
-    </svg>
-    <figcaption>Each 10&#215; cut in error adds a fixed slice of bits and a few hashes.</figcaption>
-  </figure>
-
-  <div class="cards">
-    <div class="card"><div class="v">~10 bits</div><div class="l">per item &#8776; 1% FP</div></div>
-    <div class="card"><div class="v">k = log&#8322;(1/p)</div><div class="l">hashes, set by p</div></div>
-    <div class="card"><div class="v">+4.8 bits</div><div class="l">per 10&#215; fewer FPs</div></div>
-  </div>
-
-  <table>
-    <tr><th>You want</th><th>Formula</th></tr>
-    <tr><td>Bit-array size m</td><td><code>&#8722;(n &#183; ln p) / (ln 2)&#178;</code></td></tr>
-    <tr><td>Hash count k</td><td><code>log&#8322;(1 / p)</code></td></tr>
-    <tr><td>Bits per item</td><td><code>&#8776; 1.44 &#183; log&#8322;(1 / p)</code></td></tr>
-  </table>
-
-  <p class="rule"><strong>k is set by the error you accept; only m grows with how much you store.</strong></p>
-
-  <hr class="note">
-
-  <h2>Retrieval practice</h2>
-  <p>Answer from memory — feedback is instant.</p>
-
-  <div class="quiz" id="quiz">
-    <div class="qitem" data-correct="0">
-      <p class="q"><span class="qn">Q1.</span> Doubling n, keeping p fixed, changes&#8230;</p>
-      <button class="opt">only m (the bit array), not k</button>
-      <button class="opt">only k (the hash count), not m</button>
-      <button class="opt">both m and k go up together</button>
-      <button class="opt">neither m nor k need to move</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="3">
-      <p class="q"><span class="qn">Q2.</span> The optimal hash count k depends on&#8230;</p>
-      <button class="opt">the number of items n stored</button>
-      <button class="opt">the bit-array size m chosen</button>
-      <button class="opt">both the item count and rate</button>
-      <button class="opt">the target FP rate you accept</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="0">
-      <p class="q"><span class="qn">Q3.</span> Cutting the FP rate 10&#215; raises bits/item by&#8230;</p>
-      <button class="opt">around five more bits per item</button>
-      <button class="opt">around fifty more bits per item</button>
-      <button class="opt">around half a bit per item only</button>
-      <button class="opt">almost no extra bits per item</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="2">
-      <p class="q"><span class="qn">Q4.</span> 1M items at ~1% FP needs roughly&#8230;</p>
-      <button class="opt">about 1.2 kilobytes of memory</button>
-      <button class="opt">about 120 megabytes of memory</button>
-      <button class="opt">about 1.2 megabytes of memory</button>
-      <button class="opt">about 12 gigabytes of memory</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-  </div>
-
-  <h2>Rehearse out loud</h2>
-  <p class="rehearse">Interviewer: <strong>"Size a Bloom filter to dedupe 50M event IDs at 0.1%
-    false-dupe rate."</strong> ~60 seconds, from memory — then reveal and compare.</p>
-  <div class="rehearse">
-    <textarea placeholder="Your 60-second answer, from memory…"></textarea><br>
-    <button class="btn ghost" onclick="document.getElementById('model').classList.add('show')">Reveal model answer</button>
-    <div class="model" id="model">
-      <p>At p = 0.1%, k = log&#8322;(1000) &#8776; 10 hashes, and bits/item &#8776; 14.4 — note k is fixed by
-        the rate, independent of the 50M. So m &#8776; 14.4 &#215; 50M &#8776; 720 Mbit &#8776; 90 MB. I'd round k to 10,
-        provision ~90–100 MB, and plan to rebuild or shard once the set grows past 50M, because the
-        FP rate climbs as it fills past the size I designed for.</p>
-      <p class="src"><strong>Why this scores:</strong> derives from p first, separates "k from rate"
-        vs "m from volume," lands a concrete number, and flags saturation on growth.</p>
-    </div>
-  </div>
-
-  <div class="ask">
-    <strong>I'm your teacher — ask me anything.</strong> Want the derivation of why <code>k = log&#8322;(1/p)</code>,
-    a drill on saturation as the filter fills, or the next lesson (Senior: failure modes &amp; the LSM read path)? Say so.
-  </div>
-
-  <h3>Primary source (read this next)</h3>
-  <p>📖 <a href="https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf"><strong>Mitzenmacher &amp; Broder, "Network Applications of Bloom Filters: A Survey"</strong></a><sup><a href="#s1" id="r1">1</a></sup>. The clean derivation of the sizing formulas in one trusted place.</p>
-
-  <h2 class="sec" id="interview">Interview — pick your bar</h2>
-  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
-
-  <div data-interview>
-    <details class="iq" data-level="core">
-      <summary>What two inputs do you need to size a Bloom filter, and what do they give you?</summary>
-      <div class="a">
-        <b>Hit these points:</b> the number of items <code>n</code> you'll store, and the target false-positive rate <code>p</code> you can tolerate &rarr; from those you derive the bit-array size <code>m = &minus;(n&middot;ln p)/(ln 2)<sup>2</sup></code> and the hash count <code>k = log&#8322;(1/p)</code> &rarr; the senior move is to start from the error you accept and back out the memory, not guess a bit count &rarr; everything else (bytes of RAM, bits/item) falls out of those two numbers.
-      </div>
-    </details>
-    <details class="iq" data-level="core">
-      <summary>If you double n but keep p fixed, what changes — m, k, or both?</summary>
-      <div class="a">
-        <b>Hit these points:</b> only <code>m</code> changes — the bit array roughly doubles &rarr; <code>k</code> stays the same, because <code>k = log&#8322;(1/p)</code> depends on <code>p</code> alone, not on <code>n</code> &rarr; intuition: the hash count is set by how accurate you want each lookup; the array size is set by how much you're storing &rarr; this separation ("k from rate, m from volume") is the cleanest thing to say in an interview.
-      </div>
-    </details>
-    <details class="iq" data-level="core">
-      <summary>What's the rule-of-thumb for ~1% false positives, and the cost of going 10× tighter?</summary>
-      <div class="a">
-        <b>Hit these points:</b> ~1% FP costs about 10 bits per item (more precisely ~9.6) with <code>k = 7</code> (numbers illustrative) &rarr; each 10× cut in the FP rate adds roughly a fixed slice — about +4.8 bits/item and a few more hashes &rarr; so 0.1% &asymp; 14.4 bits/item, 0.01% &asymp; 19.2 bits/item &rarr; the cost is per item and linear: accuracy is cheap but never free &rarr; bits/item &asymp; <code>1.44&middot;log&#8322;(1/p)</code> is the compact form to remember.
-      </div>
-    </details>
-    <details class="iq" data-level="core">
-      <summary>Size a filter for 1,000,000 URLs at 1% FP — walk the numbers.</summary>
-      <div class="a">
-        <b>Hit these points:</b> <code>k = log&#8322;(1/0.01) &asymp; 6.6 &rarr; 7</code> hashes &rarr; bits/item &asymp; 9.6, so <code>m &asymp; 9.6 &times; 1M &asymp; 9.6 Mbit</code> &rarr; that's ~1.2 MB of RAM (illustrative) &rarr; the whole membership index for a million URLs fits in about a megabyte — that's the headline that sells the structure &rarr; round <code>k</code> to an integer and add a little headroom for growth.
-      </div>
-    </details>
-
-    <details class="iq" data-level="senior">
-      <summary>Size a Bloom filter to dedupe 50M event IDs at 0.1% false-dupe rate.</summary>
-      <div class="a">
-        <b>Hit these points:</b> <code>k = log&#8322;(1000) &asymp; 10</code> hashes, bits/item &asymp; 14.4 — note <code>k</code> is fixed by the rate, independent of the 50M &rarr; <code>m &asymp; 14.4 &times; 50M &asymp; 720 Mbit &asymp; 90 MB</code> (illustrative) &rarr; round <code>k</code> to 10, provision ~90–100 MB &rarr; plan to rebuild or shard once the set grows past 50M, because the FP rate climbs as it fills past the design <code>n</code> &rarr; structure the answer as "derive p first, separate k-from-rate vs m-from-volume, land a number, flag saturation."
-      </div>
-    </details>
-    <details class="iq" data-level="senior">
-      <summary>You guessed a bit count instead of starting from p. Why is that the junior move?</summary>
-      <div class="a">
-        <b>Hit these points:</b> picking <code>m</code> blindly leaves the actual FP rate implicit and load-dependent — you don't know the error you're shipping &rarr; the right direction is goal-first: state the FP rate the system can tolerate, then derive <code>m</code> and <code>k</code> &rarr; this makes the trade-off explicit and reviewable, and ties memory to a business-meaningful number (acceptable error) &rarr; it also forces you to estimate <code>n</code> honestly, which is where saturation bugs hide &rarr; "choose the error, derive the rest."
-      </div>
-    </details>
-    <details class="iq" data-level="senior">
-      <summary>Why does k depend only on p and not on n — what's the intuition?</summary>
-      <div class="a">
-        <b>Hit these points:</b> at the optimal operating point you keep the array about half-full of set bits regardless of scale &rarr; the FP rate at that point is roughly <code>(0.5)<sup>k</sup></code>, which depends only on how many independent bits each lookup checks — i.e. <code>k</code> &rarr; so the accuracy per query is governed by <code>k</code>, while <code>n</code> only dictates how big the array must be to <em>stay</em> half-full &rarr; double the items and you grow <code>m</code> to hold the same bit density, but the number of probes per query that yields a given <code>p</code> is unchanged &rarr; hence <code>k = log&#8322;(1/p)</code>, free of <code>n</code>.
-      </div>
-    </details>
-    <details class="iq" data-level="senior">
-      <summary>You sized for n=10M but the set quietly grew to 30M. What happens, and how do you catch it?</summary>
-      <div class="a">
-        <b>Hit these points:</b> <code>m</code> and <code>k</code> are fixed, so the array overfills — bits-set fraction climbs past the ~50% sweet spot and the FP rate rises toward 1 &rarr; nothing errors; the filter keeps answering, just worse — silent decay &rarr; downstream the cheap "no" nearly vanishes, so the verify/disk path gets hammered &rarr; catch it by monitoring the bits-set fraction and measured FP rate against the design point, and by tracking actual <code>n</code> vs designed <code>n</code> &rarr; fix: rebuild larger, shard, or move to a scalable variant before it saturates, not after the pager fires.
-      </div>
-    </details>
-
-    <details class="iq" data-level="staff">
-      <summary>Argue for over-provisioning the filter vs sizing it tight — make the principal call.</summary>
-      <div class="a">
-        <b>For tight sizing:</b> minimizes RAM, which matters when you run one filter per shard/segment across a fleet — small per-unit savings multiply. <b>For over-provisioning:</b> the FP rate is load-dependent and decays silently; headroom buys margin against under-estimated <code>n</code> and growth, avoiding a saturation incident. <b>Synthesis:</b> size from a realistic peak <code>n</code> (not today's <code>n</code>) plus a modest factor, pick <code>p</code> from the cost of the verify path, and back it with monitoring + a rebuild/shard runbook so you can correct cheaply — the decision is "tight with observability and a rebuild plan," not a one-time guess.
-      </div>
-    </details>
-    <details class="iq" data-level="staff">
-      <summary>How do you pick the target FP rate p in the first place — what drives the number?</summary>
-      <div class="a">
-        <b>Hit these points:</b> <code>p</code> is an economic choice: it sets how often you pay the expensive verify/disk path on a false "maybe" &rarr; quantify the cost of one false positive (a disk read, a cross-node lookup, an over-rejected user) and the query rate, then choose <code>p</code> so the expected wasted-work cost is well under the RAM cost of a tighter filter &rarr; tighter <code>p</code> is roughly linear in bits/item, so there are diminishing returns — going from 1% to 0.01% nearly doubles memory &rarr; the staff answer ties <code>p</code> to a measurable downstream cost, not a round number someone liked.
-      </div>
-    </details>
-    <details class="iq" data-level="staff">
-      <summary>A service runs thousands of small Bloom filters (one per tenant). How does that change sizing?</summary>
-      <div class="a">
-        <b>Hit these points:</b> per-filter fixed overhead and small-<code>n</code> inefficiency dominate — at a few hundred items a filter may be larger than an exact hash set, so check the break-even first &rarr; <code>n</code> varies wildly per tenant, so a single global size either wastes RAM on small tenants or saturates large ones — size per tenant from its own <code>n</code>, or bucket tenants by scale &rarr; many tenants means aggregate RAM is the real budget, so the <code>p</code>-vs-bits trade-off is multiplied by tenant count &rarr; consider scalable filters so each tenant auto-grows instead of being pre-sized &rarr; the staff move: don't apply one sizing; treat it as a distribution of <code>n</code> with a per-tenant or per-bucket policy.
-      </div>
-    </details>
-
-    <div class="designrubric" data-level="design">
-      <b>Design-round framework</b> — drive any "size and place a filter" prompt through these, out loud:
-      <ol>
-        <li>Estimate peak <code>n</code> honestly (with growth), not today's count.</li>
-        <li>Choose <code>p</code> from the cost of one false positive &times; the query rate, vs RAM.</li>
-        <li>Derive <code>m = &minus;(n&middot;ln p)/(ln 2)<sup>2</sup></code> and <code>k = log&#8322;(1/p)</code>; convert to bytes.</li>
-        <li>Decide static vs scalable: known bounded <code>n</code> &rarr; static; unknown/growing &rarr; scalable or sharded.</li>
-        <li>Saturation plan: rebuild/shard thresholds tied to bits-set fraction.</li>
-        <li>Deletes/churn: counting/cuckoo or time-windowed rebuild if the set turns over.</li>
-        <li>Observe: measured FP rate, bits-set fraction, verify-path hit rate vs the design point.</li>
-      </ol>
-    </div>
-    <details class="iq" data-level="design">
-      <summary>Design the sizing + memory budget for per-SSTable Bloom filters in an LSM store with 10,000 SSTables.</summary>
-      <div class="a">
-        <b>A strong answer covers:</b> one filter per SSTable, each sized from that table's key count <code>n</code> and a target <code>p</code> (~1% &rarr; ~10 bits/key is the common default; numbers illustrative) &rarr; aggregate RAM = sum over tables of bits/key &times; keys-per-table, so the fleet budget is the real constraint, not any one filter &rarr; tighter <code>p</code> trades RAM for fewer wasted disk reads — pick <code>p</code> from disk-read cost &times; absent-key query rate &rarr; SSTables are immutable, so filters are built once at flush/compaction and never need deletes — no counting variant &rarr; on compaction, filters merge/rebuild with the new table, naturally avoiding saturation &rarr; cache hot filters in RAM, possibly spill cold ones &rarr; trade-off: bits/key (RAM across thousands of tables) vs read amplification on misses; tune per level if upper levels are hotter.
-      </div>
-    </details>
-    <details class="iq" data-level="design">
-      <summary>Design sizing for a "seen this request ID?" idempotency filter where traffic is bursty and n is hard to predict.</summary>
-      <div class="a">
-        <b>A strong answer covers:</b> unknown/variable <code>n</code> is the core problem, so don't pre-size a single static filter — use a <em>scalable</em> Bloom (chained layers with geometric error bounds) or time-windowed filters that you roll and rebuild &rarr; pick <code>p</code> from the cost of a false "seen" — here a false positive could drop a legitimate request, so it must fall through to an authoritative check, never be the final answer &rarr; if request IDs expire (idempotency windows), roll filters per window so old IDs age out, sidestepping the no-delete limit and capping growth &rarr; size each window's filter from the expected per-window peak <code>n</code> plus burst headroom, and monitor bits-set fraction to trigger an extra layer mid-window &rarr; trade-off: scalable filters grow memory with <code>n</code> and add a probe per layer vs a static filter that saturates silently under a burst; favor scalable/windowed when <code>n</code> is genuinely unpredictable.
-      </div>
-    </details>
-  </div>
-
-  <div class="next">
-    <span>📄 Keep handy: <a href="../reference/bloom-filters-cheat-sheet.html">Bloom filters reference</a></span>
-    <span><em>Next ▸ <a href="0003-failure-modes-and-lsm-reads.html">Lesson 3: Failure modes &amp; the LSM read path (Senior)</a></em></span>
-  </div>
-
-  <footer id="sources">
-    <strong>Sources</strong><br>
-    <span id="s1">1. Mitzenmacher &amp; Broder, "Network Applications of Bloom Filters: A Survey", Internet Mathematics 1(4) — <a href="https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf">harvard.edu</a>. <a href="#r1">↩</a></span><br>
-  </footer>
-<div class="lesson-fb" aria-live="polite">
-  <span class="lesson-fb-q">Was this lesson helpful?</span>
-  <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">👍 Yes</button>
-  <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No</button>
-  <span class="lesson-fb-thanks">Thanks &mdash; noted.</span>
-</div>
-<p class="lesson-endnote">These notes reflect my current understanding and are updated as I learn, build, and discover better explanations.</p>
-</main>
-</div>
-
-<script>
-  document.querySelectorAll('.qitem').forEach(function(item){
-    var correct = +item.dataset.correct;
-    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
-    var fb = item.querySelector('.fb');
-    opts.forEach(function(opt, i){
-      opt.addEventListener('click', function(){
-        opts.forEach(function(o){ o.disabled = true; });
-        opts[correct].classList.add('correct');
-        if(i === correct){
-          fb.textContent = '✓ Correct.';
-          fb.className = 'fb ok';
-        } else {
-          opt.classList.add('wrong');
-          fb.textContent = '✗ Not quite — the right answer is highlighted. Re-read it, then say it back out loud.';
-          fb.className = 'fb no';
-        }
-      });
-    });
-  });
-</script>
-<script src="../../assets/interview.js" defer></script>
-<script src="../../assets/reading-progress.js" defer></script>
-</body>
-</html>
+        // "Reveal model answer" inside each .rehearse block (id-free; supports
+        // multiple per page — replaces the old inline onclick + fixed id="model").
+        document.querySelectorAll('.rehearse [data-reveal]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var m = btn.parentElement.querySelector('.model');
+                if (m) m.classList.add('show');
+            });
+        });
+    </script>  <script src="/engineering-learning-hub/assets/interview.js" defer></script><script src="/engineering-learning-hub/assets/reading-progress.js" defer></script> </body> </html>

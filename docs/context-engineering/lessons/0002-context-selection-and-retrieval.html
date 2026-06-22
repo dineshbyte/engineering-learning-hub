@@ -1,749 +1,155 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<script>
-(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
-function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
-</script>
-
-<meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Context Retrieval: Lexical vs Semantic vs Hybrid · Engineering Vault</title>
-<meta name="description" content="Your bar: explain how a system decides what to send to the model, and compare lexical, semantic, hybrid search, ranking and re-ranking by purpose, advantages, disadvantages, and failure modes.">
-<meta name="keywords" content="context retrieval, lexical, semantic, hybrid, semantic search, retrieval augmented generation, context engineering, context window, working memory, failure modes, rag, embeddings, bm25, rerank">
-<meta name="author" content="dineshbyte">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0002-context-selection-and-retrieval.html">
-<meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Vault">
-<meta property="og:title" content="Context Retrieval: Lexical vs Semantic vs Hybrid">
-<meta property="og:description" content="How systems decide what to send the model: candidate generation, ranking, selection — plus lexical, semantic, hybrid search and re-ranking.">
-<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0002-context-selection-and-retrieval.html">
-<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/context-engineering.png">
-<meta property="og:image:alt" content="Context Engineering · Engineering Vault learning track">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Context Retrieval: Lexical vs Semantic vs Hybrid">
-<meta name="twitter:description" content="First-stage retrieval buys recall; re-ranking buys precision. Lexical finds exact, semantic finds meaning, hybrid finds both.">
-<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/context-engineering.png">
-<link rel="stylesheet" href="../../assets/tokens.css">
-<link rel="stylesheet" href="../../assets/lesson.css">
-<link rel="stylesheet" href="../../assets/interview.css">
-<style>
-  :root{--accent:var(--track-context)}
-
-  /* one-sentence decomposition chips */
-  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
-  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
-  .chip b{color:var(--accent)}
-  .chip.c2 b{color:var(--track-rest)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
-
-  /* TOC as a grid */
-  .toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
-  .toc a{text-decoration:none; padding:.15rem 0}
-
-  /* level block */
-  .lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
-  .lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
-  .num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
-  .lvltop h2{margin:0; font-size:1.24rem; font-weight:700}
-  .tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
-
-  /* fact cards — labelled 2-col variant */
-  .facts{grid-template-columns:1fr 1fr}
-  .fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
-  .fact.blue b{color:var(--track-rest)}
-
-  /* myth -> truth (2-col grid) */
-  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
-  .myth div{border-radius:6px; padding:.45rem .6rem}
-  .myth .m{background:color-mix(in srgb,var(--bad) 12%,transparent); border-left:3px solid var(--bad); color:var(--bad)}
-  .myth .t{background:color-mix(in srgb,var(--good) 14%,transparent); border-left:3px solid var(--good); color:var(--good)}
-
-  /* dark "memory rule" band */
-  .rule{font-size:.92rem; font-weight:600; background:var(--ink); color:var(--bg); border-radius:8px; padding:.55rem .85rem; margin:.7rem 0}
-  .rule span{color:var(--accent)}
-
-  /* memory-check disclosure */
-  details.mc{border:0; background:transparent; padding:0; margin:.5rem 0 0; font-size:.84rem}
-  details.mc summary{cursor:pointer; color:var(--good); font-weight:600; list-style:none}
-  details.mc summary::before{content:"\25B8 "}
-  details.mc[open] summary::before{content:"\25BE "}
-  details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
-  details.mc .ans{color:var(--muted)}
-
-  /* interview-question disclosure */
-  details.iq{border-left:3px solid var(--track-rest); font-size:.88rem}
-  details.iq summary{list-style:none}
-  details.iq summary::-webkit-details-marker{display:none}
-  details.iq summary::before{content:"\1F4AC "}
-  details.iq[open] summary{color:var(--track-rest)}
-  details.iq .a{margin-top:.45rem; font-size:.85rem; color:var(--ink); line-height:1.45}
-  details.iq .a b{color:var(--track-rest)}
-
-  /* footer nav row */
-  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
-
-  @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
-</style>
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "FAQPage",
- "mainEntity": [
-  {
-   "@type": "Question",
-   "name": "Your code assistant keeps missing the actual buggy file. Where in the selection pipeline do you look first, and how do you prove it?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: instrument the pipeline per stage, don't guess -> first check candidate generation recall : was the buggy file ever in the candidate set? if no, ranking/packing are irrelevant -> if recall is the gap, add the missing signal — usually structural (imports/call sites) or lexical for an exact symbol the embedding model washed out -> if recall is fine but the file ranked low, fix ranking / add a re-rank -> if it ranked high but got dropped, it's a packing/budget problem -> measure retrieval hit-rate as a first-class metric, not just end-answer quality."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Users complain semantic search returns \"close but wrong\" results and sometimes whiffs on exact error codes. What's your fix and why?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: name the root cause — embeddings score topical similarity, so they return plausible-but-wrong and wash out rare exact tokens like error codes -> add hybrid : run BM25 alongside the vector search and fuse (RRF) so exact strings are caught by lexical and meaning by semantic -> add a cross-encoder re-rank over the fused top-N to push the genuinely best result to the top (precision) -> frame the split: hybrid fixes recall, re-rank fixes precision -> verify with retrieval hit-rate on a labelled set, not just end-answer vibes; tune fusion weights against that set."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Name the three stages of the selection pipeline, in order, and what each one does.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: candidate generation -> cast a wide net to pull anything that might be relevant -> ranking -> score those candidates so the best ones rise -> selection / packing -> fit the top of the list into the token budget. The whole point is choosing the smallest set that still contains the answer when you can't send everything."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What does lexical / BM25 search actually match on, and what is it good at?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: it scores documents by overlap of the exact terms , weighted by term frequency and rarity (TF-IDF / BM25) -> meaning plays no part, only the literal strings -> strong on identifiers, error codes, function names, exact IDs -> fast, cheap, interpretable, no model required — you can read why it matched."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What does semantic / embedding search match on, and why use it?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: it encodes query and chunks into vectors and ranks by similarity (cosine over an ANN index) -> matches on meaning , so synonyms and paraphrase still find the right passage even with zero shared words -> exists because users rarely use the document's exact wording -> robust to phrasing, weak on rare exact tokens."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What is hybrid search, and what does fusion (e.g. RRF) do in it?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: run lexical and semantic together , then merge their two result lists into one ranking -> fusion (Reciprocal Rank Fusion or a weighted blend) combines the per-engine ranks into a single ordered list -> the reason: the two engines fail on opposite cases, so one usually catches what the other drops -> gives you exact-match and meaning-match coverage at once."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Users say semantic search returns \"close but wrong\" results and sometimes whiffs on exact error codes. What's your fix and why?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: name the root cause — embeddings score topical similarity, so they return plausible-but-wrong and wash out rare exact tokens like error codes -> add hybrid : run BM25 alongside the vector search and fuse (RRF) so exact strings are caught by lexical and meaning by semantic -> add a cross-encoder re-rank over the fused top-N to push the genuinely best result up (precision) -> frame the split: hybrid fixes recall, re-rank fixes precision -> verify with retrieval hit-rate on a labelled set, not end-answer vibes; tune fusion weights against that set."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Your code assistant keeps missing the actual buggy file. Where in the pipeline do you look first, and how do you prove it?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: instrument per stage, don't guess -> first check candidate-generation recall : was the buggy file ever in the candidate set? if no, ranking and packing are irrelevant -> if recall is the gap, add the missing signal — usually structural (imports / call sites) or lexical for an exact symbol the embedding washed out -> if recall is fine but it ranked low, fix ranking / add a re-rank -> if it ranked high but got dropped, it's a packing/budget problem -> track retrieval hit-rate as a first-class metric, not just end-answer quality."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Distinguish ranking from re-ranking. When is a cross-encoder worth its cost, and when is it a waste?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: ranking = first stage, cheap score (BM25 / cosine) over many candidates, optimizing recall — \"don't miss it\" -> re-ranking = second stage, expensive cross-encoder reading query + document jointly over the top-N, optimizing precision — \"best at the top\" -> worth it when the final top-k reaching the window must be high-precision and first-stage ordering is noisy -> a waste if recall is the real gap — it can't recover a missed doc -> bound cost by running it on top-N only and caching; prove the precision lift on a labelled set before keeping it."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Someone proposes \"just embed everything and drop BM25 — embeddings are strictly better.\" Push back.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: embeddings are weak on exact tokens — error codes, IDs, function names get washed into topical neighbours -> for a query that is the literal string, meaning is irrelevant and lexical is exactly right -> the two engines have opposite blind spots, so dropping BM25 trades one failure mode for another -> hybrid keeps BM25 precisely for those cases; the small extra infra is cheaper than silently missing every ID lookup -> decide with hit-rate on a query mix that includes exact-token queries, not a vibe."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design a retrieval strategy when you don't yet know the query mix — some lookups are exact IDs, some are vague conceptual questions, and the corpus keeps changing.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: start from recall first : a missed doc can't be ranked or packed, so over-invest stage 1 -> default to hybrid (BM25 + vector, fused) so exact-token and conceptual queries are both covered without knowing the split up front -> add a cross-encoder re-rank on the fused top-N for precision where it matters -> layer signals the domain needs — structural for code, recency/version for changing docs, authority for canonical sources -> keep re-indexing fresh as the corpus changes -> instrument hit-rate by query type, learn the real mix, then tune fusion weights and decide where re-rank earns its latency."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "\"Relevant\" means different things per system. Contrast a billing platform, a code repo, and a docs portal — and say how that changes your retrieval.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: relevance is set by the question's intent, not one universal score -> billing : the exact account / ledger rows — lexical/ID match + authority; a \"similar\" account is actively harmful -> repo : the right symbols plus their dependencies — semantic concept + structural call sites and imports -> docs : the right article at the right version — semantic gated by recency/version + authority -> so you pick and weight signals to the domain's notion of relevance, rather than shipping one generic retriever everywhere."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "You can raise recall (wider net) or precision (aggressive re-rank + tighter packing), but not both for free. How do you reason about the trade-off?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: the two failures cost differently — a recall miss means the answer never reaches the model (unrecoverable), a precision miss means noise the model must see past -> so buy recall cheaply and wide in stage 1, then buy precision narrowly in stage 2 where it's affordable -> watch the packing tension: more candidates raise recall but bury the right lines in the \"lost in the middle\" zone and cost more -> tie the dial to the domain's cost of a miss (billing error vs a fuzzy docs answer) -> measure both hit-rate and top-k precision on a labelled set and move the knob deliberately, not by feel."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design the retrieval layer for a documentation Q&A bot over versioned, frequently-updated docs.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "A strong answer covers: the query mix is mostly conceptual \"how do I…\" questions, so semantic carries weight — but keep BM25 for exact API names and error strings -> gate on recency / version so an old article doesn't beat the current one, and on authority for canonical pages -> hybrid stage 1, fuse with RRF, re-rank the top-N for precision since users read only the first answer -> pack the best article(s) within budget; prefer the right section over dumping whole pages -> re-index on every doc change so freshness holds -> call the failure modes: plausible-but-wrong from semantic, vocabulary mismatch from lexical -> measure hit-rate on labelled questions, not end-answer vibes."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design retrieval for an internal-search feature across code, tickets, and wiki docs in one box.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "A strong answer covers: the corpus is heterogeneous, so \"relevant\" differs per source — code wants structural signals (imports, call sites) plus lexical for exact symbols; tickets/wiki lean semantic -> run hybrid per source and fuse, or fuse across sources, so exact-token and conceptual queries both land -> recall first: a missed file can't be ranked or packed -> re-rank the fused top-N for precision; weight by recency where it matters (latest ticket, newest doc) and authority for canonical sources -> pack within budget — signatures/docstrings for code, snippets for docs -> keep indexes fresh as all three sources change -> instrument hit-rate by source and query type, then tune fusion weights and decide where re-rank pays for its latency."
-   }
-  }
- ]
-}
-</script>
-<script src="../../assets/analytics.js" defer></script>
-</head>
-<body>
-<a class="skip-link" href="#main">Skip to content</a>
-<!-- shared arrowheads -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
-  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
-  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
-  <marker id="arwM" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b5179e"/></marker>
-</defs></svg>
-
-<div class="wrap">
-  <nav id="hubbar">
-    <a href="../../index.html">&#8592; Engineering Vault</a>
-    <span class="pn"><a href="0001-what-is-context-and-context-as-query.html" title="What Is Context">&#8249; Prev</a><a href="0003-codebase-context-chunking-and-rag.html" title="Codebase Context, Chunking &amp; RAG">Next &#8250;</a></span>
-    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Context Engineering</span></span>
-  </nav>
-<main id="main" tabindex="-1">
-  <div id="reading-progress"></div>
-
-  <div class="kicker">Lesson 2 · Principal Track · Core &rarr; Senior</div>
-  <h1>Context Selection &amp; <em>Retrieval</em></h1>
-  <p class="meta">~14 min · 2 modules · how a system decides what to send the model — and the search machinery that finds it</p>
-  <div class="ltags"><span class="lt">Context retrieval</span><span class="lt">Lexical</span><span class="lt">Semantic</span><span class="lt">Hybrid</span><span class="lt">Semantic search</span></div>
-
-  <div class="mission">
-    <strong>Your bar:</strong> explain how a system decides <em>which</em> facts reach the model when it cannot send everything, walk a real query (&ldquo;find the authentication bug&rdquo;) through candidate generation &rarr; ranking &rarr; selection, and compare <em>lexical, semantic, hybrid</em> search plus <em>ranking vs re-ranking</em> by purpose, advantages, disadvantages, and failure modes. By the end you can answer: <b>given a fixed token budget, how do you find the smallest set that still contains the answer?</b><sup><a href="#s1" id="r1">1</a></sup>
-  </div>
-
-  <p>This lesson is one pipeline, then the engines that power it. Each chip is one thing it makes permanent:</p>
-  <div class="chips">
-    <span class="chip">You can't send everything, so the system <b>selects</b></span>
-    <span class="chip c2">cast a wide net (<b>candidates</b>), then <b>rank</b> them</span>
-    <span class="chip c3">pack the top into the <b>token budget</b></span>
-    <span class="chip c4">finding candidates = <b>lexical · semantic · hybrid · re-rank</b></span>
-  </div>
-
-  <nav class="toc">
-    <a href="#m1">1 · Context selection (candidates &rarr; rank &rarr; pack)</a>
-    <a href="#m2">2 · Retrieval (search · semantic · hybrid · re-rank)</a>
-    <a href="#quiz">&#9733; Retrieval practice</a>
-    <a href="#interview">&#9733; Interview questions</a>
-  </nav>
-
-  <!-- ============ MODULE 1 ============ -->
-  <section class="lvl" id="m1">
-    <div class="lvltop"><span class="num">1</span><h2>Context Selection</h2></div>
-    <p class="tagline">Lesson 1 fixed the budget: the window is small and you don't own all of it. <b>Selection</b> is the discipline of choosing the smallest set of text that still contains the answer — wide net, then ruthless trim.</p>
-
-    <h3>The hero: a selection funnel</h3>
-    <figure>
-      <svg viewBox="0 0 640 322" role="img" aria-label="A funnel narrows a large corpus to candidates, then ranked, then a selected few packed into the context window.">
-        <text x="320" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">SELECTION FUNNEL &mdash; many in, a curated few out</text>
-
-        <!-- corpus -->
-        <rect x="40" y="36" width="560" height="40" rx="6" fill="#efe7f0" stroke="#111110"/>
-        <text x="320" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">Corpus &mdash; every file · doc · record (millions of tokens)</text>
-        <text x="320" y="70" text-anchor="middle" font-size="8.5" fill="#6b675f">far larger than any window</text>
-
-        <!-- candidate generation -->
-        <rect x="110" y="98" width="420" height="40" rx="6" fill="#f6eef7" stroke="#b5179e"/>
-        <text x="320" y="117" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b5179e">Candidate generation &mdash; cast a wide net</text>
-        <text x="320" y="131" text-anchor="middle" font-size="8.5" fill="#6b675f">lexical + semantic search · optimize RECALL (don't miss the right one)</text>
-
-        <!-- ranking -->
-        <rect x="175" y="160" width="290" height="40" rx="6" fill="#eef2f7" stroke="#1f3a5a"/>
-        <text x="320" y="179" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1f3a5a">Ranking &mdash; score every candidate</text>
-        <text x="320" y="193" text-anchor="middle" font-size="8.5" fill="#6b675f">cheap score now · expensive re-rank optional</text>
-
-        <!-- selection / packing -->
-        <rect x="225" y="222" width="190" height="40" rx="6" fill="#e9f3ec" stroke="#2f5d3a"/>
-        <text x="320" y="241" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">Selection / packing</text>
-        <text x="320" y="255" text-anchor="middle" font-size="8.5" fill="#6b675f">fit top-K into budget</text>
-
-        <!-- window -->
-        <rect x="255" y="284" width="130" height="30" rx="6" fill="#f1eef2" stroke="#b5179e" stroke-width="2"/>
-        <text x="320" y="303" text-anchor="middle" font-size="10" font-weight="700" fill="#b5179e">Context window</text>
-
-        <!-- funnel arrows -->
-        <line x1="320" y1="76"  x2="320" y2="96"  stroke="#6b675f" marker-end="url(#arw)"/>
-        <line x1="320" y1="138" x2="320" y2="158" stroke="#6b675f" marker-end="url(#arw)"/>
-        <line x1="320" y1="200" x2="320" y2="220" stroke="#6b675f" marker-end="url(#arw)"/>
-        <line x1="320" y1="262" x2="320" y2="282" stroke="#b5179e" marker-end="url(#arwM)"/>
-      </svg>
-      <figcaption>Three stages, narrowing each time. <b>Generate</b> casts wide for recall; <b>rank</b> scores; <b>select/pack</b> fits the top into the budget — and slips in cheap structural context (signatures, not full bodies).<sup><a href="#s1" id="r1b">1</a></sup></figcaption>
-    </figure>
-
-    <div class="facts">
-      <div class="fact"><b>Is</b> Selection is the pipeline that turns a huge corpus into the curated few that fit the window: candidate generation, ranking, then packing within budget.</div>
-      <div class="fact"><b>Why it exists</b> The corpus dwarfs the window (Lesson 1). Sending everything is physically impossible and actively harmful — noise buries signal and costs more.</div>
-      <div class="fact blue"><b>Like (world)</b> A librarian who can carry ten books to your desk from a million-book stack: first pull a wide shelf, then narrow to the ten that answer <em>your</em> question.</div>
-      <div class="fact blue"><b>Like (code)</b> A <code>WHERE</code> + <code>ORDER BY</code> + <code>LIMIT</code> pipeline: filter to candidates, sort by a score, take the top N that fit the page.</div>
-    </div>
-
-    <h3>Relevance signals — what each catches, what it misses</h3>
-    <table>
-      <thead><tr><th>Signal</th><th>What it catches</th><th>What it misses</th></tr></thead>
-      <tbody>
-        <tr><td><b>Lexical match</b></td><td>Exact terms, identifiers, error codes</td><td>Synonyms &amp; paraphrase (different words, same idea)</td></tr>
-        <tr><td><b>Semantic similarity</b></td><td>Meaning, synonyms, &ldquo;asks the same thing&rdquo;</td><td>Rare exact tokens (IDs, function names, codes)</td></tr>
-        <tr><td><b>Structural / graph</b></td><td>Imports, call sites, type/dependency links</td><td>Conceptual matches with no code edge between them</td></tr>
-        <tr><td><b>Recency</b></td><td>The just-changed file, the latest doc version</td><td>Stable-but-correct old code that never changes</td></tr>
-        <tr><td><b>Authority / trust</b></td><td>Canonical source, owned doc, signed record</td><td>The right fact when it only lives in a low-trust place</td></tr>
-      </tbody>
-    </table>
-    <div class="pull">No single signal is sufficient. Each is blind to a different class of right answer — which is exactly why hybrid retrieval (Module 2) exists.</div>
-
-    <h3>&ldquo;Relevant&rdquo; means different things per system</h3>
-    <table>
-      <thead><tr><th>System</th><th>The query</th><th>What &ldquo;relevant&rdquo; means</th></tr></thead>
-      <tbody>
-        <tr><td><b>Billing platform</b></td><td>&ldquo;Why was account 4471 double-charged?&rdquo;</td><td>The <em>exact</em> account records &amp; ledger rows — lexical/ID match, authority. A &ldquo;similar&rdquo; account is worse than useless.</td></tr>
-        <tr><td><b>GitHub repository</b></td><td>&ldquo;Where do we validate the JWT?&rdquo;</td><td>The right <em>symbols</em> plus their dependencies — semantic concept + structural call sites &amp; imports.</td></tr>
-        <tr><td><b>Documentation portal</b></td><td>&ldquo;How do I rotate an API key?&rdquo;</td><td>The right <em>article</em> at the right <em>version</em> — semantic match gated by recency/version, authority.</td></tr>
-      </tbody>
-    </table>
-
-    <h3>Walk-through: &ldquo;Find the authentication bug&rdquo;</h3>
-    <figure>
-      <svg viewBox="0 0 640 360" role="img" aria-label="Six-step stepper turning the query find the authentication bug into a packed context window.">
-        <text x="320" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111110">Query: &ldquo;find the authentication bug&rdquo;</text>
-
-        <!-- step rows -->
-        <g font-size="9.5" fill="#6b675f">
-          <!-- 1 -->
-          <circle cx="40" cy="50" r="13" fill="#b5179e"/><text x="40" y="54" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">1</text>
-          <rect x="64" y="36" width="540" height="30" rx="6" fill="#f6eef7" stroke="#b5179e"/>
-          <text x="76" y="50" font-size="10.5" font-weight="700" fill="#111110">Parse entities</text>
-          <text x="76" y="62">&ldquo;authentication&rdquo; &middot; &ldquo;login&rdquo; &middot; &ldquo;token&rdquo; &middot; &ldquo;session&rdquo;</text>
-          <!-- 2 -->
-          <circle cx="40" cy="98" r="13" fill="#b5179e"/><text x="40" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">2</text>
-          <rect x="64" y="84" width="540" height="30" rx="6" fill="#f6eef7" stroke="#b5179e"/>
-          <text x="76" y="98" font-size="10.5" font-weight="700" fill="#111110">Candidate generation</text>
-          <text x="76" y="110">lexical: auth/login/session symbols &nbsp;+&nbsp; semantic: the concept</text>
-          <!-- 3 -->
-          <circle cx="40" cy="146" r="13" fill="#1f3a5a"/><text x="40" y="150" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">3</text>
-          <rect x="64" y="132" width="540" height="30" rx="6" fill="#eef2f7" stroke="#1f3a5a"/>
-          <text x="76" y="146" font-size="10.5" font-weight="700" fill="#111110">Add structural context</text>
-          <text x="76" y="158">files importing the auth module &middot; its call sites &middot; recent changes</text>
-          <!-- 4 -->
-          <circle cx="40" cy="194" r="13" fill="#1f3a5a"/><text x="40" y="198" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">4</text>
-          <rect x="64" y="180" width="540" height="30" rx="6" fill="#eef2f7" stroke="#1f3a5a"/>
-          <text x="76" y="194" font-size="10.5" font-weight="700" fill="#111110">Rank candidates</text>
-          <text x="76" y="206">score by combined signals &middot; best-looking first</text>
-          <!-- 5 -->
-          <circle cx="40" cy="242" r="13" fill="#2f5d3a"/><text x="40" y="246" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">5</text>
-          <rect x="64" y="228" width="540" height="30" rx="6" fill="#e9f3ec" stroke="#2f5d3a"/>
-          <text x="76" y="242" font-size="10.5" font-weight="700" fill="#111110">Select top-K within budget</text>
-          <text x="76" y="254">full body of the prime suspects &middot; signatures/docstrings of the rest</text>
-          <!-- 6 -->
-          <circle cx="40" cy="290" r="13" fill="#2f5d3a"/><text x="40" y="294" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">6</text>
-          <rect x="64" y="276" width="540" height="30" rx="6" fill="#e9f3ec" stroke="#2f5d3a"/>
-          <text x="76" y="290" font-size="10.5" font-weight="700" fill="#111110">Assemble the window</text>
-          <text x="76" y="302">prompt + selected context + question, in budget, ordered</text>
-        </g>
-
-        <!-- connectors -->
-        <line x1="40" y1="63"  x2="40" y2="85"  stroke="#6b675f"/>
-        <line x1="40" y1="111" x2="40" y2="133" stroke="#6b675f"/>
-        <line x1="40" y1="159" x2="40" y2="181" stroke="#6b675f"/>
-        <line x1="40" y1="207" x2="40" y2="229" stroke="#6b675f"/>
-        <line x1="40" y1="255" x2="40" y2="277" stroke="#6b675f"/>
-
-        <text x="320" y="332" text-anchor="middle" font-size="9.5" font-style="italic" fill="#9a2417">If step 2 or 3 never surfaces the buggy file, no model — however large — can find the bug.</text>
-        <text x="320" y="348" text-anchor="middle" font-size="9.5" font-style="italic" fill="#b5179e">Selection quality decides whether the model ever sees the answer.</text>
-      </svg>
-      <figcaption>The whole pipeline can be perfect downstream and still fail if generation misses the file. <b>Recall first</b> — you cannot rank or pack what you never retrieved.<sup><a href="#s1" id="r1c">1</a></sup></figcaption>
-    </figure>
-
-    <div class="myth">
-      <div class="m">&#10007; &ldquo;Just send the model more files to be safe.&rdquo;</div>
-      <div class="t">&#10003; More irrelevant files lower signal, raise cost, and push the right lines into the &ldquo;lost in the middle&rdquo; zone. Smaller-but-correct wins.</div>
-    </div>
-    <div class="myth">
-      <div class="m">&#10007; &ldquo;Selection is just one search query.&rdquo;</div>
-      <div class="t">&#10003; It's a pipeline: generate (recall) &rarr; rank (order) &rarr; pack (budget). Each stage can be the bottleneck independently.</div>
-    </div>
-
-    <div class="rule"><span>&#128229; Memory rule:</span> You can't send everything &mdash; selection is <span>choosing the smallest set that still contains the answer</span>. Cast wide for <span>recall</span>, then trim to fit.</div>
-
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Name the three stages of the selection funnel. <span class="ans">&rarr; candidate generation (recall) &rarr; ranking (order) &rarr; selection/packing (fit budget)</span></li>
-      <li>Which stage, if it fails, can't be rescued downstream? <span class="ans">&rarr; candidate generation — you can't rank or pack what was never retrieved</span></li>
-      <li>What cheap context do you pack instead of full bodies? <span class="ans">&rarr; signatures &amp; docstrings of related code, plus structural links (imports, call sites)</span></li>
-    </ul></details>
-
-    <details class="iq">
-      <summary>Your code assistant keeps missing the actual buggy file. Where in the selection pipeline do you look first, and how do you prove it?</summary>
-      <div class="a">
-        <b>Hit these points:</b> instrument the pipeline per stage, don't guess &rarr; first check <b>candidate generation recall</b>: was the buggy file ever in the candidate set? if no, ranking/packing are irrelevant &rarr; if recall is the gap, add the missing signal — usually structural (imports/call sites) or lexical for an exact symbol the embedding model washed out &rarr; if recall is fine but the file ranked low, fix ranking / add a re-rank &rarr; if it ranked high but got dropped, it's a packing/budget problem &rarr; measure retrieval hit-rate as a first-class metric, not just end-answer quality.
-      </div>
-    </details>
-  </section>
-
-  <!-- ============ MODULE 2 ============ -->
-  <section class="lvl" id="m2">
-    <div class="lvltop"><span class="num">2</span><h2>Retrieval</h2></div>
-    <p class="tagline">Module 1 said &ldquo;cast a wide net, then rank.&rdquo; This is the machinery that does it: <b>lexical</b> finds exact, <b>semantic</b> finds meaning, <b>hybrid</b> finds both, and <b>re-ranking</b> sharpens the top. Each one has a job it does well and a case where it falls down.</p>
-
-    <h3>The hero: a two-stage retrieval pipeline</h3>
-    <figure>
-      <svg viewBox="0 0 640 300" role="img" aria-label="Query fans into BM25 and vector search, results are fused, a cross-encoder re-ranks, top-k enter the window.">
-        <text x="320" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111110">TWO-STAGE RETRIEVAL &mdash; recall first, then precision</text>
-
-        <!-- query -->
-        <rect x="262" y="32" width="116" height="32" rx="7" fill="#f6eef7" stroke="#b5179e"/>
-        <text x="320" y="52" text-anchor="middle" font-size="10.5" font-weight="700" fill="#111110">Query</text>
-
-        <!-- stage 1 label -->
-        <text x="150" y="86" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6b675f">STAGE 1 &mdash; recall · cheap · wide</text>
-
-        <!-- BM25 + vector -->
-        <rect x="60" y="92" width="180" height="40" rx="7" fill="#eef2f7" stroke="#1f3a5a"/>
-        <text x="150" y="111" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1f3a5a">Lexical (BM25)</text>
-        <text x="150" y="124" text-anchor="middle" font-size="8.5" fill="#6b675f">exact terms &amp; identifiers</text>
-        <rect x="400" y="92" width="180" height="40" rx="7" fill="#e9f3ec" stroke="#2f5d3a"/>
-        <text x="490" y="111" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">Semantic (vector)</text>
-        <text x="490" y="124" text-anchor="middle" font-size="8.5" fill="#6b675f">meaning &amp; synonyms</text>
-
-        <!-- query to both -->
-        <line x1="290" y1="64" x2="180" y2="90" stroke="#6b675f" marker-end="url(#arw)"/>
-        <line x1="350" y1="64" x2="460" y2="90" stroke="#6b675f" marker-end="url(#arw)"/>
-
-        <!-- fuse -->
-        <rect x="220" y="160" width="200" height="38" rx="7" fill="#f6eef7" stroke="#b5179e" stroke-width="2"/>
-        <text x="320" y="178" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b5179e">Fuse (RRF / weighted)</text>
-        <text x="320" y="191" text-anchor="middle" font-size="8.5" fill="#6b675f">one candidate list</text>
-        <line x1="150" y1="132" x2="270" y2="158" stroke="#6b675f" marker-end="url(#arw)"/>
-        <line x1="490" y1="132" x2="370" y2="158" stroke="#6b675f" marker-end="url(#arw)"/>
-
-        <!-- stage 2 label -->
-        <text x="320" y="222" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6b675f">STAGE 2 &mdash; precision · expensive · top-N only</text>
-
-        <!-- rerank -->
-        <rect x="220" y="228" width="200" height="38" rx="7" fill="#efe7f0" stroke="#111110"/>
-        <text x="320" y="246" text-anchor="middle" font-size="10.5" font-weight="700" fill="#111110">Cross-encoder re-rank</text>
-        <text x="320" y="259" text-anchor="middle" font-size="8.5" fill="#6b675f">re-score top-N jointly with query</text>
-        <line x1="320" y1="198" x2="320" y2="226" stroke="#b5179e" marker-end="url(#arwM)"/>
-
-        <!-- window -->
-        <rect x="455" y="228" width="130" height="38" rx="7" fill="#f1eef2" stroke="#b5179e" stroke-width="2"/>
-        <text x="520" y="250" text-anchor="middle" font-size="10" font-weight="700" fill="#b5179e">top-k &rarr; window</text>
-        <line x1="420" y1="247" x2="453" y2="247" stroke="#b5179e" marker-end="url(#arwM)"/>
-      </svg>
-      <figcaption>Stage 1 (lexical + semantic, fused) maximizes <b>recall</b> cheaply across many candidates. Stage 2 (cross-encoder) maximizes <b>precision</b> on the top-N only — it cannot recover anything stage 1 missed.<sup><a href="#s2" id="r2">2</a></sup></figcaption>
-    </figure>
-
-    <h3>The four engines, side by side</h3>
-    <table>
-      <thead><tr><th>Technique</th><th>How it scores</th><th>Best at</th><th>Signature failure</th></tr></thead>
-      <tbody>
-        <tr><td><b>Lexical (BM25)</b></td><td>TF-IDF / BM25 on exact terms</td><td>Identifiers, error codes, exact strings</td><td>Vocabulary mismatch &rarr; total miss</td></tr>
-        <tr><td><b>Semantic (vector)</b></td><td>Cosine of embeddings via ANN</td><td>Meaning, synonyms, paraphrase</td><td>Plausible-but-wrong; misses exact tokens</td></tr>
-        <tr><td><b>Hybrid</b></td><td>Fuse both (RRF / weighted)</td><td>Exact <em>and</em> semantic together</td><td>Bounded by both stages' recall</td></tr>
-        <tr><td><b>Re-rank</b></td><td>Cross-encoder, query+doc jointly</td><td>Ordering the final top results</td><td>Can't recover a missed document</td></tr>
-      </tbody>
-    </table>
-
-    <h3>Search (lexical / keyword / BM25)</h3>
-    <div class="facts">
-      <div class="fact"><b>Is</b> Exact-term matching: score documents by how well their words match the query words, weighted by term frequency and rarity (TF-IDF / BM25).<sup><a href="#s3" id="r3">3</a></sup></div>
-      <div class="fact"><b>Why it exists</b> Some queries <em>are</em> the exact tokens — an error code, a function name, an account ID. For those, meaning is irrelevant; the literal string is the answer.</div>
-      <div class="fact blue"><b>Advantages</b> Precise on exact terms &amp; identifiers, fast, cheap, interpretable, needs no model — you can read why it matched.</div>
-      <div class="fact blue"><b>Failure mode</b> No synonyms or semantics: if the user phrases it differently than the doc (vocabulary mismatch), it returns a <em>total miss</em>.</div>
-    </div>
-
-    <h3>Semantic search (embeddings / vector)</h3>
-    <div class="facts">
-      <div class="fact"><b>Is</b> Encode query and chunks into vectors; rank by cosine similarity using an approximate-nearest-neighbour index (e.g. HNSW).<sup><a href="#s4" id="r4">4</a></sup></div>
-      <div class="fact"><b>Why it exists</b> Users rarely use the doc's exact words. Embeddings match on <em>meaning</em>, so a paraphrase still finds the right passage.</div>
-      <div class="fact blue"><b>Advantages</b> Captures meaning, synonyms, paraphrase; robust to wording; finds the right idea even with zero shared words.</div>
-      <div class="fact blue"><b>Failure mode</b> Returns &ldquo;topically similar but wrong&rdquo;; weak on rare exact tokens — it can't reliably match an exact error string or ID.</div>
-    </div>
-
-    <h3>Hybrid search</h3>
-    <div class="facts">
-      <div class="fact"><b>Is</b> Run lexical and semantic together, then fuse the two result lists into one ranking — commonly Reciprocal Rank Fusion or a weighted blend.<sup><a href="#s5" id="r5">5</a></sup></div>
-      <div class="fact"><b>Why it exists</b> The two engines fail on opposite cases: lexical whiffs on paraphrase, semantic whiffs on exact tokens. Run both and one usually catches what the other drops.</div>
-      <div class="fact blue"><b>Advantages</b> Covers both exact and meaning, so fewer right documents slip through. Anthropic's Contextual Retrieval pairs embeddings with BM25 for exactly this reason.<sup><a href="#s2" id="r2b">2</a></sup></div>
-      <div class="fact blue"><b>Failure mode</b> More infra and complexity, fusion weights to tune; still bounded by the recall of both first-stage retrievers.</div>
-    </div>
-
-    <h3>Ranking vs re-ranking — two different jobs</h3>
-    <figure>
-      <svg viewBox="0 0 600 180" role="img" aria-label="Stage one ranking optimizes recall across many; stage two re-ranking optimizes precision on the top few.">
-        <text x="150" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">Ranking (stage 1)</text>
-        <text x="450" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">Re-ranking (stage 2)</text>
-
-        <rect x="40" y="34" width="220" height="118" rx="8" fill="#eef2f7" stroke="#1f3a5a"/>
-        <text x="150" y="56" text-anchor="middle" font-size="10" fill="#6b675f">cheap score · many candidates</text>
-        <text x="150" y="78" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">optimize RECALL</text>
-        <text x="150" y="96" text-anchor="middle" font-size="9" fill="#6b675f">&ldquo;don't miss the right doc&rdquo;</text>
-        <text x="150" y="122" text-anchor="middle" font-size="9" fill="#111110">BM25 score · cosine score</text>
-        <text x="150" y="138" text-anchor="middle" font-size="9" fill="#111110">applied to the whole net</text>
-
-        <rect x="340" y="34" width="220" height="118" rx="8" fill="#efe7f0" stroke="#111110"/>
-        <text x="450" y="56" text-anchor="middle" font-size="10" fill="#6b675f">expensive score · top-N only</text>
-        <text x="450" y="78" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">optimize PRECISION</text>
-        <text x="450" y="96" text-anchor="middle" font-size="9" fill="#6b675f">&ldquo;put the best at the top&rdquo;</text>
-        <text x="450" y="122" text-anchor="middle" font-size="9" fill="#111110">cross-encoder · query+doc jointly</text>
-        <text x="450" y="138" text-anchor="middle" font-size="9" fill="#111110">large precision lift on the top</text>
-
-        <line x1="262" y1="93" x2="338" y2="93" stroke="#b5179e" stroke-dasharray="4 3" marker-end="url(#arwM)"/>
-        <text x="300" y="86" text-anchor="middle" font-size="8" font-weight="700" fill="#b5179e">top-N</text>
-      </svg>
-      <figcaption>First stage is wide and cheap to buy recall; second stage is narrow and expensive to buy precision. The cross-encoder reads query and document together, so it scores relevance far more accurately — but only on what stage 1 handed it.<sup><a href="#s4" id="r4b">4</a></sup></figcaption>
-    </figure>
-
-    <div class="facts">
-      <div class="fact"><b>Ranking — is</b> Order candidates by a cheap score (BM25, cosine). First stage. Purpose: optimize <em>recall</em> so the right document is somewhere in the list.</div>
-      <div class="fact"><b>Re-ranking — is</b> A second, expensive, accurate pass (cross-encoder) that re-scores the top-N jointly with the query. Purpose: optimize <em>precision</em> at the top.</div>
-      <div class="fact blue"><b>Re-rank advantage</b> Large precision lift on the final top-k the model actually sees — the items most likely to be packed into the window.</div>
-      <div class="fact blue"><b>Re-rank failure</b> Latency and cost; runs on top-N only; <em>cannot recover</em> a document the first stage already missed.</div>
-    </div>
-
-    <div class="myth">
-      <div class="m">&#10007; &ldquo;Embeddings replaced keyword search.&rdquo;</div>
-      <div class="t">&#10003; Embeddings are weak on exact tokens (error codes, IDs, function names). Hybrid keeps BM25 precisely for those cases.</div>
-    </div>
-    <div class="myth">
-      <div class="m">&#10007; &ldquo;A great re-ranker fixes bad retrieval.&rdquo;</div>
-      <div class="t">&#10003; Re-ranking only reorders what stage 1 returned. If recall missed the doc, no re-ranker can surface it — fix recall first.</div>
-    </div>
-
-    <div class="rule"><span>&#128229; Memory rule:</span> <span>First-stage retrieval buys recall; re-ranking buys precision.</span> Lexical finds exact, semantic finds meaning, <span>hybrid finds both</span>.</div>
-
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Which engine matches an exact error code, and which a paraphrase? <span class="ans">&rarr; lexical/BM25 for the exact code; semantic/vector for the paraphrase</span></li>
-      <li>What does the first stage optimize for vs the re-rank stage? <span class="ans">&rarr; first stage = recall (don't miss it); re-rank = precision (best at the top)</span></li>
-      <li>Why can't a re-ranker save bad retrieval? <span class="ans">&rarr; it only re-scores the top-N it was given; a missed document never reaches it</span></li>
-    </ul></details>
-
-    <details class="iq">
-      <summary>Users complain semantic search returns &ldquo;close but wrong&rdquo; results and sometimes whiffs on exact error codes. What's your fix and why?</summary>
-      <div class="a">
-        <b>Hit these points:</b> name the root cause — embeddings score topical similarity, so they return plausible-but-wrong and wash out rare exact tokens like error codes &rarr; add <b>hybrid</b>: run BM25 alongside the vector search and fuse (RRF) so exact strings are caught by lexical and meaning by semantic &rarr; add a <b>cross-encoder re-rank</b> over the fused top-N to push the genuinely best result to the top (precision) &rarr; frame the split: hybrid fixes recall, re-rank fixes precision &rarr; verify with retrieval hit-rate on a labelled set, not just end-answer vibes; tune fusion weights against that set.
-      </div>
-    </details>
-  </section>
-
-  <!-- ============ QUIZ ============ -->
-  <h2 class="sec" id="quiz">Retrieval practice — test the two modules</h2>
-
-  <div class="quiz">
-    <div class="qitem" data-correct="1">
-      <p class="q"><span class="qn">Q1.</span> The three stages of the selection funnel, in order, are…</p>
-      <button class="opt">Embed the corpus, store the vectors, then stream the chunks straight into the model</button>
-      <button class="opt">Candidate generation (recall), then ranking (order), then selection and packing to budget</button>
-      <button class="opt">Re-rank the corpus, drop the duplicates, then summarise everything into one digest</button>
-      <button class="opt">Parse the schema, run the SQL query, then cache the response for the next caller</button>
-      <div class="fb" role="status" aria-live="polite"></div>
-    </div>
-  </div>
-
-  <div class="quiz">
-    <div class="qitem" data-correct="3">
-      <p class="q"><span class="qn">Q2.</span> If the buggy file is never returned by candidate generation, the result is…</p>
-      <button class="opt">Re-ranking promotes it because the cross-encoder reads the file body in detail</button>
-      <button class="opt">A larger context window includes it automatically once the budget is increased</button>
-      <button class="opt">The ranking stage recomputes the candidates and recovers the file on a retry</button>
-      <button class="opt">No downstream stage can find it — you cannot rank or pack what was never retrieved</button>
-      <div class="fb" role="status" aria-live="polite"></div>
-    </div>
-  </div>
-
-  <div class="quiz">
-    <div class="qitem" data-correct="0">
-      <p class="q"><span class="qn">Q3.</span> Lexical search (BM25) is the right tool, and semantic search the wrong one, when the query is…</p>
-      <button class="opt">An exact error code or function name where the literal string must match exactly</button>
-      <button class="opt">A vague description of a feeling the user has about how the product behaves today</button>
-      <button class="opt">A paraphrase that shares no words at all with the document that answers it best</button>
-      <button class="opt">A broad concept that appears across many documents written in different wordings</button>
-      <div class="fb" role="status" aria-live="polite"></div>
-    </div>
-  </div>
-
-  <div class="quiz">
-    <div class="qitem" data-correct="2">
-      <p class="q"><span class="qn">Q4.</span> The signature failure mode of semantic (vector) search is that it…</p>
-      <button class="opt">Cannot run at all unless the entire corpus first fits inside the context window</button>
-      <button class="opt">Refuses any query that contains a synonym of a word found in the document set</button>
-      <button class="opt">Returns plausible-but-wrong matches and struggles with rare exact tokens like IDs</button>
-      <button class="opt">Always returns the single oldest document because recency is never a factor</button>
-      <div class="fb" role="status" aria-live="polite"></div>
-    </div>
-  </div>
-
-  <div class="quiz">
-    <div class="qitem" data-correct="1">
-      <p class="q"><span class="qn">Q5.</span> Re-ranking (a cross-encoder over the top-N) primarily buys you…</p>
-      <button class="opt">Recall, by widening the net so more candidate documents enter the first stage</button>
-      <button class="opt">Precision at the top, by re-scoring candidates jointly with the query in detail</button>
-      <button class="opt">Latency, because scoring query and document together is cheaper than BM25 alone</button>
-      <button class="opt">Recovery of missed documents the first-stage retriever never returned at all</button>
-      <div class="fb" role="status" aria-live="polite"></div>
-    </div>
-
-</div>
-
-  <!-- ============ INTERVIEW ============ -->
-  <h2 class="sec" id="interview">Interview — pick your bar</h2>
-  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
-  <div data-interview>
-
-    <details class="iq" data-level="core">
-      <summary>Name the three stages of the selection pipeline, in order, and what each one does.</summary>
-      <div class="a"><b>Hit these points:</b> <b>candidate generation</b> &rarr; cast a wide net to pull anything that might be relevant &rarr; <b>ranking</b> &rarr; score those candidates so the best ones rise &rarr; <b>selection / packing</b> &rarr; fit the top of the list into the token budget. The whole point is choosing the smallest set that still contains the answer when you can't send everything.</div>
-    </details>
-
-    <details class="iq" data-level="core">
-      <summary>What does lexical / BM25 search actually match on, and what is it good at?</summary>
-      <div class="a"><b>Hit these points:</b> it scores documents by overlap of the <b>exact terms</b>, weighted by term frequency and rarity (TF-IDF / BM25) &rarr; meaning plays no part, only the literal strings &rarr; strong on identifiers, error codes, function names, exact IDs &rarr; fast, cheap, interpretable, no model required — you can read why it matched.</div>
-    </details>
-
-    <details class="iq" data-level="core">
-      <summary>What does semantic / embedding search match on, and why use it?</summary>
-      <div class="a"><b>Hit these points:</b> it encodes query and chunks into vectors and ranks by similarity (cosine over an ANN index) &rarr; matches on <b>meaning</b>, so synonyms and paraphrase still find the right passage even with zero shared words &rarr; exists because users rarely use the document's exact wording &rarr; robust to phrasing, weak on rare exact tokens.</div>
-    </details>
-
-    <details class="iq" data-level="core">
-      <summary>What is hybrid search, and what does fusion (e.g. RRF) do in it?</summary>
-      <div class="a"><b>Hit these points:</b> run lexical and semantic <b>together</b>, then merge their two result lists into one ranking &rarr; <b>fusion</b> (Reciprocal Rank Fusion or a weighted blend) combines the per-engine ranks into a single ordered list &rarr; the reason: the two engines fail on opposite cases, so one usually catches what the other drops &rarr; gives you exact-match and meaning-match coverage at once.</div>
-    </details>
-
-    <details class="iq" data-level="senior">
-      <summary>Users say semantic search returns &ldquo;close but wrong&rdquo; results and sometimes whiffs on exact error codes. What's your fix and why?</summary>
-      <div class="a"><b>Hit these points:</b> name the root cause — embeddings score topical similarity, so they return plausible-but-wrong and wash out rare exact tokens like error codes &rarr; add <b>hybrid</b>: run BM25 alongside the vector search and fuse (RRF) so exact strings are caught by lexical and meaning by semantic &rarr; add a <b>cross-encoder re-rank</b> over the fused top-N to push the genuinely best result up (precision) &rarr; frame the split: hybrid fixes recall, re-rank fixes precision &rarr; verify with retrieval hit-rate on a labelled set, not end-answer vibes; tune fusion weights against that set.</div>
-    </details>
-
-    <details class="iq" data-level="senior">
-      <summary>Your code assistant keeps missing the actual buggy file. Where in the pipeline do you look first, and how do you prove it?</summary>
-      <div class="a"><b>Hit these points:</b> instrument per stage, don't guess &rarr; first check <b>candidate-generation recall</b>: was the buggy file ever in the candidate set? if no, ranking and packing are irrelevant &rarr; if recall is the gap, add the missing signal — usually structural (imports / call sites) or lexical for an exact symbol the embedding washed out &rarr; if recall is fine but it ranked low, fix ranking / add a re-rank &rarr; if it ranked high but got dropped, it's a packing/budget problem &rarr; track retrieval hit-rate as a first-class metric, not just end-answer quality.</div>
-    </details>
-
-    <details class="iq" data-level="senior">
-      <summary>Distinguish ranking from re-ranking. When is a cross-encoder worth its cost, and when is it a waste?</summary>
-      <div class="a"><b>Hit these points:</b> <b>ranking</b> = first stage, cheap score (BM25 / cosine) over many candidates, optimizing recall — &ldquo;don't miss it&rdquo; &rarr; <b>re-ranking</b> = second stage, expensive cross-encoder reading query + document jointly over the top-N, optimizing precision — &ldquo;best at the top&rdquo; &rarr; worth it when the final top-k reaching the window must be high-precision and first-stage ordering is noisy &rarr; a waste if recall is the real gap — it can't recover a missed doc &rarr; bound cost by running it on top-N only and caching; prove the precision lift on a labelled set before keeping it.</div>
-    </details>
-
-    <details class="iq" data-level="senior">
-      <summary>Someone proposes &ldquo;just embed everything and drop BM25 — embeddings are strictly better.&rdquo; Push back.</summary>
-      <div class="a"><b>Hit these points:</b> embeddings are <b>weak on exact tokens</b> — error codes, IDs, function names get washed into topical neighbours &rarr; for a query that <em>is</em> the literal string, meaning is irrelevant and lexical is exactly right &rarr; the two engines have opposite blind spots, so dropping BM25 trades one failure mode for another &rarr; hybrid keeps BM25 precisely for those cases; the small extra infra is cheaper than silently missing every ID lookup &rarr; decide with hit-rate on a query mix that includes exact-token queries, not a vibe.</div>
-    </details>
-
-    <details class="iq" data-level="staff">
-      <summary>Design a retrieval strategy when you don't yet know the query mix — some lookups are exact IDs, some are vague conceptual questions, and the corpus keeps changing.</summary>
-      <div class="a"><b>Hit these points:</b> start from <b>recall first</b>: a missed doc can't be ranked or packed, so over-invest stage 1 &rarr; default to <b>hybrid</b> (BM25 + vector, fused) so exact-token and conceptual queries are both covered without knowing the split up front &rarr; add a <b>cross-encoder re-rank</b> on the fused top-N for precision where it matters &rarr; layer signals the domain needs — structural for code, recency/version for changing docs, authority for canonical sources &rarr; keep re-indexing fresh as the corpus changes &rarr; instrument hit-rate by query type, learn the real mix, then tune fusion weights and decide where re-rank earns its latency.</div>
-    </details>
-
-    <details class="iq" data-level="staff">
-      <summary>&ldquo;Relevant&rdquo; means different things per system. Contrast a billing platform, a code repo, and a docs portal — and say how that changes your retrieval.</summary>
-      <div class="a"><b>Hit these points:</b> relevance is set by the question's intent, not one universal score &rarr; <b>billing</b>: the exact account / ledger rows — lexical/ID match + authority; a &ldquo;similar&rdquo; account is actively harmful &rarr; <b>repo</b>: the right symbols plus their dependencies — semantic concept + structural call sites and imports &rarr; <b>docs</b>: the right article at the right version — semantic gated by recency/version + authority &rarr; so you pick and weight signals to the domain's notion of relevance, rather than shipping one generic retriever everywhere.</div>
-    </details>
-
-    <details class="iq" data-level="staff">
-      <summary>You can raise recall (wider net) or precision (aggressive re-rank + tighter packing), but not both for free. How do you reason about the trade-off?</summary>
-      <div class="a"><b>Hit these points:</b> the two failures cost differently — a recall miss means the answer never reaches the model (unrecoverable), a precision miss means noise the model must see past &rarr; so buy recall cheaply and wide in stage 1, then buy precision narrowly in stage 2 where it's affordable &rarr; watch the packing tension: more candidates raise recall but bury the right lines in the &ldquo;lost in the middle&rdquo; zone and cost more &rarr; tie the dial to the domain's cost of a miss (billing error vs a fuzzy docs answer) &rarr; measure both hit-rate and top-k precision on a labelled set and move the knob deliberately, not by feel.</div>
-    </details>
-
-    <div class="designrubric" data-level="design"><b>Design-round framework</b> — narrate retrieval design in this order so the interviewer hears recall-first thinking:
-      <ol>
-        <li>Clarify the query mix &amp; the cost of a miss (exact-ID lookups vs vague concepts; how bad is a wrong-but-plausible answer?).</li>
-        <li>Define &ldquo;relevant&rdquo; for this domain and pick signals (lexical, semantic, structural, recency, authority).</li>
-        <li>Stage 1 for recall: hybrid candidate generation (BM25 + vector) and how you fuse the lists.</li>
-        <li>Stage 2 for precision: whether a cross-encoder re-rank on the top-N earns its latency.</li>
-        <li>Packing within the token budget: top-k, full bodies vs signatures/docstrings, ordering.</li>
-        <li>Freshness &amp; failure modes: re-indexing the changing corpus, vocabulary mismatch, plausible-but-wrong.</li>
-        <li>Measure: retrieval hit-rate and top-k precision on a labelled set; tune weights against it.</li>
-      </ol>
-    </div>
-
-    <details class="iq" data-level="design">
-      <summary>Design the retrieval layer for a documentation Q&amp;A bot over versioned, frequently-updated docs.</summary>
-      <div class="a"><b>A strong answer covers:</b> the query mix is mostly conceptual &ldquo;how do I…&rdquo; questions, so semantic carries weight — but keep BM25 for exact API names and error strings &rarr; gate on <b>recency / version</b> so an old article doesn't beat the current one, and on <b>authority</b> for canonical pages &rarr; hybrid stage 1, fuse with RRF, re-rank the top-N for precision since users read only the first answer &rarr; pack the best article(s) within budget; prefer the right section over dumping whole pages &rarr; re-index on every doc change so freshness holds &rarr; call the failure modes: plausible-but-wrong from semantic, vocabulary mismatch from lexical &rarr; measure hit-rate on labelled questions, not end-answer vibes.</div>
-    </details>
-
-    <details class="iq" data-level="design">
-      <summary>Design retrieval for an internal-search feature across code, tickets, and wiki docs in one box.</summary>
-      <div class="a"><b>A strong answer covers:</b> the corpus is heterogeneous, so &ldquo;relevant&rdquo; differs per source — code wants structural signals (imports, call sites) plus lexical for exact symbols; tickets/wiki lean semantic &rarr; run <b>hybrid</b> per source and fuse, or fuse across sources, so exact-token and conceptual queries both land &rarr; recall first: a missed file can't be ranked or packed &rarr; re-rank the fused top-N for precision; weight by recency where it matters (latest ticket, newest doc) and authority for canonical sources &rarr; pack within budget — signatures/docstrings for code, snippets for docs &rarr; keep indexes fresh as all three sources change &rarr; instrument hit-rate by source and query type, then tune fusion weights and decide where re-rank pays for its latency.</div>
-    </details>
-
-  </div>
-
-  <!-- ============ NAV ============ -->
-  <div class="nav">
-    <span style="color:var(--muted)">&#8592; <a href="../../index.html#grid">Engineering Vault</a></span>
-    <span>Lesson 3: <a href="0003-codebase-context-chunking-and-rag.html">Codebase Context, Chunking &amp; RAG &rarr;</a></span>
-  </div>
-
-  <footer>
-    <p>Sources</p>
-    <ol style="padding-left:1.2rem;margin:.3rem 0">
-      <li id="s1">Anthropic, "Effective context engineering for AI agents" &mdash; anthropic.com/engineering. Context as a finite, curated resource; selection over dumping; recall before packing.</li>
-      <li id="s2">Anthropic, "Introducing Contextual Retrieval" &mdash; anthropic.com/news/contextual-retrieval. Hybrid embeddings + BM25 with re-ranking to reduce retrieval failures (figures illustrative).</li>
-      <li id="s3">Robertson &amp; Zaragoza, 2009, "The Probabilistic Relevance Framework: BM25 and Beyond." Lexical / keyword retrieval and TF-IDF/BM25 scoring.</li>
-      <li id="s4">Karpukhin et al., 2020, "Dense Passage Retrieval for Open-Domain QA" &mdash; arXiv:2004.04906. Dense (embedding) retrieval; dense vs lexical trade-offs; cross-encoder re-ranking context.</li>
-      <li id="s5">Cormack et al., 2009, "Reciprocal Rank Fusion outperforms Condorcet and individual rank learning methods" &mdash; SIGIR. Fusing multiple rankings for hybrid search.</li>
-    </ol>
-  </footer>
-
-<div class="lesson-fb" aria-live="polite">
-  <span class="lesson-fb-q">Was this lesson helpful?</span>
-  <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">👍 Yes</button>
-  <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No</button>
-  <span class="lesson-fb-thanks">Thanks &mdash; noted.</span>
-</div>
-<p class="lesson-endnote">These notes reflect my current understanding and are updated as I learn, build, and discover better explanations.</p>
-</main>
-</div><!-- /wrap -->
-
-<script>
-  document.querySelectorAll('.qitem').forEach(function(item){
-    var correct = +item.dataset.correct;
-    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
-    var fb = item.querySelector('.fb');
-    opts.forEach(function(opt, i){
-      opt.addEventListener('click', function(){
-        opts.forEach(function(o){ o.disabled = true; });
-        opts[correct].classList.add('correct');
-        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
-        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
-      });
-    });
-  });
-</script>
-<script src="../../assets/interview.js" defer></script>
-<script src="../../assets/reading-progress.js" defer></script>
-</body>
-</html>
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><link rel="icon" type="image/svg+xml" href="/engineering-learning-hub/assets/favicon.svg"><!-- a11y: no maximum-scale / user-scalable=no — pinch-zoom must stay
+             available (WCAG 1.4.4). Dropped per the hub-migration audit. --><meta name="viewport" content="width=device-width, initial-scale=1"><title>Context Retrieval: Lexical vs Semantic vs Hybrid · Engineering Vault</title><meta name="description" content="Your bar: explain how a system decides what to send to the model, and compare lexical, semantic, hybrid search, ranking and re-ranking by purpose, advantages, disadvantages, and failure modes."><meta name="keywords" content="context retrieval, lexical, semantic, hybrid, semantic search, retrieval augmented generation, context engineering, context window, working memory, failure modes, rag, embeddings, bm25, rerank"><meta name="author" content="dineshbyte"><meta name="robots" content="index, follow"><link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0002-context-selection-and-retrieval.html"><meta property="og:type" content="article"><meta property="og:site_name" content="Engineering Vault"><meta property="og:title" content="Context Retrieval: Lexical vs Semantic vs Hybrid"><meta property="og:description" content="Your bar: explain how a system decides what to send to the model, and compare lexical, semantic, hybrid search, ranking and re-ranking by purpose, advantages, disadvantages, and failure modes."><meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/context-engineering/lessons/0002-context-selection-and-retrieval.html"><meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/context-engineering.png"><meta property="og:image:alt" content="Context Engineering · Engineering Vault learning track"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@dineshxbyte"><meta name="twitter:title" content="Context Retrieval: Lexical vs Semantic vs Hybrid"><meta name="twitter:description" content="Your bar: explain how a system decides what to send to the model, and compare lexical, semantic, hybrid search, ranking and re-ranking by purpose, advantages, disadvantages, and failure modes."><meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/context-engineering.png"><script>
+            (function () {
+                try {
+                    var t = localStorage.getItem('theme');
+                    if (t !== 'light' && t !== 'dark') {
+                        t =
+                            window.matchMedia &&
+                            window.matchMedia('(prefers-color-scheme:dark)').matches
+                                ? 'dark'
+                                : 'light';
+                    }
+                    document.documentElement.setAttribute('data-theme', t);
+                } catch (e) {}
+            })();
+        </script><script>
+            function toggleTheme() {
+                var d = document.documentElement;
+                var t = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                d.setAttribute('data-theme', t);
+                try {
+                    localStorage.setItem('theme', t);
+                } catch (e) {}
+            }
+        </script><link rel="stylesheet" href="/engineering-learning-hub/assets/tokens.css"><link rel="stylesheet" href="/engineering-learning-hub/assets/lesson.css"><link rel="stylesheet" href="/engineering-learning-hub/assets/interview.css"><style>:root{--accent:var(--track-context)}</style><script src="/engineering-learning-hub/assets/analytics.js" defer></script></head> <body> <a class="skip-link" href="#main">Skip to content</a>  <div class="wrap"> <nav id="hubbar"> <a href="/engineering-learning-hub/index.html">&#8592; Engineering Vault</a> <span class="pn"> <a href="0001-what-is-context-and-context-as-query.html" title="What Is Context">
+&#8249; Prev
+</a> <a href="0003-codebase-context-chunking-and-rag.html" title="Codebase Context, Chunking &#38; RAG">
+Next &#8250;
+</a> </span> <span style="display:flex;align-items:center;gap:.6rem"> <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button> <span style="color:var(--muted)">Context Engineering</span> </span> </nav> <main id="main" tabindex="-1"> <div id="reading-progress"></div> <div class="kicker">Lesson 2 · Principal Track · Core → Senior</div> <h1>Context Selection &amp; <em>Retrieval</em></h1> <p class="meta">~14 min · 2 modules · how a system decides what to send the model — and the search machinery that finds it</p> <div class="ltags"><span class="lt">Context retrieval</span><span class="lt">Lexical</span><span class="lt">Semantic</span><span class="lt">Hybrid</span><span class="lt">Semantic search</span></div>  <div class="mission"><p><strong>Your bar:</strong> explain how a system decides <em>which</em> facts reach the model
+when it cannot send everything, walk a real query (“find the authentication bug”)
+through candidate generation → ranking → selection, and compare 
+<em>lexical, semantic, hybrid</em>
+search plus <em>ranking vs re-ranking</em> by purpose, advantages, disadvantages, and failure
+modes. By the end you can answer: </p><b><p>given a fixed token budget, how do you find the smallest set that still contains the answer?</p></b><sup><a href="#s1" id="r1"><p>1</p></a></sup></div>
+<p><p>This lesson is one pipeline, then the engines that power it. Each chip is one thing it makes
+permanent:</p></p>
+<div class="chips"><span class="chip"><p>You can’t send everything, so the system <b>selects</b></p></span><span class="chip c2"><p>cast a wide net (<b>candidates</b>), then <b>rank</b> them</p></span><span class="chip c3"><p>pack the top into the <b>token budget</b></p></span><span class="chip c4"><p>finding candidates = <b>lexical · semantic · hybrid · re-rank</b></p></span></div>
+<nav class="toc"><a href="#m1">1 · Context selection (candidates → rank → pack)</a><a href="#m2">2 · Retrieval (search · semantic · hybrid · re-rank)</a><a href="#quiz">★ Retrieval practice</a><a href="#interview">★ Interview questions</a></nav>
+
+<section class="lvl" id="m1"><div class="lvltop"><span class="num">1</span><h2>Context Selection</h2></div><p class="tagline"><p>Lesson 1 fixed the budget: the window is small and you don’t own all of it. <b>Selection</b>
+is the discipline of choosing the smallest set of text that still contains the answer — wide
+net, then ruthless trim.</p></p><h3>The hero: a selection funnel</h3><figure> <svg viewBox="0 0 640 322" role="img" aria-label="A funnel narrows a large corpus to candidates, then ranked, then a selected few packed into the context window."> <defs> <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker> <marker id="arwM" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b5179e"></path></marker> </defs> <text x="320" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">SELECTION FUNNEL &mdash; many in, a curated few out</text> <!-- corpus --> <rect x="40" y="36" width="560" height="40" rx="6" fill="#efe7f0" stroke="#111110"></rect> <text x="320" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">Corpus &mdash; every file · doc · record (millions of tokens)</text> <text x="320" y="70" text-anchor="middle" font-size="8.5" fill="#6b675f">far larger than any window</text> <!-- candidate generation --> <rect x="110" y="98" width="420" height="40" rx="6" fill="#f6eef7" stroke="#b5179e"></rect> <text x="320" y="117" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b5179e">Candidate generation &mdash; cast a wide net</text> <text x="320" y="131" text-anchor="middle" font-size="8.5" fill="#6b675f">lexical + semantic search · optimize RECALL (don't miss the right one)</text> <!-- ranking --> <rect x="175" y="160" width="290" height="40" rx="6" fill="#eef2f7" stroke="#1f3a5a"></rect> <text x="320" y="179" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1f3a5a">Ranking &mdash; score every candidate</text> <text x="320" y="193" text-anchor="middle" font-size="8.5" fill="#6b675f">cheap score now · expensive re-rank optional</text> <!-- selection / packing --> <rect x="225" y="222" width="190" height="40" rx="6" fill="#e9f3ec" stroke="#2f5d3a"></rect> <text x="320" y="241" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">Selection / packing</text> <text x="320" y="255" text-anchor="middle" font-size="8.5" fill="#6b675f">fit top-K into budget</text> <!-- window --> <rect x="255" y="284" width="130" height="30" rx="6" fill="#f1eef2" stroke="#b5179e" stroke-width="2"></rect> <text x="320" y="303" text-anchor="middle" font-size="10" font-weight="700" fill="#b5179e">Context window</text> <!-- funnel arrows --> <line x1="320" y1="76" x2="320" y2="96" stroke="#6b675f" marker-end="url(#arw)"></line> <line x1="320" y1="138" x2="320" y2="158" stroke="#6b675f" marker-end="url(#arw)"></line> <line x1="320" y1="200" x2="320" y2="220" stroke="#6b675f" marker-end="url(#arw)"></line> <line x1="320" y1="262" x2="320" y2="282" stroke="#b5179e" marker-end="url(#arwM)"></line> </svg> <figcaption>
+Three stages, narrowing each time. <b>Generate</b> casts wide for recall; <b>rank</b> scores;
+<b>select/pack</b> fits the top into the budget — and slips in cheap structural context (signatures,
+        not full bodies).<sup><a href="#s1" id="r1b">1</a></sup> </figcaption> </figure><div class="facts"><div class="fact"><p><b>Is</b> Selection is the pipeline that turns a huge corpus into the curated few that fit
+the window: candidate generation, ranking, then packing within budget.</p></div><div class="fact"><p><b>Why it exists</b> The corpus dwarfs the window (Lesson 1). Sending everything is
+physically impossible and actively harmful — noise buries signal and costs more.</p></div><div class="fact blue"><p><b>Like (world)</b> A librarian who can carry ten books to your desk from a million-book
+stack: first pull a wide shelf, then narrow to the ten that answer <em>your</em> question.</p></div><div class="fact blue"><p><b>Like (code)</b> A <code>WHERE</code> + <code>ORDER BY</code> + <code>LIMIT</code>
+pipeline: filter to candidates, sort by a score, take the top N that fit the page.</p></div></div><h3>Relevance signals — what each catches, what it misses</h3><table><thead><tr><th>Signal</th><th>What it catches</th><th>What it misses</th></tr></thead><tbody><tr><td><b>Lexical match</b></td><td>Exact terms, identifiers, error codes</td><td>Synonyms &amp; paraphrase (different words, same idea)</td></tr><tr><td><b>Semantic similarity</b></td><td>Meaning, synonyms, “asks the same thing”</td><td>Rare exact tokens (IDs, function names, codes)</td></tr><tr><td><b>Structural / graph</b></td><td>Imports, call sites, type/dependency links</td><td>Conceptual matches with no code edge between them</td></tr><tr><td><b>Recency</b></td><td>The just-changed file, the latest doc version</td><td>Stable-but-correct old code that never changes</td></tr><tr><td><b>Authority / trust</b></td><td>Canonical source, owned doc, signed record</td><td>The right fact when it only lives in a low-trust place</td></tr></tbody></table><div class="pull"><p>No single signal is sufficient. Each is blind to a different class of right answer — which is
+exactly why hybrid retrieval (Module 2) exists.</p></div><h3>“Relevant” means different things per system</h3><table><thead><tr><th>System</th><th>The query</th><th>What “relevant” means</th></tr></thead><tbody><tr><td><b>Billing platform</b></td><td>“Why was account 4471 double-charged?”</td><td><p>The <em>exact</em> account records &amp; ledger rows — lexical/ID match, authority.
+A “similar” account is worse than useless.</p></td></tr><tr><td><b>GitHub repository</b></td><td>“Where do we validate the JWT?”</td><td><p>The right <em>symbols</em> plus their dependencies — semantic concept + structural
+call sites &amp; imports.</p></td></tr><tr><td><b>Documentation portal</b></td><td>“How do I rotate an API key?”</td><td><p>The right <em>article</em> at the right <em>version</em> — semantic match gated by
+recency/version, authority.</p></td></tr></tbody></table><h3>Walk-through: “Find the authentication bug”</h3><figure> <svg viewBox="0 0 640 360" role="img" aria-label="Six-step stepper turning the query find the authentication bug into a packed context window."> <text x="320" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111110">Query: &ldquo;find the authentication bug&rdquo;</text> <!-- step rows --> <g font-size="9.5" fill="#6b675f"> <!-- 1 --> <circle cx="40" cy="50" r="13" fill="#b5179e"></circle><text x="40" y="54" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">1</text> <rect x="64" y="36" width="540" height="30" rx="6" fill="#f6eef7" stroke="#b5179e"></rect> <text x="76" y="50" font-size="10.5" font-weight="700" fill="#111110">Parse entities</text> <text x="76" y="62">&ldquo;authentication&rdquo; &middot; &ldquo;login&rdquo; &middot;
+                &ldquo;token&rdquo; &middot; &ldquo;session&rdquo;</text> <!-- 2 --> <circle cx="40" cy="98" r="13" fill="#b5179e"></circle><text x="40" y="102" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">2</text> <rect x="64" y="84" width="540" height="30" rx="6" fill="#f6eef7" stroke="#b5179e"></rect> <text x="76" y="98" font-size="10.5" font-weight="700" fill="#111110">Candidate generation</text> <text x="76" y="110">lexical: auth/login/session symbols &nbsp;+&nbsp; semantic: the concept</text> <!-- 3 --> <circle cx="40" cy="146" r="13" fill="#1f3a5a"></circle><text x="40" y="150" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">3</text> <rect x="64" y="132" width="540" height="30" rx="6" fill="#eef2f7" stroke="#1f3a5a"></rect> <text x="76" y="146" font-size="10.5" font-weight="700" fill="#111110">Add structural context</text> <text x="76" y="158">files importing the auth module &middot; its call sites &middot; recent changes</text> <!-- 4 --> <circle cx="40" cy="194" r="13" fill="#1f3a5a"></circle><text x="40" y="198" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">4</text> <rect x="64" y="180" width="540" height="30" rx="6" fill="#eef2f7" stroke="#1f3a5a"></rect> <text x="76" y="194" font-size="10.5" font-weight="700" fill="#111110">Rank candidates</text> <text x="76" y="206">score by combined signals &middot; best-looking first</text> <!-- 5 --> <circle cx="40" cy="242" r="13" fill="#2f5d3a"></circle><text x="40" y="246" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">5</text> <rect x="64" y="228" width="540" height="30" rx="6" fill="#e9f3ec" stroke="#2f5d3a"></rect> <text x="76" y="242" font-size="10.5" font-weight="700" fill="#111110">Select top-K within budget</text> <text x="76" y="254">full body of the prime suspects &middot; signatures/docstrings of the rest</text> <!-- 6 --> <circle cx="40" cy="290" r="13" fill="#2f5d3a"></circle><text x="40" y="294" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">6</text> <rect x="64" y="276" width="540" height="30" rx="6" fill="#e9f3ec" stroke="#2f5d3a"></rect> <text x="76" y="290" font-size="10.5" font-weight="700" fill="#111110">Assemble the window</text> <text x="76" y="302">prompt + selected context + question, in budget, ordered</text> </g> <!-- connectors --> <line x1="40" y1="63" x2="40" y2="85" stroke="#6b675f"></line> <line x1="40" y1="111" x2="40" y2="133" stroke="#6b675f"></line> <line x1="40" y1="159" x2="40" y2="181" stroke="#6b675f"></line> <line x1="40" y1="207" x2="40" y2="229" stroke="#6b675f"></line> <line x1="40" y1="255" x2="40" y2="277" stroke="#6b675f"></line> <text x="320" y="332" text-anchor="middle" font-size="9.5" font-style="italic" fill="#9a2417">If step 2 or 3 never surfaces the buggy file, no model — however large — can find the
+            bug.</text> <text x="320" y="348" text-anchor="middle" font-size="9.5" font-style="italic" fill="#b5179e">Selection quality decides whether the model ever sees the answer.</text> </svg> <figcaption>
+The whole pipeline can be perfect downstream and still fail if generation misses the file. <b>Recall first</b> — you cannot rank or pack what you never retrieved.<sup><a href="#s1" id="r1c">1</a></sup> </figcaption> </figure><div class="myth"><div class="m">✗ “Just send the model more files to be safe.”</div><div class="t"><p>✓ More irrelevant files lower signal, raise cost, and push the right lines into the
+“lost in the middle” zone. Smaller-but-correct wins.</p></div></div><div class="myth"><div class="m">✗ “Selection is just one search query.”</div><div class="t"><p>✓ It’s a pipeline: generate (recall) → rank (order) → pack (budget). Each
+stage can be the bottleneck independently.</p></div></div><div class="rule"><p><span>📥 Memory rule:</span> You can’t send everything — selection is 
+<span>choosing the smallest set that still contains the answer</span>. Cast wide for 
+<span>recall</span>, then trim to fit.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Name the three stages of the selection funnel. <span class="ans">&rarr; candidate generation (recall) &rarr; ranking (order) &rarr; selection/packing (fit budget)</span> </li><li> Which stage, if it fails, can't be rescued downstream? <span class="ans">&rarr; candidate generation — you can't rank or pack what was never retrieved</span> </li><li> What cheap context do you pack instead of full bodies? <span class="ans">&rarr; signatures &amp; docstrings of related code, plus structural links (imports, call sites)</span> </li> </ul> </details><details class="iq"><summary><p>Your code assistant keeps missing the actual buggy file. Where in the selection pipeline
+do you look first, and how do you prove it?</p></summary><div class="a"><p><b>Hit these points:</b> instrument the pipeline per stage, don’t guess → first check 
+<b>candidate generation recall</b>: was the buggy file ever in the candidate set? if no,
+ranking/packing are irrelevant → if recall is the gap, add the missing signal —
+usually structural (imports/call sites) or lexical for an exact symbol the embedding model
+washed out → if recall is fine but the file ranked low, fix ranking / add a re-rank
+→ if it ranked high but got dropped, it’s a packing/budget problem → measure
+retrieval hit-rate as a first-class metric, not just end-answer quality.</p></div></details></section>
+
+<section class="lvl" id="m2"><div class="lvltop"><span class="num">2</span><h2>Retrieval</h2></div><p class="tagline"><p>Module 1 said “cast a wide net, then rank.” This is the machinery that does it: 
+<b>lexical</b> finds exact, <b>semantic</b> finds meaning, <b>hybrid</b> finds both, and 
+<b>re-ranking</b> sharpens the top. Each one has a job it does well and a case where it falls
+down.</p></p><h3>The hero: a two-stage retrieval pipeline</h3><figure> <svg viewBox="0 0 640 300" role="img" aria-label="Query fans into BM25 and vector search, results are fused, a cross-encoder re-ranks, top-k enter the window."> <defs> <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker> <marker id="arwM" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b5179e"></path></marker> </defs> <text x="320" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111110">TWO-STAGE RETRIEVAL &mdash; recall first, then precision</text> <!-- query --> <rect x="262" y="32" width="116" height="32" rx="7" fill="#f6eef7" stroke="#b5179e"></rect> <text x="320" y="52" text-anchor="middle" font-size="10.5" font-weight="700" fill="#111110">Query</text> <!-- stage 1 label --> <text x="150" y="86" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6b675f">STAGE 1 &mdash; recall · cheap · wide</text> <!-- BM25 + vector --> <rect x="60" y="92" width="180" height="40" rx="7" fill="#eef2f7" stroke="#1f3a5a"></rect> <text x="150" y="111" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1f3a5a">Lexical (BM25)</text> <text x="150" y="124" text-anchor="middle" font-size="8.5" fill="#6b675f">exact terms &amp; identifiers</text> <rect x="400" y="92" width="180" height="40" rx="7" fill="#e9f3ec" stroke="#2f5d3a"></rect> <text x="490" y="111" text-anchor="middle" font-size="10.5" font-weight="700" fill="#2f5d3a">Semantic (vector)</text> <text x="490" y="124" text-anchor="middle" font-size="8.5" fill="#6b675f">meaning &amp; synonyms</text> <!-- query to both --> <line x1="290" y1="64" x2="180" y2="90" stroke="#6b675f" marker-end="url(#arw)"></line> <line x1="350" y1="64" x2="460" y2="90" stroke="#6b675f" marker-end="url(#arw)"></line> <!-- fuse --> <rect x="220" y="160" width="200" height="38" rx="7" fill="#f6eef7" stroke="#b5179e" stroke-width="2"></rect> <text x="320" y="178" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b5179e">Fuse (RRF / weighted)</text> <text x="320" y="191" text-anchor="middle" font-size="8.5" fill="#6b675f">one candidate list</text> <line x1="150" y1="132" x2="270" y2="158" stroke="#6b675f" marker-end="url(#arw)"></line> <line x1="490" y1="132" x2="370" y2="158" stroke="#6b675f" marker-end="url(#arw)"></line> <!-- stage 2 label --> <text x="320" y="222" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6b675f">STAGE 2 &mdash; precision · expensive · top-N only</text> <!-- rerank --> <rect x="220" y="228" width="200" height="38" rx="7" fill="#efe7f0" stroke="#111110"></rect> <text x="320" y="246" text-anchor="middle" font-size="10.5" font-weight="700" fill="#111110">Cross-encoder re-rank</text> <text x="320" y="259" text-anchor="middle" font-size="8.5" fill="#6b675f">re-score top-N jointly with query</text> <line x1="320" y1="198" x2="320" y2="226" stroke="#b5179e" marker-end="url(#arwM)"></line> <!-- window --> <rect x="455" y="228" width="130" height="38" rx="7" fill="#f1eef2" stroke="#b5179e" stroke-width="2"></rect> <text x="520" y="250" text-anchor="middle" font-size="10" font-weight="700" fill="#b5179e">top-k &rarr; window</text> <line x1="420" y1="247" x2="453" y2="247" stroke="#b5179e" marker-end="url(#arwM)"></line> </svg> <figcaption>
+Stage 1 (lexical + semantic, fused) maximizes <b>recall</b> cheaply across many candidates. Stage
+        2 (cross-encoder) maximizes <b>precision</b> on the top-N only — it cannot recover anything stage
+        1 missed.<sup><a href="#s2" id="r2">2</a></sup> </figcaption> </figure><h3>The four engines, side by side</h3><table><thead><tr><th>Technique</th><th>How it scores</th><th>Best at</th><th>Signature failure</th></tr></thead><tbody><tr><td><b>Lexical (BM25)</b></td><td>TF-IDF / BM25 on exact terms</td><td>Identifiers, error codes, exact strings</td><td>Vocabulary mismatch → total miss</td></tr><tr><td><b>Semantic (vector)</b></td><td>Cosine of embeddings via ANN</td><td>Meaning, synonyms, paraphrase</td><td>Plausible-but-wrong; misses exact tokens</td></tr><tr><td><b>Hybrid</b></td><td>Fuse both (RRF / weighted)</td><td><p>Exact <em>and</em> semantic together</p></td><td>Bounded by both stages’ recall</td></tr><tr><td><b>Re-rank</b></td><td>Cross-encoder, query+doc jointly</td><td>Ordering the final top results</td><td>Can’t recover a missed document</td></tr></tbody></table><h3>Search (lexical / keyword / BM25)</h3><div class="facts"><div class="fact"><p><b>Is</b> Exact-term matching: score documents by how well their words match the query
+words, weighted by term frequency and rarity (TF-IDF / BM25).</p><sup><a href="#s3" id="r3">3</a></sup></div><div class="fact"><p><b>Why it exists</b> Some queries <em>are</em> the exact tokens — an error code, a function
+name, an account ID. For those, meaning is irrelevant; the literal string is the answer.</p></div><div class="fact blue"><p><b>Advantages</b> Precise on exact terms &amp; identifiers, fast, cheap, interpretable,
+needs no model — you can read why it matched.</p></div><div class="fact blue"><p><b>Failure mode</b> No synonyms or semantics: if the user phrases it differently than the
+doc (vocabulary mismatch), it returns a <em>total miss</em>.</p></div></div><h3>Semantic search (embeddings / vector)</h3><div class="facts"><div class="fact"><p><b>Is</b> Encode query and chunks into vectors; rank by cosine similarity using an
+approximate-nearest-neighbour index (e.g. HNSW).</p><sup><a href="#s4" id="r4">4</a></sup></div><div class="fact"><p><b>Why it exists</b> Users rarely use the doc’s exact words. Embeddings match on 
+<em>meaning</em>, so a paraphrase still finds the right passage.</p></div><div class="fact blue"><p><b>Advantages</b> Captures meaning, synonyms, paraphrase; robust to wording; finds the
+right idea even with zero shared words.</p></div><div class="fact blue"><p><b>Failure mode</b> Returns “topically similar but wrong”; weak on rare exact
+tokens — it can’t reliably match an exact error string or ID.</p></div></div><h3>Hybrid search</h3><div class="facts"><div class="fact"><p><b>Is</b> Run lexical and semantic together, then fuse the two result lists into one
+ranking — commonly Reciprocal Rank Fusion or a weighted blend.</p><sup><a href="#s5" id="r5">5</a></sup></div><div class="fact"><p><b>Why it exists</b> The two engines fail on opposite cases: lexical whiffs on paraphrase,
+semantic whiffs on exact tokens. Run both and one usually catches what the other drops.</p></div><div class="fact blue"><p><b>Advantages</b> Covers both exact and meaning, so fewer right documents slip through.
+Anthropic’s Contextual Retrieval pairs embeddings with BM25 for exactly this reason.</p><sup><a href="#s2" id="r2b">2</a></sup></div><div class="fact blue"><p><b>Failure mode</b> More infra and complexity, fusion weights to tune; still bounded by the
+recall of both first-stage retrievers.</p></div></div><h3>Ranking vs re-ranking — two different jobs</h3><figure> <svg viewBox="0 0 600 180" role="img" aria-label="Stage one ranking optimizes recall across many; stage two re-ranking optimizes precision on the top few."> <defs> <marker id="arwM" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b5179e"></path></marker> </defs> <text x="150" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">Ranking (stage 1)</text> <text x="450" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">Re-ranking (stage 2)</text> <rect x="40" y="34" width="220" height="118" rx="8" fill="#eef2f7" stroke="#1f3a5a"></rect> <text x="150" y="56" text-anchor="middle" font-size="10" fill="#6b675f">cheap score · many candidates</text> <text x="150" y="78" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">optimize RECALL</text> <text x="150" y="96" text-anchor="middle" font-size="9" fill="#6b675f">&ldquo;don't miss the right doc&rdquo;</text> <text x="150" y="122" text-anchor="middle" font-size="9" fill="#111110">BM25 score · cosine score</text> <text x="150" y="138" text-anchor="middle" font-size="9" fill="#111110">applied to the whole net</text> <rect x="340" y="34" width="220" height="118" rx="8" fill="#efe7f0" stroke="#111110"></rect> <text x="450" y="56" text-anchor="middle" font-size="10" fill="#6b675f">expensive score · top-N only</text> <text x="450" y="78" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">optimize PRECISION</text> <text x="450" y="96" text-anchor="middle" font-size="9" fill="#6b675f">&ldquo;put the best at the top&rdquo;</text> <text x="450" y="122" text-anchor="middle" font-size="9" fill="#111110">cross-encoder · query+doc jointly</text> <text x="450" y="138" text-anchor="middle" font-size="9" fill="#111110">large precision lift on the top</text> <line x1="262" y1="93" x2="338" y2="93" stroke="#b5179e" stroke-dasharray="4 3" marker-end="url(#arwM)"></line> <text x="300" y="86" text-anchor="middle" font-size="8" font-weight="700" fill="#b5179e">top-N</text> </svg> <figcaption>
+First stage is wide and cheap to buy recall; second stage is narrow and expensive to buy
+        precision. The cross-encoder reads query and document together, so it scores relevance far
+        more accurately — but only on what stage 1 handed it.<sup><a href="#s4" id="r4b">4</a></sup> </figcaption> </figure><div class="facts"><div class="fact"><p><b>Ranking — is</b> Order candidates by a cheap score (BM25, cosine). First stage. Purpose:
+optimize <em>recall</em> so the right document is somewhere in the list.</p></div><div class="fact"><p><b>Re-ranking — is</b> A second, expensive, accurate pass (cross-encoder) that re-scores
+the top-N jointly with the query. Purpose: optimize <em>precision</em> at the top.</p></div><div class="fact blue"><p><b>Re-rank advantage</b> Large precision lift on the final top-k the model actually sees —
+the items most likely to be packed into the window.</p></div><div class="fact blue"><p><b>Re-rank failure</b> Latency and cost; runs on top-N only; <em>cannot recover</em> a
+document the first stage already missed.</p></div></div><div class="myth"><div class="m">✗ “Embeddings replaced keyword search.”</div><div class="t"><p>✓ Embeddings are weak on exact tokens (error codes, IDs, function names). Hybrid
+keeps BM25 precisely for those cases.</p></div></div><div class="myth"><div class="m">✗ “A great re-ranker fixes bad retrieval.”</div><div class="t"><p>✓ Re-ranking only reorders what stage 1 returned. If recall missed the doc, no
+re-ranker can surface it — fix recall first.</p></div></div><div class="rule"><p><span>📥 Memory rule:</span> 
+<span>First-stage retrieval buys recall; re-ranking buys precision.</span> Lexical finds
+exact, semantic finds meaning, <span>hybrid finds both</span>.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Which engine matches an exact error code, and which a paraphrase? <span class="ans">&rarr; lexical/BM25 for the exact code; semantic/vector for the paraphrase</span> </li><li> What does the first stage optimize for vs the re-rank stage? <span class="ans">&rarr; first stage = recall (don't miss it); re-rank = precision (best at the top)</span> </li><li> Why can't a re-ranker save bad retrieval? <span class="ans">&rarr; it only re-scores the top-N it was given; a missed document never reaches it</span> </li> </ul> </details><details class="iq"><summary><p>Users complain semantic search returns “close but wrong” results and sometimes
+whiffs on exact error codes. What’s your fix and why?</p></summary><div class="a"><p><b>Hit these points:</b> name the root cause — embeddings score topical similarity, so they
+return plausible-but-wrong and wash out rare exact tokens like error codes → add 
+<b>hybrid</b>: run BM25 alongside the vector search and fuse (RRF) so exact strings are
+caught by lexical and meaning by semantic → add a <b>cross-encoder re-rank</b> over the
+fused top-N to push the genuinely best result to the top (precision) → frame the
+split: hybrid fixes recall, re-rank fixes precision → verify with retrieval hit-rate
+on a labelled set, not just end-answer vibes; tune fusion weights against that set.</p></div></details></section>
+
+<h2 class="sec" id="quiz"><p>Retrieval practice — test the two modules</p></h2>
+<div class="quiz"> <div class="qitem" data-correct="1"> <p class="q"> <span class="qn">Q1.</span> The three stages of the selection funnel, in order, are… </p> <button class="opt">Embed the corpus, store the vectors, then stream the chunks straight into the model</button><button class="opt">Candidate generation (recall), then ranking (order), then selection and packing to budget</button><button class="opt">Re-rank the corpus, drop the duplicates, then summarise everything into one digest</button><button class="opt">Parse the schema, run the SQL query, then cache the response for the next caller</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="3"> <p class="q"> <span class="qn">Q2.</span> If the buggy file is never returned by candidate generation, the result is… </p> <button class="opt">Re-ranking promotes it because the cross-encoder reads the file body in detail</button><button class="opt">A larger context window includes it automatically once the budget is increased</button><button class="opt">The ranking stage recomputes the candidates and recovers the file on a retry</button><button class="opt">No downstream stage can find it — you cannot rank or pack what was never retrieved</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="0"> <p class="q"> <span class="qn">Q3.</span> Lexical search (BM25) is the right tool, and semantic search the wrong one, when the query is… </p> <button class="opt">An exact error code or function name where the literal string must match exactly</button><button class="opt">A vague description of a feeling the user has about how the product behaves today</button><button class="opt">A paraphrase that shares no words at all with the document that answers it best</button><button class="opt">A broad concept that appears across many documents written in different wordings</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="2"> <p class="q"> <span class="qn">Q4.</span> The signature failure mode of semantic (vector) search is that it… </p> <button class="opt">Cannot run at all unless the entire corpus first fits inside the context window</button><button class="opt">Refuses any query that contains a synonym of a word found in the document set</button><button class="opt">Returns plausible-but-wrong matches and struggles with rare exact tokens like IDs</button><button class="opt">Always returns the single oldest document because recency is never a factor</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="1"> <p class="q"> <span class="qn">Q5.</span> Re-ranking (a cross-encoder over the top-N) primarily buys you… </p> <button class="opt">Recall, by widening the net so more candidate documents enter the first stage</button><button class="opt">Precision at the top, by re-scoring candidates jointly with the query in detail</button><button class="opt">Latency, because scoring query and document together is cheaper than BM25 alone</button><button class="opt">Recovery of missed documents the first-stage retriever never returned at all</button> <p class="fb" role="status" aria-live="polite"></p> </div> </div>
+
+<h2 class="sec" id="interview"><p>Interview — pick your bar</p></h2>
+<p class="tagline"><p>Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System Design</b> = open
+design round (a different axis, not a harder level).</p></p>
+<div data-interview> <details class="iq" data-level="core"> <summary>Name the three stages of the selection pipeline, in order, and what each one does.</summary> <div class="a"><b>Hit these points:</b> <b>candidate generation</b> &rarr; cast a wide net to pull anything that might be relevant &rarr; <b>ranking</b> &rarr; score those candidates so the best ones rise &rarr; <b>selection / packing</b> &rarr; fit the top of the list into the token budget. The whole point is choosing the smallest set that still contains the answer when you can't send everything.</div> </details> <details class="iq" data-level="core"> <summary>What does lexical / BM25 search actually match on, and what is it good at?</summary> <div class="a"><b>Hit these points:</b> it scores documents by overlap of the <b>exact terms</b>, weighted by term frequency and rarity (TF-IDF / BM25) &rarr; meaning plays no part, only the literal strings &rarr; strong on identifiers, error codes, function names, exact IDs &rarr; fast, cheap, interpretable, no model required — you can read why it matched.</div> </details> <details class="iq" data-level="core"> <summary>What does semantic / embedding search match on, and why use it?</summary> <div class="a"><b>Hit these points:</b> it encodes query and chunks into vectors and ranks by similarity (cosine over an ANN index) &rarr; matches on <b>meaning</b>, so synonyms and paraphrase still find the right passage even with zero shared words &rarr; exists because users rarely use the document's exact wording &rarr; robust to phrasing, weak on rare exact tokens.</div> </details> <details class="iq" data-level="core"> <summary>What is hybrid search, and what does fusion (e.g. RRF) do in it?</summary> <div class="a"><b>Hit these points:</b> run lexical and semantic <b>together</b>, then merge their two result lists into one ranking &rarr; <b>fusion</b> (Reciprocal Rank Fusion or a weighted blend) combines the per-engine ranks into a single ordered list &rarr; the reason: the two engines fail on opposite cases, so one usually catches what the other drops &rarr; gives you exact-match and meaning-match coverage at once.</div> </details> <details class="iq" data-level="senior"> <summary>Users say semantic search returns &ldquo;close but wrong&rdquo; results and sometimes whiffs on exact error codes. What's your fix and why?</summary> <div class="a"><b>Hit these points:</b> name the root cause — embeddings score topical similarity, so they return plausible-but-wrong and wash out rare exact tokens like error codes &rarr; add <b>hybrid</b>: run BM25 alongside the vector search and fuse (RRF) so exact strings are caught by lexical and meaning by semantic &rarr; add a <b>cross-encoder re-rank</b> over the fused top-N to push the genuinely best result up (precision) &rarr; frame the split: hybrid fixes recall, re-rank fixes precision &rarr; verify with retrieval hit-rate on a labelled set, not end-answer vibes; tune fusion weights against that set.</div> </details> <details class="iq" data-level="senior"> <summary>Your code assistant keeps missing the actual buggy file. Where in the pipeline do you look first, and how do you prove it?</summary> <div class="a"><b>Hit these points:</b> instrument per stage, don't guess &rarr; first check <b>candidate-generation recall</b>: was the buggy file ever in the candidate set? if no, ranking and packing are irrelevant &rarr; if recall is the gap, add the missing signal — usually structural (imports / call sites) or lexical for an exact symbol the embedding washed out &rarr; if recall is fine but it ranked low, fix ranking / add a re-rank &rarr; if it ranked high but got dropped, it's a packing/budget problem &rarr; track retrieval hit-rate as a first-class metric, not just end-answer quality.</div> </details> <details class="iq" data-level="senior"> <summary>Distinguish ranking from re-ranking. When is a cross-encoder worth its cost, and when is it a waste?</summary> <div class="a"><b>Hit these points:</b> <b>ranking</b> = first stage, cheap score (BM25 / cosine) over many candidates, optimizing recall — &ldquo;don't miss it&rdquo; &rarr; <b>re-ranking</b> = second stage, expensive cross-encoder reading query + document jointly over the top-N, optimizing precision — &ldquo;best at the top&rdquo; &rarr; worth it when the final top-k reaching the window must be high-precision and first-stage ordering is noisy &rarr; a waste if recall is the real gap — it can't recover a missed doc &rarr; bound cost by running it on top-N only and caching; prove the precision lift on a labelled set before keeping it.</div> </details> <details class="iq" data-level="senior"> <summary>Someone proposes &ldquo;just embed everything and drop BM25 — embeddings are strictly better.&rdquo; Push back.</summary> <div class="a"><b>Hit these points:</b> embeddings are <b>weak on exact tokens</b> — error codes, IDs, function names get washed into topical neighbours &rarr; for a query that <em>is</em> the literal string, meaning is irrelevant and lexical is exactly right &rarr; the two engines have opposite blind spots, so dropping BM25 trades one failure mode for another &rarr; hybrid keeps BM25 precisely for those cases; the small extra infra is cheaper than silently missing every ID lookup &rarr; decide with hit-rate on a query mix that includes exact-token queries, not a vibe.</div> </details> <details class="iq" data-level="staff"> <summary>Design a retrieval strategy when you don't yet know the query mix — some lookups are exact IDs, some are vague conceptual questions, and the corpus keeps changing.</summary> <div class="a"><b>Hit these points:</b> start from <b>recall first</b>: a missed doc can't be ranked or packed, so over-invest stage 1 &rarr; default to <b>hybrid</b> (BM25 + vector, fused) so exact-token and conceptual queries are both covered without knowing the split up front &rarr; add a <b>cross-encoder re-rank</b> on the fused top-N for precision where it matters &rarr; layer signals the domain needs — structural for code, recency/version for changing docs, authority for canonical sources &rarr; keep re-indexing fresh as the corpus changes &rarr; instrument hit-rate by query type, learn the real mix, then tune fusion weights and decide where re-rank earns its latency.</div> </details> <details class="iq" data-level="staff"> <summary>&ldquo;Relevant&rdquo; means different things per system. Contrast a billing platform, a code repo, and a docs portal — and say how that changes your retrieval.</summary> <div class="a"><b>Hit these points:</b> relevance is set by the question's intent, not one universal score &rarr; <b>billing</b>: the exact account / ledger rows — lexical/ID match + authority; a &ldquo;similar&rdquo; account is actively harmful &rarr; <b>repo</b>: the right symbols plus their dependencies — semantic concept + structural call sites and imports &rarr; <b>docs</b>: the right article at the right version — semantic gated by recency/version + authority &rarr; so you pick and weight signals to the domain's notion of relevance, rather than shipping one generic retriever everywhere.</div> </details> <details class="iq" data-level="staff"> <summary>You can raise recall (wider net) or precision (aggressive re-rank + tighter packing), but not both for free. How do you reason about the trade-off?</summary> <div class="a"><b>Hit these points:</b> the two failures cost differently — a recall miss means the answer never reaches the model (unrecoverable), a precision miss means noise the model must see past &rarr; so buy recall cheaply and wide in stage 1, then buy precision narrowly in stage 2 where it's affordable &rarr; watch the packing tension: more candidates raise recall but bury the right lines in the &ldquo;lost in the middle&rdquo; zone and cost more &rarr; tie the dial to the domain's cost of a miss (billing error vs a fuzzy docs answer) &rarr; measure both hit-rate and top-k precision on a labelled set and move the knob deliberately, not by feel.</div> </details> <div class="designrubric" data-level="design"> <b>Design-round framework</b> — narrate retrieval design in this order so the interviewer hears recall-first thinking: <ol> <li>Clarify the query mix &amp; the cost of a miss (exact-ID lookups vs vague concepts; how bad is a wrong-but-plausible answer?).</li><li>Define &ldquo;relevant&rdquo; for this domain and pick signals (lexical, semantic, structural, recency, authority).</li><li>Stage 1 for recall: hybrid candidate generation (BM25 + vector) and how you fuse the lists.</li><li>Stage 2 for precision: whether a cross-encoder re-rank on the top-N earns its latency.</li><li>Packing within the token budget: top-k, full bodies vs signatures/docstrings, ordering.</li><li>Freshness &amp; failure modes: re-indexing the changing corpus, vocabulary mismatch, plausible-but-wrong.</li><li>Measure: retrieval hit-rate and top-k precision on a labelled set; tune weights against it.</li> </ol> </div><details class="iq" data-level="design"> <summary>Design the retrieval layer for a documentation Q&amp;A bot over versioned, frequently-updated docs.</summary> <div class="a"><b>A strong answer covers:</b> the query mix is mostly conceptual &ldquo;how do I…&rdquo; questions, so semantic carries weight — but keep BM25 for exact API names and error strings &rarr; gate on <b>recency / version</b> so an old article doesn't beat the current one, and on <b>authority</b> for canonical pages &rarr; hybrid stage 1, fuse with RRF, re-rank the top-N for precision since users read only the first answer &rarr; pack the best article(s) within budget; prefer the right section over dumping whole pages &rarr; re-index on every doc change so freshness holds &rarr; call the failure modes: plausible-but-wrong from semantic, vocabulary mismatch from lexical &rarr; measure hit-rate on labelled questions, not end-answer vibes.</div> </details> <details class="iq" data-level="design"> <summary>Design retrieval for an internal-search feature across code, tickets, and wiki docs in one box.</summary> <div class="a"><b>A strong answer covers:</b> the corpus is heterogeneous, so &ldquo;relevant&rdquo; differs per source — code wants structural signals (imports, call sites) plus lexical for exact symbols; tickets/wiki lean semantic &rarr; run <b>hybrid</b> per source and fuse, or fuse across sources, so exact-token and conceptual queries both land &rarr; recall first: a missed file can't be ranked or packed &rarr; re-rank the fused top-N for precision; weight by recency where it matters (latest ticket, newest doc) and authority for canonical sources &rarr; pack within budget — signatures/docstrings for code, snippets for docs &rarr; keep indexes fresh as all three sources change &rarr; instrument hit-rate by source and query type, then tune fusion weights and decide where re-rank pays for its latency.</div> </details>  </div> <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Name the three stages of the selection pipeline, in order, and what each one does.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: candidate generation → cast a wide net to pull anything that might be relevant → ranking → score those candidates so the best ones rise → selection / packing → fit the top of the list into the token budget. The whole point is choosing the smallest set that still contains the answer when you can't send everything."}},{"@type":"Question","name":"What does lexical / BM25 search actually match on, and what is it good at?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: it scores documents by overlap of the exact terms, weighted by term frequency and rarity (TF-IDF / BM25) → meaning plays no part, only the literal strings → strong on identifiers, error codes, function names, exact IDs → fast, cheap, interpretable, no model required — you can read why it matched."}},{"@type":"Question","name":"What does semantic / embedding search match on, and why use it?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: it encodes query and chunks into vectors and ranks by similarity (cosine over an ANN index) → matches on meaning, so synonyms and paraphrase still find the right passage even with zero shared words → exists because users rarely use the document's exact wording → robust to phrasing, weak on rare exact tokens."}},{"@type":"Question","name":"What is hybrid search, and what does fusion (e.g. RRF) do in it?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: run lexical and semantic together, then merge their two result lists into one ranking → fusion (Reciprocal Rank Fusion or a weighted blend) combines the per-engine ranks into a single ordered list → the reason: the two engines fail on opposite cases, so one usually catches what the other drops → gives you exact-match and meaning-match coverage at once."}},{"@type":"Question","name":"Users say semantic search returns &ldquo;close but wrong&rdquo; results and sometimes whiffs on exact error codes. What's your fix and why?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: name the root cause — embeddings score topical similarity, so they return plausible-but-wrong and wash out rare exact tokens like error codes → add hybrid: run BM25 alongside the vector search and fuse (RRF) so exact strings are caught by lexical and meaning by semantic → add a cross-encoder re-rank over the fused top-N to push the genuinely best result up (precision) → frame the split: hybrid fixes recall, re-rank fixes precision → verify with retrieval hit-rate on a labelled set, not end-answer vibes; tune fusion weights against that set."}},{"@type":"Question","name":"Your code assistant keeps missing the actual buggy file. Where in the pipeline do you look first, and how do you prove it?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: instrument per stage, don't guess → first check candidate-generation recall: was the buggy file ever in the candidate set? if no, ranking and packing are irrelevant → if recall is the gap, add the missing signal — usually structural (imports / call sites) or lexical for an exact symbol the embedding washed out → if recall is fine but it ranked low, fix ranking / add a re-rank → if it ranked high but got dropped, it's a packing/budget problem → track retrieval hit-rate as a first-class metric, not just end-answer quality."}},{"@type":"Question","name":"Distinguish ranking from re-ranking. When is a cross-encoder worth its cost, and when is it a waste?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: ranking = first stage, cheap score (BM25 / cosine) over many candidates, optimizing recall — &ldquo;don't miss it&rdquo; → re-ranking = second stage, expensive cross-encoder reading query + document jointly over the top-N, optimizing precision — &ldquo;best at the top&rdquo; → worth it when the final top-k reaching the window must be high-precision and first-stage ordering is noisy → a waste if recall is the real gap — it can't recover a missed doc → bound cost by running it on top-N only and caching; prove the precision lift on a labelled set before keeping it."}},{"@type":"Question","name":"Someone proposes &ldquo;just embed everything and drop BM25 — embeddings are strictly better.&rdquo; Push back.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: embeddings are weak on exact tokens — error codes, IDs, function names get washed into topical neighbours → for a query that is the literal string, meaning is irrelevant and lexical is exactly right → the two engines have opposite blind spots, so dropping BM25 trades one failure mode for another → hybrid keeps BM25 precisely for those cases; the small extra infra is cheaper than silently missing every ID lookup → decide with hit-rate on a query mix that includes exact-token queries, not a vibe."}},{"@type":"Question","name":"Design a retrieval strategy when you don't yet know the query mix — some lookups are exact IDs, some are vague conceptual questions, and the corpus keeps changing.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: start from recall first: a missed doc can't be ranked or packed, so over-invest stage 1 → default to hybrid (BM25 + vector, fused) so exact-token and conceptual queries are both covered without knowing the split up front → add a cross-encoder re-rank on the fused top-N for precision where it matters → layer signals the domain needs — structural for code, recency/version for changing docs, authority for canonical sources → keep re-indexing fresh as the corpus changes → instrument hit-rate by query type, learn the real mix, then tune fusion weights and decide where re-rank earns its latency."}},{"@type":"Question","name":"&ldquo;Relevant&rdquo; means different things per system. Contrast a billing platform, a code repo, and a docs portal — and say how that changes your retrieval.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: relevance is set by the question's intent, not one universal score → billing: the exact account / ledger rows — lexical/ID match + authority; a &ldquo;similar&rdquo; account is actively harmful → repo: the right symbols plus their dependencies — semantic concept + structural call sites and imports → docs: the right article at the right version — semantic gated by recency/version + authority → so you pick and weight signals to the domain's notion of relevance, rather than shipping one generic retriever everywhere."}},{"@type":"Question","name":"You can raise recall (wider net) or precision (aggressive re-rank + tighter packing), but not both for free. How do you reason about the trade-off?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: the two failures cost differently — a recall miss means the answer never reaches the model (unrecoverable), a precision miss means noise the model must see past → so buy recall cheaply and wide in stage 1, then buy precision narrowly in stage 2 where it's affordable → watch the packing tension: more candidates raise recall but bury the right lines in the &ldquo;lost in the middle&rdquo; zone and cost more → tie the dial to the domain's cost of a miss (billing error vs a fuzzy docs answer) → measure both hit-rate and top-k precision on a labelled set and move the knob deliberately, not by feel."}},{"@type":"Question","name":"Design the retrieval layer for a documentation Q&A bot over versioned, frequently-updated docs.","acceptedAnswer":{"@type":"Answer","text":"A strong answer covers: the query mix is mostly conceptual &ldquo;how do I…&rdquo; questions, so semantic carries weight — but keep BM25 for exact API names and error strings → gate on recency / version so an old article doesn't beat the current one, and on authority for canonical pages → hybrid stage 1, fuse with RRF, re-rank the top-N for precision since users read only the first answer → pack the best article(s) within budget; prefer the right section over dumping whole pages → re-index on every doc change so freshness holds → call the failure modes: plausible-but-wrong from semantic, vocabulary mismatch from lexical → measure hit-rate on labelled questions, not end-answer vibes."}},{"@type":"Question","name":"Design retrieval for an internal-search feature across code, tickets, and wiki docs in one box.","acceptedAnswer":{"@type":"Answer","text":"A strong answer covers: the corpus is heterogeneous, so &ldquo;relevant&rdquo; differs per source — code wants structural signals (imports, call sites) plus lexical for exact symbols; tickets/wiki lean semantic → run hybrid per source and fuse, or fuse across sources, so exact-token and conceptual queries both land → recall first: a missed file can't be ranked or packed → re-rank the fused top-N for precision; weight by recency where it matters (latest ticket, newest doc) and authority for canonical sources → pack within budget — signatures/docstrings for code, snippets for docs → keep indexes fresh as all three sources change → instrument hit-rate by source and query type, then tune fusion weights and decide where re-rank pays for its latency."}}]}</script>
+<footer id="sources"> <strong>Sources</strong><br>  <span id="s1">Anthropic, "Effective context engineering for AI agents" &mdash; anthropic.com/engineering. Context as a finite, curated resource; selection over dumping; recall before packing.</span> <br>  <span id="s2">Anthropic, "Introducing Contextual Retrieval" &mdash; anthropic.com/news/contextual-retrieval. Hybrid embeddings + BM25 with re-ranking to reduce retrieval failures (figures illustrative).</span> <br>  <span id="s3">Robertson &amp; Zaragoza, 2009, "The Probabilistic Relevance Framework: BM25 and Beyond." Lexical / keyword retrieval and TF-IDF/BM25 scoring.</span> <br>  <span id="s4">Karpukhin et al., 2020, "Dense Passage Retrieval for Open-Domain QA" &mdash; arXiv:2004.04906. Dense (embedding) retrieval; dense vs lexical trade-offs; cross-encoder re-ranking context.</span> <br>  <span id="s5">Cormack et al., 2009, "Reciprocal Rank Fusion outperforms Condorcet and individual rank learning methods" &mdash; SIGIR. Fusing multiple rankings for hybrid search.</span> <br>  </footer>  <!-- standardized bottom pager — guarantees the `.nav a` hook that
+                 analytics.js uses for lesson_nav_* + lesson_complete on every lesson --> <nav class="nav"> <span>&#8592; <a href="/engineering-learning-hub/index.html#grid">Engineering Vault</a></span> <span>
+Next: <a href="0003-codebase-context-chunking-and-rag.html">Codebase Context, Chunking &amp; RAG &#8594;</a> </span> </nav> <div class="lesson-fb" aria-live="polite"> <span class="lesson-fb-q">Was this lesson helpful?</span> <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">
+👍 Yes
+</button> <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No
+</button> <span class="lesson-fb-thanks">Thanks &mdash; noted.</span> </div> <p class="lesson-endnote">
+These notes reflect my current understanding and are updated as I learn, build, and
+                discover better explanations.
+</p> </main> </div>  <script>
+        document.querySelectorAll('.qitem').forEach(function (item) {
+            var correct = +item.dataset.correct;
+            var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+            var fb = item.querySelector('.fb');
+            opts.forEach(function (opt, i) {
+                opt.addEventListener('click', function () {
+                    opts.forEach(function (o) {
+                        o.disabled = true;
+                    });
+                    opts[correct].classList.add('correct');
+                    if (i === correct) {
+                        fb.textContent = '✓ Correct.';
+                        fb.className = 'fb ok';
+                    } else {
+                        opt.classList.add('wrong');
+                        fb.textContent =
+                            '✗ Not quite — the right answer is highlighted. Re-read it, then say it back out loud.';
+                        fb.className = 'fb no';
+                    }
+                });
+            });
+        });
+
+        // "Reveal model answer" inside each .rehearse block (id-free; supports
+        // multiple per page — replaces the old inline onclick + fixed id="model").
+        document.querySelectorAll('.rehearse [data-reveal]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var m = btn.parentElement.querySelector('.model');
+                if (m) m.classList.add('show');
+            });
+        });
+    </script>  <script src="/engineering-learning-hub/assets/interview.js" defer></script><script src="/engineering-learning-hub/assets/reading-progress.js" defer></script> </body> </html>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 520" font-family="sans-serif">
+  <defs>
+    <marker id="at3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker>
+    <style>
+      .title{font-size:16px;font-weight:bold;fill:#111}
+      .axis{stroke:#333;stroke-width:1.5}
+      .cap{font-size:11px;fill:#555}
+      .early{fill:#fff3d6;stroke:#b58a3b;stroke-width:1.4}
+      .ontime{fill:#eef0f7;stroke:#6b4fa0;stroke-width:1.6}
+      .late{fill:#fde7d6;stroke:#b06000;stroke-width:1.4}
+      .fT{font-size:11px;font-weight:bold;fill:#111}
+      .res{font-size:12px;font-weight:bold;fill:#111}
+      .wm{stroke:#6b4fa0;stroke-width:2.4;stroke-dasharray:6 4}
+      .wmT{font-size:11px;font-weight:bold;fill:#52407e}
+      .band{fill:#eafaef;stroke:#9bcaa6;stroke-width:1}
+      .dot{fill:#2a6099;stroke:#1a4470;stroke-width:1}
+      .drop{fill:#c0392b;stroke:#8a2820;stroke-width:1}
+      .bad{font-size:11px;font-weight:bold;fill:#b00000}
+    </style>
+  </defs>
+  <rect width="1080" height="520" fill="#ffffff"/>
+  <text x="540" y="26" text-anchor="middle" class="title">Triggers: one window can fire EARLY, ON-TIME, and LATE</text>
+  <text x="540" y="48" text-anchor="middle" class="cap">window [12:00–12:05) · counting events · accumulating mode</text>
+
+  <!-- allowed lateness band -->
+  <rect class="band" x="560" y="70" width="300" height="320"/>
+  <text x="710" y="88" text-anchor="middle" class="cap">allowed lateness — keep state</text>
+
+  <!-- axis -->
+  <line class="axis" x1="60" y1="360" x2="1020" y2="360" marker-end="url(#at3b)"/>
+  <text x="1028" y="364" class="cap">processing time</text>
+
+  <!-- early firing -->
+  <line x1="240" y1="200" x2="240" y2="358" stroke="#b58a3b" stroke-width="1.4" stroke-dasharray="3 3"/>
+  <rect class="early" x="170" y="160" width="140" height="44" rx="6"/><text x="240" y="180" text-anchor="middle" class="fT">EARLY firing</text><text x="240" y="197" text-anchor="middle" class="res">count = 2</text>
+  <text x="240" y="378" text-anchor="middle" class="cap">speculative · before watermark</text>
+
+  <!-- watermark / on-time -->
+  <line class="wm" x1="560" y1="120" x2="560" y2="390"/>
+  <text x="560" y="112" text-anchor="middle" class="wmT">watermark passes 12:05</text>
+  <rect class="ontime" x="490" y="200" width="140" height="44" rx="6"/><text x="560" y="220" text-anchor="middle" class="fT" fill="#52407e">ON-TIME firing</text><text x="560" y="237" text-anchor="middle" class="res">count = 4</text>
+
+  <!-- late event + late firing -->
+  <circle class="dot" cx="690" cy="330" r="8"/><text x="690" y="350" text-anchor="middle" class="cap">late event</text>
+  <line x1="730" y1="270" x2="730" y2="358" stroke="#b06000" stroke-width="1.4" stroke-dasharray="3 3"/>
+  <rect class="late" x="660" y="232" width="140" height="44" rx="6"/><text x="730" y="252" text-anchor="middle" class="fT" fill="#a05000">LATE firing</text><text x="730" y="269" text-anchor="middle" class="res">count = 5 (corrected)</text>
+
+  <!-- GC + drop -->
+  <line x1="860" y1="120" x2="860" y2="390" stroke="#1f7a1f" stroke-width="1.4" stroke-dasharray="4 3"/>
+  <text x="860" y="112" text-anchor="middle" class="cap" fill="#1f7a1f">allowed lateness ends → state GC'd</text>
+  <circle class="drop" cx="930" cy="330" r="8"/><line x1="922" y1="322" x2="938" y2="338" stroke="#fff" stroke-width="2"/><line x1="938" y1="322" x2="922" y2="338" stroke="#fff" stroke-width="2"/>
+  <text x="930" y="380" text-anchor="middle" class="bad">truly late →</text><text x="930" y="394" text-anchor="middle" class="bad">dropped / side output</text>
+
+  <rect x="120" y="440" width="840" height="50" rx="8" fill="#f6f7f6" stroke="#ddd"/>
+  <text x="540" y="462" text-anchor="middle" class="fT">The watermark only informs the ON-TIME firing. The trigger decides WHEN to emit — and may emit many times.</text>
+  <text x="540" y="480" text-anchor="middle" class="cap">Accumulating mode: each firing overwrites the window's result with the latest, more-complete value. Late data is corrected, not lost.</text>
+</svg>

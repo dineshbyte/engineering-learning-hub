@@ -1,481 +1,112 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Bloom Filter Variants at Scale: Counting &amp; Scalable · Engineering Vault</title>
-<meta name="description" content="Counting, scalable, and blocked Bloom filter variants compared. Standard Bloom is the default — reach for a variant only when deletes, unknown n, or speed bite.">
-<meta name="keywords" content="bloom filter variants, counting, scalable, bloom filters, data structures, false positive, probabilistic, sizing, lsm, cuckoo, hash, membership">
-<meta name="author" content="dineshbyte">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/bloom-filters/lessons/0004-variants-at-scale.html">
-<meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Vault">
-<meta property="og:title" content="Bloom Filter Variants at Scale: Counting &amp; Scalable">
-<meta property="og:description" content="Counting, scalable, and blocked Bloom filter variants compared. Standard Bloom is the default — reach for a variant only when deletes, unknown n, or speed bite.">
-<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/bloom-filters/lessons/0004-variants-at-scale.html">
-<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/bloom-filters.png">
-<meta property="og:image:alt" content="Bloom Filters · Engineering Vault learning track">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Bloom Filter Variants at Scale: Counting &amp; Scalable">
-<meta name="twitter:description" content="Counting, scalable, and blocked Bloom filter variants compared. Standard Bloom is the default — reach for a variant only when deletes, unknown n, or speed bite.">
-<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/bloom-filters.png">
-<script>(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
-<script>function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}</script>
-<link rel="stylesheet" href="../../assets/tokens.css">
-<link rel="stylesheet" href="../../assets/lesson.css">
-<link rel="stylesheet" href="../../assets/interview.css">
-<style>:root{--accent:var(--track-bloom)}</style>
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "FAQPage",
- "mainEntity": [
-  {
-   "@type": "Question",
-   "name": "What does a counting Bloom filter change, and what does it cost?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: it replaces each bit with a small counter (commonly ~4 bits) -> add increments the k counters, remove decrements them — so it supports deletes , which a standard filter can't -> the cost is roughly 4× the memory of a plain bit array -> watch for counter overflow under heavy duplication -> reach for it only when you genuinely need deletes and can pay the space."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What problem does a scalable Bloom filter solve?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: it handles unknown or growing n without saturating -> when the current filter fills, it adds a new, larger filter to the chain -> geometric error bounds across layers keep the total FP rate capped -> a query checks each layer until a \"maybe\" or runs out and returns \"no\" -> cost: memory grows with n and you pay roughly k probes per layer -> use it when you can't size n up front."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What's a cuckoo filter and where does it beat a Bloom filter?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: it stores short fingerprints in buckets, with each item having 2 candidate buckets (cuckoo hashing) -> it supports deletes (remove the fingerprint) and has good locality — typically 2 bucket probes -> it's smaller than a Bloom filter once the target FP rate is low (roughly p <= 3% ; illustrative) -> trade-off: insertions can fail/relocate when buckets are full, so it has a load-factor ceiling -> pick it for deletes + tight space at low error rates."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What does a blocked / register-blocked Bloom filter optimize, and at what cost?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: it packs an item's k bits into a single cache line (or register) -> so a lookup is one memory access instead of k scattered ones -> that's a speed/locality win on modern CPUs -> the cost is a slightly worse FP rate for the same bits, because confining bits to one block reduces independence -> use it when lookup throughput / cache misses dominate and you can spare a touch of accuracy."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "You need deletes but RAM is very tight. Counting or cuckoo — which, and why?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: prefer a cuckoo filter — it supports deletes and is smaller than a counting Bloom (and smaller than standard Bloom once p is low) -> counting Bloom pays ~4× the bits for its counters, which is exactly what \"RAM is tight\" rules out -> the cuckoo trade-off: insertion can fail near the load-factor ceiling, so size for a safe load factor and have a resize/rebuild path -> if deletes were rare you'd skip both and just rebuild a standard filter, but \"need deletes + tight RAM\" points squarely at cuckoo."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Item count n is unknown and may grow a lot. Which variant, and what's the failure mode you're avoiding?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: use a scalable Bloom filter that chains new, larger layers as it fills -> the failure mode you're avoiding is saturation : a fixed-size standard filter sized for the wrong n silently drives its FP rate toward 1 as it overfills -> scalable keeps the aggregate FP capped via geometric error bounds -> cost: memory grows with n and lookups probe each layer -> alternative is sharding fixed filters by key hash, but that still needs a growth plan; scalable bakes the growth in."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What's the Staff framing of a Bloom filter in a pipeline — what is it, and what is it not?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: it's a cheap negative filter in front of an expensive, authoritative check — not the source of truth -> \"no\" is certain, so it removes the bulk of work (drops/skips) without a lookup; \"maybe\" falls through to the real store -> it never decides correctness — it just strips the cheap certainties so the authoritative path handles a fraction of traffic -> the anti-pattern is treating \"maybe present\" as a final answer for anything correctness- or money-sensitive -> the whole value is the certain \"no\" eliminating real cost."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "When should you reach for NO filter variant at all — just use a real data structure?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: when false positives are unacceptable and there's no cheap verify step — use an exact set/index -> when you must enumerate or return the items — filters store no keys, so they can't list anything -> when the set is tiny (a few thousand) — a plain hash set is smaller, exact, and supports deletes, so there's no win -> when queries are hit-dominated — \"maybe\" every time buys nothing -> the discipline: a filter earns its keep only when negative answers are common and a certain \"no\" removes real work."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Standard Bloom is the default — defend that, then steelman reaching for a variant by default.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "For standard-as-default: best space at a given FP rate, dead simple, no insertion-failure modes, well understood operationally — variants each add a cost (4× RAM, layered probes, load-factor ceilings). Steelman for a variant: if you know the system will churn (deletes) or grow unbounded (unknown n ), starting standard guarantees a painful migration or a saturation incident later, so picking cuckoo/scalable up front is the honest choice. Synthesis: default to standard and only deviate when a specific limit provably bites — deletes -> counting/cuckoo, unknown n -> scalable, speed -> blocked — decided by the workload, not by reaching for the fanciest tool."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Two variants each fix one of your problems but cost on another axis. How do you make the call?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: name the axes explicitly — deletes, growth (unknown n ), space, speed/locality — and rank which limit actually bites your workload -> quantify the cost of each variant against your real budget: counting's 4× RAM across a fleet, cuckoo's insertion-failure ceiling and rebuild, scalable's per-layer probes and growing memory, blocked's slightly higher FP -> prefer the change that relieves your binding constraint while costing on an axis you have slack on -> consider composition (e.g., scalable + per-layer blocked) only if the complexity is justified -> the staff move: pick from the limit that bites, with the cost stated, and a rebuild/migration path — not \"it's the newest, so it's better.\""
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design dedup for a 100-node, 10B-event/day ingest pipeline with 0.1% duplicate tolerance — what and why?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: per-node Bloom filter in front of an authoritative dedup store (Redis / sharded KV) -> the Bloom is a cheap negative filter : \"no\" is certain, so it drops most duplicates locally; only \"maybe\" hits pay the cross-node/store lookup — that's where the savings live -> size each filter from target p (~0.1% -> ~14.4 bits/item; illustrative) -> if per-node n is unknown/unbounded, use a scalable Bloom so the FP rate stays capped as it grows -> shard the authoritative store by key and roll/rebuild filters on a time window (events expire), so saturation never pushes FP up -> cuckoo or counting only if you actually need deletes -> structure: cheap-negative-filter framing, size from p , name the source of truth, scalable for unknown n , rebuild/shard plan for saturation."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design a distributed dedup tier for a high-throughput event pipeline using the right filter variant(s).",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "A strong answer covers: per-node/local filter as a cheap negative filter in front of a sharded authoritative dedup store, so most duplicates die locally and only \"maybes\" pay the network/store cost -> choose the variant from the binding limit: unknown/growing per-node n -> scalable Bloom (or time-windowed rolling filters if events expire); continuous deletes -> cuckoo (deletes + tight space) over counting's 4× RAM -> size from target p set by the cost of a false \"maybe\" (a cross-node lookup) x event rate -> shard the authoritative store by key hash for horizontal scale; roll/rebuild filters per window to cap saturation and age out stale entries -> correctness: \"maybe\" never decides dedup alone — it gates the authoritative check -> observability: measured FP, load factor, verify-hit rate, with alerts that trigger a new scalable layer or a roll -> trade-offs: scalable's growing memory + per-layer probes vs static saturation; cuckoo's insertion ceiling vs counting's RAM; local filter staleness vs network savings."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design a CDN/cache \"one-hit-wonder\" admission filter so single-access objects never pollute the cache.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "A strong answer covers: goal — admit an object to cache only on its second request, so objects requested once (the bulk of long-tail traffic) never evict hot content -> use a Bloom filter as a \"have I seen this key before?\" gate: on a request, if the filter says \"no\" -> record it in the filter but don't cache; if \"maybe seen\" -> admit to cache -> the asymmetry is fine here: a false positive admits a true one-hit-wonder occasionally (small waste), and there are no false negatives that would block a genuinely repeated object -> n (distinct keys per window) is large and shifting, so use time-windowed/scalable filters that roll so old keys age out and the filter never saturates -> size from a tolerable FP rate (illustrative) and per-window key estimate -> observe admission rate and cache hit-ratio lift -> trade-offs: a tighter filter (more bits) reduces wasteful admissions but costs RAM; rolling windows trade a little staleness for bounded size and built-in expiry; this is a classic Bloom admission policy (e.g., TinyLFU-style) where the filter's certain \"no\" is exactly what protects the cache."
-   }
-  }
- ]
-}
-</script>
-<script src="../../assets/analytics.js" defer></script>
-</head>
-<body>
-<a class="skip-link" href="#main">Skip to content</a>
-<div class="wrap">
-  <nav id="hubbar">
-    <a href="../../index.html">&#8592; Engineering Vault</a>
-    <span class="pn"><a href="0003-failure-modes-and-lsm-reads.html" title="Failure modes &amp; LSM reads">&#8249; Prev</a><span style="color:var(--muted);opacity:.45">Next &#8250;</span></span>
-    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Bloom Filters &#183; Staff</span></span>
-  </nav>
-<main id="main" tabindex="-1">
-  <div id="reading-progress"></div>
-  <div class="kicker">Lesson 4 · Staff</div>
-  <h1>Variants at scale: pick the one whose <em>limit</em> bites</h1>
-  <p class="meta">~8 min · visual-first · retrieval practice at the end</p>
-  <div class="ltags"><span class="lt">Bloom filter variants</span><span class="lt">Counting</span><span class="lt">Scalable</span><span class="lt">Bloom filters</span><span class="lt">Data structures</span></div>
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><link rel="icon" type="image/svg+xml" href="/engineering-learning-hub/assets/favicon.svg"><!-- a11y: no maximum-scale / user-scalable=no — pinch-zoom must stay
+             available (WCAG 1.4.4). Dropped per the hub-migration audit. --><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bloom Filter Variants at Scale: Counting &amp; Scalable · Engineering Vault</title><meta name="description" content="Counting, scalable, and blocked Bloom filter variants compared. Standard Bloom is the default — reach for a variant only when deletes, unknown n, or speed bite."><meta name="keywords" content="bloom filter variants, counting, scalable, bloom filters, data structures, false positive, probabilistic, sizing, lsm, cuckoo, hash, membership"><meta name="author" content="dineshbyte"><meta name="robots" content="index, follow"><link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/bloom-filters/lessons/0004-variants-at-scale.html"><meta property="og:type" content="article"><meta property="og:site_name" content="Engineering Vault"><meta property="og:title" content="Bloom Filter Variants at Scale: Counting &#38; Scalable"><meta property="og:description" content="Counting, scalable, and blocked Bloom filter variants compared. Standard Bloom is the default — reach for a variant only when deletes, unknown n, or speed bite."><meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/bloom-filters/lessons/0004-variants-at-scale.html"><meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/bloom-filters.png"><meta property="og:image:alt" content="Bloom Filters · Engineering Vault learning track"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@dineshxbyte"><meta name="twitter:title" content="Bloom Filter Variants at Scale: Counting &#38; Scalable"><meta name="twitter:description" content="Counting, scalable, and blocked Bloom filter variants compared. Standard Bloom is the default — reach for a variant only when deletes, unknown n, or speed bite."><meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/bloom-filters.png"><script>
+            (function () {
+                try {
+                    var t = localStorage.getItem('theme');
+                    if (t !== 'light' && t !== 'dark') {
+                        t =
+                            window.matchMedia &&
+                            window.matchMedia('(prefers-color-scheme:dark)').matches
+                                ? 'dark'
+                                : 'light';
+                    }
+                    document.documentElement.setAttribute('data-theme', t);
+                } catch (e) {}
+            })();
+        </script><script>
+            function toggleTheme() {
+                var d = document.documentElement;
+                var t = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                d.setAttribute('data-theme', t);
+                try {
+                    localStorage.setItem('theme', t);
+                } catch (e) {}
+            }
+        </script><link rel="stylesheet" href="/engineering-learning-hub/assets/tokens.css"><link rel="stylesheet" href="/engineering-learning-hub/assets/lesson.css"><link rel="stylesheet" href="/engineering-learning-hub/assets/interview.css"><style>:root{--accent:var(--track-bloom)}</style><script src="/engineering-learning-hub/assets/analytics.js" defer></script></head> <body> <a class="skip-link" href="#main">Skip to content</a>  <div class="wrap"> <nav id="hubbar"> <a href="/engineering-learning-hub/index.html">&#8592; Engineering Vault</a> <span class="pn"> <a href="0003-failure-modes-and-lsm-reads.html" title="Failure modes &#38; LSM reads">
+&#8249; Prev
+</a> <span style="color:var(--muted);opacity:.45">Next &#8250;</span> </span> <span style="display:flex;align-items:center;gap:.6rem"> <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button> <span style="color:var(--muted)">Bloom Filters · Staff</span> </span> </nav> <main id="main" tabindex="-1"> <div id="reading-progress"></div> <div class="kicker">Lesson 4 · Staff</div> <h1>Variants at scale: pick the one whose <em>limit</em> bites</h1> <p class="meta">~8 min · visual-first · retrieval practice at the end</p> <div class="ltags"><span class="lt">Bloom filter variants</span><span class="lt">Counting</span><span class="lt">Scalable</span><span class="lt">Bloom filters</span><span class="lt">Data structures</span></div>  <div class="mission"><p><strong>The Staff frame.</strong> Standard Bloom is the default. Reach for a variant only when
+one specific limit — no deletes, unknown <code>n</code>, or speed — actually hurts.</p></div>
+<h2 id="the-decision-matrix">The decision matrix</h2>
+<figure> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 320" font-family="ui-sans-serif,system-ui,sans-serif"> <rect width="680" height="320" fill="#fffff8"></rect> <text x="340" y="26" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">Four filters, four answers to "what limit do I hit?"</text> <!-- column headers --> <rect x="206" y="44" width="112" height="30" rx="5" fill="#e8f1ef" stroke="#136f63"></rect><text x="262" y="63" text-anchor="middle" font-size="11.5" fill="#0f4f47" font-weight="bold">Delete?</text> <rect x="322" y="44" width="112" height="30" rx="5" fill="#e8f1ef" stroke="#136f63"></rect><text x="378" y="63" text-anchor="middle" font-size="11.5" fill="#0f4f47" font-weight="bold">Grows w/ n?</text> <rect x="438" y="44" width="112" height="30" rx="5" fill="#e8f1ef" stroke="#136f63"></rect><text x="494" y="63" text-anchor="middle" font-size="11.5" fill="#0f4f47" font-weight="bold">Space</text> <rect x="554" y="44" width="112" height="30" rx="5" fill="#e8f1ef" stroke="#136f63"></rect><text x="610" y="63" text-anchor="middle" font-size="11.5" fill="#0f4f47" font-weight="bold">Locality</text> <!-- row: Standard --> <rect x="16" y="80" width="186" height="46" rx="6" fill="#fff" stroke="#136f63"></rect><text x="26" y="100" font-size="13" fill="#0f4f47" font-weight="bold">Standard Bloom</text><text x="26" y="118" font-size="10.5" fill="#6b675f">the baseline</text> <rect x="206" y="80" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"></rect><text x="262" y="108" text-anchor="middle" font-size="12" fill="#9a2417">no</text> <rect x="322" y="80" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"></rect><text x="378" y="108" text-anchor="middle" font-size="12" fill="#9a2417">no (fixed m)</text> <rect x="438" y="80" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="494" y="108" text-anchor="middle" font-size="12" fill="#2f5d3a">best (1x)</text> <rect x="554" y="80" width="112" height="46" rx="6" fill="#fbf3e6" stroke="#9a7a17"></rect><text x="610" y="108" text-anchor="middle" font-size="12" fill="#7a5e12">k probes</text> <!-- row: Counting --> <rect x="16" y="130" width="186" height="46" rx="6" fill="#fff" stroke="#136f63"></rect><text x="26" y="150" font-size="13" fill="#0f4f47" font-weight="bold">Counting Bloom</text><text x="26" y="168" font-size="10.5" fill="#6b675f">bits &#8594; counters</text> <rect x="206" y="130" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="262" y="158" text-anchor="middle" font-size="12" fill="#2f5d3a">yes</text> <rect x="322" y="130" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"></rect><text x="378" y="158" text-anchor="middle" font-size="12" fill="#9a2417">no (fixed m)</text> <rect x="438" y="130" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"></rect><text x="494" y="158" text-anchor="middle" font-size="12" fill="#9a2417">~4x bits</text> <rect x="554" y="130" width="112" height="46" rx="6" fill="#fbf3e6" stroke="#9a7a17"></rect><text x="610" y="158" text-anchor="middle" font-size="12" fill="#7a5e12">k probes</text> <!-- row: Scalable --> <rect x="16" y="180" width="186" height="46" rx="6" fill="#fff" stroke="#136f63"></rect><text x="26" y="200" font-size="13" fill="#0f4f47" font-weight="bold">Scalable Bloom</text><text x="26" y="218" font-size="10.5" fill="#6b675f">chain of filters</text> <rect x="206" y="180" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"></rect><text x="262" y="208" text-anchor="middle" font-size="12" fill="#9a2417">no</text> <rect x="322" y="180" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="378" y="208" text-anchor="middle" font-size="12" fill="#2f5d3a">yes (auto)</text> <rect x="438" y="180" width="112" height="46" rx="6" fill="#fbf3e6" stroke="#9a7a17"></rect><text x="494" y="208" text-anchor="middle" font-size="12" fill="#7a5e12">grows w/ n</text> <rect x="554" y="180" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"></rect><text x="610" y="208" text-anchor="middle" font-size="12" fill="#9a2417">k per layer</text> <!-- row: Cuckoo --> <rect x="16" y="230" width="186" height="46" rx="6" fill="#fff" stroke="#136f63"></rect><text x="26" y="250" font-size="13" fill="#0f4f47" font-weight="bold">Cuckoo filter</text><text x="26" y="268" font-size="10.5" fill="#6b675f">fingerprint buckets</text> <rect x="206" y="230" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="262" y="258" text-anchor="middle" font-size="12" fill="#2f5d3a">yes</text> <rect x="322" y="230" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"></rect><text x="378" y="258" text-anchor="middle" font-size="12" fill="#9a2417">no (fixed)</text> <rect x="438" y="230" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="494" y="258" text-anchor="middle" font-size="12" fill="#2f5d3a">&lt; Bloom if p&#8804;3%</text> <rect x="554" y="230" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="610" y="258" text-anchor="middle" font-size="12" fill="#2f5d3a">2 buckets</text> <text x="340" y="302" text-anchor="middle" font-size="12" fill="#6b675f">Green = the advantage that makes you pick it. Red = the cost you pay for it.</text> </svg> <figcaption>
+Each variant trades one of standard Bloom's costs for relief on a different axis.<sup><a href="#s1" id="r1">1</a></sup><sup><a href="#s2" id="r2">2</a></sup><sup><a href="#s3" id="r3">3</a></sup> </figcaption> </figure>
+<h2 id="what-each-one-actually-changes">What each one actually changes</h2>
+<div class="steps"> <div class="step"> <div class="lab">Counting</div> <div class="big">delete</div> <div class="sub">bits &#8594; ~4-bit counters; increment on add, decrement on remove &#8212; costs ~4&#215; the bits<sup><a href="#s1" id="r4">1</a></sup></div> </div> <div class="arrow">&#8594;</div><div class="step"> <div class="lab">Scalable</div> <div class="big">unknown n</div> <div class="sub">add a new, larger filter when full; geometric error bounds keep total FP capped<sup><a href="#s3" id="r5">3</a></sup></div> </div> <div class="arrow">&#8594;</div><div class="step"> <div class="lab">Cuckoo</div> <div class="big">delete + space</div> <div class="sub">stores fingerprints in 2 candidate buckets; smaller than Bloom once p&#8804;3%<sup><a href="#s2" id="r6">2</a></sup></div> </div>  </div>
+<p><p>Blocked / register-blocked Bloom packs an item’s <code>k</code> bits into one cache line, so a
+lookup is a single memory access — speed at a tiny FP-rate cost.</p></p>
+<h2 id="the-staff-use-a-cheap-negative-filter">The Staff use: a cheap negative filter</h2>
+<figure> <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 330" font-family="ui-sans-serif,system-ui,sans-serif"> <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#136f63"></path></marker> <marker id="r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9a2417"></path></marker></defs> <rect width="680" height="330" fill="#fffff8"></rect> <text x="340" y="26" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">Distributed dedup: Bloom in front of the source of truth</text> <!-- ingest nodes --> <text x="92" y="60" text-anchor="middle" font-size="11" fill="#6b675f">N ingest nodes</text> <rect x="20" y="70" width="144" height="40" rx="6" fill="#fff" stroke="#136f63"></rect><text x="92" y="88" text-anchor="middle" font-size="12" fill="#0f4f47" font-weight="bold">Node 1 + local Bloom</text><text x="92" y="103" text-anchor="middle" font-size="10" fill="#6b675f">cheap, in-RAM</text> <rect x="20" y="120" width="144" height="40" rx="6" fill="#fff" stroke="#136f63"></rect><text x="92" y="138" text-anchor="middle" font-size="12" fill="#0f4f47" font-weight="bold">Node 2 + local Bloom</text><text x="92" y="153" text-anchor="middle" font-size="10" fill="#6b675f">cheap, in-RAM</text> <rect x="20" y="170" width="144" height="40" rx="6" fill="#fff" stroke="#136f63"></rect><text x="92" y="188" text-anchor="middle" font-size="12" fill="#0f4f47" font-weight="bold">Node N + local Bloom</text><text x="92" y="203" text-anchor="middle" font-size="10" fill="#6b675f">cheap, in-RAM</text> <!-- gate --> <rect x="236" y="110" width="150" height="100" rx="8" fill="#e8f1ef" stroke="#136f63" stroke-width="1.5"></rect> <text x="311" y="138" text-anchor="middle" font-size="13" fill="#0f4f47" font-weight="bold">Bloom says?</text> <text x="311" y="166" text-anchor="middle" font-size="11.5" fill="#9a2417" font-weight="bold">&#8220;no&#8221; &#8594; drop / accept</text> <text x="311" y="184" text-anchor="middle" font-size="10.5" fill="#6b675f">certain &#8212; no lookup needed</text> <text x="311" y="202" text-anchor="middle" font-size="11.5" fill="#2f5d3a" font-weight="bold">&#8220;maybe&#8221; &#8594; verify &#8595;</text> <!-- source of truth --> <rect x="470" y="120" width="190" height="80" rx="8" fill="#fbf3e6" stroke="#9a7a17" stroke-width="1.5"></rect> <text x="565" y="150" text-anchor="middle" font-size="13" fill="#7a5e12" font-weight="bold">Source of truth</text> <text x="565" y="170" text-anchor="middle" font-size="11" fill="#7a5e12">DB / cross-node lookup</text> <text x="565" y="188" text-anchor="middle" font-size="10.5" fill="#6b675f">expensive &#183; authoritative</text> <!-- arrows nodes -> gate --> <path d="M164 90 C200 100 210 130 236 140" fill="none" stroke="#136f63" stroke-width="1.4" marker-end="url(#a)"></path> <path d="M164 140 L236 152" fill="none" stroke="#136f63" stroke-width="1.4" marker-end="url(#a)"></path> <path d="M164 190 C200 180 210 170 236 162" fill="none" stroke="#136f63" stroke-width="1.4" marker-end="url(#a)"></path> <!-- maybe -> source --> <path d="M386 175 C420 180 440 165 470 160" fill="none" stroke="#2f5d3a" stroke-width="1.6" marker-end="url(#a)"></path> <text x="430" y="150" text-anchor="middle" font-size="10" fill="#2f5d3a">few % of traffic</text> <!-- no path dropping --> <path d="M311 210 L311 250" fill="none" stroke="#9a2417" stroke-width="1.6" marker-end="url(#r)"></path> <text x="311" y="268" text-anchor="middle" font-size="11" fill="#9a2417" font-weight="bold">most traffic stops here</text> <rect x="120" y="290" width="440" height="30" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect> <text x="340" y="310" text-anchor="middle" font-size="12.5" fill="#2f5d3a" font-weight="bold">Bloom turns the expensive lookup from "every event" into "only maybes"</text> </svg> <figcaption>
+The filter never decides correctness — it just removes the cheap certainties so the
+        authoritative store handles a fraction of the load.
+</figcaption> </figure>
+<p class="rule"><strong><p>Reach for a variant only when standard Bloom’s specific limit bites: delete → counting
+/ cuckoo; unknown n → scalable; speed → blocked.</p></strong></p>
+<h2 id="when-not-to-use-any-of-them">When NOT to use any of them</h2>
+<div class="cards"><div class="card"><div class="v">need exact</div><div class="l">false positives unacceptable → use a real set / index</div></div><div class="card"><div class="v">enumerate</div><div class="l">must list or return the items → filters store no keys</div></div><div class="card"><div class="v">tiny set</div><div class="l">a hash set is smaller and exact → no win below ~thousands</div></div></div>
+<hr class="note"/>
+<h2 id="retrieval-practice">Retrieval practice</h2>
+<p>Answer from memory — feedback is instant.</p>
+<div class="quiz" id="quiz"> <div class="qitem" data-correct="2"> <p class="q"> <span class="qn">Q1.</span> You need deletes but RAM is very tight. Pick… </p> <button class="opt">a scalable Bloom, sized for the peak load</button><button class="opt">a counting Bloom, paying the extra counters</button><button class="opt">a cuckoo filter, smaller at low error rates</button><button class="opt">a standard Bloom, rebuilt on each delete</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="3"> <p class="q"> <span class="qn">Q2.</span> Item count n is unknown and may grow a lot. Use… </p> <button class="opt">a cuckoo filter with oversized buckets</button><button class="opt">a counting Bloom with the widest counter</button><button class="opt">a blocked Bloom for the cache-line speed</button><button class="opt">a scalable Bloom that chains new layers</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="1"> <p class="q"> <span class="qn">Q3.</span> The Staff framing of Bloom in a pipeline is… </p> <button class="opt">the authoritative store of membership truth</button><button class="opt">a cheap negative filter before a costly check</button><button class="opt">a cache that returns the stored item values</button><button class="opt">a replacement for the database index layer</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="0"> <p class="q"> <span class="qn">Q4.</span> Counting Bloom&#39;s cost versus a standard Bloom is… </p> <button class="opt">about four times the bits for the counters</button><button class="opt">about half the bits because deletes free up</button><button class="opt">about equal bits with slower lookups only</button><button class="opt">about ten times the bits for safe counting</button> <p class="fb" role="status" aria-live="polite"></p> </div> </div>
+<h2 id="rehearse-out-loud">Rehearse out loud</h2>
+<p class="rehearse">Interviewer: <strong>"Design dedup for a 100-node, 10B-event/day ingest pipeline with a 0.1% duplicate tolerance — what do you use and why?"</strong> ~60 seconds, from memory — then reveal and compare.</p> <div class="rehearse"> <textarea placeholder="Your 60-second answer, from memory…"></textarea><br> <button class="btn ghost" data-reveal>Reveal model answer</button> <div class="model"><p><p>Put a per-node Bloom filter in front of an authoritative dedup store (Redis / a sharded KV).
+The Bloom is a <strong>cheap negative filter</strong>: a “no” is certain, so it drops the
+bulk of duplicates locally and only “maybe” hits pay the cross-node / store lookup — that’s
+where the cost savings live. Size each filter from the target <code>p</code> (~0.1% →
+~14.4 bits/item); if per-node n is unknown or unbounded, use a 
+<strong>scalable Bloom</strong> so the FP rate stays capped as it grows. Plan to shard the
+authoritative store by key and rebuild / roll filters on a time window (events expire), so
+saturation never pushes the FP rate up. Cuckoo or counting only if I actually need deletes.</p></p><p class="src"><p><strong>Why this scores:</strong> leads with the cheap-negative-filter framing, sizes from
+p, names the authoritative source of truth, picks scalable for unknown n, and has a rebuild
+/ shard plan for saturation — not just “add a Bloom filter.”</p></p></div> </div>
+<div class="ask"><p><strong>I’m your teacher — ask me anything.</strong> Want the cuckoo-filter insertion / kick-out
+mechanics, the geometric-error-bound math behind scalable Bloom, or a deeper drill on sizing the
+distributed dedup tier? Say so.</p></div>
+<h3 id="primary-sources-read-these-next">Primary sources (read these next)</h3>
+<p><p>📖 </p><a href="https://www.cs.cmu.edu/~dga/papers/cuckoo-conext2014.pdf"><strong><p>Fan, Andersen, Kaminsky &amp; Mitzenmacher, “Cuckoo Filter: Practically Better Than
+Bloom” (2014)</p></strong></a><sup><a href="#s2" id="r7"><p>2</p></a></sup> <p>— delete support, locality, and the ≤3% space crossover.</p></p>
+<h2 class="sec" id="interview"><p>Interview — pick your bar</p></h2>
+<p class="tagline"><p>Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System Design</b> = open
+design round (a different axis, not a harder level).</p></p>
+<div data-interview> <details class="iq" data-level="core"> <summary>What does a counting Bloom filter change, and what does it cost?</summary> <div class="a"><b>Hit these points:</b> it replaces each bit with a small counter (commonly ~4 bits) &rarr; <code>add</code> increments the <code>k</code> counters, <code>remove</code> decrements them — so it supports <b>deletes</b>, which a standard filter can't &rarr; the cost is roughly <b>4× the memory</b> of a plain bit array &rarr; watch for counter overflow under heavy duplication &rarr; reach for it only when you genuinely need deletes and can pay the space.</div> </details> <details class="iq" data-level="core"> <summary>What problem does a scalable Bloom filter solve?</summary> <div class="a"><b>Hit these points:</b> it handles <b>unknown or growing <code>n</code></b> without saturating &rarr; when the current filter fills, it adds a new, larger filter to the chain &rarr; geometric error bounds across layers keep the <em>total</em> FP rate capped &rarr; a query checks each layer until a "maybe" or runs out and returns "no" &rarr; cost: memory grows with <code>n</code> and you pay roughly <code>k</code> probes per layer &rarr; use it when you can't size <code>n</code> up front.</div> </details> <details class="iq" data-level="core"> <summary>What's a cuckoo filter and where does it beat a Bloom filter?</summary> <div class="a"><b>Hit these points:</b> it stores short <em>fingerprints</em> in buckets, with each item having 2 candidate buckets (cuckoo hashing) &rarr; it supports <b>deletes</b> (remove the fingerprint) and has good locality — typically 2 bucket probes &rarr; it's <em>smaller</em> than a Bloom filter once the target FP rate is low (roughly <code>p &le; 3%</code>; illustrative) &rarr; trade-off: insertions can fail/relocate when buckets are full, so it has a load-factor ceiling &rarr; pick it for deletes + tight space at low error rates.</div> </details> <details class="iq" data-level="core"> <summary>What does a blocked / register-blocked Bloom filter optimize, and at what cost?</summary> <div class="a"><b>Hit these points:</b> it packs an item's <code>k</code> bits into a single cache line (or register) &rarr; so a lookup is <em>one</em> memory access instead of <code>k</code> scattered ones &rarr; that's a speed/locality win on modern CPUs &rarr; the cost is a slightly worse FP rate for the same bits, because confining bits to one block reduces independence &rarr; use it when lookup throughput / cache misses dominate and you can spare a touch of accuracy.</div> </details> <details class="iq" data-level="senior"> <summary>You need deletes but RAM is very tight. Counting or cuckoo — which, and why?</summary> <div class="a"><b>Hit these points:</b> prefer a <b>cuckoo filter</b> — it supports deletes <em>and</em> is smaller than a counting Bloom (and smaller than standard Bloom once <code>p</code> is low) &rarr; counting Bloom pays ~4× the bits for its counters, which is exactly what "RAM is tight" rules out &rarr; the cuckoo trade-off: insertion can fail near the load-factor ceiling, so size for a safe load factor and have a resize/rebuild path &rarr; if deletes were rare you'd skip both and just rebuild a standard filter, but "need deletes + tight RAM" points squarely at cuckoo.</div> </details> <details class="iq" data-level="senior"> <summary>Item count n is unknown and may grow a lot. Which variant, and what's the failure mode you're avoiding?</summary> <div class="a"><b>Hit these points:</b> use a <b>scalable Bloom filter</b> that chains new, larger layers as it fills &rarr; the failure mode you're avoiding is <b>saturation</b>: a fixed-size standard filter sized for the wrong <code>n</code> silently drives its FP rate toward 1 as it overfills &rarr; scalable keeps the aggregate FP capped via geometric error bounds &rarr; cost: memory grows with <code>n</code> and lookups probe each layer &rarr; alternative is sharding fixed filters by key hash, but that still needs a growth plan; scalable bakes the growth in.</div> </details> <details class="iq" data-level="senior"> <summary>What's the Staff framing of a Bloom filter in a pipeline — what is it, and what is it not?</summary> <div class="a"><b>Hit these points:</b> it's a <b>cheap negative filter</b> in front of an expensive, authoritative check — not the source of truth &rarr; "no" is certain, so it removes the bulk of work (drops/skips) without a lookup; "maybe" falls through to the real store &rarr; it never decides correctness — it just strips the cheap certainties so the authoritative path handles a fraction of traffic &rarr; the anti-pattern is treating "maybe present" as a final answer for anything correctness- or money-sensitive &rarr; the whole value is the certain "no" eliminating real cost.</div> </details> <details class="iq" data-level="senior"> <summary>When should you reach for NO filter variant at all — just use a real data structure?</summary> <div class="a"><b>Hit these points:</b> when false positives are <b>unacceptable</b> and there's no cheap verify step — use an exact set/index &rarr; when you must <b>enumerate</b> or return the items — filters store no keys, so they can't list anything &rarr; when the set is <b>tiny</b> (a few thousand) — a plain hash set is smaller, exact, and supports deletes, so there's no win &rarr; when queries are <b>hit-dominated</b> — "maybe" every time buys nothing &rarr; the discipline: a filter earns its keep only when negative answers are common and a certain "no" removes real work.</div> </details> <details class="iq" data-level="staff"> <summary>Standard Bloom is the default — defend that, then steelman reaching for a variant by default.</summary> <div class="a"><b>For standard-as-default:</b> best space at a given FP rate, dead simple, no insertion-failure modes, well understood operationally — variants each add a cost (4× RAM, layered probes, load-factor ceilings). <b>Steelman for a variant:</b> if you <em>know</em> the system will churn (deletes) or grow unbounded (unknown <code>n</code>), starting standard guarantees a painful migration or a saturation incident later, so picking cuckoo/scalable up front is the honest choice. <b>Synthesis:</b> default to standard and only deviate when a <em>specific</em> limit provably bites — deletes &rarr; counting/cuckoo, unknown <code>n</code> &rarr; scalable, speed &rarr; blocked — decided by the workload, not by reaching for the fanciest tool.</div> </details> <details class="iq" data-level="staff"> <summary>Two variants each fix one of your problems but cost on another axis. How do you make the call?</summary> <div class="a"><b>Hit these points:</b> name the axes explicitly — deletes, growth (unknown <code>n</code>), space, speed/locality — and rank which limit actually bites your workload &rarr; quantify the cost of each variant against your real budget: counting's 4× RAM across a fleet, cuckoo's insertion-failure ceiling and rebuild, scalable's per-layer probes and growing memory, blocked's slightly higher FP &rarr; prefer the change that relieves your binding constraint while costing on an axis you have slack on &rarr; consider composition (e.g., scalable + per-layer blocked) only if the complexity is justified &rarr; the staff move: pick from the limit that bites, with the cost stated, and a rebuild/migration path — not "it's the newest, so it's better."</div> </details> <details class="iq" data-level="staff"> <summary>Design dedup for a 100-node, 10B-event/day ingest pipeline with 0.1% duplicate tolerance — what and why?</summary> <div class="a"><b>Hit these points:</b> per-node Bloom filter in front of an authoritative dedup store (Redis / sharded KV) &rarr; the Bloom is a <b>cheap negative filter</b>: "no" is certain, so it drops most duplicates locally; only "maybe" hits pay the cross-node/store lookup — that's where the savings live &rarr; size each filter from target <code>p</code> (~0.1% &rarr; ~14.4 bits/item; illustrative) &rarr; if per-node <code>n</code> is unknown/unbounded, use a <b>scalable</b> Bloom so the FP rate stays capped as it grows &rarr; shard the authoritative store by key and roll/rebuild filters on a time window (events expire), so saturation never pushes FP up &rarr; cuckoo or counting only if you actually need deletes &rarr; structure: cheap-negative-filter framing, size from <code>p</code>, name the source of truth, scalable for unknown <code>n</code>, rebuild/shard plan for saturation.</div> </details> <div class="designrubric" data-level="design"> <b>Design-round framework</b> — drive any "which filter, at scale" prompt through these, out loud: <ol> <li>Workload first: hit-heavy or miss-heavy? Filters only help when "absent" is common.</li><li>Identify the binding limit: deletes, unknown/growing <code>n</code>, space, or lookup speed.</li><li>Map limit &rarr; variant: deletes &rarr; counting/cuckoo; unknown <code>n</code> &rarr; scalable; speed &rarr; blocked; else standard.</li><li>Size from target <code>p</code> and peak <code>n</code>; convert to per-unit and fleet RAM.</li><li>Place as a negative filter before the authoritative store; "maybe" always verifies.</li><li>Saturation + churn plan: rebuild/roll/shard thresholds; expiry windows.</li><li>Observe: measured FP, bits-set/load factor, verify-path hit rate; alert before it rots.</li> </ol> </div><details class="iq" data-level="design"> <summary>Design a distributed dedup tier for a high-throughput event pipeline using the right filter variant(s).</summary> <div class="a"><b>A strong answer covers:</b> per-node/local filter as a cheap negative filter in front of a sharded authoritative dedup store, so most duplicates die locally and only "maybes" pay the network/store cost &rarr; choose the variant from the binding limit: unknown/growing per-node <code>n</code> &rarr; scalable Bloom (or time-windowed rolling filters if events expire); continuous deletes &rarr; cuckoo (deletes + tight space) over counting's 4× RAM &rarr; size from target <code>p</code> set by the cost of a false "maybe" (a cross-node lookup) &times; event rate &rarr; shard the authoritative store by key hash for horizontal scale; roll/rebuild filters per window to cap saturation and age out stale entries &rarr; correctness: "maybe" never decides dedup alone — it gates the authoritative check &rarr; observability: measured FP, load factor, verify-hit rate, with alerts that trigger a new scalable layer or a roll &rarr; trade-offs: scalable's growing memory + per-layer probes vs static saturation; cuckoo's insertion ceiling vs counting's RAM; local filter staleness vs network savings.</div> </details> <details class="iq" data-level="design"> <summary>Design a CDN/cache "one-hit-wonder" admission filter so single-access objects never pollute the cache.</summary> <div class="a"><b>A strong answer covers:</b> goal — admit an object to cache only on its <em>second</em> request, so objects requested once (the bulk of long-tail traffic) never evict hot content &rarr; use a Bloom filter as a "have I seen this key before?" gate: on a request, if the filter says "no" &rarr; record it in the filter but don't cache; if "maybe seen" &rarr; admit to cache &rarr; the asymmetry is fine here: a false positive admits a true one-hit-wonder occasionally (small waste), and there are no false negatives that would block a genuinely repeated object &rarr; <code>n</code> (distinct keys per window) is large and shifting, so use time-windowed/scalable filters that roll so old keys age out and the filter never saturates &rarr; size from a tolerable FP rate (illustrative) and per-window key estimate &rarr; observe admission rate and cache hit-ratio lift &rarr; trade-offs: a tighter filter (more bits) reduces wasteful admissions but costs RAM; rolling windows trade a little staleness for bounded size and built-in expiry; this is a classic Bloom admission policy (e.g., TinyLFU-style) where the filter's certain "no" is exactly what protects the cache.</div> </details>  </div> <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What does a counting Bloom filter change, and what does it cost?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: it replaces each bit with a small counter (commonly ~4 bits) → add increments the k counters, remove decrements them — so it supports deletes, which a standard filter can't → the cost is roughly 4× the memory of a plain bit array → watch for counter overflow under heavy duplication → reach for it only when you genuinely need deletes and can pay the space."}},{"@type":"Question","name":"What problem does a scalable Bloom filter solve?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: it handles unknown or growing n without saturating → when the current filter fills, it adds a new, larger filter to the chain → geometric error bounds across layers keep the total FP rate capped → a query checks each layer until a \"maybe\" or runs out and returns \"no\" → cost: memory grows with n and you pay roughly k probes per layer → use it when you can't size n up front."}},{"@type":"Question","name":"What's a cuckoo filter and where does it beat a Bloom filter?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: it stores short fingerprints in buckets, with each item having 2 candidate buckets (cuckoo hashing) → it supports deletes (remove the fingerprint) and has good locality — typically 2 bucket probes → it's smaller than a Bloom filter once the target FP rate is low (roughly p &le; 3%; illustrative) → trade-off: insertions can fail/relocate when buckets are full, so it has a load-factor ceiling → pick it for deletes + tight space at low error rates."}},{"@type":"Question","name":"What does a blocked / register-blocked Bloom filter optimize, and at what cost?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: it packs an item's k bits into a single cache line (or register) → so a lookup is one memory access instead of k scattered ones → that's a speed/locality win on modern CPUs → the cost is a slightly worse FP rate for the same bits, because confining bits to one block reduces independence → use it when lookup throughput / cache misses dominate and you can spare a touch of accuracy."}},{"@type":"Question","name":"You need deletes but RAM is very tight. Counting or cuckoo — which, and why?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: prefer a cuckoo filter — it supports deletes and is smaller than a counting Bloom (and smaller than standard Bloom once p is low) → counting Bloom pays ~4× the bits for its counters, which is exactly what \"RAM is tight\" rules out → the cuckoo trade-off: insertion can fail near the load-factor ceiling, so size for a safe load factor and have a resize/rebuild path → if deletes were rare you'd skip both and just rebuild a standard filter, but \"need deletes + tight RAM\" points squarely at cuckoo."}},{"@type":"Question","name":"Item count n is unknown and may grow a lot. Which variant, and what's the failure mode you're avoiding?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: use a scalable Bloom filter that chains new, larger layers as it fills → the failure mode you're avoiding is saturation: a fixed-size standard filter sized for the wrong n silently drives its FP rate toward 1 as it overfills → scalable keeps the aggregate FP capped via geometric error bounds → cost: memory grows with n and lookups probe each layer → alternative is sharding fixed filters by key hash, but that still needs a growth plan; scalable bakes the growth in."}},{"@type":"Question","name":"What's the Staff framing of a Bloom filter in a pipeline — what is it, and what is it not?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: it's a cheap negative filter in front of an expensive, authoritative check — not the source of truth → \"no\" is certain, so it removes the bulk of work (drops/skips) without a lookup; \"maybe\" falls through to the real store → it never decides correctness — it just strips the cheap certainties so the authoritative path handles a fraction of traffic → the anti-pattern is treating \"maybe present\" as a final answer for anything correctness- or money-sensitive → the whole value is the certain \"no\" eliminating real cost."}},{"@type":"Question","name":"When should you reach for NO filter variant at all — just use a real data structure?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: when false positives are unacceptable and there's no cheap verify step — use an exact set/index → when you must enumerate or return the items — filters store no keys, so they can't list anything → when the set is tiny (a few thousand) — a plain hash set is smaller, exact, and supports deletes, so there's no win → when queries are hit-dominated — \"maybe\" every time buys nothing → the discipline: a filter earns its keep only when negative answers are common and a certain \"no\" removes real work."}},{"@type":"Question","name":"Standard Bloom is the default — defend that, then steelman reaching for a variant by default.","acceptedAnswer":{"@type":"Answer","text":"For standard-as-default: best space at a given FP rate, dead simple, no insertion-failure modes, well understood operationally — variants each add a cost (4× RAM, layered probes, load-factor ceilings). Steelman for a variant: if you know the system will churn (deletes) or grow unbounded (unknown n), starting standard guarantees a painful migration or a saturation incident later, so picking cuckoo/scalable up front is the honest choice. Synthesis: default to standard and only deviate when a specific limit provably bites — deletes → counting/cuckoo, unknown n → scalable, speed → blocked — decided by the workload, not by reaching for the fanciest tool."}},{"@type":"Question","name":"Two variants each fix one of your problems but cost on another axis. How do you make the call?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: name the axes explicitly — deletes, growth (unknown n), space, speed/locality — and rank which limit actually bites your workload → quantify the cost of each variant against your real budget: counting's 4× RAM across a fleet, cuckoo's insertion-failure ceiling and rebuild, scalable's per-layer probes and growing memory, blocked's slightly higher FP → prefer the change that relieves your binding constraint while costing on an axis you have slack on → consider composition (e.g., scalable + per-layer blocked) only if the complexity is justified → the staff move: pick from the limit that bites, with the cost stated, and a rebuild/migration path — not \"it's the newest, so it's better.\""}},{"@type":"Question","name":"Design dedup for a 100-node, 10B-event/day ingest pipeline with 0.1% duplicate tolerance — what and why?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: per-node Bloom filter in front of an authoritative dedup store (Redis / sharded KV) → the Bloom is a cheap negative filter: \"no\" is certain, so it drops most duplicates locally; only \"maybe\" hits pay the cross-node/store lookup — that's where the savings live → size each filter from target p (~0.1% → ~14.4 bits/item; illustrative) → if per-node n is unknown/unbounded, use a scalable Bloom so the FP rate stays capped as it grows → shard the authoritative store by key and roll/rebuild filters on a time window (events expire), so saturation never pushes FP up → cuckoo or counting only if you actually need deletes → structure: cheap-negative-filter framing, size from p, name the source of truth, scalable for unknown n, rebuild/shard plan for saturation."}},{"@type":"Question","name":"Design a distributed dedup tier for a high-throughput event pipeline using the right filter variant(s).","acceptedAnswer":{"@type":"Answer","text":"A strong answer covers: per-node/local filter as a cheap negative filter in front of a sharded authoritative dedup store, so most duplicates die locally and only \"maybes\" pay the network/store cost → choose the variant from the binding limit: unknown/growing per-node n → scalable Bloom (or time-windowed rolling filters if events expire); continuous deletes → cuckoo (deletes + tight space) over counting's 4× RAM → size from target p set by the cost of a false \"maybe\" (a cross-node lookup) &times; event rate → shard the authoritative store by key hash for horizontal scale; roll/rebuild filters per window to cap saturation and age out stale entries → correctness: \"maybe\" never decides dedup alone — it gates the authoritative check → observability: measured FP, load factor, verify-hit rate, with alerts that trigger a new scalable layer or a roll → trade-offs: scalable's growing memory + per-layer probes vs static saturation; cuckoo's insertion ceiling vs counting's RAM; local filter staleness vs network savings."}},{"@type":"Question","name":"Design a CDN/cache \"one-hit-wonder\" admission filter so single-access objects never pollute the cache.","acceptedAnswer":{"@type":"Answer","text":"A strong answer covers: goal — admit an object to cache only on its second request, so objects requested once (the bulk of long-tail traffic) never evict hot content → use a Bloom filter as a \"have I seen this key before?\" gate: on a request, if the filter says \"no\" → record it in the filter but don't cache; if \"maybe seen\" → admit to cache → the asymmetry is fine here: a false positive admits a true one-hit-wonder occasionally (small waste), and there are no false negatives that would block a genuinely repeated object → n (distinct keys per window) is large and shifting, so use time-windowed/scalable filters that roll so old keys age out and the filter never saturates → size from a tolerable FP rate (illustrative) and per-window key estimate → observe admission rate and cache hit-ratio lift → trade-offs: a tighter filter (more bits) reduces wasteful admissions but costs RAM; rolling windows trade a little staleness for bounded size and built-in expiry; this is a classic Bloom admission policy (e.g., TinyLFU-style) where the filter's certain \"no\" is exactly what protects the cache."}}]}</script>
+<div class="next"><span><p>📄 End of track — keep handy: 
+<a href="../reference/bloom-filters-cheat-sheet.html">Bloom filters cheat sheet</a></p></span><span><em>✓ Final lesson (Staff). You’ve walked the full ladder.</em></span></div>
+<footer id="sources"> <strong>Sources</strong><br>  <span id="s1">1. Mitzenmacher &amp; Broder, "Network Applications of Bloom Filters: A Survey", Internet Mathematics 1(4) — counting Bloom filters (~4-bit counters) — <a href="https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf">harvard.edu</a>. <a href="#r1">↩</a> <a href="#r4">↩</a></span> <br>  <span id="s2">2. Fan, Andersen, Kaminsky &amp; Mitzenmacher, "Cuckoo Filter: Practically Better Than Bloom", ACM CoNEXT 2014 — deletes, 2 candidate buckets, &#8804;3% FP space crossover — <a href="https://www.cs.cmu.edu/~dga/papers/cuckoo-conext2014.pdf">cs.cmu.edu</a>. <a href="#r2">↩</a> <a href="#r6">↩</a> <a href="#r7">↩</a></span> <br>  <span id="s3">3. Almeida, Baquero, Preguiça &amp; Hutchison, "Scalable Bloom Filters", Information Processing Letters 101(6), 2007 — chained filters with geometric error bounds — <a href="https://gsd.di.uminho.pt/members/cbm/ps/dbloom.pdf">gsd.di.uminho.pt</a>. <a href="#r3">↩</a> <a href="#r5">↩</a></span> <br>  </footer>  <!-- standardized bottom pager — guarantees the `.nav a` hook that
+                 analytics.js uses for lesson_nav_* + lesson_complete on every lesson --> <nav class="nav"> <span>&#8592; <a href="/engineering-learning-hub/index.html#grid">Engineering Vault</a></span> <span style="color:var(--muted)">Next: more coming soon</span> </nav> <div class="lesson-fb" aria-live="polite"> <span class="lesson-fb-q">Was this lesson helpful?</span> <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">
+👍 Yes
+</button> <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No
+</button> <span class="lesson-fb-thanks">Thanks &mdash; noted.</span> </div> <p class="lesson-endnote">
+These notes reflect my current understanding and are updated as I learn, build, and
+                discover better explanations.
+</p> </main> </div>  <script>
+        document.querySelectorAll('.qitem').forEach(function (item) {
+            var correct = +item.dataset.correct;
+            var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+            var fb = item.querySelector('.fb');
+            opts.forEach(function (opt, i) {
+                opt.addEventListener('click', function () {
+                    opts.forEach(function (o) {
+                        o.disabled = true;
+                    });
+                    opts[correct].classList.add('correct');
+                    if (i === correct) {
+                        fb.textContent = '✓ Correct.';
+                        fb.className = 'fb ok';
+                    } else {
+                        opt.classList.add('wrong');
+                        fb.textContent =
+                            '✗ Not quite — the right answer is highlighted. Re-read it, then say it back out loud.';
+                        fb.className = 'fb no';
+                    }
+                });
+            });
+        });
 
-  <div class="mission">
-    <strong>The Staff frame.</strong> Standard Bloom is the default. Reach for a variant only when
-    one specific limit — no deletes, unknown <code>n</code>, or speed — actually hurts.
-  </div>
-
-  <h2>The decision matrix</h2>
-  <figure>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 320" font-family="ui-sans-serif,system-ui,sans-serif">
-      <rect width="680" height="320" fill="#fffff8"/>
-      <text x="340" y="26" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">Four filters, four answers to "what limit do I hit?"</text>
-      <!-- column headers -->
-      <rect x="206" y="44" width="112" height="30" rx="5" fill="#e8f1ef" stroke="#136f63"/><text x="262" y="63" text-anchor="middle" font-size="11.5" fill="#0f4f47" font-weight="bold">Delete?</text>
-      <rect x="322" y="44" width="112" height="30" rx="5" fill="#e8f1ef" stroke="#136f63"/><text x="378" y="63" text-anchor="middle" font-size="11.5" fill="#0f4f47" font-weight="bold">Grows w/ n?</text>
-      <rect x="438" y="44" width="112" height="30" rx="5" fill="#e8f1ef" stroke="#136f63"/><text x="494" y="63" text-anchor="middle" font-size="11.5" fill="#0f4f47" font-weight="bold">Space</text>
-      <rect x="554" y="44" width="112" height="30" rx="5" fill="#e8f1ef" stroke="#136f63"/><text x="610" y="63" text-anchor="middle" font-size="11.5" fill="#0f4f47" font-weight="bold">Locality</text>
-      <!-- row: Standard -->
-      <rect x="16" y="80" width="186" height="46" rx="6" fill="#fff" stroke="#136f63"/><text x="26" y="100" font-size="13" fill="#0f4f47" font-weight="bold">Standard Bloom</text><text x="26" y="118" font-size="10.5" fill="#6b675f">the baseline</text>
-      <rect x="206" y="80" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="262" y="108" text-anchor="middle" font-size="12" fill="#9a2417">no</text>
-      <rect x="322" y="80" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="378" y="108" text-anchor="middle" font-size="12" fill="#9a2417">no (fixed m)</text>
-      <rect x="438" y="80" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="494" y="108" text-anchor="middle" font-size="12" fill="#2f5d3a">best (1x)</text>
-      <rect x="554" y="80" width="112" height="46" rx="6" fill="#fbf3e6" stroke="#9a7a17"/><text x="610" y="108" text-anchor="middle" font-size="12" fill="#7a5e12">k probes</text>
-      <!-- row: Counting -->
-      <rect x="16" y="130" width="186" height="46" rx="6" fill="#fff" stroke="#136f63"/><text x="26" y="150" font-size="13" fill="#0f4f47" font-weight="bold">Counting Bloom</text><text x="26" y="168" font-size="10.5" fill="#6b675f">bits &#8594; counters</text>
-      <rect x="206" y="130" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="262" y="158" text-anchor="middle" font-size="12" fill="#2f5d3a">yes</text>
-      <rect x="322" y="130" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="378" y="158" text-anchor="middle" font-size="12" fill="#9a2417">no (fixed m)</text>
-      <rect x="438" y="130" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="494" y="158" text-anchor="middle" font-size="12" fill="#9a2417">~4x bits</text>
-      <rect x="554" y="130" width="112" height="46" rx="6" fill="#fbf3e6" stroke="#9a7a17"/><text x="610" y="158" text-anchor="middle" font-size="12" fill="#7a5e12">k probes</text>
-      <!-- row: Scalable -->
-      <rect x="16" y="180" width="186" height="46" rx="6" fill="#fff" stroke="#136f63"/><text x="26" y="200" font-size="13" fill="#0f4f47" font-weight="bold">Scalable Bloom</text><text x="26" y="218" font-size="10.5" fill="#6b675f">chain of filters</text>
-      <rect x="206" y="180" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="262" y="208" text-anchor="middle" font-size="12" fill="#9a2417">no</text>
-      <rect x="322" y="180" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="378" y="208" text-anchor="middle" font-size="12" fill="#2f5d3a">yes (auto)</text>
-      <rect x="438" y="180" width="112" height="46" rx="6" fill="#fbf3e6" stroke="#9a7a17"/><text x="494" y="208" text-anchor="middle" font-size="12" fill="#7a5e12">grows w/ n</text>
-      <rect x="554" y="180" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="610" y="208" text-anchor="middle" font-size="12" fill="#9a2417">k per layer</text>
-      <!-- row: Cuckoo -->
-      <rect x="16" y="230" width="186" height="46" rx="6" fill="#fff" stroke="#136f63"/><text x="26" y="250" font-size="13" fill="#0f4f47" font-weight="bold">Cuckoo filter</text><text x="26" y="268" font-size="10.5" fill="#6b675f">fingerprint buckets</text>
-      <rect x="206" y="230" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="262" y="258" text-anchor="middle" font-size="12" fill="#2f5d3a">yes</text>
-      <rect x="322" y="230" width="112" height="46" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="378" y="258" text-anchor="middle" font-size="12" fill="#9a2417">no (fixed)</text>
-      <rect x="438" y="230" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="494" y="258" text-anchor="middle" font-size="12" fill="#2f5d3a">&lt; Bloom if p&#8804;3%</text>
-      <rect x="554" y="230" width="112" height="46" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="610" y="258" text-anchor="middle" font-size="12" fill="#2f5d3a">2 buckets</text>
-      <text x="340" y="302" text-anchor="middle" font-size="12" fill="#6b675f">Green = the advantage that makes you pick it. Red = the cost you pay for it.</text>
-    </svg>
-    <figcaption>Each variant trades one of standard Bloom's costs for relief on a different axis.<sup><a href="#s1" id="r1">1</a></sup><sup><a href="#s2" id="r2">2</a></sup><sup><a href="#s3" id="r3">3</a></sup></figcaption>
-  </figure>
-
-  <h2>What each one actually changes</h2>
-  <div class="steps">
-    <div class="step"><div class="lab">Counting</div><div class="big">delete</div><div class="sub">bits &#8594; ~4-bit counters; increment on add, decrement on remove &#8212; costs ~4&#215; the bits<sup><a href="#s1" id="r4">1</a></sup></div></div>
-    <div class="step"><div class="lab">Scalable</div><div class="big">unknown n</div><div class="sub">add a new, larger filter when full; geometric error bounds keep total FP capped<sup><a href="#s3" id="r5">3</a></sup></div></div>
-    <div class="step"><div class="lab">Cuckoo</div><div class="big">delete + space</div><div class="sub">stores fingerprints in 2 candidate buckets; smaller than Bloom once p&#8804;3%<sup><a href="#s2" id="r6">2</a></sup></div></div>
-  </div>
-
-  <p>Blocked / register-blocked Bloom packs an item's <code>k</code> bits into one cache line, so a
-  lookup is a single memory access — speed at a tiny FP-rate cost.</p>
-
-  <h2>The Staff use: a cheap negative filter</h2>
-  <figure>
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 330" font-family="ui-sans-serif,system-ui,sans-serif">
-      <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#136f63"/></marker>
-      <marker id="r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9a2417"/></marker></defs>
-      <rect width="680" height="330" fill="#fffff8"/>
-      <text x="340" y="26" text-anchor="middle" font-size="15" fill="#0f4f47" font-weight="bold">Distributed dedup: Bloom in front of the source of truth</text>
-      <!-- ingest nodes -->
-      <text x="92" y="60" text-anchor="middle" font-size="11" fill="#6b675f">N ingest nodes</text>
-      <rect x="20" y="70" width="144" height="40" rx="6" fill="#fff" stroke="#136f63"/><text x="92" y="88" text-anchor="middle" font-size="12" fill="#0f4f47" font-weight="bold">Node 1 + local Bloom</text><text x="92" y="103" text-anchor="middle" font-size="10" fill="#6b675f">cheap, in-RAM</text>
-      <rect x="20" y="120" width="144" height="40" rx="6" fill="#fff" stroke="#136f63"/><text x="92" y="138" text-anchor="middle" font-size="12" fill="#0f4f47" font-weight="bold">Node 2 + local Bloom</text><text x="92" y="153" text-anchor="middle" font-size="10" fill="#6b675f">cheap, in-RAM</text>
-      <rect x="20" y="170" width="144" height="40" rx="6" fill="#fff" stroke="#136f63"/><text x="92" y="188" text-anchor="middle" font-size="12" fill="#0f4f47" font-weight="bold">Node N + local Bloom</text><text x="92" y="203" text-anchor="middle" font-size="10" fill="#6b675f">cheap, in-RAM</text>
-      <!-- gate -->
-      <rect x="236" y="110" width="150" height="100" rx="8" fill="#e8f1ef" stroke="#136f63" stroke-width="1.5"/>
-      <text x="311" y="138" text-anchor="middle" font-size="13" fill="#0f4f47" font-weight="bold">Bloom says?</text>
-      <text x="311" y="166" text-anchor="middle" font-size="11.5" fill="#9a2417" font-weight="bold">&#8220;no&#8221; &#8594; drop / accept</text>
-      <text x="311" y="184" text-anchor="middle" font-size="10.5" fill="#6b675f">certain &#8212; no lookup needed</text>
-      <text x="311" y="202" text-anchor="middle" font-size="11.5" fill="#2f5d3a" font-weight="bold">&#8220;maybe&#8221; &#8594; verify &#8595;</text>
-      <!-- source of truth -->
-      <rect x="470" y="120" width="190" height="80" rx="8" fill="#fbf3e6" stroke="#9a7a17" stroke-width="1.5"/>
-      <text x="565" y="150" text-anchor="middle" font-size="13" fill="#7a5e12" font-weight="bold">Source of truth</text>
-      <text x="565" y="170" text-anchor="middle" font-size="11" fill="#7a5e12">DB / cross-node lookup</text>
-      <text x="565" y="188" text-anchor="middle" font-size="10.5" fill="#6b675f">expensive &#183; authoritative</text>
-      <!-- arrows nodes -> gate -->
-      <path d="M164 90 C200 100 210 130 236 140" fill="none" stroke="#136f63" stroke-width="1.4" marker-end="url(#a)"/>
-      <path d="M164 140 L236 152" fill="none" stroke="#136f63" stroke-width="1.4" marker-end="url(#a)"/>
-      <path d="M164 190 C200 180 210 170 236 162" fill="none" stroke="#136f63" stroke-width="1.4" marker-end="url(#a)"/>
-      <!-- maybe -> source -->
-      <path d="M386 175 C420 180 440 165 470 160" fill="none" stroke="#2f5d3a" stroke-width="1.6" marker-end="url(#a)"/>
-      <text x="430" y="150" text-anchor="middle" font-size="10" fill="#2f5d3a">few % of traffic</text>
-      <!-- no path dropping -->
-      <path d="M311 210 L311 250" fill="none" stroke="#9a2417" stroke-width="1.6" marker-end="url(#r)"/>
-      <text x="311" y="268" text-anchor="middle" font-size="11" fill="#9a2417" font-weight="bold">most traffic stops here</text>
-      <rect x="120" y="290" width="440" height="30" rx="6" fill="#eef5ee" stroke="#2f5d3a"/>
-      <text x="340" y="310" text-anchor="middle" font-size="12.5" fill="#2f5d3a" font-weight="bold">Bloom turns the expensive lookup from "every event" into "only maybes"</text>
-    </svg>
-    <figcaption>The filter never decides correctness — it just removes the cheap certainties so the
-    authoritative store handles a fraction of the load.</figcaption>
-  </figure>
-
-  <p class="rule"><strong>Reach for a variant only when standard Bloom's specific limit bites:
-  delete &#8594; counting / cuckoo; unknown n &#8594; scalable; speed &#8594; blocked.</strong></p>
-
-  <h2>When NOT to use any of them</h2>
-  <div class="cards">
-    <div class="card"><div class="v">need exact</div><div class="l">false positives unacceptable &#8594; use a real set / index</div></div>
-    <div class="card"><div class="v">enumerate</div><div class="l">must list or return the items &#8594; filters store no keys</div></div>
-    <div class="card"><div class="v">tiny set</div><div class="l">a hash set is smaller and exact &#8594; no win below ~thousands</div></div>
-  </div>
-
-  <hr class="note">
-
-  <h2>Retrieval practice</h2>
-  <p>Answer from memory — feedback is instant.</p>
-
-  <div class="quiz" id="quiz">
-    <div class="qitem" data-correct="2">
-      <p class="q"><span class="qn">Q1.</span> You need deletes but RAM is very tight. Pick&#8230;</p>
-      <button class="opt">a scalable Bloom, sized for the peak load</button>
-      <button class="opt">a counting Bloom, paying the extra counters</button>
-      <button class="opt">a cuckoo filter, smaller at low error rates</button>
-      <button class="opt">a standard Bloom, rebuilt on each delete</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="3">
-      <p class="q"><span class="qn">Q2.</span> Item count n is unknown and may grow a lot. Use&#8230;</p>
-      <button class="opt">a cuckoo filter with oversized buckets</button>
-      <button class="opt">a counting Bloom with the widest counter</button>
-      <button class="opt">a blocked Bloom for the cache-line speed</button>
-      <button class="opt">a scalable Bloom that chains new layers</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="1">
-      <p class="q"><span class="qn">Q3.</span> The Staff framing of Bloom in a pipeline is&#8230;</p>
-      <button class="opt">the authoritative store of membership truth</button>
-      <button class="opt">a cheap negative filter before a costly check</button>
-      <button class="opt">a cache that returns the stored item values</button>
-      <button class="opt">a replacement for the database index layer</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="0">
-      <p class="q"><span class="qn">Q4.</span> Counting Bloom's cost versus a standard Bloom is&#8230;</p>
-      <button class="opt">about four times the bits for the counters</button>
-      <button class="opt">about half the bits because deletes free up</button>
-      <button class="opt">about equal bits with slower lookups only</button>
-      <button class="opt">about ten times the bits for safe counting</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-  </div>
-
-  <h2>Rehearse out loud</h2>
-  <p class="rehearse">Interviewer: <strong>"Design dedup for a 100-node, 10B-event/day ingest pipeline
-    with a 0.1% duplicate tolerance — what do you use and why?"</strong> ~60 seconds, from memory —
-    then reveal and compare.</p>
-  <div class="rehearse">
-    <textarea placeholder="Your 60-second answer, from memory…"></textarea><br>
-    <button class="btn ghost" onclick="document.getElementById('model').classList.add('show')">Reveal model answer</button>
-    <div class="model" id="model">
-      <p>Put a per-node Bloom filter in front of an authoritative dedup store (Redis / a sharded
-        KV). The Bloom is a <strong>cheap negative filter</strong>: a "no" is certain, so it drops
-        the bulk of duplicates locally and only "maybe" hits pay the cross-node / store lookup —
-        that's where the cost savings live. Size each filter from the target <code>p</code>
-        (~0.1% &#8594; ~14.4 bits/item); if per-node n is unknown or unbounded, use a
-        <strong>scalable Bloom</strong> so the FP rate stays capped as it grows. Plan to shard the
-        authoritative store by key and rebuild / roll filters on a time window (events expire), so
-        saturation never pushes the FP rate up. Cuckoo or counting only if I actually need deletes.</p>
-      <p class="src"><strong>Why this scores:</strong> leads with the cheap-negative-filter framing,
-        sizes from p, names the authoritative source of truth, picks scalable for unknown n, and has
-        a rebuild / shard plan for saturation — not just "add a Bloom filter."</p>
-    </div>
-  </div>
-
-  <div class="ask">
-    <strong>I'm your teacher — ask me anything.</strong> Want the cuckoo-filter insertion / kick-out
-    mechanics, the geometric-error-bound math behind scalable Bloom, or a deeper drill on sizing the
-    distributed dedup tier? Say so.
-  </div>
-
-  <h3>Primary sources (read these next)</h3>
-  <p>📖 <a href="https://www.cs.cmu.edu/~dga/papers/cuckoo-conext2014.pdf"><strong>Fan, Andersen, Kaminsky &amp; Mitzenmacher, "Cuckoo Filter: Practically Better Than Bloom" (2014)</strong></a><sup><a href="#s2" id="r7">2</a></sup> — delete support, locality, and the &#8804;3% space crossover.</p>
-
-  <h2 class="sec" id="interview">Interview — pick your bar</h2>
-  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
-
-  <div data-interview>
-    <details class="iq" data-level="core">
-      <summary>What does a counting Bloom filter change, and what does it cost?</summary>
-      <div class="a">
-        <b>Hit these points:</b> it replaces each bit with a small counter (commonly ~4 bits) &rarr; <code>add</code> increments the <code>k</code> counters, <code>remove</code> decrements them — so it supports <b>deletes</b>, which a standard filter can't &rarr; the cost is roughly <b>4× the memory</b> of a plain bit array &rarr; watch for counter overflow under heavy duplication &rarr; reach for it only when you genuinely need deletes and can pay the space.
-      </div>
-    </details>
-    <details class="iq" data-level="core">
-      <summary>What problem does a scalable Bloom filter solve?</summary>
-      <div class="a">
-        <b>Hit these points:</b> it handles <b>unknown or growing <code>n</code></b> without saturating &rarr; when the current filter fills, it adds a new, larger filter to the chain &rarr; geometric error bounds across layers keep the <em>total</em> FP rate capped &rarr; a query checks each layer until a "maybe" or runs out and returns "no" &rarr; cost: memory grows with <code>n</code> and you pay roughly <code>k</code> probes per layer &rarr; use it when you can't size <code>n</code> up front.
-      </div>
-    </details>
-    <details class="iq" data-level="core">
-      <summary>What's a cuckoo filter and where does it beat a Bloom filter?</summary>
-      <div class="a">
-        <b>Hit these points:</b> it stores short <em>fingerprints</em> in buckets, with each item having 2 candidate buckets (cuckoo hashing) &rarr; it supports <b>deletes</b> (remove the fingerprint) and has good locality — typically 2 bucket probes &rarr; it's <em>smaller</em> than a Bloom filter once the target FP rate is low (roughly <code>p &le; 3%</code>; illustrative) &rarr; trade-off: insertions can fail/relocate when buckets are full, so it has a load-factor ceiling &rarr; pick it for deletes + tight space at low error rates.
-      </div>
-    </details>
-    <details class="iq" data-level="core">
-      <summary>What does a blocked / register-blocked Bloom filter optimize, and at what cost?</summary>
-      <div class="a">
-        <b>Hit these points:</b> it packs an item's <code>k</code> bits into a single cache line (or register) &rarr; so a lookup is <em>one</em> memory access instead of <code>k</code> scattered ones &rarr; that's a speed/locality win on modern CPUs &rarr; the cost is a slightly worse FP rate for the same bits, because confining bits to one block reduces independence &rarr; use it when lookup throughput / cache misses dominate and you can spare a touch of accuracy.
-      </div>
-    </details>
-
-    <details class="iq" data-level="senior">
-      <summary>You need deletes but RAM is very tight. Counting or cuckoo — which, and why?</summary>
-      <div class="a">
-        <b>Hit these points:</b> prefer a <b>cuckoo filter</b> — it supports deletes <em>and</em> is smaller than a counting Bloom (and smaller than standard Bloom once <code>p</code> is low) &rarr; counting Bloom pays ~4× the bits for its counters, which is exactly what "RAM is tight" rules out &rarr; the cuckoo trade-off: insertion can fail near the load-factor ceiling, so size for a safe load factor and have a resize/rebuild path &rarr; if deletes were rare you'd skip both and just rebuild a standard filter, but "need deletes + tight RAM" points squarely at cuckoo.
-      </div>
-    </details>
-    <details class="iq" data-level="senior">
-      <summary>Item count n is unknown and may grow a lot. Which variant, and what's the failure mode you're avoiding?</summary>
-      <div class="a">
-        <b>Hit these points:</b> use a <b>scalable Bloom filter</b> that chains new, larger layers as it fills &rarr; the failure mode you're avoiding is <b>saturation</b>: a fixed-size standard filter sized for the wrong <code>n</code> silently drives its FP rate toward 1 as it overfills &rarr; scalable keeps the aggregate FP capped via geometric error bounds &rarr; cost: memory grows with <code>n</code> and lookups probe each layer &rarr; alternative is sharding fixed filters by key hash, but that still needs a growth plan; scalable bakes the growth in.
-      </div>
-    </details>
-    <details class="iq" data-level="senior">
-      <summary>What's the Staff framing of a Bloom filter in a pipeline — what is it, and what is it not?</summary>
-      <div class="a">
-        <b>Hit these points:</b> it's a <b>cheap negative filter</b> in front of an expensive, authoritative check — not the source of truth &rarr; "no" is certain, so it removes the bulk of work (drops/skips) without a lookup; "maybe" falls through to the real store &rarr; it never decides correctness — it just strips the cheap certainties so the authoritative path handles a fraction of traffic &rarr; the anti-pattern is treating "maybe present" as a final answer for anything correctness- or money-sensitive &rarr; the whole value is the certain "no" eliminating real cost.
-      </div>
-    </details>
-    <details class="iq" data-level="senior">
-      <summary>When should you reach for NO filter variant at all — just use a real data structure?</summary>
-      <div class="a">
-        <b>Hit these points:</b> when false positives are <b>unacceptable</b> and there's no cheap verify step — use an exact set/index &rarr; when you must <b>enumerate</b> or return the items — filters store no keys, so they can't list anything &rarr; when the set is <b>tiny</b> (a few thousand) — a plain hash set is smaller, exact, and supports deletes, so there's no win &rarr; when queries are <b>hit-dominated</b> — "maybe" every time buys nothing &rarr; the discipline: a filter earns its keep only when negative answers are common and a certain "no" removes real work.
-      </div>
-    </details>
-
-    <details class="iq" data-level="staff">
-      <summary>Standard Bloom is the default — defend that, then steelman reaching for a variant by default.</summary>
-      <div class="a">
-        <b>For standard-as-default:</b> best space at a given FP rate, dead simple, no insertion-failure modes, well understood operationally — variants each add a cost (4× RAM, layered probes, load-factor ceilings). <b>Steelman for a variant:</b> if you <em>know</em> the system will churn (deletes) or grow unbounded (unknown <code>n</code>), starting standard guarantees a painful migration or a saturation incident later, so picking cuckoo/scalable up front is the honest choice. <b>Synthesis:</b> default to standard and only deviate when a <em>specific</em> limit provably bites — deletes &rarr; counting/cuckoo, unknown <code>n</code> &rarr; scalable, speed &rarr; blocked — decided by the workload, not by reaching for the fanciest tool.
-      </div>
-    </details>
-    <details class="iq" data-level="staff">
-      <summary>Two variants each fix one of your problems but cost on another axis. How do you make the call?</summary>
-      <div class="a">
-        <b>Hit these points:</b> name the axes explicitly — deletes, growth (unknown <code>n</code>), space, speed/locality — and rank which limit actually bites your workload &rarr; quantify the cost of each variant against your real budget: counting's 4× RAM across a fleet, cuckoo's insertion-failure ceiling and rebuild, scalable's per-layer probes and growing memory, blocked's slightly higher FP &rarr; prefer the change that relieves your binding constraint while costing on an axis you have slack on &rarr; consider composition (e.g., scalable + per-layer blocked) only if the complexity is justified &rarr; the staff move: pick from the limit that bites, with the cost stated, and a rebuild/migration path — not "it's the newest, so it's better."
-      </div>
-    </details>
-    <details class="iq" data-level="staff">
-      <summary>Design dedup for a 100-node, 10B-event/day ingest pipeline with 0.1% duplicate tolerance — what and why?</summary>
-      <div class="a">
-        <b>Hit these points:</b> per-node Bloom filter in front of an authoritative dedup store (Redis / sharded KV) &rarr; the Bloom is a <b>cheap negative filter</b>: "no" is certain, so it drops most duplicates locally; only "maybe" hits pay the cross-node/store lookup — that's where the savings live &rarr; size each filter from target <code>p</code> (~0.1% &rarr; ~14.4 bits/item; illustrative) &rarr; if per-node <code>n</code> is unknown/unbounded, use a <b>scalable</b> Bloom so the FP rate stays capped as it grows &rarr; shard the authoritative store by key and roll/rebuild filters on a time window (events expire), so saturation never pushes FP up &rarr; cuckoo or counting only if you actually need deletes &rarr; structure: cheap-negative-filter framing, size from <code>p</code>, name the source of truth, scalable for unknown <code>n</code>, rebuild/shard plan for saturation.
-      </div>
-    </details>
-
-    <div class="designrubric" data-level="design">
-      <b>Design-round framework</b> — drive any "which filter, at scale" prompt through these, out loud:
-      <ol>
-        <li>Workload first: hit-heavy or miss-heavy? Filters only help when "absent" is common.</li>
-        <li>Identify the binding limit: deletes, unknown/growing <code>n</code>, space, or lookup speed.</li>
-        <li>Map limit &rarr; variant: deletes &rarr; counting/cuckoo; unknown <code>n</code> &rarr; scalable; speed &rarr; blocked; else standard.</li>
-        <li>Size from target <code>p</code> and peak <code>n</code>; convert to per-unit and fleet RAM.</li>
-        <li>Place as a negative filter before the authoritative store; "maybe" always verifies.</li>
-        <li>Saturation + churn plan: rebuild/roll/shard thresholds; expiry windows.</li>
-        <li>Observe: measured FP, bits-set/load factor, verify-path hit rate; alert before it rots.</li>
-      </ol>
-    </div>
-    <details class="iq" data-level="design">
-      <summary>Design a distributed dedup tier for a high-throughput event pipeline using the right filter variant(s).</summary>
-      <div class="a">
-        <b>A strong answer covers:</b> per-node/local filter as a cheap negative filter in front of a sharded authoritative dedup store, so most duplicates die locally and only "maybes" pay the network/store cost &rarr; choose the variant from the binding limit: unknown/growing per-node <code>n</code> &rarr; scalable Bloom (or time-windowed rolling filters if events expire); continuous deletes &rarr; cuckoo (deletes + tight space) over counting's 4× RAM &rarr; size from target <code>p</code> set by the cost of a false "maybe" (a cross-node lookup) &times; event rate &rarr; shard the authoritative store by key hash for horizontal scale; roll/rebuild filters per window to cap saturation and age out stale entries &rarr; correctness: "maybe" never decides dedup alone — it gates the authoritative check &rarr; observability: measured FP, load factor, verify-hit rate, with alerts that trigger a new scalable layer or a roll &rarr; trade-offs: scalable's growing memory + per-layer probes vs static saturation; cuckoo's insertion ceiling vs counting's RAM; local filter staleness vs network savings.
-      </div>
-    </details>
-    <details class="iq" data-level="design">
-      <summary>Design a CDN/cache "one-hit-wonder" admission filter so single-access objects never pollute the cache.</summary>
-      <div class="a">
-        <b>A strong answer covers:</b> goal — admit an object to cache only on its <em>second</em> request, so objects requested once (the bulk of long-tail traffic) never evict hot content &rarr; use a Bloom filter as a "have I seen this key before?" gate: on a request, if the filter says "no" &rarr; record it in the filter but don't cache; if "maybe seen" &rarr; admit to cache &rarr; the asymmetry is fine here: a false positive admits a true one-hit-wonder occasionally (small waste), and there are no false negatives that would block a genuinely repeated object &rarr; <code>n</code> (distinct keys per window) is large and shifting, so use time-windowed/scalable filters that roll so old keys age out and the filter never saturates &rarr; size from a tolerable FP rate (illustrative) and per-window key estimate &rarr; observe admission rate and cache hit-ratio lift &rarr; trade-offs: a tighter filter (more bits) reduces wasteful admissions but costs RAM; rolling windows trade a little staleness for bounded size and built-in expiry; this is a classic Bloom admission policy (e.g., TinyLFU-style) where the filter's certain "no" is exactly what protects the cache.
-      </div>
-    </details>
-  </div>
-
-  <div class="next">
-    <span>📄 End of track — keep handy: <a href="../reference/bloom-filters-cheat-sheet.html">Bloom filters cheat sheet</a></span>
-    <span><em>✓ Final lesson (Staff). You've walked the full ladder.</em></span>
-  </div>
-
-  <footer id="sources">
-    <strong>Sources</strong><br>
-    <span id="s1">1. Mitzenmacher &amp; Broder, "Network Applications of Bloom Filters: A Survey", Internet Mathematics 1(4) — counting Bloom filters (~4-bit counters) — <a href="https://www.eecs.harvard.edu/~michaelm/postscripts/im2005b.pdf">harvard.edu</a>. <a href="#r1">↩</a> <a href="#r4">↩</a></span><br>
-    <span id="s2">2. Fan, Andersen, Kaminsky &amp; Mitzenmacher, "Cuckoo Filter: Practically Better Than Bloom", ACM CoNEXT 2014 — deletes, 2 candidate buckets, &#8804;3% FP space crossover — <a href="https://www.cs.cmu.edu/~dga/papers/cuckoo-conext2014.pdf">cs.cmu.edu</a>. <a href="#r2">↩</a> <a href="#r6">↩</a> <a href="#r7">↩</a></span><br>
-    <span id="s3">3. Almeida, Baquero, Preguiça &amp; Hutchison, "Scalable Bloom Filters", Information Processing Letters 101(6), 2007 — chained filters with geometric error bounds — <a href="https://gsd.di.uminho.pt/members/cbm/ps/dbloom.pdf">gsd.di.uminho.pt</a>. <a href="#r3">↩</a> <a href="#r5">↩</a></span><br>
-  </footer>
-<div class="lesson-fb" aria-live="polite">
-  <span class="lesson-fb-q">Was this lesson helpful?</span>
-  <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">👍 Yes</button>
-  <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No</button>
-  <span class="lesson-fb-thanks">Thanks &mdash; noted.</span>
-</div>
-<p class="lesson-endnote">These notes reflect my current understanding and are updated as I learn, build, and discover better explanations.</p>
-</main>
-</div>
-
-<script>
-  document.querySelectorAll('.qitem').forEach(function(item){
-    var correct = +item.dataset.correct;
-    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
-    var fb = item.querySelector('.fb');
-    opts.forEach(function(opt, i){
-      opt.addEventListener('click', function(){
-        opts.forEach(function(o){ o.disabled = true; });
-        opts[correct].classList.add('correct');
-        if(i === correct){
-          fb.textContent = '✓ Correct.';
-          fb.className = 'fb ok';
-        } else {
-          opt.classList.add('wrong');
-          fb.textContent = '✗ Not quite — the right answer is highlighted. Re-read it, then say it back out loud.';
-          fb.className = 'fb no';
-        }
-      });
-    });
-  });
-</script>
-<script src="../../assets/interview.js" defer></script>
-<script src="../../assets/reading-progress.js" defer></script>
-</body>
-</html>
+        // "Reveal model answer" inside each .rehearse block (id-free; supports
+        // multiple per page — replaces the old inline onclick + fixed id="model").
+        document.querySelectorAll('.rehearse [data-reveal]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var m = btn.parentElement.querySelector('.model');
+                if (m) m.classList.add('show');
+            });
+        });
+    </script>  <script src="/engineering-learning-hub/assets/interview.js" defer></script><script src="/engineering-learning-hub/assets/reading-progress.js" defer></script> </body> </html>

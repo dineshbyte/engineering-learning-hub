@@ -1,35 +1,28 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<script>
-(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
-function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
-</script>
-<meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>API Security &amp; Auth Cheat Sheet · Engineering Vault</title>
-<meta name="description" content="An API security cheat sheet covering authentication, authorization, OAuth2, JWT, scopes, and rate limiting — a fast reference for REST API security interviews.">
-<meta name="keywords" content="api security, auth, status codes, http methods, rest, api, idempotency, pagination, caching, oauth, jwt, versioning, errors, rate">
-<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/rest-api/reference/api-security-and-auth.html">
-<meta name="robots" content="index, follow">
-<meta name="author" content="dineshbyte">
-<meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Vault">
-<meta property="og:title" content="API Security &amp; Auth Cheat Sheet · Engineering Vault">
-<meta property="og:description" content="An API security cheat sheet covering authentication, authorization, OAuth2, JWT, scopes, and rate limiting — a fast reference for REST API security interviews.">
-<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/rest-api/reference/api-security-and-auth.html">
-<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/rest-api.png">
-<meta property="og:image:alt" content="REST API · Engineering Vault learning track">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="API Security &amp; Auth Cheat Sheet · Engineering Vault">
-<meta name="twitter:description" content="An API security cheat sheet covering authentication, authorization, OAuth2, JWT, scopes, and rate limiting — a fast reference for REST API security interviews.">
-<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/rest-api.png">
-<link rel="stylesheet" href="../../assets/tokens.css">
-<style>
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><link rel="icon" type="image/svg+xml" href="/engineering-learning-hub/assets/favicon.svg"><!-- a11y: no maximum-scale / user-scalable=no — pinch-zoom must stay
+             available (WCAG 1.4.4). Dropped per the hub-migration audit. --><meta name="viewport" content="width=device-width, initial-scale=1"><title>API Security &amp; Auth Cheat Sheet · Engineering Vault</title><meta name="description" content="A REST cheat sheet on the six architectural constraints, the Richardson maturity model, HATEOAS, and HTTP method semantics — quick reference for API interviews."><meta name="keywords" content="rest constraints, maturity, status codes, http methods, rest, api, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors"><meta name="author" content="dineshbyte"><meta name="robots" content="index, follow"><link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/rest-api/reference/api-security-and-auth.html"><meta property="og:type" content="article"><meta property="og:site_name" content="Engineering Vault"><meta property="og:title" content="API Security &#38; Auth Cheat Sheet · Engineering Vault"><meta property="og:description" content="A REST cheat sheet on the six architectural constraints, the Richardson maturity model, HATEOAS, and HTTP method semantics — quick reference for API interviews."><meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/rest-api/reference/api-security-and-auth.html"><meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/rest-api.png"><meta property="og:image:alt" content="REST API · Engineering Vault learning track"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@dineshxbyte"><meta name="twitter:title" content="API Security &#38; Auth Cheat Sheet · Engineering Vault"><meta name="twitter:description" content="A REST cheat sheet on the six architectural constraints, the Richardson maturity model, HATEOAS, and HTTP method semantics — quick reference for API interviews."><meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/rest-api.png"><script>
+            (function () {
+                try {
+                    var t = localStorage.getItem('theme');
+                    if (t !== 'light' && t !== 'dark') {
+                        t =
+                            window.matchMedia &&
+                            window.matchMedia('(prefers-color-scheme:dark)').matches
+                                ? 'dark'
+                                : 'light';
+                    }
+                    document.documentElement.setAttribute('data-theme', t);
+                } catch (e) {}
+            })();
+        </script><script>
+            function toggleTheme() {
+                var d = document.documentElement;
+                var t = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                d.setAttribute('data-theme', t);
+                try {
+                    localStorage.setItem('theme', t);
+                } catch (e) {}
+            }
+        </script><link rel="stylesheet" href="/engineering-learning-hub/assets/tokens.css"><script src="/engineering-learning-hub/assets/analytics.js" defer></script></head> <body> <a class="skip-link" href="#main">Skip to content</a>  <style>
   :root{--accent:var(--track-rest)}
   *{box-sizing:border-box}
   html{font-size:17px}
@@ -69,134 +62,37 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     .themebtn,#hubbar{display:none!important}
     html[data-theme="dark"]{--bg:#fff;--card:#fff;--ink:#111110}
   }
-</style>
-<style>
+</style> <style>
 /* topic tag chips (multi-colour, theme-aware) — match the lesson pages */
 .ltags{display:flex;flex-wrap:wrap;gap:.4rem;margin:.7rem 0 .2rem}
 .ltags .lt{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:.7rem;font-weight:600;line-height:1;white-space:nowrap;padding:.32rem .56rem;border-radius:6px;color:color-mix(in srgb,var(--lt-c,var(--accent)) 70%,var(--ink));background:color-mix(in srgb,var(--lt-c,var(--accent)) 14%,transparent);border:1px solid color-mix(in srgb,var(--lt-c,var(--accent)) 32%,transparent)}
 .ltags .lt:nth-child(6n+1){--lt-c:#5b54e6}.ltags .lt:nth-child(6n+2){--lt-c:#0f8a7e}.ltags .lt:nth-child(6n+3){--lt-c:#c2700f}.ltags .lt:nth-child(6n+4){--lt-c:#d6455d}.ltags .lt:nth-child(6n+5){--lt-c:#1f77d0}.ltags .lt:nth-child(6n+6){--lt-c:#8a3fbf}
-</style>
-<script src="../../assets/analytics.js" defer></script>
-</head>
-<body>
-<a class="skip-link" href="#main">Skip to content</a>
-<button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light" style="position:fixed;top:.7rem;right:.7rem;z-index:60;background:var(--card)">🌓</button>
-<div class="wrap">
-  <nav id="hubbar" style="position:sticky;top:0;z-index:50;display:flex;justify-content:space-between;align-items:center;gap:1rem;margin:-3rem -1.5rem 1.4rem;padding:.6rem 1.5rem;background:var(--card);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);font-family:ui-sans-serif,system-ui,sans-serif;font-size:.8rem"><a href="../../index.html" style="color:var(--accent);text-decoration:none;font-weight:600">← Engineering Vault</a><span style="color:var(--muted)">REST API Mastery · Reference</span></nav>
-<main id="main" tabindex="-1">
-  <div class="kicker">Reference · Security</div>
-  <h1>API Security, Auth &amp; Rate Limiting</h1>
-  <div class="ltags"><span class="lt">API security</span><span class="lt">Auth</span><span class="lt">Status codes</span><span class="lt">HTTP methods</span><span class="lt">REST</span></div>
-  <p class="lede">The compressed essence. One page to glance at before an interview or a design review. Definitions live in <code>Glossary</code>.</p>
-
-  <h2>AuthN vs AuthZ</h2>
-  <p>Two questions, two failure codes — keep them distinct.</p>
-  <dl>
-    <dt>Authentication — <em>who you are</em></dt>
-    <dd>Establishes identity. Missing or invalid credentials → <code>401 Unauthorized</code>. <span class="why">→ The client hasn't proven who it is.</span></dd>
-    <dt>Authorization — <em>what you may do</em></dt>
-    <dd>Establishes permission once identity is known. Known principal, not permitted → <code>403 Forbidden</code>. <span class="why">→ We know who you are; you simply can't do this.</span></dd>
-  </dl>
-
-  <h2>Credential schemes</h2>
-  <table>
-    <thead><tr><th>Scheme</th><th>Use when</th><th>Watch out</th></tr></thead>
-    <tbody>
-      <tr><td>API key</td><td>Server-to-server, simple identification of a calling app</td><td>Coarse-grained; hard to scope or rotate; never expose in a browser or in the URL</td></tr>
-      <tr><td>Bearer token</td><td>Caller presents a token it holds — sent in the <code>Authorization</code> header</td><td>Whoever holds it can use it; protect in transit, keep out of logs/URLs</td></tr>
-      <tr><td>OAuth&nbsp;2.0</td><td>Delegated authorization — let an app act on a user's behalf without their password</td><td>It is a <strong>delegated-authorization framework, NOT authentication</strong> by itself</td></tr>
-      <tr><td>OIDC</td><td>You need to authenticate (identify) the end user — "sign in with…"</td><td>Adds an identity/authentication layer <em>on top of</em> OAuth&nbsp;2; don't conflate the two</td></tr>
-      <tr><td>mTLS</td><td>Service-to-service strong identity (both ends present certs)</td><td>Cert lifecycle / rotation overhead; usually internal, not public clients</td></tr>
-    </tbody>
-  </table>
-
-  <h2>OAuth 2.0 grant types</h2>
-  <p>Tokens carry <strong>scopes</strong> (coarse permissions) and an <strong>audience</strong> (<code>aud</code>) naming the intended resource.</p>
-  <table>
-    <thead><tr><th>Grant</th><th>Use for</th><th>Note</th></tr></thead>
-    <tbody>
-      <tr><td>Authorization Code&nbsp;+&nbsp;PKCE</td><td>Users on web / mobile / SPA</td><td>PKCE protects <em>public</em> clients (no client secret) against code interception</td></tr>
-      <tr><td>Client Credentials</td><td>Machine-to-machine, no user present</td><td>App authenticates as itself with its own secret</td></tr>
-      <tr><td>Implicit</td><td>—</td><td class="n">LEGACY · do not use (superseded by Code&nbsp;+&nbsp;PKCE)</td></tr>
-      <tr><td>Resource-Owner Password</td><td>—</td><td class="n">LEGACY · do not use (app handles the user's password)</td></tr>
-    </tbody>
-  </table>
-
-  <h2>JWT vs server-side sessions</h2>
-  <table>
-    <thead><tr><th>&nbsp;</th><th>JWT (token)</th><th>Server-side session</th></tr></thead>
-    <tbody>
-      <tr><td>Shape</td><td>Self-contained, signed: <code>header.payload.signature</code></td><td>Opaque session id; data lives server-side</td></tr>
-      <tr><td>Validation</td><td class="y">Stateless — any node verifies the signature locally (fits REST statelessness)</td><td>Stateful — shared store or sticky sessions required</td></tr>
-      <tr><td>Confidentiality</td><td class="n">base64 is <em>encoded, not encrypted</em> — put no secrets inside</td><td>Payload never leaves the server</td></tr>
-      <tr><td>Revocation</td><td class="n">Hard before expiry → short-lived access tokens + rotating refresh tokens + denylist / introspection</td><td class="y">Easy — delete the session</td></tr>
-    </tbody>
-  </table>
-  <p style="font-size:.86rem;color:var(--muted)"><strong>JWT validation checklist:</strong> verify the signature; <em>pin the algorithm</em> (reject <code>alg: none</code> and alg-confusion); check <code>iss</code>, <code>aud</code>, and <code>exp</code>/<code>nbf</code>. The stateless win is real, but you trade away easy revocation — pure statelessness vs. instant logout is the design tension.</p>
-
-  <h2>Authorization models</h2>
-  <dl>
-    <dt>RBAC — role-based</dt>
-    <dd>Permissions attach to roles; principals get roles. Simple, coarse. <span class="why">→ "editors can publish."</span></dd>
-    <dt>ABAC — attribute-based</dt>
-    <dd>Decisions from attributes of subject / resource / environment. Fine-grained, dynamic. <span class="why">→ "owner can edit during business hours."</span></dd>
-    <dt>Object-level authZ <em>(the one that bites)</em></dt>
-    <dd>Verify the principal owns or may act on <strong>this specific object</strong> — not merely that they're authenticated. <span class="why">→ Missing this check is OWASP API1 / BOLA, the #1 API risk.</span></dd>
-  </dl>
-
-  <h2>OWASP API Security Top 10 (2023)</h2>
-  <p>Condensed. <a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/">OWASP API Security Top&nbsp;10</a>.</p>
-  <table>
-    <thead><tr><th>ID</th><th>Risk</th></tr></thead>
-    <tbody>
-      <tr><td class="num">API1</td><td><strong>BOLA</strong> — Broken Object Level Authorization <span class="n">· #1 / most common</span></td></tr>
-      <tr><td class="num">API2</td><td>Broken Authentication</td></tr>
-      <tr><td class="num">API3</td><td>BOPLA — Broken Object Property Level Authorization</td></tr>
-      <tr><td class="num">API4</td><td>Unrestricted Resource Consumption</td></tr>
-      <tr><td class="num">API5</td><td>BFLA — Broken Function Level Authorization</td></tr>
-      <tr><td class="num">API6</td><td>Unrestricted Access to Sensitive Business Flows</td></tr>
-      <tr><td class="num">API7</td><td>Server-Side Request Forgery (SSRF)</td></tr>
-      <tr><td class="num">API8</td><td>Security Misconfiguration</td></tr>
-      <tr><td class="num">API9</td><td>Improper Inventory Management</td></tr>
-      <tr><td class="num">API10</td><td>Unsafe Consumption of APIs</td></tr>
-    </tbody>
-  </table>
-
-  <h2>Rate limiting</h2>
-  <p>On throttle return <code>429 Too Many Requests</code> + <code>Retry-After</code>; expose <code>RateLimit-Limit</code> / <code>RateLimit-Remaining</code> / <code>RateLimit-Reset</code>. Limit per principal / key / account (per&nbsp;IP for anonymous). Protects availability (OWASP&nbsp;API4).</p>
-  <table>
-    <thead><tr><th>Algorithm</th><th>Behaviour</th></tr></thead>
-    <tbody>
-      <tr><td>Fixed window</td><td>Count per clock window. Simple, but allows <em>boundary bursts</em> at window edges.</td></tr>
-      <tr><td>Sliding window</td><td>Rolling interval — smoother than fixed; no edge double-spend.</td></tr>
-      <tr><td>Token bucket</td><td>Bursts up to a cap, then steady refill. <em>Common</em> — allows spikes within limits.</td></tr>
-      <tr><td>Leaky bucket</td><td>Drains at a constant rate — smooths the <em>output</em> regardless of input bursts.</td></tr>
-    </tbody>
-  </table>
-
-  <h2>Hygiene checklist</h2>
-  <dl>
-    <dt>Transport &amp; storage</dt>
-    <dd>TLS everywhere; never put tokens in URLs / query strings (they land in logs and history).</dd>
-    <dt>Browser cookies</dt>
-    <dd>Set <code>HttpOnly</code> + <code>Secure</code> + <code>SameSite</code>.</dd>
-    <dt>Secrets &amp; scope</dt>
-    <dd>Rotate secrets regularly; grant least-privilege scopes.</dd>
-    <dt>Errors</dt>
-    <dd>Consistent <a href="https://www.rfc-editor.org/rfc/rfc9457.html">RFC&nbsp;9457</a> Problem Details that leak no internals (no stack traces, no internal IDs).</dd>
-  </dl>
-
-  <footer>
-    Reference doc · part of the REST API teaching workspace ·
-    see <a href="../lessons/0008-authentication-and-authorization.html">Lesson&nbsp;8 — Authentication &amp; Authorization</a> ·
-    <a href="../lessons/0009-error-design-rate-limiting-observability.html">Lesson&nbsp;9 — Error Design, Rate Limiting &amp; Observability</a> ·
-    sources:
-    <a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/">OWASP API Security Top&nbsp;10 (2023)</a>,
-    <a href="https://www.rfc-editor.org/rfc/rfc6749">OAuth&nbsp;2.0 (RFC&nbsp;6749)</a>,
-    <a href="https://openid.net/developers/how-connect-works/">OpenID Connect</a>,
-    <a href="https://www.rfc-editor.org/rfc/rfc9457.html">RFC&nbsp;9457 Problem Details</a>.
-  </footer>
-</main>
-</div>
-</body>
-</html>
+</style> <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light" style="position:fixed;top:.7rem;right:.7rem;z-index:60;background:var(--card)">&#127763;</button> <div class="wrap"> <nav id="hubbar" style="position:sticky;top:0;z-index:50;display:flex;justify-content:space-between;align-items:center;gap:1rem;margin:-3rem -1.5rem 1.4rem;padding:.6rem 1.5rem;background:var(--card);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);font-family:ui-sans-serif,system-ui,sans-serif;font-size:.8rem"><a href="/engineering-learning-hub/index.html" style="color:var(--accent);text-decoration:none;font-weight:600">&#8592; Engineering Vault</a><span style="color:var(--muted)">REST API Mastery · Reference</span></nav> <main id="main" tabindex="-1"> <div class="kicker">Reference · Security</div> <h1>API Security, Auth &amp; Rate Limiting</h1> <div class="ltags"><span class="lt">API security</span><span class="lt">Auth</span><span class="lt">Status codes</span><span class="lt">HTTP methods</span><span class="lt">REST</span></div> <p class="lede">The compressed essence. One page to glance at before an interview or a design review. Definitions live in <code>Glossary</code>.</p>   <h2>AuthN vs AuthZ</h2>
+<p>Two questions, two failure codes — keep them distinct.</p>
+<dl><dt>Authentication — <em>who you are</em></dt><dd>Establishes identity. Missing or invalid credentials → <code>401 Unauthorized</code>. <span class="why">→ The client hasn’t proven who it is.</span></dd><dt>Authorization — <em>what you may do</em></dt><dd>Establishes permission once identity is known. Known principal, not permitted → <code>403 Forbidden</code>. <span class="why">→ We know who you are; you simply can’t do this.</span></dd></dl>
+<h2>Credential schemes</h2>
+<table><thead><tr><th>Scheme</th><th>Use when</th><th>Watch out</th></tr></thead><tbody><tr><td>API key</td><td>Server-to-server, simple identification of a calling app</td><td>Coarse-grained; hard to scope or rotate; never expose in a browser or in the URL</td></tr><tr><td>Bearer token</td><td>Caller presents a token it holds — sent in the <code>Authorization</code> header</td><td>Whoever holds it can use it; protect in transit, keep out of logs/URLs</td></tr><tr><td>OAuth 2.0</td><td>Delegated authorization — let an app act on a user’s behalf without their password</td><td>It is a <strong>delegated-authorization framework, NOT authentication</strong> by itself</td></tr><tr><td>OIDC</td><td>You need to authenticate (identify) the end user — “sign in with…”</td><td>Adds an identity/authentication layer <em>on top of</em> OAuth 2; don’t conflate the two</td></tr><tr><td>mTLS</td><td>Service-to-service strong identity (both ends present certs)</td><td>Cert lifecycle / rotation overhead; usually internal, not public clients</td></tr></tbody></table>
+<h2>OAuth 2.0 grant types</h2>
+<p>Tokens carry <strong>scopes</strong> (coarse permissions) and an <strong>audience</strong> (<code>aud</code>) naming the intended resource.</p>
+<table><thead><tr><th>Grant</th><th>Use for</th><th>Note</th></tr></thead><tbody><tr><td>Authorization Code + PKCE</td><td>Users on web / mobile / SPA</td><td>PKCE protects <em>public</em> clients (no client secret) against code interception</td></tr><tr><td>Client Credentials</td><td>Machine-to-machine, no user present</td><td>App authenticates as itself with its own secret</td></tr><tr><td>Implicit</td><td>—</td><td class="n">LEGACY · do not use (superseded by Code + PKCE)</td></tr><tr><td>Resource-Owner Password</td><td>—</td><td class="n">LEGACY · do not use (app handles the user’s password)</td></tr></tbody></table>
+<h2>JWT vs server-side sessions</h2>
+<table><thead><tr><th> </th><th>JWT (token)</th><th>Server-side session</th></tr></thead><tbody><tr><td>Shape</td><td>Self-contained, signed: <code>header.payload.signature</code></td><td>Opaque session id; data lives server-side</td></tr><tr><td>Validation</td><td class="y">Stateless — any node verifies the signature locally (fits REST statelessness)</td><td>Stateful — shared store or sticky sessions required</td></tr><tr><td>Confidentiality</td><td class="n">base64 is <em>encoded, not encrypted</em> — put no secrets inside</td><td>Payload never leaves the server</td></tr><tr><td>Revocation</td><td class="n">Hard before expiry → short-lived access tokens + rotating refresh tokens + denylist / introspection</td><td class="y">Easy — delete the session</td></tr></tbody></table>
+<p style="font-size:.86rem;color:var(--muted)"><strong>JWT validation checklist:</strong> verify the signature; <em>pin the algorithm</em> (reject <code>alg: none</code> and alg-confusion); check <code>iss</code>, <code>aud</code>, and <code>exp</code>/<code>nbf</code>. The stateless win is real, but you trade away easy revocation — pure statelessness vs. instant logout is the design tension.</p>
+<h2>Authorization models</h2>
+<dl><dt>RBAC — role-based</dt><dd>Permissions attach to roles; principals get roles. Simple, coarse. <span class="why">→ “editors can publish.”</span></dd><dt>ABAC — attribute-based</dt><dd>Decisions from attributes of subject / resource / environment. Fine-grained, dynamic. <span class="why">→ “owner can edit during business hours.”</span></dd><dt>Object-level authZ <em>(the one that bites)</em></dt><dd>Verify the principal owns or may act on <strong>this specific object</strong> — not merely that they’re authenticated. <span class="why">→ Missing this check is OWASP API1 / BOLA, the #1 API risk.</span></dd></dl>
+<h2>OWASP API Security Top 10 (2023)</h2>
+<p>Condensed. <a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/">OWASP API Security Top 10</a>.</p>
+<table><thead><tr><th>ID</th><th>Risk</th></tr></thead><tbody><tr><td class="num">API1</td><td><strong>BOLA</strong> — Broken Object Level Authorization <span class="n">· #1 / most common</span></td></tr><tr><td class="num">API2</td><td>Broken Authentication</td></tr><tr><td class="num">API3</td><td>BOPLA — Broken Object Property Level Authorization</td></tr><tr><td class="num">API4</td><td>Unrestricted Resource Consumption</td></tr><tr><td class="num">API5</td><td>BFLA — Broken Function Level Authorization</td></tr><tr><td class="num">API6</td><td>Unrestricted Access to Sensitive Business Flows</td></tr><tr><td class="num">API7</td><td>Server-Side Request Forgery (SSRF)</td></tr><tr><td class="num">API8</td><td>Security Misconfiguration</td></tr><tr><td class="num">API9</td><td>Improper Inventory Management</td></tr><tr><td class="num">API10</td><td>Unsafe Consumption of APIs</td></tr></tbody></table>
+<h2>Rate limiting</h2>
+<p>On throttle return <code>429 Too Many Requests</code> + <code>Retry-After</code>; expose <code>RateLimit-Limit</code> / <code>RateLimit-Remaining</code> / <code>RateLimit-Reset</code>. Limit per principal / key / account (per IP for anonymous). Protects availability (OWASP API4).</p>
+<table><thead><tr><th>Algorithm</th><th>Behaviour</th></tr></thead><tbody><tr><td>Fixed window</td><td>Count per clock window. Simple, but allows <em>boundary bursts</em> at window edges.</td></tr><tr><td>Sliding window</td><td>Rolling interval — smoother than fixed; no edge double-spend.</td></tr><tr><td>Token bucket</td><td>Bursts up to a cap, then steady refill. <em>Common</em> — allows spikes within limits.</td></tr><tr><td>Leaky bucket</td><td>Drains at a constant rate — smooths the <em>output</em> regardless of input bursts.</td></tr></tbody></table>
+<h2>Hygiene checklist</h2>
+<dl><dt>Transport &amp; storage</dt><dd>TLS everywhere; never put tokens in URLs / query strings (they land in logs and history).</dd><dt>Browser cookies</dt><dd>Set <code>HttpOnly</code> + <code>Secure</code> + <code>SameSite</code>.</dd><dt>Secrets &amp; scope</dt><dd>Rotate secrets regularly; grant least-privilege scopes.</dd><dt>Errors</dt><dd>Consistent <a href="https://www.rfc-editor.org/rfc/rfc9457.html">RFC 9457</a> Problem Details that leak no internals (no stack traces, no internal IDs).</dd></dl>
+<footer><p>Reference doc · part of the REST API teaching workspace ·
+see <a href="../lessons/0008-authentication-and-authorization.html">Lesson 8 — Authentication &amp; Authorization</a> ·
+<a href="../lessons/0009-error-design-rate-limiting-observability.html">Lesson 9 — Error Design, Rate Limiting &amp; Observability</a> ·
+sources:
+<a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/">OWASP API Security Top 10 (2023)</a>,
+<a href="https://www.rfc-editor.org/rfc/rfc6749">OAuth 2.0 (RFC 6749)</a>,
+<a href="https://openid.net/developers/how-connect-works/">OpenID Connect</a>,
+<a href="https://www.rfc-editor.org/rfc/rfc9457.html">RFC 9457 Problem Details</a>.</p></footer>  </main> </div>   </body> </html>

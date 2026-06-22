@@ -129,6 +129,23 @@ export const GET: APIRoute = async () => {
         });
     }
 
+    // ── INTERVIEW BANK entries — FULL-TEXT (now a migrated `interview` collection) ─
+    const interviewEntries = await getCollection('interview');
+    const interview: SearchEntry[] = [];
+    for (const entry of interviewEntries) {
+        const d = entry.data;
+        const track = trackBySlug.get(d.track);
+        const g = track?.name ?? decode(d.track);
+        const c = track?.colorVar ?? d.accentVar;
+        const title = decode(d.title);
+        const chipsText = (d.chips ?? []).map(decode).join(' ');
+        const qaText = (d.interview ?? []).map((iv) => `${iv.q} ${iv.a}`).join(' ');
+        const rubricText = (d.rubric ?? []).join(' ');
+        const prose = bodyToText(await rawBody(entry)); // the `.how` intro
+        const blob = bodyToText([title, chipsText, qaText, rubricText, prose].join(' '));
+        interview.push({ t: title, u: d.path, g, k: 'Interview', c, x: blob.toLowerCase() });
+    }
+
     // ── REFERENCE entries — the .tfoot pills (verbatim with index.astro) ─────
     const references: SearchEntry[] = [];
     for (const track of tracks) {
@@ -146,7 +163,7 @@ export const GET: APIRoute = async () => {
         }
     }
 
-    const entries = lessons.concat(references);
+    const entries = lessons.concat(interview, references);
 
     return new Response(`window.SEARCH_INDEX=${JSON.stringify(entries)};`, {
         headers: { 'content-type': 'text/javascript' },

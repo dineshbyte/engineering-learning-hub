@@ -1,564 +1,152 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<script>
-(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
-function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
-</script>
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><link rel="icon" type="image/svg+xml" href="/engineering-learning-hub/assets/favicon.svg"><!-- a11y: no maximum-scale / user-scalable=no — pinch-zoom must stay
+             available (WCAG 1.4.4). Dropped per the hub-migration audit. --><meta name="viewport" content="width=device-width, initial-scale=1"><title>HTTP Methods &amp; Status Codes Explained · Engineering Vault</title><meta name="description" content="HTTP methods and status codes explained: GET, POST, PUT, PATCH, DELETE semantics, safe vs idempotent methods, and choosing the right 2xx/4xx/5xx code for REST APIs."><meta name="keywords" content="http methods, status codes, rest, api, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors, rate, limiting"><meta name="author" content="dineshbyte"><meta name="robots" content="index, follow"><link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/rest-api/lessons/0002-http-methods-and-status-codes.html"><meta property="og:type" content="article"><meta property="og:site_name" content="Engineering Vault"><meta property="og:title" content="HTTP Methods &#38; Status Codes Explained"><meta property="og:description" content="HTTP methods and status codes explained: GET, POST, PUT, PATCH, DELETE semantics, safe vs idempotent methods, and choosing the right 2xx/4xx/5xx code for REST APIs."><meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/rest-api/lessons/0002-http-methods-and-status-codes.html"><meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/rest-api.png"><meta property="og:image:alt" content="REST API · Engineering Vault learning track"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@dineshxbyte"><meta name="twitter:title" content="HTTP Methods &#38; Status Codes Explained"><meta name="twitter:description" content="HTTP methods and status codes explained: GET, POST, PUT, PATCH, DELETE semantics, safe vs idempotent methods, and choosing the right 2xx/4xx/5xx code for REST APIs."><meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/rest-api.png"><script>
+            (function () {
+                try {
+                    var t = localStorage.getItem('theme');
+                    if (t !== 'light' && t !== 'dark') {
+                        t =
+                            window.matchMedia &&
+                            window.matchMedia('(prefers-color-scheme:dark)').matches
+                                ? 'dark'
+                                : 'light';
+                    }
+                    document.documentElement.setAttribute('data-theme', t);
+                } catch (e) {}
+            })();
+        </script><script>
+            function toggleTheme() {
+                var d = document.documentElement;
+                var t = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                d.setAttribute('data-theme', t);
+                try {
+                    localStorage.setItem('theme', t);
+                } catch (e) {}
+            }
+        </script><link rel="stylesheet" href="/engineering-learning-hub/assets/tokens.css"><link rel="stylesheet" href="/engineering-learning-hub/assets/lesson.css"><link rel="stylesheet" href="/engineering-learning-hub/assets/interview.css"><style>:root{--accent:var(--track-rest)}</style><script src="/engineering-learning-hub/assets/analytics.js" defer></script></head> <body> <a class="skip-link" href="#main">Skip to content</a>  <div class="wrap"> <nav id="hubbar"> <a href="/engineering-learning-hub/index.html">&#8592; Engineering Vault</a> <span class="pn"> <a href="0001-what-makes-an-api-restful.html" title="What actually makes an API RESTful? (visual)">
+&#8249; Prev
+</a> <a href="0003-idempotency-in-practice.html" title="Idempotency in practice (visual)">
+Next &#8250;
+</a> </span> <span style="display:flex;align-items:center;gap:.6rem"> <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button> <span style="color:var(--muted)">REST API</span> </span> </nav> <main id="main" tabindex="-1"> <div id="reading-progress"></div> <div class="kicker">Lesson 2 · HTTP semantics · visual edition</div> <h1>HTTP methods &amp; status codes, done right</h1> <p class="meta">~7 min · one diagram per idea · retrieval practice at the end</p> <div class="ltags"><span class="lt">HTTP methods</span><span class="lt">Status codes</span><span class="lt">REST</span><span class="lt">API</span><span class="lt">Idempotency</span></div>  <div class="mission"><p><strong>Why this, first.</strong> Anyone can recite “GET reads, POST creates.” The senior bar is
+<em>precise semantics</em>: which methods are safe vs. idempotent, when PUT beats POST, and the
+exact status code for “well-formed but invalid.” These distinctions are the fastest
+discriminator an interviewer has between a mid and a senior answer — and they’re choices you
+defend in every design review afterward.</p></div>
+<div class="chips"><span class="chip"><p>Three axes: <b>safe · idempotent · cacheable</b></p></span><span class="chip"><p>PUT vs POST = <b>who owns the URI</b></p></span><span class="chip"><p>Pick the <b>exact</b> status code</p></span><span class="chip"><p>Never tunnel errors through <b>200</b></p></span></div>
 
-<meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>HTTP Methods &amp; Status Codes Explained · Engineering Vault</title>
-<meta name="description" content="HTTP methods and status codes explained: GET, POST, PUT, PATCH, DELETE semantics, safe vs idempotent methods, and choosing the right 2xx/4xx/5xx code for REST APIs.">
-<meta name="keywords" content="http methods, status codes, rest, api, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors, rate, limiting">
-<meta name="author" content="dineshbyte">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/rest-api/lessons/0002-http-methods-and-status-codes.html">
-<meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Vault">
-<meta property="og:title" content="HTTP Methods &amp; Status Codes Explained · Engineering Vault">
-<meta property="og:description" content="HTTP methods and status codes explained: GET, POST, PUT, PATCH, DELETE semantics, safe vs idempotent methods, and choosing the right 2xx/4xx/5xx code for REST APIs.">
-<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/rest-api/lessons/0002-http-methods-and-status-codes.html">
-<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/rest-api.png">
-<meta property="og:image:alt" content="REST API · Engineering Vault learning track">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="HTTP Methods &amp; Status Codes Explained · Engineering Vault">
-<meta name="twitter:description" content="HTTP methods and status codes explained: GET, POST, PUT, PATCH, DELETE semantics, safe vs idempotent methods, and choosing the right 2xx/4xx/5xx code for REST APIs.">
-<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/rest-api.png">
-<link rel="stylesheet" href="../../assets/tokens.css">
-<link rel="stylesheet" href="../../assets/lesson.css">
-<link rel="stylesheet" href="../../assets/interview.css">
-<style>
-  :root{--accent:var(--track-rest)}
-  /* chips — pill row (not in lesson.css) */
-  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
-  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
-  .chip b{color:var(--accent)}
-  /* REST uses .fact / .step as content blocks with an inline <b> label */
-  .facts{grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr))}
-  .fact b,.step b{display:block; font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
-  .fact.blue b{color:var(--accent)}
-  .steps{display:grid; grid-template-columns:1fr 1fr; gap:.5rem}
-  /* myth compare grid — lesson.css styles .m/.t but not the container */
-  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.8rem 0; font-size:.9rem}
-  /* bottom footer nav — lesson.css names this .next */
-  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.85rem}
-  @media (max-width:560px){.steps,.myth{grid-template-columns:1fr}}
-</style>
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "FAQPage",
- "mainEntity": [
-  {
-   "@type": "Question",
-   "name": "Define a safe and an idempotent HTTP method.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Safe = read-only intent , no intended state change ( GET , HEAD , OPTIONS ). Idempotent = N identical requests have the same effect on server state as one ( GET , HEAD , OPTIONS , PUT , DELETE ). The key word is effect on state , not a byte-identical response."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Is POST idempotent? Why does it matter?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "No. A retried POST can create a duplicate (a second charge or order). It matters because dropped connections and retries are normal in distributed systems — non-idempotency is exactly why POST creation needs an Idempotency-Key to be retry-safe."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "200 vs 201 vs 204 , and what must a 201 include?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "200 OK : success with a body. 201 Created : a new resource was created and must carry a Location header to it. 204 No Content : success with no body (common for DELETE and for PUT / PATCH that don't echo the resource)."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "401 vs 403 — what's the difference?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "401 Unauthorized = authentication failed (\"we don't know who you are\" — credentials missing/invalid/expired; re-authenticate). 403 Forbidden = authorization failed (\"we know who you are, you're not allowed\" — re-authenticating won't help)."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Explain \"safe idempotent,\" and why \"safe means secure\" is false.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Every safe method is idempotent (reading changes nothing, so repeating it changes nothing); the reverse fails — PUT / DELETE are idempotent but not safe. \"Safe\" is about read-only intent , nothing about authn/authz/TLS: a GET can still expose sensitive data and still needs authorization and transport security. Keep safe / idempotent / cacheable as three separate axes."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Is PATCH idempotent, and how do JSON Merge Patch vs JSON Patch relate?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Not guaranteed — it depends on the patch document. A \"set field to X\" patch is idempotent; \"increment by 1\" / \"add to array\" is not. JSON Merge Patch (RFC 7386) sets values ( null = remove), so it tends to be idempotent; JSON Patch (RFC 6902) is an op sequence where add isn't. Make PATCH idempotent when you can, and know why a given patch isn't."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Why prefer 307 / 308 over 302 / 301 , and why is 304 a feature?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "307 / 308 preserve the method and body ; with 301 / 302 clients historically rewrote a POST into a GET , dropping the body. 304 Not Modified is the payoff of conditional GET: the client revalidates with If-None-Match / If-Modified-Since and, if nothing changed, gets 304 with no body and reuses its cache — bandwidth saved, not a failure."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "When should a forbidden resource return 404 instead of 403 ?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "When the very existence of the resource is sensitive. A 403 confirms \"this exists, you just can't see it,\" which leaks information (resource enumeration — e.g. private repo names). 404 hides existence entirely. Trade-off: 404 is harder to debug for legitimate users, so reserve it for genuinely sensitive resources, not as a blanket policy."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "A teammate puts \"mark as read\" behind GET /messages/42?read=true . What breaks?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "It makes a state-changing operation safe-in-name only, and the ecosystem assumes GET is safe: prefetchers, crawlers, link-preview bots, and proxies fire it and silently mutate state, and caches may serve stale results. Intended state change belongs on a non-safe verb — POST , or PATCH / PUT for an idempotent update. The classic casualty was an admin panel where a crawler followed every \"delete\" link."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "A downstream dependency is timing out under load. Walk the status codes and behavior you'd return.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "If a circuit breaker is open / you're shedding load, return 503 + Retry-After so clients back off. If you actually called upstream and it timed out, 504 is honest; if it returned garbage, 502 . Don't let upstream's timeout surface as a 500 for a valid client request, and never convert it into a 4xx — the client did nothing wrong. Combine with idempotency keys so the inevitable retries don't double-act."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Status code as the contract, or body error codes — how do you reconcile them?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Use both at the right layer. The HTTP status is the coarse, machine-actionable verdict that infrastructure (caches, LBs, retry logic, alerting) acts on — get it right first. The body carries a stable, fine-grained error code plus human/field detail for the application to branch on (e.g. \"code\": \"card_declined\" alongside a 402 / 422 ). Status for the network, body codes for the application — not one instead of the other."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design the request/response contract for POST /payments where the connection can drop mid-flight. Walk the methods and status codes.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "A strong answer covers: POST is correct because the server assigns the payment id -> sync path returns 201 Created + Location ; async path returns 202 Accepted + a status URL to poll, never 200 for unfinished work -> the dropped connection is the hard part: POST isn't idempotent, so a client-generated Idempotency-Key lets a retry replay the original result instead of double-charging -> map the failure modes to honest codes: 422 for validation, 409 for a state conflict, 402 /body error code for a declined card, 503 + Retry-After when shedding load, 504 if upstream timed out -> never tunnel an error through 200 , never return 5xx for bad client input -> name the contract split: status code for the network/infra, stable body error code for the application."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design the update + concurrency story for a resource many clients edit at once (PUT vs PATCH, conditional requests).",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "A strong answer covers: choose PUT (full replace, idempotent by construction) vs PATCH (partial edit) by resource size and whether \"set to null\" must differ from \"leave untouched\" -> for PATCH , pick the format deliberately — JSON Merge Patch (value-setting, tends to be idempotent) vs JSON Patch (op sequence, add isn't idempotent) -> guard lost updates with optimistic concurrency: hand out an ETag on reads, require If-Match on writes, return 412 Precondition Failed on a stale version -> distinguish 412 (\"your version is stale\") from 409 (\"this action conflicts with current state\") -> make retries safe: idempotent verbs retry freely, and a turned-into-explicit conflict is retryable after a re-read -> name the trade-off: PUT is simpler and retry-safe but bandwidth-heavy; PATCH saves bytes but adds format and idempotency nuance."
-   }
-  }
- ]
-}
-</script>
-<script src="../../assets/analytics.js" defer></script>
-</head>
-<body>
-<a class="skip-link" href="#main">Skip to content</a>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
-  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
-  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
-  <marker id="arwR" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9a2417"/></marker>
-</defs></svg>
+<h2 id="three-orthogonal-properties-dont-conflate-them">Three orthogonal properties (don’t conflate them)</h2>
+<p><p>Methods are described by three independent axes.</p><sup><a href="#s1" id="r1"><p>1</p></a></sup> <p>Mid-level answers blur them; seniors keep them separate. The containment to remember: 
+<strong>safe ⊂ idempotent</strong> — every safe method is idempotent, but not the reverse.</p></p>
+<figure> <svg viewBox="0 0 560 200" role="img" aria-label="Nested sets: safe methods are a subset of idempotent methods; cacheable overlaps safe; POST and PATCH sit outside idempotent"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="280" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">SAFE ⊂ IDEMPOTENT · CACHEABLE IS A SEPARATE AXIS</text> <rect x="40" y="34" width="340" height="148" rx="12" fill="#fff" stroke="#1f3a5a" stroke-width="1.5"></rect> <text x="210" y="52" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1f3a5a">IDEMPOTENT — repeat = same state</text> <rect x="60" y="64" width="180" height="104" rx="10" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"></rect> <text x="150" y="82" text-anchor="middle" font-size="10" font-weight="700" fill="#2f5d3a">SAFE — read-only intent</text> <text x="150" y="104" text-anchor="middle" font-size="13" font-weight="700" fill="#2f5d3a">GET · HEAD</text> <text x="150" y="124" text-anchor="middle" font-size="13" font-weight="700" fill="#2f5d3a">OPTIONS</text> <text x="150" y="150" text-anchor="middle" font-size="9" fill="#244a2e">cacheable by default →</text> <text x="310" y="104" text-anchor="middle" font-size="13" font-weight="700" fill="#1f3a5a">PUT</text> <text x="310" y="126" text-anchor="middle" font-size="13" font-weight="700" fill="#1f3a5a">DELETE</text> <text x="310" y="150" text-anchor="middle" font-size="9" fill="#6b675f">change state, but converge</text> <rect x="402" y="64" width="150" height="104" rx="10" fill="#f7ecea" stroke="#9a2417" stroke-width="1.5"></rect> <text x="477" y="84" text-anchor="middle" font-size="10" font-weight="700" fill="#9a2417">NOT IDEMPOTENT</text> <text x="477" y="108" text-anchor="middle" font-size="13" font-weight="700" fill="#9a2417">POST</text> <text x="477" y="132" text-anchor="middle" font-size="13" font-weight="700" fill="#9a2417">PATCH*</text> <text x="477" y="156" text-anchor="middle" font-size="8.5" fill="#7a2218">*depends on the patch doc</text> </g> </svg> <figcaption>
+"Safe" ≠ "secure": a <code>GET</code> may log or run analytics — it just isn't
+<em>intended</em> to change resource state. Cacheability is independent of the other two axes.
+</figcaption> </figure>
 
-<div class="wrap">
-  <nav id="hubbar">
-    <a href="../../index.html">&#8592; Engineering Vault</a>
-    <span class="pn"><a href="0001-what-makes-an-api-restful.html" title="What actually makes an API RESTful? (visual)">&#8249; Prev</a><a href="0003-idempotency-in-practice.html" title="Idempotency in practice (visual)">Next &#8250;</a></span>
-    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">REST API</span></span>
-  </nav>
-<main id="main" tabindex="-1">
-  <div id="reading-progress"></div>
-  <div class="kicker">Lesson 2 · HTTP semantics · visual edition</div>
-  <h1>HTTP methods &amp; status codes, done right</h1>
-  <p class="meta">~7 min · one diagram per idea · retrieval practice at the end</p>
-  <div class="ltags"><span class="lt">HTTP methods</span><span class="lt">Status codes</span><span class="lt">REST</span><span class="lt">API</span><span class="lt">Idempotency</span></div>
+<figure> <svg viewBox="0 0 560 226" role="img" aria-label="Matrix of GET, POST, PUT, PATCH, DELETE against Safe, Idempotent, and Has request body"> <g font-family="ui-sans-serif,system-ui,sans-serif" font-size="11"> <text x="280" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">METHOD SEMANTICS MATRIX · RFC 9110</text> <!-- column headers --> <text x="232" y="42" text-anchor="middle" font-size="10" font-weight="700" fill="#6b675f">Safe?</text> <text x="342" y="42" text-anchor="middle" font-size="10" font-weight="700" fill="#6b675f">Idempotent?</text> <text x="470" y="42" text-anchor="middle" font-size="10" font-weight="700" fill="#6b675f">Has body?</text> <line x1="14" y1="50" x2="546" y2="50" stroke="#d8d4c8"></line> <!-- rows --> <g> <rect x="14" y="58" width="100" height="28" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect> <text x="64" y="77" text-anchor="middle" font-size="12" font-weight="700" fill="#2f5d3a">GET</text> <text x="232" y="77" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text> <text x="342" y="77" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text> <text x="470" y="77" text-anchor="middle" font-size="13" fill="#9a2417">✗</text> </g> <g> <rect x="14" y="92" width="100" height="28" rx="6" fill="#f7ecea" stroke="#9a2417"></rect> <text x="64" y="111" text-anchor="middle" font-size="12" font-weight="700" fill="#9a2417">POST</text> <text x="232" y="111" text-anchor="middle" font-size="13" fill="#9a2417">✗</text> <text x="342" y="111" text-anchor="middle" font-size="13" fill="#9a2417">✗</text> <text x="470" y="111" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text> </g> <g> <rect x="14" y="126" width="100" height="28" rx="6" fill="#eef2f5" stroke="#1f3a5a"></rect> <text x="64" y="145" text-anchor="middle" font-size="12" font-weight="700" fill="#1f3a5a">PUT</text> <text x="232" y="145" text-anchor="middle" font-size="13" fill="#9a2417">✗</text> <text x="342" y="145" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text> <text x="470" y="145" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text> </g> <g> <rect x="14" y="160" width="100" height="28" rx="6" fill="#fbfaf2" stroke="#6b675f"></rect> <text x="64" y="179" text-anchor="middle" font-size="12" font-weight="700" fill="#6b675f">PATCH</text> <text x="232" y="179" text-anchor="middle" font-size="13" fill="#9a2417">✗</text> <text x="342" y="179" text-anchor="middle" font-size="11" fill="#6b675f">maybe</text> <text x="470" y="179" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text> </g> <g> <rect x="14" y="194" width="100" height="28" rx="6" fill="#eef2f5" stroke="#1f3a5a"></rect> <text x="64" y="213" text-anchor="middle" font-size="12" font-weight="700" fill="#1f3a5a">DELETE</text> <text x="232" y="213" text-anchor="middle" font-size="13" fill="#9a2417">✗</text> <text x="342" y="213" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text> <text x="470" y="213" text-anchor="middle" font-size="11" fill="#6b675f">often</text> </g> <line x1="124" y1="50" x2="124" y2="222" stroke="#d8d4c8"></line> </g> </svg> <figcaption> <code>PATCH</code> is <em>not guaranteed</em> idempotent — JSON Merge Patch (RFC 7386) tends to
+        be; JSON Patch (RFC 6902) with ops like "add to array" is not. The senior move: make your PATCH
+        idempotent when you can, and know why it might not be.
+</figcaption> </figure>
+<h2 id="put-vs-post-for-creation">PUT vs POST for creation</h2>
+<p><p>The classic probe. The deciding question is <em>who owns the URI</em>:</p><sup><a href="#s2" id="r2"><p>2</p></a></sup></p>
+<figure> <svg viewBox="0 0 600 158" role="img" aria-label="If the client knows the target URI use PUT and it is idempotent; if the server assigns the URI use POST returning 201 with a Location header"> <defs> <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker> <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker> </defs> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="300" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">WHO OWNS THE TARGET URI?</text> <rect x="210" y="28" width="180" height="34" rx="8" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"></rect> <text x="300" y="49" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">Does the client know the URI?</text> <!-- YES branch --> <line x1="240" y1="62" x2="140" y2="92" stroke="#2f5d3a" marker-end="url(#arwG)"></line> <text x="160" y="80" text-anchor="middle" font-size="9" font-weight="700" fill="#2f5d3a">YES</text> <rect x="20" y="92" width="240" height="58" rx="9" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"></rect> <text x="140" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="#2f5d3a">PUT /users/42</text> <text x="140" y="129" text-anchor="middle" font-size="9" fill="#244a2e">replace-or-create at this address</text> <text x="140" y="143" text-anchor="middle" font-size="9" fill="#244a2e">idempotent — two calls → one user 42</text> <!-- NO branch --> <line x1="360" y1="62" x2="460" y2="92" stroke="#1f3a5a" marker-end="url(#arw)"></line> <text x="440" y="80" text-anchor="middle" font-size="9" font-weight="700" fill="#1f3a5a">NO</text> <rect x="340" y="92" width="244" height="58" rx="9" fill="#eef2f5" stroke="#1f3a5a" stroke-width="1.5"></rect> <text x="462" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="#1f3a5a">POST /users</text> <text x="462" y="129" text-anchor="middle" font-size="9" fill="#1f3a5a">server assigns the URI</text> <text x="462" y="143" text-anchor="middle" font-size="9" fill="#1f3a5a">returns 201 + Location header</text> </g> </svg> <figcaption>
+The other axis: <code>PUT</code> replaces the <strong>whole</strong> resource;
+<code>PATCH</code> applies a <strong>partial</strong> modification. A partial body with
+<code>PUT</code> means "the omitted fields are now gone."
+</figcaption> </figure>
+<div class="myth"><div class="m">✗ Myth: “lead with the verb list — GET reads, POST creates, PUT updates.”</div><div class="t"><p>✓ Senior: lead with idempotency. POST isn’t idempotent, so a dropped-connection retry can
+double-create — that’s why creation uses PUT at a client-known URI, or POST plus an
+idempotency key.</p></div></div>
+<p class="pull"><p><strong>Lead with idempotency, not the verb.</strong> That single sentence signals senior; the
+verb list alone signals junior.</p></p>
 
-  <div class="mission">
-    <strong>Why this, first.</strong> Anyone can recite "GET reads, POST creates." The senior bar is <em>precise semantics</em>: which methods are safe vs. idempotent, when PUT beats POST, and the exact status code for "well-formed but invalid." These distinctions are the fastest discriminator an interviewer has between a mid and a senior answer — and they're choices you defend in every design review afterward.
-  </div>
+<h2 id="status-codes-that-separate-seniors">Status codes that separate seniors</h2>
+<p><p>Pick the code that tells the client <em>exactly</em> what happened and what to do next.</p><sup><a href="#s3" id="r3"><p>3</p></a></sup></p>
+<figure> <svg viewBox="0 0 600 230" role="img" aria-label="Status code families: 2xx success, 3xx redirection, 4xx client error, 5xx server error, each with key codes"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="300" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">STATUS-CODE FAMILIES AT A GLANCE</text> <!-- 2xx --> <rect x="14" y="28" width="280" height="92" rx="9" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"></rect> <text x="28" y="48" font-size="13" font-weight="700" fill="#2f5d3a">2xx · Success</text> <text x="28" y="68" font-size="9.5" fill="#244a2e">200 OK — success with a body</text> <text x="28" y="83" font-size="9.5" fill="#244a2e">201 Created — MUST add Location header</text> <text x="28" y="98" font-size="9.5" fill="#244a2e">202 Accepted — async, not done yet</text> <text x="28" y="113" font-size="9.5" fill="#244a2e">204 No Content — success, empty body</text> <!-- 3xx --> <rect x="306" y="28" width="280" height="92" rx="9" fill="#eef2f5" stroke="#1f3a5a" stroke-width="1.5"></rect> <text x="320" y="48" font-size="13" font-weight="700" fill="#1f3a5a">3xx · Redirection</text> <text x="320" y="68" font-size="9.5" fill="#1f3a5a">301/308 permanent · 302/307 temporary</text> <text x="320" y="83" font-size="9.5" fill="#1f3a5a">307/308 preserve method + body</text> <text x="320" y="98" font-size="9.5" fill="#1f3a5a">301/302 may switch POST → GET</text> <text x="320" y="113" font-size="9.5" fill="#1f3a5a">304 Not Modified — a feature, not error</text> <!-- 4xx --> <rect x="14" y="128" width="280" height="92" rx="9" fill="#f7ecea" stroke="#9a2417" stroke-width="1.5"></rect> <text x="28" y="148" font-size="13" font-weight="700" fill="#9a2417">4xx · Client error</text> <text x="28" y="168" font-size="9.5" fill="#7a2218">400 malformed · 422 well-formed, invalid</text> <text x="28" y="183" font-size="9.5" fill="#7a2218">401 who are you? · 403 not allowed</text> <text x="28" y="198" font-size="9.5" fill="#7a2218">404 hidden/absent · 410 gone · 409 conflict</text> <text x="28" y="213" font-size="9.5" fill="#7a2218">405 +Allow · 429 +Retry-After</text> <!-- 5xx --> <rect x="306" y="128" width="280" height="92" rx="9" fill="#fbfaf2" stroke="#7a1f12" stroke-width="1.5"></rect> <text x="320" y="148" font-size="13" font-weight="700" fill="#7a1f12">5xx · Server error</text> <text x="320" y="168" font-size="9.5" fill="#2c2a26">500 generic · 502 bad gateway</text> <text x="320" y="183" font-size="9.5" fill="#2c2a26">503 unavailable (+Retry-After)</text> <text x="320" y="198" font-size="9.5" fill="#2c2a26">504 gateway timeout</text> <text x="320" y="213" font-size="9.5" fill="#9a2417">Never 5xx for a client's bad input</text> </g> </svg> <figcaption>
+The cardinal anti-pattern: returning <code>200</code> with an error embedded in the body.
+<strong>Don't tunnel errors through success.</strong> </figcaption> </figure>
 
-  <div class="chips">
-    <span class="chip">Three axes: <b>safe · idempotent · cacheable</b></span>
-    <span class="chip">PUT vs POST = <b>who owns the URI</b></span>
-    <span class="chip">Pick the <b>exact</b> status code</span>
-    <span class="chip">Never tunnel errors through <b>200</b></span>
-  </div>
+<figure> <svg viewBox="0 0 600 250" role="img" aria-label="Decision mini-map for picking between commonly confused status codes"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="300" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">PICK THE RIGHT CODE — FOUR FORKS</text> <!-- Fork A: 201 vs 200 vs 204 --> <rect x="14" y="30" width="280" height="98" rx="9" fill="#fff" stroke="#2f5d3a"></rect> <text x="28" y="49" font-size="10.5" font-weight="700" fill="#2f5d3a">Created something new?</text> <text x="28" y="68" font-size="9.5" fill="#244a2e">→ 201 + Location (new resource)</text> <text x="28" y="85" font-size="9.5" fill="#244a2e">→ 200 if returning a body, no new URI</text> <text x="28" y="102" font-size="9.5" fill="#244a2e">→ 204 success, nothing to send back</text> <text x="28" y="119" font-size="8.5" fill="#6b675f">typical 204: DELETE / PUT with no body</text> <!-- Fork B: 400 vs 422 --> <rect x="306" y="30" width="280" height="98" rx="9" fill="#fff" stroke="#9a2417"></rect> <text x="320" y="49" font-size="10.5" font-weight="700" fill="#9a2417">Bad request — how bad?</text> <text x="320" y="68" font-size="9.5" fill="#7a2218">→ 400 syntactically broken / unparseable</text> <text x="320" y="85" font-size="9.5" fill="#7a2218">→ 422 parses fine, fails validation</text> <text x="320" y="105" font-size="8.5" fill="#6b675f">"well-formed JSON, business rule fails"</text> <text x="320" y="119" font-size="8.5" fill="#6b675f">= 422 Unprocessable Content</text> <!-- Fork C: 401 vs 403 --> <rect x="14" y="138" width="280" height="98" rx="9" fill="#fff" stroke="#1f3a5a"></rect> <text x="28" y="157" font-size="10.5" font-weight="700" fill="#1f3a5a">Auth problem — which?</text> <text x="28" y="176" font-size="9.5" fill="#1f3a5a">→ 401 "we don't know who you are"</text> <text x="28" y="190" font-size="8.5" fill="#6b675f">authentication — credentials missing/bad</text> <text x="28" y="209" font-size="9.5" fill="#1f3a5a">→ 403 "we know you, you can't"</text> <text x="28" y="223" font-size="8.5" fill="#6b675f">authorization — identity is fine, no access</text> <!-- Fork D: 404 vs 410 --> <rect x="306" y="138" width="280" height="98" rx="9" fill="#fff" stroke="#7a1f12"></rect> <text x="320" y="157" font-size="10.5" font-weight="700" fill="#7a1f12">Not here — for now or forever?</text> <text x="320" y="176" font-size="9.5" fill="#2c2a26">→ 404 absent, or hiding existence</text> <text x="320" y="190" font-size="8.5" fill="#6b675f">404 over 403 avoids leaking it exists</text> <text x="320" y="209" font-size="9.5" fill="#2c2a26">→ 410 Gone — permanently removed</text> <text x="320" y="223" font-size="8.5" fill="#6b675f">tells clients to stop asking</text> </g> </svg> <figcaption>
+The gotcha checklist: 201 needs <code>Location</code> · 401 vs 403 is authn vs authz · 404 hides
+        existence on purpose · 307/308 preserve the method · PATCH idempotency depends on the patch ·
+        never tunnel errors through a 200.
+</figcaption> </figure>
+<div class="facts"><div class="fact"><p><b>201 vs 202</b> 201 means done and created (with <code>Location</code>); 202 means
+accepted for async processing — <em>not done yet</em>, hand back a status URL to poll.</p></div><div class="fact"><p><b>304 is a feature</b> Not Modified powers conditional GET / revalidation. It’s a cache
+win, not an error.</p></div><div class="fact blue"><p><b>405 vs 409 vs 410</b> 405 Method Not Allowed adds an <code>Allow</code> header; 409 for a
+state conflict; 410 Gone for permanently removed.</p></div><div class="fact blue"><p><b>429 + Retry-After</b> Too Many Requests should tell the client when to come back — same
+courtesy as 503.</p></div></div>
+<div class="rule"><p><span>🎯 Memory rule:</span> Three axes (safe ⊂ idempotent, cacheable apart); PUT vs POST = who
+owns the URI; pick the <em>exact</em> code — 422 not 400 for valid-but-invalid, 401 vs 403 for
+authn vs authz, 404 to hide existence — and never tunnel errors through a 200.</p></div>
+<h2 id="retrieval-practice">Retrieval practice</h2>
+<p><p>Close the lesson in your mind first, then answer from memory. Effortful recall is what converts
+this from “I read it” to “I own it.” Immediate feedback below.</p></p>
+<div class="quiz" id="quiz"> <div class="qitem" data-correct="2"> <p class="q"> <span class="qn">Q1.</span> Which property set is correct for the PUT method? </p> <button class="opt">it is both safe and also fully cacheable</button><button class="opt">it is safe but it is never idempotent</button><button class="opt">it is idempotent but it is not safe</button><button class="opt">it is neither idempotent nor ever cacheable</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="3"> <p class="q"> <span class="qn">Q2.</span> A request body is well-formed JSON but fails business validation. Return… </p> <button class="opt">a 500 because the request could not complete</button><button class="opt">a 403 because the data was clearly forbidden</button><button class="opt">a 400 because the request looked plainly broken</button><button class="opt">a 422 because the request was semantically invalid</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="1"> <p class="q"> <span class="qn">Q3.</span> Why prefer 307 over 302 when redirecting a POST? </p> <button class="opt">because 307 permanently caches the redirect target longer</button><button class="opt">because 307 preserves the original method and body</button><button class="opt">because 307 tells the client to switch into GET</button><button class="opt">because 307 signals the resource has been removed</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="0"> <p class="q"> <span class="qn">Q4.</span> A successful 201 Created response MUST include which header? </p> <button class="opt">a Location header pointing at the new resource</button><button class="opt">a Retry-After header telling clients when to retry</button><button class="opt">an Allow header listing every permitted request method</button><button class="opt">a Cache-Control header marking the response cacheable</button> <p class="fb" role="status" aria-live="polite"></p> </div> </div>
+<h2 id="rehearse-the-answer-out-loud">Rehearse the answer out loud</h2>
+<p class="rehearse">Interviewer: <strong>"A client calls <code>POST /payments</code> and the connection drops before they get a response. Walk me through the method and status code design so a retry is safe."</strong> Type your answer from memory (no scrolling up), <em>then</em> reveal and compare — don't read the model first.</p> <div class="rehearse"> <textarea placeholder="Your answer, from memory…"></textarea><br> <button class="btn ghost" data-reveal>Reveal model answer</button> <div class="model"><p><p>“<code>POST</code> is right here because the <strong>server assigns the payment id</strong> 
+— the client doesn’t know the URI ahead of time. If we process synchronously I return 
+<strong>201 Created</strong> with a <code>Location</code> header to the new payment; if it’s
+async, <strong>202 Accepted</strong> with a status/Location URL the client can poll.</p></p><p><p>The hard part is the dropped connection. <strong>POST isn’t idempotent</strong>, so a blind
+retry risks a double-charge. The fix is a client-generated <strong>Idempotency-Key</strong> 
+header: the server records it, and a retry with the same key returns the <em>original</em> 
+result instead of charging again — that’s exactly the idempotency-in-practice pattern we
+cover next. On a genuine state conflict I’d return <strong>409</strong>; on a validation
+failure <strong>422</strong>. And I’d never return <code>200</code> with an error tucked in
+the body.”</p></p><p class="src"><p><strong>Why this scores:</strong> it names the non-idempotency problem explicitly and 
+<em>solves</em> it with an idempotency key, picks the correct codes for sync vs async, and
+handles the failure branches (409/422) without tunneling errors through 200.</p></p></div> </div>
+<div class="ask"><p><strong>I’m your teacher — ask me anything.</strong> Want to drill the 401-vs-403 and
+404-leakage trade-offs? Curious how JSON Patch breaks idempotency in practice? Want me to grade
+your rehearsal answer or fire harder follow-ups at you? Just say so in the chat.</p></div>
+<h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem"><p>Primary source (read this next)</p></h3>
+<p><p>📖 </p><a href="https://www.rfc-editor.org/rfc/rfc9110.html"><strong>RFC 9110 — HTTP Semantics</strong></a><p>. The authoritative spec for method properties (safe/idempotent/cacheable) and status-code
+meaning. Keep the 
+<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods">MDN methods</a> and 
+<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status">MDN status</a> pages open as
+fast lookups.</p></p>
+<h2 class="sec" id="interview"><p>Interview — pick your bar</p></h2>
+<p class="tagline"><p>Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System Design</b> = open
+design round (a different axis, not a harder level).</p></p>
+<div data-interview> <details class="iq" data-level="core"> <summary>Define a <em>safe</em> and an <em>idempotent</em> HTTP method.</summary> <div class="a"><p><strong>Safe</strong> = read-only <em>intent</em>, no intended state change (<code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>). <strong>Idempotent</strong> = N identical requests have the same effect on server state as one (<code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>, <code>PUT</code>, <code>DELETE</code>). The key word is <em>effect on state</em>, not a byte-identical response.</p></div> </details> <details class="iq" data-level="core"> <summary>Is <code>POST</code> idempotent? Why does it matter?</summary> <div class="a"><p>No. A retried <code>POST</code> can create a duplicate (a second charge or order). It matters because dropped connections and retries are normal in distributed systems — non-idempotency is exactly why <code>POST</code> creation needs an <code>Idempotency-Key</code> to be retry-safe.</p></div> </details> <details class="iq" data-level="core"> <summary><code>200</code> vs <code>201</code> vs <code>204</code>, and what must a <code>201</code> include?</summary> <div class="a"><p><code>200 OK</code>: success with a body. <code>201 Created</code>: a new resource was created and <strong>must carry a <code>Location</code></strong> header to it. <code>204 No Content</code>: success with no body (common for <code>DELETE</code> and for <code>PUT</code>/<code>PATCH</code> that don't echo the resource).</p></div> </details> <details class="iq" data-level="core"> <summary><code>401</code> vs <code>403</code> — what's the difference?</summary> <div class="a"><p><code>401 Unauthorized</code> = <strong>authentication</strong> failed ("we don't know who you are" — credentials missing/invalid/expired; re-authenticate). <code>403 Forbidden</code> = <strong>authorization</strong> failed ("we know who you are, you're not allowed" — re-authenticating won't help).</p></div> </details> <details class="iq" data-level="senior"> <summary>Explain "safe &sub; idempotent," and why "safe means secure" is false.</summary> <div class="a"><p>Every safe method is idempotent (reading changes nothing, so repeating it changes nothing); the reverse fails — <code>PUT</code>/<code>DELETE</code> are idempotent but not safe. "Safe" is about read-only <em>intent</em>, nothing about authn/authz/TLS: a <code>GET</code> can still expose sensitive data and still needs authorization and transport security. Keep safe / idempotent / cacheable as three separate axes.</p></div> </details> <details class="iq" data-level="senior"> <summary>Is <code>PATCH</code> idempotent, and how do JSON Merge Patch vs JSON Patch relate?</summary> <div class="a"><p>Not guaranteed — it depends on the patch document. A "set field to X" patch is idempotent; "increment by 1" / "add to array" is not. <strong>JSON Merge Patch (RFC 7386)</strong> sets values (<code>null</code> = remove), so it tends to be idempotent; <strong>JSON Patch (RFC 6902)</strong> is an op sequence where <code>add</code> isn't. Make <code>PATCH</code> idempotent when you can, and know why a given patch isn't.</p></div> </details> <details class="iq" data-level="senior"> <summary>Why prefer <code>307</code>/<code>308</code> over <code>302</code>/<code>301</code>, and why is <code>304</code> a feature?</summary> <div class="a"><p><code>307</code>/<code>308</code> <strong>preserve the method and body</strong>; with <code>301</code>/<code>302</code> clients historically rewrote a <code>POST</code> into a <code>GET</code>, dropping the body. <code>304 Not Modified</code> is the payoff of conditional GET: the client revalidates with <code>If-None-Match</code>/<code>If-Modified-Since</code> and, if nothing changed, gets <code>304</code> with no body and reuses its cache — bandwidth saved, not a failure.</p></div> </details> <details class="iq" data-level="senior"> <summary>When should a forbidden resource return <code>404</code> instead of <code>403</code>?</summary> <div class="a"><p>When the very <em>existence</em> of the resource is sensitive. A <code>403</code> confirms "this exists, you just can't see it," which leaks information (resource enumeration — e.g. private repo names). <code>404</code> hides existence entirely. Trade-off: <code>404</code> is harder to debug for legitimate users, so reserve it for genuinely sensitive resources, not as a blanket policy.</p></div> </details> <details class="iq" data-level="staff"> <summary>A teammate puts "mark as read" behind <code>GET /messages/42?read=true</code>. What breaks?</summary> <div class="a"><p>It makes a state-changing operation safe-in-name only, and the ecosystem assumes <code>GET</code> is safe: prefetchers, crawlers, link-preview bots, and proxies fire it and silently mutate state, and caches may serve stale results. Intended state change belongs on a non-safe verb — <code>POST</code>, or <code>PATCH</code>/<code>PUT</code> for an idempotent update. The classic casualty was an admin panel where a crawler followed every "delete" link.</p></div> </details> <details class="iq" data-level="staff"> <summary>A downstream dependency is timing out under load. Walk the status codes and behavior you'd return.</summary> <div class="a"><p>If a circuit breaker is open / you're shedding load, return <code>503</code> + <code>Retry-After</code> so clients back off. If you actually called upstream and it timed out, <code>504</code> is honest; if it returned garbage, <code>502</code>. Don't let upstream's timeout surface as a <code>500</code> for a valid client request, and never convert it into a <code>4xx</code> — the client did nothing wrong. Combine with idempotency keys so the inevitable retries don't double-act.</p></div> </details> <details class="iq" data-level="staff"> <summary>Status code as the contract, or body error codes — how do you reconcile them?</summary> <div class="a"><p>Use both at the right layer. The HTTP status is the <strong>coarse, machine-actionable verdict</strong> that infrastructure (caches, LBs, retry logic, alerting) acts on — get it right first. The body carries a <strong>stable, fine-grained error code</strong> plus human/field detail for the application to branch on (e.g. <code>"code": "card_declined"</code> alongside a <code>402</code>/<code>422</code>). Status for the network, body codes for the application — not one instead of the other.</p></div> </details> <div class="designrubric" data-level="design"> <b>REST design-round framework</b> — drive any "design a REST API" prompt through these, out loud: <ol> <li>Model resources &amp; URIs — nouns not verbs, collections vs items (<code>/orders</code>, <code>/orders/{id}</code>), nesting only for true ownership.</li><li>Map methods &amp; status codes — GET/POST/PUT/PATCH/DELETE to the right semantics; 2xx/4xx/5xx that mean what they say (201+<code>Location</code>, 401 vs 403, 422 vs 400).</li><li>Idempotency &amp; caching — safe/idempotent verbs, idempotency keys for POST, <code>ETag</code>/<code>If-Match</code>/conditional requests.</li><li>Pagination, filtering &amp; sorting — cursor vs offset, bounded page sizes, consistent query params.</li><li>AuthN/AuthZ — bearer tokens on every request (stateless), scopes/roles, transport security, rate limits with <code>Retry-After</code> (OWASP API Top 10).</li><li>Versioning &amp; evolution — additive changes, deprecation policy, URL vs header versioning.</li><li>Errors &amp; contracts — status as the machine verdict plus a stable body error code (e.g. RFC 9457 problem+json), correlation IDs.</li> </ol> </div><details class="iq" data-level="design"> <summary>Design the request/response contract for <code>POST /payments</code> where the connection can drop mid-flight. Walk the methods and status codes.</summary> <div class="a"><p><b>A strong answer covers:</b> <code>POST</code> is correct because the server assigns the payment id &rarr; sync path returns <code>201 Created</code> + <code>Location</code>; async path returns <code>202 Accepted</code> + a status URL to poll, never <code>200</code> for unfinished work &rarr; the dropped connection is the hard part: <code>POST</code> isn't idempotent, so a client-generated <code>Idempotency-Key</code> lets a retry replay the original result instead of double-charging &rarr; map the failure modes to honest codes: <code>422</code> for validation, <code>409</code> for a state conflict, <code>402</code>/body error code for a declined card, <code>503</code>+<code>Retry-After</code> when shedding load, <code>504</code> if upstream timed out &rarr; never tunnel an error through <code>200</code>, never return <code>5xx</code> for bad client input &rarr; name the contract split: status code for the network/infra, stable body error code for the application.</p></div> </details> <details class="iq" data-level="design"> <summary>Design the update + concurrency story for a resource many clients edit at once (PUT vs PATCH, conditional requests).</summary> <div class="a"><p><b>A strong answer covers:</b> choose <code>PUT</code> (full replace, idempotent by construction) vs <code>PATCH</code> (partial edit) by resource size and whether "set to null" must differ from "leave untouched" &rarr; for <code>PATCH</code>, pick the format deliberately — JSON Merge Patch (value-setting, tends to be idempotent) vs JSON Patch (op sequence, <code>add</code> isn't idempotent) &rarr; guard lost updates with optimistic concurrency: hand out an <code>ETag</code> on reads, require <code>If-Match</code> on writes, return <code>412 Precondition Failed</code> on a stale version &rarr; distinguish <code>412</code> ("your version is stale") from <code>409</code> ("this action conflicts with current state") &rarr; make retries safe: idempotent verbs retry freely, and a turned-into-explicit conflict is retryable after a re-read &rarr; name the trade-off: <code>PUT</code> is simpler and retry-safe but bandwidth-heavy; <code>PATCH</code> saves bytes but adds format and idempotency nuance.</p></div> </details>  </div> <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Define a safe and an idempotent HTTP method.","acceptedAnswer":{"@type":"Answer","text":"Safe = read-only intent, no intended state change (GET, HEAD, OPTIONS). Idempotent = N identical requests have the same effect on server state as one (GET, HEAD, OPTIONS, PUT, DELETE). The key word is effect on state, not a byte-identical response."}},{"@type":"Question","name":"Is POST idempotent? Why does it matter?","acceptedAnswer":{"@type":"Answer","text":"No. A retried POST can create a duplicate (a second charge or order). It matters because dropped connections and retries are normal in distributed systems — non-idempotency is exactly why POST creation needs an Idempotency-Key to be retry-safe."}},{"@type":"Question","name":"200 vs 201 vs 204, and what must a 201 include?","acceptedAnswer":{"@type":"Answer","text":"200 OK: success with a body. 201 Created: a new resource was created and must carry a Location header to it. 204 No Content: success with no body (common for DELETE and for PUT/PATCH that don't echo the resource)."}},{"@type":"Question","name":"401 vs 403 — what's the difference?","acceptedAnswer":{"@type":"Answer","text":"401 Unauthorized = authentication failed (\"we don't know who you are\" — credentials missing/invalid/expired; re-authenticate). 403 Forbidden = authorization failed (\"we know who you are, you're not allowed\" — re-authenticating won't help)."}},{"@type":"Question","name":"Explain \"safe &sub; idempotent,\" and why \"safe means secure\" is false.","acceptedAnswer":{"@type":"Answer","text":"Every safe method is idempotent (reading changes nothing, so repeating it changes nothing); the reverse fails — PUT/DELETE are idempotent but not safe. \"Safe\" is about read-only intent, nothing about authn/authz/TLS: a GET can still expose sensitive data and still needs authorization and transport security. Keep safe / idempotent / cacheable as three separate axes."}},{"@type":"Question","name":"Is PATCH idempotent, and how do JSON Merge Patch vs JSON Patch relate?","acceptedAnswer":{"@type":"Answer","text":"Not guaranteed — it depends on the patch document. A \"set field to X\" patch is idempotent; \"increment by 1\" / \"add to array\" is not. JSON Merge Patch (RFC 7386) sets values (null = remove), so it tends to be idempotent; JSON Patch (RFC 6902) is an op sequence where add isn't. Make PATCH idempotent when you can, and know why a given patch isn't."}},{"@type":"Question","name":"Why prefer 307/308 over 302/301, and why is 304 a feature?","acceptedAnswer":{"@type":"Answer","text":"307/308 preserve the method and body; with 301/302 clients historically rewrote a POST into a GET, dropping the body. 304 Not Modified is the payoff of conditional GET: the client revalidates with If-None-Match/If-Modified-Since and, if nothing changed, gets 304 with no body and reuses its cache — bandwidth saved, not a failure."}},{"@type":"Question","name":"When should a forbidden resource return 404 instead of 403?","acceptedAnswer":{"@type":"Answer","text":"When the very existence of the resource is sensitive. A 403 confirms \"this exists, you just can't see it,\" which leaks information (resource enumeration — e.g. private repo names). 404 hides existence entirely. Trade-off: 404 is harder to debug for legitimate users, so reserve it for genuinely sensitive resources, not as a blanket policy."}},{"@type":"Question","name":"A teammate puts \"mark as read\" behind GET /messages/42?read=true. What breaks?","acceptedAnswer":{"@type":"Answer","text":"It makes a state-changing operation safe-in-name only, and the ecosystem assumes GET is safe: prefetchers, crawlers, link-preview bots, and proxies fire it and silently mutate state, and caches may serve stale results. Intended state change belongs on a non-safe verb — POST, or PATCH/PUT for an idempotent update. The classic casualty was an admin panel where a crawler followed every \"delete\" link."}},{"@type":"Question","name":"A downstream dependency is timing out under load. Walk the status codes and behavior you'd return.","acceptedAnswer":{"@type":"Answer","text":"If a circuit breaker is open / you're shedding load, return 503 + Retry-After so clients back off. If you actually called upstream and it timed out, 504 is honest; if it returned garbage, 502. Don't let upstream's timeout surface as a 500 for a valid client request, and never convert it into a 4xx — the client did nothing wrong. Combine with idempotency keys so the inevitable retries don't double-act."}},{"@type":"Question","name":"Status code as the contract, or body error codes — how do you reconcile them?","acceptedAnswer":{"@type":"Answer","text":"Use both at the right layer. The HTTP status is the coarse, machine-actionable verdict that infrastructure (caches, LBs, retry logic, alerting) acts on — get it right first. The body carries a stable, fine-grained error code plus human/field detail for the application to branch on (e.g. \"code\": \"card_declined\" alongside a 402/422). Status for the network, body codes for the application — not one instead of the other."}},{"@type":"Question","name":"Design the request/response contract for POST /payments where the connection can drop mid-flight. Walk the methods and status codes.","acceptedAnswer":{"@type":"Answer","text":"A strong answer covers: POST is correct because the server assigns the payment id → sync path returns 201 Created + Location; async path returns 202 Accepted + a status URL to poll, never 200 for unfinished work → the dropped connection is the hard part: POST isn't idempotent, so a client-generated Idempotency-Key lets a retry replay the original result instead of double-charging → map the failure modes to honest codes: 422 for validation, 409 for a state conflict, 402/body error code for a declined card, 503+Retry-After when shedding load, 504 if upstream timed out → never tunnel an error through 200, never return 5xx for bad client input → name the contract split: status code for the network/infra, stable body error code for the application."}},{"@type":"Question","name":"Design the update + concurrency story for a resource many clients edit at once (PUT vs PATCH, conditional requests).","acceptedAnswer":{"@type":"Answer","text":"A strong answer covers: choose PUT (full replace, idempotent by construction) vs PATCH (partial edit) by resource size and whether \"set to null\" must differ from \"leave untouched\" → for PATCH, pick the format deliberately — JSON Merge Patch (value-setting, tends to be idempotent) vs JSON Patch (op sequence, add isn't idempotent) → guard lost updates with optimistic concurrency: hand out an ETag on reads, require If-Match on writes, return 412 Precondition Failed on a stale version → distinguish 412 (\"your version is stale\") from 409 (\"this action conflicts with current state\") → make retries safe: idempotent verbs retry freely, and a turned-into-explicit conflict is retryable after a re-read → name the trade-off: PUT is simpler and retry-safe but bandwidth-heavy; PATCH saves bytes but adds format and idempotency nuance."}}]}</script>
+<div class="next"><span><p>📄 Keep handy: </p><a href="../reference/rest-constraints-and-maturity.html"><p>Constraints &amp; method semantics reference</p></a></span><span><p><a href="../lessons/0001-what-makes-an-api-restful.html">◂ Prev</a> · </p><a href="../lessons/0003-idempotency-in-practice.html"><em>Next ▸ Lesson 3</em></a></span></div>
+<footer id="sources"> <strong>Sources</strong><br>  <span id="s1">1. RFC 9110, HTTP Semantics (safe, idempotent, cacheable) — <a href="https://www.rfc-editor.org/rfc/rfc9110.html">rfc-editor.org</a>; method overview on <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods">MDN</a>. <a href="#r1">↩</a></span> <br>  <span id="s2">2. Method semantics (PUT/POST/PATCH) — <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods">MDN HTTP Methods</a>; normative text in <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC 9110</a>. <a href="#r2">↩</a></span> <br>  <span id="s3">3. HTTP response status codes — <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status">MDN HTTP Status</a>; definitions in <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC 9110</a>. <a href="#r3">↩</a></span> <br>  </footer>  <!-- standardized bottom pager — guarantees the `.nav a` hook that
+                 analytics.js uses for lesson_nav_* + lesson_complete on every lesson --> <nav class="nav"> <span>&#8592; <a href="/engineering-learning-hub/index.html#grid">Engineering Vault</a></span> <span>
+Next: <a href="0003-idempotency-in-practice.html">Idempotency in practice (visual) &#8594;</a> </span> </nav> <div class="lesson-fb" aria-live="polite"> <span class="lesson-fb-q">Was this lesson helpful?</span> <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">
+👍 Yes
+</button> <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No
+</button> <span class="lesson-fb-thanks">Thanks &mdash; noted.</span> </div> <p class="lesson-endnote">
+These notes reflect my current understanding and are updated as I learn, build, and
+                discover better explanations.
+</p> </main> </div>  <script>
+        document.querySelectorAll('.qitem').forEach(function (item) {
+            var correct = +item.dataset.correct;
+            var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+            var fb = item.querySelector('.fb');
+            opts.forEach(function (opt, i) {
+                opt.addEventListener('click', function () {
+                    opts.forEach(function (o) {
+                        o.disabled = true;
+                    });
+                    opts[correct].classList.add('correct');
+                    if (i === correct) {
+                        fb.textContent = '✓ Correct.';
+                        fb.className = 'fb ok';
+                    } else {
+                        opt.classList.add('wrong');
+                        fb.textContent =
+                            '✗ Not quite — the right answer is highlighted. Re-read it, then say it back out loud.';
+                        fb.className = 'fb no';
+                    }
+                });
+            });
+        });
 
-  <!-- DIAGRAM 1: three orthogonal properties -->
-  <h2 class="sec">Three orthogonal properties (don't conflate them)</h2>
-  <p>Methods are described by three independent axes.<sup><a href="#s1" id="r1">1</a></sup> Mid-level answers blur them; seniors keep them separate. The containment to remember: <strong>safe ⊂ idempotent</strong> — every safe method is idempotent, but not the reverse.</p>
-  <figure>
-    <svg viewBox="0 0 560 200" role="img" aria-label="Nested sets: safe methods are a subset of idempotent methods; cacheable overlaps safe; POST and PATCH sit outside idempotent">
-      <g font-family="ui-sans-serif,system-ui,sans-serif">
-        <text x="280" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">SAFE ⊂ IDEMPOTENT · CACHEABLE IS A SEPARATE AXIS</text>
-        <rect x="40" y="34" width="340" height="148" rx="12" fill="#fff" stroke="#1f3a5a" stroke-width="1.5"/>
-        <text x="210" y="52" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1f3a5a">IDEMPOTENT — repeat = same state</text>
-        <rect x="60" y="64" width="180" height="104" rx="10" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
-        <text x="150" y="82" text-anchor="middle" font-size="10" font-weight="700" fill="#2f5d3a">SAFE — read-only intent</text>
-        <text x="150" y="104" text-anchor="middle" font-size="13" font-weight="700" fill="#2f5d3a">GET · HEAD</text>
-        <text x="150" y="124" text-anchor="middle" font-size="13" font-weight="700" fill="#2f5d3a">OPTIONS</text>
-        <text x="150" y="150" text-anchor="middle" font-size="9" fill="#244a2e">cacheable by default →</text>
-        <text x="310" y="104" text-anchor="middle" font-size="13" font-weight="700" fill="#1f3a5a">PUT</text>
-        <text x="310" y="126" text-anchor="middle" font-size="13" font-weight="700" fill="#1f3a5a">DELETE</text>
-        <text x="310" y="150" text-anchor="middle" font-size="9" fill="#6b675f">change state, but converge</text>
-        <rect x="402" y="64" width="150" height="104" rx="10" fill="#f7ecea" stroke="#9a2417" stroke-width="1.5"/>
-        <text x="477" y="84" text-anchor="middle" font-size="10" font-weight="700" fill="#9a2417">NOT IDEMPOTENT</text>
-        <text x="477" y="108" text-anchor="middle" font-size="13" font-weight="700" fill="#9a2417">POST</text>
-        <text x="477" y="132" text-anchor="middle" font-size="13" font-weight="700" fill="#9a2417">PATCH*</text>
-        <text x="477" y="156" text-anchor="middle" font-size="8.5" fill="#7a2218">*depends on the patch doc</text>
-      </g>
-    </svg>
-    <figcaption>"Safe" ≠ "secure": a <code>GET</code> may log or run analytics — it just isn't <em>intended</em> to change resource state. Cacheability is independent of the other two axes.</figcaption>
-  </figure>
-
-  <!-- DIAGRAM 2: method-semantics matrix -->
-  <figure>
-    <svg viewBox="0 0 560 226" role="img" aria-label="Matrix of GET, POST, PUT, PATCH, DELETE against Safe, Idempotent, and Has request body">
-      <g font-family="ui-sans-serif,system-ui,sans-serif" font-size="11">
-        <text x="280" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">METHOD SEMANTICS MATRIX · RFC 9110</text>
-        <!-- column headers -->
-        <text x="232" y="42" text-anchor="middle" font-size="10" font-weight="700" fill="#6b675f">Safe?</text>
-        <text x="342" y="42" text-anchor="middle" font-size="10" font-weight="700" fill="#6b675f">Idempotent?</text>
-        <text x="470" y="42" text-anchor="middle" font-size="10" font-weight="700" fill="#6b675f">Has body?</text>
-        <line x1="14" y1="50" x2="546" y2="50" stroke="#d8d4c8"/>
-        <!-- rows -->
-        <g>
-          <rect x="14" y="58" width="100" height="28" rx="6" fill="#eef5ee" stroke="#2f5d3a"/>
-          <text x="64" y="77" text-anchor="middle" font-size="12" font-weight="700" fill="#2f5d3a">GET</text>
-          <text x="232" y="77" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text>
-          <text x="342" y="77" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text>
-          <text x="470" y="77" text-anchor="middle" font-size="13" fill="#9a2417">✗</text>
-        </g>
-        <g>
-          <rect x="14" y="92" width="100" height="28" rx="6" fill="#f7ecea" stroke="#9a2417"/>
-          <text x="64" y="111" text-anchor="middle" font-size="12" font-weight="700" fill="#9a2417">POST</text>
-          <text x="232" y="111" text-anchor="middle" font-size="13" fill="#9a2417">✗</text>
-          <text x="342" y="111" text-anchor="middle" font-size="13" fill="#9a2417">✗</text>
-          <text x="470" y="111" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text>
-        </g>
-        <g>
-          <rect x="14" y="126" width="100" height="28" rx="6" fill="#eef2f5" stroke="#1f3a5a"/>
-          <text x="64" y="145" text-anchor="middle" font-size="12" font-weight="700" fill="#1f3a5a">PUT</text>
-          <text x="232" y="145" text-anchor="middle" font-size="13" fill="#9a2417">✗</text>
-          <text x="342" y="145" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text>
-          <text x="470" y="145" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text>
-        </g>
-        <g>
-          <rect x="14" y="160" width="100" height="28" rx="6" fill="#fbfaf2" stroke="#6b675f"/>
-          <text x="64" y="179" text-anchor="middle" font-size="12" font-weight="700" fill="#6b675f">PATCH</text>
-          <text x="232" y="179" text-anchor="middle" font-size="13" fill="#9a2417">✗</text>
-          <text x="342" y="179" text-anchor="middle" font-size="11" fill="#6b675f">maybe</text>
-          <text x="470" y="179" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text>
-        </g>
-        <g>
-          <rect x="14" y="194" width="100" height="28" rx="6" fill="#eef2f5" stroke="#1f3a5a"/>
-          <text x="64" y="213" text-anchor="middle" font-size="12" font-weight="700" fill="#1f3a5a">DELETE</text>
-          <text x="232" y="213" text-anchor="middle" font-size="13" fill="#9a2417">✗</text>
-          <text x="342" y="213" text-anchor="middle" font-size="13" fill="#2f5d3a">✓</text>
-          <text x="470" y="213" text-anchor="middle" font-size="11" fill="#6b675f">often</text>
-        </g>
-        <line x1="124" y1="50" x2="124" y2="222" stroke="#d8d4c8"/>
-      </g>
-    </svg>
-    <figcaption><code>PATCH</code> is <em>not guaranteed</em> idempotent — JSON Merge Patch (RFC 7386) tends to be; JSON Patch (RFC 6902) with ops like "add to array" is not. The senior move: make your PATCH idempotent when you can, and know why it might not be.</figcaption>
-  </figure>
-
-  <!-- PUT vs POST -->
-  <h2 class="sec">PUT vs POST for creation</h2>
-  <p>The classic probe. The deciding question is <em>who owns the URI</em>:<sup><a href="#s2" id="r2">2</a></sup></p>
-  <figure>
-    <svg viewBox="0 0 600 158" role="img" aria-label="If the client knows the target URI use PUT and it is idempotent; if the server assigns the URI use POST returning 201 with a Location header">
-      <g font-family="ui-sans-serif,system-ui,sans-serif">
-        <text x="300" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">WHO OWNS THE TARGET URI?</text>
-        <rect x="210" y="28" width="180" height="34" rx="8" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
-        <text x="300" y="49" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">Does the client know the URI?</text>
-        <!-- YES branch -->
-        <line x1="240" y1="62" x2="140" y2="92" stroke="#2f5d3a" marker-end="url(#arwG)"/>
-        <text x="160" y="80" text-anchor="middle" font-size="9" font-weight="700" fill="#2f5d3a">YES</text>
-        <rect x="20" y="92" width="240" height="58" rx="9" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
-        <text x="140" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="#2f5d3a">PUT /users/42</text>
-        <text x="140" y="129" text-anchor="middle" font-size="9" fill="#244a2e">replace-or-create at this address</text>
-        <text x="140" y="143" text-anchor="middle" font-size="9" fill="#244a2e">idempotent — two calls → one user 42</text>
-        <!-- NO branch -->
-        <line x1="360" y1="62" x2="460" y2="92" stroke="#1f3a5a" marker-end="url(#arw)"/>
-        <text x="440" y="80" text-anchor="middle" font-size="9" font-weight="700" fill="#1f3a5a">NO</text>
-        <rect x="340" y="92" width="244" height="58" rx="9" fill="#eef2f5" stroke="#1f3a5a" stroke-width="1.5"/>
-        <text x="462" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="#1f3a5a">POST /users</text>
-        <text x="462" y="129" text-anchor="middle" font-size="9" fill="#1f3a5a">server assigns the URI</text>
-        <text x="462" y="143" text-anchor="middle" font-size="9" fill="#1f3a5a">returns 201 + Location header</text>
-      </g>
-    </svg>
-    <figcaption>The other axis: <code>PUT</code> replaces the <strong>whole</strong> resource; <code>PATCH</code> applies a <strong>partial</strong> modification. A partial body with <code>PUT</code> means "the omitted fields are now gone."</figcaption>
-  </figure>
-  <div class="myth"><div class="m">✗ Myth: "lead with the verb list — GET reads, POST creates, PUT updates."</div>
-  <div class="t">✓ Senior: lead with idempotency. POST isn't idempotent, so a dropped-connection retry can double-create — that's why creation uses PUT at a client-known URI, or POST plus an idempotency key.</div></div>
-  <p class="pull"><strong>Lead with idempotency, not the verb.</strong> That single sentence signals senior; the verb list alone signals junior.</p>
-
-  <!-- DIAGRAM 3: status code families -->
-  <h2 class="sec">Status codes that separate seniors</h2>
-  <p>Pick the code that tells the client <em>exactly</em> what happened and what to do next.<sup><a href="#s3" id="r3">3</a></sup></p>
-  <figure>
-    <svg viewBox="0 0 600 230" role="img" aria-label="Status code families: 2xx success, 3xx redirection, 4xx client error, 5xx server error, each with key codes">
-      <g font-family="ui-sans-serif,system-ui,sans-serif">
-        <text x="300" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">STATUS-CODE FAMILIES AT A GLANCE</text>
-        <!-- 2xx -->
-        <rect x="14" y="28" width="280" height="92" rx="9" fill="#eef5ee" stroke="#2f5d3a" stroke-width="1.5"/>
-        <text x="28" y="48" font-size="13" font-weight="700" fill="#2f5d3a">2xx · Success</text>
-        <text x="28" y="68" font-size="9.5" fill="#244a2e">200 OK — success with a body</text>
-        <text x="28" y="83" font-size="9.5" fill="#244a2e">201 Created — MUST add Location header</text>
-        <text x="28" y="98" font-size="9.5" fill="#244a2e">202 Accepted — async, not done yet</text>
-        <text x="28" y="113" font-size="9.5" fill="#244a2e">204 No Content — success, empty body</text>
-        <!-- 3xx -->
-        <rect x="306" y="28" width="280" height="92" rx="9" fill="#eef2f5" stroke="#1f3a5a" stroke-width="1.5"/>
-        <text x="320" y="48" font-size="13" font-weight="700" fill="#1f3a5a">3xx · Redirection</text>
-        <text x="320" y="68" font-size="9.5" fill="#1f3a5a">301/308 permanent · 302/307 temporary</text>
-        <text x="320" y="83" font-size="9.5" fill="#1f3a5a">307/308 preserve method + body</text>
-        <text x="320" y="98" font-size="9.5" fill="#1f3a5a">301/302 may switch POST → GET</text>
-        <text x="320" y="113" font-size="9.5" fill="#1f3a5a">304 Not Modified — a feature, not error</text>
-        <!-- 4xx -->
-        <rect x="14" y="128" width="280" height="92" rx="9" fill="#f7ecea" stroke="#9a2417" stroke-width="1.5"/>
-        <text x="28" y="148" font-size="13" font-weight="700" fill="#9a2417">4xx · Client error</text>
-        <text x="28" y="168" font-size="9.5" fill="#7a2218">400 malformed · 422 well-formed, invalid</text>
-        <text x="28" y="183" font-size="9.5" fill="#7a2218">401 who are you? · 403 not allowed</text>
-        <text x="28" y="198" font-size="9.5" fill="#7a2218">404 hidden/absent · 410 gone · 409 conflict</text>
-        <text x="28" y="213" font-size="9.5" fill="#7a2218">405 +Allow · 429 +Retry-After</text>
-        <!-- 5xx -->
-        <rect x="306" y="128" width="280" height="92" rx="9" fill="#fbfaf2" stroke="#7a1f12" stroke-width="1.5"/>
-        <text x="320" y="148" font-size="13" font-weight="700" fill="#7a1f12">5xx · Server error</text>
-        <text x="320" y="168" font-size="9.5" fill="#2c2a26">500 generic · 502 bad gateway</text>
-        <text x="320" y="183" font-size="9.5" fill="#2c2a26">503 unavailable (+Retry-After)</text>
-        <text x="320" y="198" font-size="9.5" fill="#2c2a26">504 gateway timeout</text>
-        <text x="320" y="213" font-size="9.5" fill="#9a2417">Never 5xx for a client's bad input</text>
-      </g>
-    </svg>
-    <figcaption>The cardinal anti-pattern: returning <code>200</code> with an error embedded in the body. <strong>Don't tunnel errors through success.</strong></figcaption>
-  </figure>
-
-  <!-- DIAGRAM 4: pick the right code decision mini-map -->
-  <figure>
-    <svg viewBox="0 0 600 250" role="img" aria-label="Decision mini-map for picking between commonly confused status codes">
-      <g font-family="ui-sans-serif,system-ui,sans-serif">
-        <text x="300" y="16" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">PICK THE RIGHT CODE — FOUR FORKS</text>
-        <!-- Fork A: 201 vs 200 vs 204 -->
-        <rect x="14" y="30" width="280" height="98" rx="9" fill="#fff" stroke="#2f5d3a"/>
-        <text x="28" y="49" font-size="10.5" font-weight="700" fill="#2f5d3a">Created something new?</text>
-        <text x="28" y="68" font-size="9.5" fill="#244a2e">→ 201 + Location (new resource)</text>
-        <text x="28" y="85" font-size="9.5" fill="#244a2e">→ 200 if returning a body, no new URI</text>
-        <text x="28" y="102" font-size="9.5" fill="#244a2e">→ 204 success, nothing to send back</text>
-        <text x="28" y="119" font-size="8.5" fill="#6b675f">typical 204: DELETE / PUT with no body</text>
-        <!-- Fork B: 400 vs 422 -->
-        <rect x="306" y="30" width="280" height="98" rx="9" fill="#fff" stroke="#9a2417"/>
-        <text x="320" y="49" font-size="10.5" font-weight="700" fill="#9a2417">Bad request — how bad?</text>
-        <text x="320" y="68" font-size="9.5" fill="#7a2218">→ 400 syntactically broken / unparseable</text>
-        <text x="320" y="85" font-size="9.5" fill="#7a2218">→ 422 parses fine, fails validation</text>
-        <text x="320" y="105" font-size="8.5" fill="#6b675f">"well-formed JSON, business rule fails"</text>
-        <text x="320" y="119" font-size="8.5" fill="#6b675f">= 422 Unprocessable Content</text>
-        <!-- Fork C: 401 vs 403 -->
-        <rect x="14" y="138" width="280" height="98" rx="9" fill="#fff" stroke="#1f3a5a"/>
-        <text x="28" y="157" font-size="10.5" font-weight="700" fill="#1f3a5a">Auth problem — which?</text>
-        <text x="28" y="176" font-size="9.5" fill="#1f3a5a">→ 401 "we don't know who you are"</text>
-        <text x="28" y="190" font-size="8.5" fill="#6b675f">authentication — credentials missing/bad</text>
-        <text x="28" y="209" font-size="9.5" fill="#1f3a5a">→ 403 "we know you, you can't"</text>
-        <text x="28" y="223" font-size="8.5" fill="#6b675f">authorization — identity is fine, no access</text>
-        <!-- Fork D: 404 vs 410 -->
-        <rect x="306" y="138" width="280" height="98" rx="9" fill="#fff" stroke="#7a1f12"/>
-        <text x="320" y="157" font-size="10.5" font-weight="700" fill="#7a1f12">Not here — for now or forever?</text>
-        <text x="320" y="176" font-size="9.5" fill="#2c2a26">→ 404 absent, or hiding existence</text>
-        <text x="320" y="190" font-size="8.5" fill="#6b675f">404 over 403 avoids leaking it exists</text>
-        <text x="320" y="209" font-size="9.5" fill="#2c2a26">→ 410 Gone — permanently removed</text>
-        <text x="320" y="223" font-size="8.5" fill="#6b675f">tells clients to stop asking</text>
-      </g>
-    </svg>
-    <figcaption>The gotcha checklist: 201 needs <code>Location</code> · 401 vs 403 is authn vs authz · 404 hides existence on purpose · 307/308 preserve the method · PATCH idempotency depends on the patch · never tunnel errors through a 200.</figcaption>
-  </figure>
-
-  <div class="facts">
-    <div class="fact"><b>201 vs 202</b> 201 means done and created (with <code>Location</code>); 202 means accepted for async processing — <em>not done yet</em>, hand back a status URL to poll.</div>
-    <div class="fact"><b>304 is a feature</b> Not Modified powers conditional GET / revalidation. It's a cache win, not an error.</div>
-    <div class="fact blue"><b>405 vs 409 vs 410</b> 405 Method Not Allowed adds an <code>Allow</code> header; 409 for a state conflict; 410 Gone for permanently removed.</div>
-    <div class="fact blue"><b>429 + Retry-After</b> Too Many Requests should tell the client when to come back — same courtesy as 503.</div>
-  </div>
-  <div class="rule"><span>🎯 Memory rule:</span> Three axes (safe ⊂ idempotent, cacheable apart); PUT vs POST = who owns the URI; pick the <em>exact</em> code — 422 not 400 for valid-but-invalid, 401 vs 403 for authn vs authz, 404 to hide existence — and never tunnel errors through a 200.</div>
-
-  <!-- RETRIEVAL -->
-  <h2 class="sec">Retrieval practice</h2>
-  <p>Close the lesson in your mind first, then answer from memory. Effortful recall is what converts this from "I read it" to "I own it." Immediate feedback below.</p>
-  <div class="quiz" id="quiz">
-    <div class="qitem" data-correct="2">
-      <p class="q"><span class="qn">Q1.</span> Which property set is correct for the <code>PUT</code> method?</p>
-      <button class="opt">it is both safe and also fully cacheable</button>
-      <button class="opt">it is safe but it is never idempotent</button>
-      <button class="opt">it is idempotent but it is not safe</button>
-      <button class="opt">it is neither idempotent nor ever cacheable</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="3">
-      <p class="q"><span class="qn">Q2.</span> A request body is well-formed JSON but fails business validation. Return…</p>
-      <button class="opt">a <code>500</code> because the request could not complete</button>
-      <button class="opt">a <code>403</code> because the data was clearly forbidden</button>
-      <button class="opt">a <code>400</code> because the request looked plainly broken</button>
-      <button class="opt">a <code>422</code> because the request was semantically invalid</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="1">
-      <p class="q"><span class="qn">Q3.</span> Why prefer <code>307</code> over <code>302</code> when redirecting a <code>POST</code>?</p>
-      <button class="opt">because <code>307</code> permanently caches the redirect target longer</button>
-      <button class="opt">because <code>307</code> preserves the original method and body</button>
-      <button class="opt">because <code>307</code> tells the client to switch into GET</button>
-      <button class="opt">because <code>307</code> signals the resource has been removed</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="0">
-      <p class="q"><span class="qn">Q4.</span> A successful <code>201 Created</code> response MUST include which header?</p>
-      <button class="opt">a <code>Location</code> header pointing at the new resource</button>
-      <button class="opt">a <code>Retry-After</code> header telling clients when to retry</button>
-      <button class="opt">an <code>Allow</code> header listing every permitted request method</button>
-      <button class="opt">a <code>Cache-Control</code> header marking the response cacheable</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-  </div>
-
-  <h2 class="sec">Rehearse the answer out loud</h2>
-  <p class="rehearse">Interviewer: <strong>"A client calls <code>POST /payments</code> and the connection drops before they get a response. Walk me through the method and status code design so a retry is safe."</strong> Type your answer from memory (no scrolling up), <em>then</em> reveal and compare — don't read the model first.</p>
-  <div class="rehearse">
-    <textarea placeholder="Your answer, from memory…"></textarea><br>
-    <button class="btn" onclick="document.getElementById('model').classList.add('show')">Reveal model answer</button>
-    <div class="model" id="model">
-      <p>"<code>POST</code> is right here because the <strong>server assigns the payment id</strong> — the client doesn't know the URI ahead of time. If we process synchronously I return <strong>201 Created</strong> with a <code>Location</code> header to the new payment; if it's async, <strong>202 Accepted</strong> with a status/Location URL the client can poll.</p>
-      <p>The hard part is the dropped connection. <strong>POST isn't idempotent</strong>, so a blind retry risks a double-charge. The fix is a client-generated <strong>Idempotency-Key</strong> header: the server records it, and a retry with the same key returns the <em>original</em> result instead of charging again — that's exactly the idempotency-in-practice pattern we cover next. On a genuine state conflict I'd return <strong>409</strong>; on a validation failure <strong>422</strong>. And I'd never return <code>200</code> with an error tucked in the body."</p>
-      <p class="src"><strong>Why this scores:</strong> it names the non-idempotency problem explicitly and <em>solves</em> it with an idempotency key, picks the correct codes for sync vs async, and handles the failure branches (409/422) without tunneling errors through 200.</p>
-    </div>
-  </div>
-
-  <div class="ask">
-    <strong>I'm your teacher — ask me anything.</strong> Want to drill the 401-vs-403 and 404-leakage trade-offs? Curious how JSON Patch breaks idempotency in practice? Want me to grade your rehearsal answer or fire harder follow-ups at you? Just say so in the chat.
-  </div>
-
-  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Primary source (read this next)</h3>
-  <p>📖 <a href="https://www.rfc-editor.org/rfc/rfc9110.html"><strong>RFC 9110 — HTTP Semantics</strong></a>. The authoritative spec for method properties (safe/idempotent/cacheable) and status-code meaning. Keep the <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods">MDN methods</a> and <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status">MDN status</a> pages open as fast lookups.</p>
-
-  <h2 class="sec" id="interview">Interview — pick your bar</h2>
-  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
-
-  <div data-interview>
-    <details class="iq" data-level="core">
-      <summary>Define a <em>safe</em> and an <em>idempotent</em> HTTP method.</summary>
-      <div class="a"><p><strong>Safe</strong> = read-only <em>intent</em>, no intended state change (<code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>). <strong>Idempotent</strong> = N identical requests have the same effect on server state as one (<code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>, <code>PUT</code>, <code>DELETE</code>). The key word is <em>effect on state</em>, not a byte-identical response.</p></div>
-    </details>
-    <details class="iq" data-level="core">
-      <summary>Is <code>POST</code> idempotent? Why does it matter?</summary>
-      <div class="a"><p>No. A retried <code>POST</code> can create a duplicate (a second charge or order). It matters because dropped connections and retries are normal in distributed systems — non-idempotency is exactly why <code>POST</code> creation needs an <code>Idempotency-Key</code> to be retry-safe.</p></div>
-    </details>
-    <details class="iq" data-level="core">
-      <summary><code>200</code> vs <code>201</code> vs <code>204</code>, and what must a <code>201</code> include?</summary>
-      <div class="a"><p><code>200 OK</code>: success with a body. <code>201 Created</code>: a new resource was created and <strong>must carry a <code>Location</code></strong> header to it. <code>204 No Content</code>: success with no body (common for <code>DELETE</code> and for <code>PUT</code>/<code>PATCH</code> that don't echo the resource).</p></div>
-    </details>
-    <details class="iq" data-level="core">
-      <summary><code>401</code> vs <code>403</code> — what's the difference?</summary>
-      <div class="a"><p><code>401 Unauthorized</code> = <strong>authentication</strong> failed ("we don't know who you are" — credentials missing/invalid/expired; re-authenticate). <code>403 Forbidden</code> = <strong>authorization</strong> failed ("we know who you are, you're not allowed" — re-authenticating won't help).</p></div>
-    </details>
-
-    <details class="iq" data-level="senior">
-      <summary>Explain "safe &sub; idempotent," and why "safe means secure" is false.</summary>
-      <div class="a"><p>Every safe method is idempotent (reading changes nothing, so repeating it changes nothing); the reverse fails — <code>PUT</code>/<code>DELETE</code> are idempotent but not safe. "Safe" is about read-only <em>intent</em>, nothing about authn/authz/TLS: a <code>GET</code> can still expose sensitive data and still needs authorization and transport security. Keep safe / idempotent / cacheable as three separate axes.</p></div>
-    </details>
-    <details class="iq" data-level="senior">
-      <summary>Is <code>PATCH</code> idempotent, and how do JSON Merge Patch vs JSON Patch relate?</summary>
-      <div class="a"><p>Not guaranteed — it depends on the patch document. A "set field to X" patch is idempotent; "increment by 1" / "add to array" is not. <strong>JSON Merge Patch (RFC 7386)</strong> sets values (<code>null</code> = remove), so it tends to be idempotent; <strong>JSON Patch (RFC 6902)</strong> is an op sequence where <code>add</code> isn't. Make <code>PATCH</code> idempotent when you can, and know why a given patch isn't.</p></div>
-    </details>
-    <details class="iq" data-level="senior">
-      <summary>Why prefer <code>307</code>/<code>308</code> over <code>302</code>/<code>301</code>, and why is <code>304</code> a feature?</summary>
-      <div class="a"><p><code>307</code>/<code>308</code> <strong>preserve the method and body</strong>; with <code>301</code>/<code>302</code> clients historically rewrote a <code>POST</code> into a <code>GET</code>, dropping the body. <code>304 Not Modified</code> is the payoff of conditional GET: the client revalidates with <code>If-None-Match</code>/<code>If-Modified-Since</code> and, if nothing changed, gets <code>304</code> with no body and reuses its cache — bandwidth saved, not a failure.</p></div>
-    </details>
-    <details class="iq" data-level="senior">
-      <summary>When should a forbidden resource return <code>404</code> instead of <code>403</code>?</summary>
-      <div class="a"><p>When the very <em>existence</em> of the resource is sensitive. A <code>403</code> confirms "this exists, you just can't see it," which leaks information (resource enumeration — e.g. private repo names). <code>404</code> hides existence entirely. Trade-off: <code>404</code> is harder to debug for legitimate users, so reserve it for genuinely sensitive resources, not as a blanket policy.</p></div>
-    </details>
-
-    <details class="iq" data-level="staff">
-      <summary>A teammate puts "mark as read" behind <code>GET /messages/42?read=true</code>. What breaks?</summary>
-      <div class="a"><p>It makes a state-changing operation safe-in-name only, and the ecosystem assumes <code>GET</code> is safe: prefetchers, crawlers, link-preview bots, and proxies fire it and silently mutate state, and caches may serve stale results. Intended state change belongs on a non-safe verb — <code>POST</code>, or <code>PATCH</code>/<code>PUT</code> for an idempotent update. The classic casualty was an admin panel where a crawler followed every "delete" link.</p></div>
-    </details>
-    <details class="iq" data-level="staff">
-      <summary>A downstream dependency is timing out under load. Walk the status codes and behavior you'd return.</summary>
-      <div class="a"><p>If a circuit breaker is open / you're shedding load, return <code>503</code> + <code>Retry-After</code> so clients back off. If you actually called upstream and it timed out, <code>504</code> is honest; if it returned garbage, <code>502</code>. Don't let upstream's timeout surface as a <code>500</code> for a valid client request, and never convert it into a <code>4xx</code> — the client did nothing wrong. Combine with idempotency keys so the inevitable retries don't double-act.</p></div>
-    </details>
-    <details class="iq" data-level="staff">
-      <summary>Status code as the contract, or body error codes — how do you reconcile them?</summary>
-      <div class="a"><p>Use both at the right layer. The HTTP status is the <strong>coarse, machine-actionable verdict</strong> that infrastructure (caches, LBs, retry logic, alerting) acts on — get it right first. The body carries a <strong>stable, fine-grained error code</strong> plus human/field detail for the application to branch on (e.g. <code>"code": "card_declined"</code> alongside a <code>402</code>/<code>422</code>). Status for the network, body codes for the application — not one instead of the other.</p></div>
-    </details>
-
-    <div class="designrubric" data-level="design">
-      <b>REST design-round framework</b> — drive any "design a REST API" prompt through these, out loud:
-      <ol>
-        <li>Model resources &amp; URIs — nouns not verbs, collections vs items (<code>/orders</code>, <code>/orders/{id}</code>), nesting only for true ownership.</li>
-        <li>Map methods &amp; status codes — GET/POST/PUT/PATCH/DELETE to the right semantics; 2xx/4xx/5xx that mean what they say (201+<code>Location</code>, 401 vs 403, 422 vs 400).</li>
-        <li>Idempotency &amp; caching — safe/idempotent verbs, idempotency keys for POST, <code>ETag</code>/<code>If-Match</code>/conditional requests.</li>
-        <li>Pagination, filtering &amp; sorting — cursor vs offset, bounded page sizes, consistent query params.</li>
-        <li>AuthN/AuthZ — bearer tokens on every request (stateless), scopes/roles, transport security, rate limits with <code>Retry-After</code> (OWASP API Top 10).</li>
-        <li>Versioning &amp; evolution — additive changes, deprecation policy, URL vs header versioning.</li>
-        <li>Errors &amp; contracts — status as the machine verdict plus a stable body error code (e.g. RFC 9457 problem+json), correlation IDs.</li>
-      </ol>
-    </div>
-    <details class="iq" data-level="design">
-      <summary>Design the request/response contract for <code>POST /payments</code> where the connection can drop mid-flight. Walk the methods and status codes.</summary>
-      <div class="a"><p><b>A strong answer covers:</b> <code>POST</code> is correct because the server assigns the payment id &rarr; sync path returns <code>201 Created</code> + <code>Location</code>; async path returns <code>202 Accepted</code> + a status URL to poll, never <code>200</code> for unfinished work &rarr; the dropped connection is the hard part: <code>POST</code> isn't idempotent, so a client-generated <code>Idempotency-Key</code> lets a retry replay the original result instead of double-charging &rarr; map the failure modes to honest codes: <code>422</code> for validation, <code>409</code> for a state conflict, <code>402</code>/body error code for a declined card, <code>503</code>+<code>Retry-After</code> when shedding load, <code>504</code> if upstream timed out &rarr; never tunnel an error through <code>200</code>, never return <code>5xx</code> for bad client input &rarr; name the contract split: status code for the network/infra, stable body error code for the application.</p></div>
-    </details>
-    <details class="iq" data-level="design">
-      <summary>Design the update + concurrency story for a resource many clients edit at once (PUT vs PATCH, conditional requests).</summary>
-      <div class="a"><p><b>A strong answer covers:</b> choose <code>PUT</code> (full replace, idempotent by construction) vs <code>PATCH</code> (partial edit) by resource size and whether "set to null" must differ from "leave untouched" &rarr; for <code>PATCH</code>, pick the format deliberately — JSON Merge Patch (value-setting, tends to be idempotent) vs JSON Patch (op sequence, <code>add</code> isn't idempotent) &rarr; guard lost updates with optimistic concurrency: hand out an <code>ETag</code> on reads, require <code>If-Match</code> on writes, return <code>412 Precondition Failed</code> on a stale version &rarr; distinguish <code>412</code> ("your version is stale") from <code>409</code> ("this action conflicts with current state") &rarr; make retries safe: idempotent verbs retry freely, and a turned-into-explicit conflict is retryable after a re-read &rarr; name the trade-off: <code>PUT</code> is simpler and retry-safe but bandwidth-heavy; <code>PATCH</code> saves bytes but adds format and idempotency nuance.</p></div>
-    </details>
-  </div>
-
-  <div class="nav">
-    <span>📄 Keep handy: <a href="../reference/rest-constraints-and-maturity.html">Constraints &amp; method semantics reference</a></span>
-    <span><a href="../lessons/0001-what-makes-an-api-restful.html">◂ Prev</a> · <a href="../lessons/0003-idempotency-in-practice.html"><em>Next ▸ Lesson 3</em></a></span>
-  </div>
-
-  <footer id="sources">
-    <strong>Sources</strong><br>
-    <span id="s1">1. RFC 9110, HTTP Semantics (safe, idempotent, cacheable) — <a href="https://www.rfc-editor.org/rfc/rfc9110.html">rfc-editor.org</a>; method overview on <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods">MDN</a>. <a href="#r1">↩</a></span><br>
-    <span id="s2">2. Method semantics (PUT/POST/PATCH) — <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods">MDN HTTP Methods</a>; normative text in <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC 9110</a>. <a href="#r2">↩</a></span><br>
-    <span id="s3">3. HTTP response status codes — <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status">MDN HTTP Status</a>; definitions in <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC 9110</a>. <a href="#r3">↩</a></span>
-  </footer>
-<div class="lesson-fb" aria-live="polite">
-  <span class="lesson-fb-q">Was this lesson helpful?</span>
-  <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">👍 Yes</button>
-  <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No</button>
-  <span class="lesson-fb-thanks">Thanks &mdash; noted.</span>
-</div>
-<p class="lesson-endnote">These notes reflect my current understanding and are updated as I learn, build, and discover better explanations.</p>
-</main>
-</div>
-
-<script>
-  document.querySelectorAll('.qitem').forEach(function(item){
-    var correct = +item.dataset.correct;
-    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
-    var fb = item.querySelector('.fb');
-    opts.forEach(function(opt, i){
-      opt.addEventListener('click', function(){
-        opts.forEach(function(o){ o.disabled = true; });
-        opts[correct].classList.add('correct');
-        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
-        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
-      });
-    });
-  });
-</script>
-<script src="../../assets/interview.js" defer></script>
-<script src="../../assets/reading-progress.js" defer></script>
-</body>
-</html>
+        // "Reveal model answer" inside each .rehearse block (id-free; supports
+        // multiple per page — replaces the old inline onclick + fixed id="model").
+        document.querySelectorAll('.rehearse [data-reveal]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var m = btn.parentElement.querySelector('.model');
+                if (m) m.classList.add('show');
+            });
+        });
+    </script>  <script src="/engineering-learning-hub/assets/interview.js" defer></script><script src="/engineering-learning-hub/assets/reading-progress.js" defer></script> </body> </html>

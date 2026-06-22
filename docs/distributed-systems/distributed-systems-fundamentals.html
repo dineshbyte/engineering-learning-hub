@@ -1,876 +1,273 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<script>
-(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
-function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
-</script>
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><link rel="icon" type="image/svg+xml" href="/engineering-learning-hub/assets/favicon.svg"><!-- a11y: no maximum-scale / user-scalable=no — pinch-zoom must stay
+             available (WCAG 1.4.4). Dropped per the hub-migration audit. --><meta name="viewport" content="width=device-width, initial-scale=1"><title>Distributed Systems Fundamentals — CAP &amp; Consistency · Engineering Vault</title><meta name="description" content="Distributed systems fundamentals: the CAP theorem, consistency models, replication, partitioning, and failure modes — reason about any async, multi-service system from first principles."><meta name="keywords" content="distributed systems fundamentals, cap, consistency, idempotency keys, distributed systems, failure, time, consensus, raft, paxos, quorum, replication"><meta name="author" content="dineshbyte"><meta name="robots" content="index, follow"><link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/distributed-systems/distributed-systems-fundamentals.html"><meta property="og:type" content="article"><meta property="og:site_name" content="Engineering Vault"><meta property="og:title" content="Distributed Systems Fundamentals — CAP &#38; Consistency"><meta property="og:description" content="Distributed systems fundamentals: the CAP theorem, consistency models, replication, partitioning, and failure modes — reason about any async, multi-service system from first principles."><meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/distributed-systems/distributed-systems-fundamentals.html"><meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/distributed-systems.png"><meta property="og:image:alt" content="Distributed Systems · Engineering Vault learning track"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@dineshxbyte"><meta name="twitter:title" content="Distributed Systems Fundamentals — CAP &#38; Consistency"><meta name="twitter:description" content="Distributed systems fundamentals: the CAP theorem, consistency models, replication, partitioning, and failure modes — reason about any async, multi-service system from first principles."><meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/distributed-systems.png"><script>
+            (function () {
+                try {
+                    var t = localStorage.getItem('theme');
+                    if (t !== 'light' && t !== 'dark') {
+                        t =
+                            window.matchMedia &&
+                            window.matchMedia('(prefers-color-scheme:dark)').matches
+                                ? 'dark'
+                                : 'light';
+                    }
+                    document.documentElement.setAttribute('data-theme', t);
+                } catch (e) {}
+            })();
+        </script><script>
+            function toggleTheme() {
+                var d = document.documentElement;
+                var t = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                d.setAttribute('data-theme', t);
+                try {
+                    localStorage.setItem('theme', t);
+                } catch (e) {}
+            }
+        </script><link rel="stylesheet" href="/engineering-learning-hub/assets/tokens.css"><link rel="stylesheet" href="/engineering-learning-hub/assets/lesson.css"><link rel="stylesheet" href="/engineering-learning-hub/assets/interview.css"><style>:root{--accent:var(--track-distributed)}</style><script src="/engineering-learning-hub/assets/analytics.js" defer></script></head> <body> <a class="skip-link" href="#main">Skip to content</a>  <div class="wrap"> <nav id="hubbar"> <a href="/engineering-learning-hub/index.html">&#8592; Engineering Vault</a> <span class="pn"> <span style="color:var(--muted);opacity:.45">&#8249; Prev</span> <a href="consensus-deep-dive.html" title="Consensus — Deep Dive">
+Next &#8250;
+</a> </span> <span style="display:flex;align-items:center;gap:.6rem"> <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button> <span style="color:var(--muted)">Distributed Systems</span> </span> </nav> <main id="main" tabindex="-1"> <div id="reading-progress"></div> <div class="kicker">Fundamentals · 10 lessons · visual edition</div> <h1>Distributed Systems from first principles</h1> <p class="meta">~40 min · 10 levels · space-time diagrams + interview questions · interactive recall</p> <div class="ltags"><span class="lt">Distributed systems fundamentals</span><span class="lt">CAP</span><span class="lt">Consistency</span><span class="lt">Idempotency keys</span><span class="lt">Distributed systems</span></div>  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs> <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker> <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"></path></marker> <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker> </defs></svg>
+<div class="mission"><p><strong>Your bar:</strong> redraw the core of this field on a whiteboard from memory — and
+reason about any async, multi-service system without flinching. Almost everything below is a
+response to <em>one</em> hard truth, so every level is built to be <em>seen and redrawn</em>,
+not read. Grounded in Kleppmann’s <em>Designing Data-Intensive Applications</em></p><sup><a href="#s1" id="r1"><p>1</p></a></sup><p>and the Cambridge <em>Distributed Systems</em> lectures.</p><sup><a href="#s2" id="r2"><p>2</p></a></sup></div>
+<p>One truth holds the whole field. Every technique below is a strategy for living with it:</p>
+<div class="chips"><span class="chip"><p>When a remote call <b>goes silent</b></p></span><span class="chip c2"><p>you <b>cannot know</b> if it failed, succeeded, or runs on</p></span><span class="chip c3"><p>so you build to be <b>safe despite</b> that</p></span><span class="chip c4"><p>never <b>certain</b> of it</p></span></div>
+<nav class="toc"><a href="#l1">1 · The One Hard Truth</a><a href="#l2">2 · Delivery &amp; idempotency</a><a href="#l3">3 · No global clock</a><a href="#l4">4 · Order &amp; causality</a><a href="#l5">5 · Replication</a><a href="#l6">6 · Consistency models</a><a href="#l7">7 · CAP &amp; PACELC</a><a href="#l8">8 · Consensus &amp; Raft</a><a href="#l9">9 · Partitioning</a><a href="#l10">10 · Resilience toolkit</a><a href="#interview">★ Interview Qs</a><a href="#quiz">★ Retrieval quiz</a><a href="#cheat">★ Cheat sheet</a><a href="#review">★ Review guides</a></nav>
 
-<meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Distributed Systems Fundamentals — CAP &amp; Consistency · Engineering Vault</title>
-<meta name="description" content="Distributed systems fundamentals: the CAP theorem, consistency models, replication, partitioning, and failure modes — reason about any async, multi-service system from first principles.">
-<meta name="keywords" content="distributed systems fundamentals, cap, consistency, idempotency keys, distributed systems, failure, time, consensus, raft, paxos, quorum, replication">
-<meta name="author" content="dineshbyte">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/distributed-systems/distributed-systems-fundamentals.html">
-<meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Vault">
-<meta property="og:title" content="Distributed Systems Fundamentals — CAP &amp; Consistency · Engineering Vault">
-<meta property="og:description" content="Distributed systems fundamentals: the CAP theorem, consistency models, replication, partitioning, and failure modes — reason about any async, multi-service system from first principles.">
-<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/distributed-systems/distributed-systems-fundamentals.html">
-<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/distributed-systems.png">
-<meta property="og:image:alt" content="Distributed Systems · Engineering Vault learning track">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Distributed Systems Fundamentals — CAP &amp; Consistency · Engineering Vault">
-<meta name="twitter:description" content="Distributed systems fundamentals: the CAP theorem, consistency models, replication, partitioning, and failure modes — reason about any async, multi-service system from first principles.">
-<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/distributed-systems.png">
-<link rel="stylesheet" href="../assets/tokens.css">
-<link rel="stylesheet" href="../assets/lesson.css">
-<link rel="stylesheet" href="../assets/interview.css">
-<style>:root{--accent:var(--track-distributed)}
-/* ---- decomposition chips (not in lesson.css) ---- */
-.chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
-.chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
-.chip b{color:var(--accent)}
-.chip.c2 b{color:var(--track-rest)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
-/* ---- TOC grid ---- */
-.toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
-.toc a{text-decoration:none; padding:.15rem 0}
-/* ---- level blocks ---- */
-.lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
-.lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
-.num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
-.lvltop h2{margin:0; font-size:1.24rem}
-.tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
-/* ---- fact grid (fixed 2-col + label) ---- */
-.facts{grid-template-columns:1fr 1fr}
-.fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
-.fact.blue b{color:var(--track-rest)}
-/* ---- myth/truth grid container (lesson.css styles .m and .t, not the layout) ---- */
-.myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
-.myth .m{border-left:3px solid var(--bad)}
-.myth .t{border-left:3px solid var(--good)}
-/* ---- memory rule accent span ---- */
-.rule span{color:var(--accent); font-weight:700}
-/* ---- memory-check details ---- */
-details.mc{margin:.5rem 0 0; font-size:.84rem; background:transparent; border:0; padding:0}
-details.mc summary{cursor:pointer; color:var(--good); font-weight:600; list-style:none}
-details.mc summary::before{content:"\25B8 "}
-details.mc[open] summary::before{content:"\25BE "}
-details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
-details.mc .ans{color:var(--muted)}
-/* ---- interview-question details ---- */
-details.iq{border-left:3px solid var(--track-rest); font-size:.88rem}
-details.iq summary{list-style:none; color:var(--ink)}
-details.iq summary::-webkit-details-marker{display:none}
-details.iq summary::before{content:"\1F4AC "}
-details.iq[open] summary{color:var(--track-rest)}
-details.iq .a{margin-top:.45rem; font-size:.85rem; line-height:1.45}
-details.iq .a b{color:var(--track-rest)}
-/* ---- dark cheat panel (token-recolored; readable in both themes) ---- */
-.cheat{background:color-mix(in srgb,var(--ink) 92%,var(--accent)); color:var(--bg); border-radius:10px; padding:1.1rem 1.2rem; margin:1.2rem 0; font-size:.88rem}
-.cheat h3{color:var(--accent); margin:1rem 0 .3rem; font-size:.8rem; letter-spacing:.06em; text-transform:uppercase}
-.cheat a{color:var(--accent)} .cheat th{color:var(--muted)}
-.cheat td,.cheat th{border-color:color-mix(in srgb,var(--bg) 30%,transparent)}
-.cheat code{background:color-mix(in srgb,var(--bg) 18%,transparent); color:var(--bg)}
-/* ---- bottom nav row ---- */
-.nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
-@media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
-</style>
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "FAQPage",
- "mainEntity": [
-  {
-   "@type": "Question",
-   "name": "State CAP precisely, then correct the most common misreading.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: CAP = under a network partition you must choose Consistency (linearizability) or Availability — you cannot keep both -> P is not optional, partitions happen, so the real lever is C-vs-A during a partition: CP blocks the minority side, AP serves possibly-stale reads -> the misreading is \"pick 2 of 3\" as if a system is permanently one letter — CAP only speaks about partitions and says nothing about the healthy case -> that's exactly the gap PACELC fills: Else (no partition), you still trade Latency vs Consistency -> so a real label is two-part, e.g. PA/EL or PC/EC."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Name the consistency models from weakest to strongest and what each guarantees.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: eventual — if writes stop, replicas converge; any stale read is legal meanwhile -> read-your-writes / session — a client sees its own writes and monotonic reads within a session -> causal — operations that are causally related are seen in order by everyone; concurrent ones may differ -> linearizable — every operation appears to take effect atomically at one instant between invocation and response, as if on a single copy -> rule of thumb: buy the weakest model your correctness actually needs, since each rung up costs latency and availability."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What is a quorum, and why does R + W > N matter in a leaderless store?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: in a leaderless (Dynamo-style) store with N replicas, a write waits for W acks and a read gathers R responses -> if R + W > N the read set and the most recent write set must share at least one node, so a read overlaps every acknowledged write and can return the freshest value -> e.g. N=5, W=3, R=3 overlaps; W=2, R=2 does not -> quorums tune the C-vs-A/latency trade: bigger W = more durable, slower writes; smaller R = faster, riskier reads -> caveat: strict quorums still need read-repair / anti-entropy and don't by themselves give linearizability."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Name the three replication topologies and the price each pays.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: single-leader — all writes to one node, replicate to followers; simple and linearizable-able, but the leader is a write bottleneck and a failover hazard -> multi-leader — writes accepted at several leaders (e.g. multi-region); better write availability/latency, but concurrent writes create conflicts you must resolve -> leaderless — any replica takes writes, quorums for correctness; great availability, but you own conflict detection (version vectors) and read-repair -> the through-line: as you move away from one leader you buy availability and pay in conflict handling."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "A payment call times out with no reply. What do you do, and why is \"just retry\" dangerous?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: a timeout has four indistinguishable causes — lost request, slow node, lost reply, or dead node — so you cannot tell \"didn't happen\" from \"happened, ack lost\" -> the charge may already have succeeded, so a blind retry double-charges -> the fix is to make the operation idempotent with a client-generated key: at-least-once delivery + idempotent effect = exactly-once effect -> pair it with bounded retries, exponential backoff + jitter, and a retry budget so you don't amplify an overload -> red flag: treating a timeout as proof of failure."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Why is \"exactly-once delivery\" impossible, and what do we actually ship instead?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: an unacked send forces a choice — resend (risk a duplicate) or don't (risk loss); there is no third door, it's the Two Generals problem -> so \"exactly-once delivery\" over an unreliable network is unachievable -> what we build is exactly-once effects : at-least-once delivery + an idempotent or deduplicating endpoint = effectively-once -> always ask \"exactly-once across which boundary?\" — the guarantee is per consumer/store, not end-to-end magic -> mechanisms: idempotency keys, dedup windows, transactional outbox to avoid the dual-write."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Two replicas accepted writes; which one wins? Walk me through the clock issue.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: wall-clock timestamps on different machines aren't comparable — clock skew can make the later write carry the smaller timestamp -> so last-write-wins by physical time silently drops a genuinely-later write -> you need a logical notion of order: happens-before via Lamport clocks, or version vectors to actually detect concurrency rather than impose a false order -> once concurrency is detected you either merge (CRDT/app-level) or surface siblings to the application -> if you must use LWW, scope its data-loss risk explicitly and use it only where losing a concurrent write is acceptable."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "You key a time-series table by timestamp and one node is melting. Why, and how do you fix it?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: key-range partitioning by timestamp routes all current writes to the single partition holding the newest range — a moving write hot spot -> fix options: hash-partition the key for even write spread (cost: range scans now scatter across partitions) or prefix/salt the key so recent writes fan out -> never rebalance with mod N — adding a node remaps almost everything; use a fixed number of partitions or consistent hashing so adding a node moves only ~K/N keys -> for read-heavy time ranges, consider a compound key (e.g. tenant + time bucket) so writes spread but scans stay local."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Events are \"coming out of order.\" Diagnose it, then decide how much ordering to actually buy.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: first ask which order is required — FIFO (per source), causal, or total — because they cost wildly different amounts -> FIFO ⊂ causal ⊂ total; pick the lowest rung that satisfies correctness, over-ordering is over-engineering -> causal order is enforceable locally with vector clocks and no coordination; total order needs consensus (a single Kafka partition, a replicated log) and is the expensive, throughput-capping one -> diagnose by tracing whether the disorder is cross-partition (you chose total order but partitioned for throughput) or genuine concurrency -> synthesis: partition for throughput where order doesn't matter, reserve a totally-ordered lane only for the keys that need it."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "How does Raft avoid two leaders, and what does FLP have to do with it?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: a node grants at most one vote per term and a leader needs a majority; any two majorities overlap in ≥1 node, so two leaders in the same term is impossible — that's the safety argument -> FLP proves no deterministic protocol can guarantee termination in a purely asynchronous model with even one crash -> Raft doesn't beat FLP; it sidesteps it by assuming partial synchrony (timeouts) for liveness and using randomized election timeouts to break symmetric split votes -> the principal framing: safety always, liveness only when the network is eventually calm -> so a permanently flaky network can stall progress without ever violating correctness."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "How would you choose a failure detector, and why is \"perfect failure detection\" the wrong goal?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: in an async network you cannot distinguish a slow node from a dead one, so any timeout-based detector is a tunable guess trading completeness (always suspect real failures) against accuracy (never falsely suspect) -> aggressive timeouts cause false positives — needless failovers, re-elections, duplicate work; lax timeouts delay recovery -> prefer adaptive detectors (e.g. phi-accrual) that output a suspicion level from observed RTT history instead of a hard boolean -> pair detection with fencing tokens so a wrongly-suspected-then-revived node can't act as a stale leader -> the staff move: don't chase perfect detection — design so a wrong suspicion is safe (idempotent work, fencing, leader leases), because wrong suspicions are inevitable."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design an order-checkout flow across payment, inventory, and shipping that survives partial failure.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "A strong answer covers: idempotency keys on every external side effect so retries don't double-charge or double-ship -> bounded retries with exponential backoff + jitter and a retry budget to avoid retry storms -> the transactional outbox so the DB state change and the event publish commit atomically (kills the dual-write) -> a saga with compensating transactions (refund, restock) because you cannot 2PC across independent services -> dedup at each consumer with a window comfortably exceeding the worst-case redelivery delay -> choose consistency per step: inventory reservation may need strong/conditional writes, order history can be eventual -> the end-to-end argument — confirm the charge with the payment provider's own idempotency, don't infer success from a timeout -> name the trade-off: saga gives availability and loose coupling but exposes intermediate states, so model compensations and \"stuck saga\" alerts."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design a globally replicated key-value store and state its consistency contract under partition.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "A strong answer covers: start from the contract — do callers need linearizable reads or is causal/eventual acceptable? that single choice drives everything -> partition the keyspace with consistent hashing (virtual nodes) so adding capacity moves only ~K/N keys and avoids hot spots; salt known hot keys -> replicate each partition N ways across failure domains/regions; expose tunable quorums (R + W > N for read-overlap, lower for latency) -> under a partition, declare the choice: CP (block the minority, stay linearizable) for a config/lock store, or AP (serve stale, reconcile later) for a cart -> conflict handling for AP: version vectors to detect concurrency, CRDTs or app merge for resolution, read-repair + anti-entropy to converge -> place it on PACELC and say it: e.g. PC/EC for a metadata store, PA/EL for a session cache -> ops: detect partitions and replica lag, fence stale leaders with tokens, and test failover with fault injection -> name the trade-off explicitly between availability and the strength of the read your callers can rely on."
-   }
-  }
- ]
-}
-</script>
-<script src="../assets/analytics.js" defer></script>
-</head>
-<body>
-<a class="skip-link" href="#main">Skip to content</a>
-<!-- shared arrowheads -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
-  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
-  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
-</defs></svg>
+<figure style="margin-top:1.6rem"> <svg viewBox="0 0 640 210" role="img" aria-label="Node A sends a request to Node B and hears nothing; the four causes — lost request, B slow, lost reply, B dead — all look identical: silence"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="320" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THE ONE HARD TRUTH — no reply has four indistinguishable causes</text> <!-- A --> <rect x="18" y="76" width="96" height="46" rx="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"></rect> <text x="66" y="98" text-anchor="middle" font-size="14" font-weight="700" fill="#7a1f12">Node A</text> <text x="66" y="113" text-anchor="middle" font-size="9.5" fill="#6b675f">waits…</text> <!-- B --> <rect x="526" y="76" width="96" height="46" rx="9" fill="#fff" stroke="#d8d4c8"></rect> <text x="574" y="98" text-anchor="middle" font-size="14" font-weight="700" fill="#111110">Node B</text> <text x="574" y="113" text-anchor="middle" font-size="9.5" fill="#6b675f">??</text> <!-- request arrow --> <line x1="116" y1="90" x2="524" y2="90" stroke="#6b675f" marker-end="url(#arw)"></line> <text x="320" y="84" text-anchor="middle" font-size="10" fill="#6b675f">request</text> <!-- four causes --> <g font-size="10" fill="#9a2417"> <text x="320" y="142" text-anchor="middle">① request lost &#160;·&#160; ② B slow / paused (GC) &#160;·&#160; ③ reply lost
+                    &#160;·&#160; ④ B dead</text> </g> <rect x="120" y="156" width="400" height="30" rx="8" fill="#f7ecea" stroke="#9a2417"></rect> <text x="320" y="175" text-anchor="middle" font-size="11" font-weight="700" fill="#7a2218">from A's seat all four = identical silence</text> <text x="320" y="200" text-anchor="middle" font-size="10" fill="#7a1f12">…and in ③ &amp; ④ the work may already be done</text> </g> </svg> <figcaption>
+Memorise this banner. Every level below is a tactic for making good decisions <em>despite</em>
+this permanent uncertainty.
+</figcaption> </figure>
 
-<div class="wrap">
-  <nav id="hubbar">
-    <a href="../index.html">&#8592; Engineering Vault</a>
-    <span class="pn"><span style="opacity:.45">&#8249; Prev</span><a href="consensus-deep-dive.html" title="Consensus — Deep Dive">Next &#8250;</a></span>
-    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Distributed Systems</span></span>
-  </nav>
-<main id="main" tabindex="-1">
-  <div class="kicker">Fundamentals · 10 lessons · visual edition</div>
-  <h1>Distributed Systems from first principles</h1>
-  <p class="meta">~40 min · 10 levels · space-time diagrams + interview questions · interactive recall</p>
-  <div class="ltags"><span class="lt">Distributed systems fundamentals</span><span class="lt">CAP</span><span class="lt">Consistency</span><span class="lt">Idempotency keys</span><span class="lt">Distributed systems</span></div>
+<section class="lvl" id="l1"><div class="lvltop"><span class="num">1</span><h2>The One Hard Truth — you can never know</h2></div><p class="tagline"><p>Partial failure: some parts work while others fail, and the working parts can’t tell which
+is which.</p></p><figure><img src="diagrams/01-four-causes.png" alt="The four indistinguishable causes. A request that draws no reply has exactly these four explanations — and from A's vantage point every one of them looks the same: silence."/><figcaption><p><strong>The four indistinguishable causes.</strong> A request that draws no reply has
+exactly these four explanations — and from A’s vantage point every one of them looks the
+same: silence.</p></figcaption></figure><div class="facts"><div class="fact"><p><b>Is</b> A set of nodes that interact only by messages over a network, where failure is 
+<em>partial</em>, not total-and-knowable.</p></div><div class="fact"><p><b>Why it’s hard</b> A single machine crashes with a stack trace. A distributed node
+dies silently while everyone else runs on, unaware.</p></div><div class="fact blue"><p><b>The trap</b> In causes ③ &amp; ④ the work <em>already happened</em> — the charge went
+through, the row was written. “Just retry” is loaded.</p></div><div class="fact blue"><p><b>Two Generals</b> No finite exchange of messages makes two parties <em>certain</em> 
+they agree over a lossy channel. Proven impossible — not hard.</p></div></div><figure><img src="diagrams/03-two-generals-regress.png" alt="The acknowledgement regress. Each message could be the one that's lost, so each needs its own confirmation — which needs its own confirmation, without end. Certainty is never reached in a finite number of messages."/><figcaption><p><strong>The acknowledgement regress.</strong> Each message could be the one that’s lost,
+so each needs <em>its</em> own confirmation, without end. Certainty is never reached in
+a finite number of messages. (Two Generals, Kleppmann, Cambridge Lecture 2.)</p></figcaption></figure><p class="tagline"><p><b>Timeouts are a guess, not a truth.</b> A timeout doesn’t <em>detect</em> failure; it 
+<em>declares</em> it — and there is no provably-correct value for <em>N</em>:</p></p><figure> <svg viewBox="0 0 560 150" role="img" aria-label="Too short a timeout fires false positives and double-runs; too long hangs the system; no correct value exists"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <rect x="14" y="30" width="250" height="96" rx="9" fill="#f7ecea" stroke="#9a2417"></rect> <text x="139" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#7a2218">TOO SHORT</text> <text x="139" y="74" text-anchor="middle" font-size="10" fill="#7a2218">call a slow node "dead"</text> <text x="139" y="92" text-anchor="middle" font-size="10" fill="#7a2218">→ retry runs it twice</text> <text x="139" y="110" text-anchor="middle" font-size="10" fill="#7a2218">double charge · split brain</text> <rect x="296" y="30" width="250" height="96" rx="9" fill="#fbfaf2" stroke="#7a1f12"></rect> <text x="421" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#7a1f12">TOO LONG</text> <text x="421" y="74" text-anchor="middle" font-size="10" fill="#6b675f">hang on a dead node</text> <text x="421" y="92" text-anchor="middle" font-size="10" fill="#6b675f">→ slow detection</text> <text x="421" y="110" text-anchor="middle" font-size="10" fill="#6b675f">cascading queues</text> <text x="280" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">no provably-correct N — the network has no upper delay bound</text> </g> </svg> <figcaption>
+A real network is <em>asynchronous</em>: no guaranteed bound on message delay or pause
+        length. With no bound, no timeout can ever be provably correct. (DDIA Ch. 8, "Timeouts and
+        Unbounded Delays.")
+</figcaption> </figure><div class="myth"><div class="m">✗ “TCP is reliable, so my request is safe”</div><div class="t"><p>✓ TCP ACK = “kernel got bytes,” not “app did the work” — the four causes live at the
+application layer</p></div></div><div class="rule"><p><span>🧠 Memory rule:</span> When a remote call goes silent you cannot tell 
+<span>lost request · slow node · lost reply · dead node</span> apart — and the work may
+already be done.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Four indistinguishable causes of no reply? <span class="ans">&rarr; lost request · node slow/paused · lost reply · node dead</span> </li><li> What is a timeout, really? <span class="ans">&rarr; a guess that declares failure; it doesn't detect it</span> </li><li> What does Two Generals prove? <span class="ans">&rarr; certain agreement over a lossy channel is impossible</span> </li> </ul> </details></section>
 
-  <div class="mission">
-    <strong>Your bar:</strong> redraw the core of this field on a whiteboard from memory — and reason about any
-    async, multi-service system without flinching. Almost everything below is a response to <em>one</em> hard
-    truth, so every level is built to be <em>seen and redrawn</em>, not read. Grounded in Kleppmann's
-    <em>Designing Data-Intensive Applications</em><sup><a href="#s1" id="r1">1</a></sup> and the Cambridge
-    <em>Distributed Systems</em> lectures.<sup><a href="#s2" id="r2">2</a></sup>
-  </div>
+<section class="lvl" id="l2"><div class="lvltop"><span class="num">2</span><h2>Delivery guarantees &amp; idempotency</h2></div><p class="tagline"><p>The fix for the double-charge: pick at-least-once, then make processing duplicate-proof.</p></p><figure><img src="diagrams/04-delivery-guarantees.png" alt="The three delivery guarantees. Send-and-forget may lose the message; retry-until-acked may duplicate it; exactly-once is the goal you can't get at the delivery layer."/><figcaption><p><strong>The three delivery guarantees.</strong> Send-and-forget may lose the message;
+retry-until-acked may duplicate it; exactly-once is the goal you can’t get at the
+delivery layer.</p></figcaption></figure><table><tr><th>Guarantee</th><th>Promise</th><th>The price · where you see it</th></tr><tr><td>At-most-once</td><td>send &amp; forget; 0 or 1 times</td><td><p>may be <b>lost</b>, never duplicated · metrics, telemetry</p></td></tr><tr><td>At-least-once</td><td>retry until acked</td><td><p>never lost, may <b>duplicate</b> · Kafka, SQS, webhooks (the default)</p></td></tr><tr><td><p>Exactly-once <em>delivery</em></p></td><td>once, period</td><td><p><b>impossible</b> over an unreliable network — see below</p></td></tr></table><p class="tagline"><p>An unacked send leaves you two moves: <b>resend</b> (risk a duplicate → at-least-once) or 
+<b>don’t</b> (risk a loss → at-most-once). There is no third door — it’s Two Generals in
+work clothes. So stop chasing exactly-once <em>delivery</em> and build exactly-once 
+<strong>effects</strong>.</p></p><figure><img src="diagrams/05-idempotency-key.png" alt="The idempotency key. The timed-out retry carries the same key; the server recognises it, returns the original result, and does not charge again. At-least-once + idempotency = exactly-once effect."/><figcaption><p><strong>The idempotency key.</strong> The timed-out retry carries the same key; the
+server recognises it, returns the original result, and does not charge again. 
+<b>At-least-once + idempotency = exactly-once effect.</b></p></figcaption></figure><div class="facts"><div class="fact"><p><b>Idempotent</b> Doing it many times = doing it once. <code>balance=100</code>, 
+<code>DELETE /orders/42</code>, “mark #7 paid.”</p></div><div class="fact"><p><b>Not idempotent</b> <code>balance=balance+10</code>, <code>POST /orders</code>,
+“increment counter,” “append a row.”</p></div><div class="fact blue"><p><b>Idempotency key</b> Client mints one UUID per <em>logical</em> op, reuses it on every
+retry; server stores <code>key→result</code>, replays the saved result on repeats.
+(Stripe’s <code>Idempotency-Key</code>.)</p></div><div class="fact blue"><p><b>Dedup (receiver side)</b> Broker tags each message; consumer records processed IDs
+and drops repeats — exactly-once <em>within the dedup window</em>.</p></div></div><div class="myth"><div class="m">✗ “Idempotency also protects me from reordering”</div><div class="t"><p>✓ Idempotency defends against duplicates only; reordering needs ordering (Lessons 3–4)
+or commutative ops</p></div></div><div class="rule"><p><span>🔁 Memory rule:</span> Exactly-once delivery is a myth; ship 
+<span>at-least-once + idempotency</span> = exactly-once <em>effects</em>.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> The default real-world guarantee? <span class="ans">&rarr; at-least-once (may duplicate)</span> </li><li> Why is exactly-once delivery impossible? <span class="ans">&rarr; unacked send forces resend-or-not = duplicate-or-loss</span> </li><li> Who generates the idempotency key, and when? <span class="ans">&rarr; the client, once per logical op, reused on retries</span> </li> </ul> </details></section>
 
-  <p>One truth holds the whole field. Every technique below is a strategy for living with it:</p>
-  <div class="chips">
-    <span class="chip">When a remote call <b>goes silent</b></span>
-    <span class="chip c2">you <b>cannot know</b> if it failed, succeeded, or runs on</span>
-    <span class="chip c3">so you build to be <b>safe despite</b> that</span>
-    <span class="chip c4">never <b>certain</b> of it</span>
-  </div>
+<section class="lvl" id="l3"><div class="lvltop"><span class="num">3</span><h2>No global clock — logical time</h2></div><p class="tagline"><p>Stop asking <em>when</em> things happened on a wall clock; ask which one <em>caused</em> the
+other.</p></p><figure> <svg viewBox="0 0 560 150" role="img" aria-label="Two machine clocks drift apart; the later write carries the smaller timestamp and last-write-wins silently discards it"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="280" y="20" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9a2417">CLOCK SKEW silently eats data under last-write-wins</text> <rect x="20" y="40" width="150" height="40" rx="8" fill="#fff" stroke="#d8d4c8"></rect> <text x="95" y="58" text-anchor="middle" font-size="10.5" font-weight="700">Replica A clock</text> <text x="95" y="73" text-anchor="middle" font-size="10" fill="#6b675f">stamps write @ t=105</text> <rect x="390" y="40" width="150" height="40" rx="8" fill="#fff" stroke="#d8d4c8"></rect> <text x="465" y="58" text-anchor="middle" font-size="10.5" font-weight="700">Replica B clock</text> <text x="465" y="73" text-anchor="middle" font-size="10" fill="#6b675f">stamps LATER write @ t=103</text> <line x1="170" y1="60" x2="388" y2="60" stroke="#9a2417" stroke-dasharray="4 3" marker-end="url(#arwA)"></line> <text x="279" y="52" text-anchor="middle" font-size="10" fill="#9a2417">~ms skew</text> <rect x="120" y="100" width="320" height="34" rx="8" fill="#f7ecea" stroke="#9a2417"></rect> <text x="280" y="121" text-anchor="middle" font-size="11" font-weight="700" fill="#7a2218">later write (103) &lt; earlier (105) → silently dropped</text> </g> </svg> <figcaption>
+Quartz drifts ~200 ppm (≈17 s/day); NTP narrows but can't share an instant and can step
+<em>backwards</em>. Wall-clock timestamps from different machines are not comparable for
+        ordering. (DDIA Ch. 8, "Unreliable Clocks".)
+</figcaption> </figure><table><tr><th>Clock kind</th><th>Answers</th><th>Failure mode</th></tr><tr><td>Physical / time-of-day</td><td>”what wall-clock instant?“</td><td>skew, drift, backward jumps</td></tr><tr><td>Monotonic</td><td>”how much elapsed locally?“</td><td>meaningless across machines</td></tr><tr><td>Logical</td><td><p>“what is the <em>order</em>?“</p></td><td>carries no real-time meaning</td></tr></table><figure><img src="diagrams/06-happens-before.png" alt="Happens-before vs concurrent, with Lamport timestamps. A space-time diagram showing that B sending event m2 only after receiving m1 from A makes A's send causally before B's send, while C's event is concurrent with both."/><figcaption><p>Happens-before vs concurrent. B sends m2 only after receiving m1, so 
+<code>send(m1) → recv(m1) → send(m2)</code>; C’s event is reachable from neither — 
+<em>concurrent</em>. (Lamport, 1978.)</p></figcaption></figure><div class="facts"><div class="fact"><p><b>Happens-before (a → b)</b> Same node &amp; earlier; or send→receive of one message;
+plus transitivity. A <em>partial</em> order.</p></div><div class="fact"><p><b>Concurrent (a ∥ b)</b> Neither reaches the other — causally independent, <em>not</em> 
+“same wall-clock time.”</p></div><div class="fact blue"><p><b>Lamport clock</b> One integer; <code>recv: L=max(L,t)+1</code>. Gives 
+<code>a→b ⟹ L(a)&lt;L(b)</code> — but <em>not</em> the converse. Can’t detect
+concurrency.</p></div><div class="fact blue"><p><b>Vector clock</b> One counter per node; compare element-wise. 
+<code>a→b iff V(a)&lt;V(b)</code>; incomparable = concurrent. Cost: O(N) per message.
+(Dynamo.)</p></div></div><div class="myth"><div class="m">✗ “NTP syncs clocks, so timestamps order events”</div><div class="t"><p>✓ NTP error is tens of ms and can jump backward; use logical time for ordering</p></div></div><div class="rule"><p><span>⏱ Memory rule:</span> There is no global clock — for ordering, throw away time and
+track <span>cause: happens-before</span>.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Why are cross-machine timestamps unsafe to order? <span class="ans">&rarr; skew can make the later event carry the smaller stamp</span> </li><li> What does a Lamport clock fail to do? <span class="ans">&rarr; tell whether two events were concurrent or causal</span> </li><li> What does a vector clock add? <span class="ans">&rarr; an exact concurrent-vs-causal test</span> </li> </ul> </details></section>
 
-  <nav class="toc">
-    <a href="#l1">1 · The One Hard Truth</a><a href="#l2">2 · Delivery &amp; idempotency</a>
-    <a href="#l3">3 · No global clock</a><a href="#l4">4 · Order &amp; causality</a>
-    <a href="#l5">5 · Replication</a><a href="#l6">6 · Consistency models</a>
-    <a href="#l7">7 · CAP &amp; PACELC</a><a href="#l8">8 · Consensus &amp; Raft</a>
-    <a href="#l9">9 · Partitioning</a><a href="#l10">10 · Resilience toolkit</a>
-    <a href="#interview">★ Interview Qs</a><a href="#quiz">★ Retrieval quiz</a>
-    <a href="#cheat">★ Cheat sheet</a><a href="#review">★ Review guides</a>
-  </nav>
+<section class="lvl" id="l4"><div class="lvltop"><span class="num">4</span><h2>Order &amp; causality — the broadcast ladder</h2></div><p class="tagline"><p>Pick the cheapest rung that still satisfies the requirement — that choice is the whole art.</p></p><figure><img src="diagrams/07-broadcast-ordering.png" alt="The broadcast-guarantee ladder, and the causal violation it prevents. A layered stack from best-effort up to total order, beside a three-node example where a reply (M2) overtakes the question (M1) it depends on. The reader should conclude: each rung adds exactly one ordering promise, and the causal rung is the one that stops the overtaking reply."/><figcaption><p><strong>The broadcast-guarantee ladder, and the causal violation it prevents.</strong> 
+Each rung adds exactly one ordering promise; the causal rung is the one that stops a
+reply from overtaking the question it depends on.</p></figcaption></figure><table><tr><th>Rung</th><th>Adds this promise</th><th>Concretely</th></tr><tr><td>Best-effort</td><td>nothing — try once</td><td>sender may crash mid-send; some get it, some don’t</td></tr><tr><td>Reliable</td><td>all-or-nothing</td><td>if any correct node delivers, every correct node eventually does</td></tr><tr><td>FIFO</td><td>per-sender order</td><td>one sender’s messages arrive in send order</td></tr><tr><td>Causal</td><td>happens-before order</td><td>if A→B, every node delivers A before B</td></tr><tr><td>Total order</td><td>one global sequence</td><td><p>all nodes deliver all messages in the <b>same</b> order</p></td></tr></table><figure> <svg viewBox="0 0 560 130" role="img" aria-label="Total-order broadcast equals state-machine replication equals consensus — the same problem in three hats"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <rect x="14" y="44" width="160" height="48" rx="9" fill="#fff" stroke="#1f3a5a"></rect> <text x="94" y="66" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">total-order</text> <text x="94" y="82" text-anchor="middle" font-size="10" fill="#6b675f">broadcast</text> <rect x="200" y="44" width="160" height="48" rx="9" fill="#f1eee2" stroke="#7a1f12"></rect> <text x="280" y="66" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">state-machine</text> <text x="280" y="82" text-anchor="middle" font-size="10" fill="#6b675f">replication</text> <rect x="386" y="44" width="160" height="48" rx="9" fill="#fff" stroke="#2f5d3a"></rect> <text x="466" y="66" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">consensus</text> <text x="466" y="82" text-anchor="middle" font-size="10" fill="#6b675f">(Lesson 8)</text> <text x="187" y="72" text-anchor="middle" font-size="16" fill="#6b675f">≈</text> <text x="373" y="72" text-anchor="middle" font-size="16" fill="#6b675f">≈</text> <text x="280" y="26" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">ONE problem in three hats — each reduces to the others</text> <text x="280" y="116" text-anchor="middle" font-size="10" fill="#7a1f12">so total order inherits Lesson 1's impossibility (FLP)</text> </g> </svg> <figcaption>
+Causal order is enforceable <em>locally</em> (vector-clock metadata, no agreement). Total order
+        requires nodes to <em>agree</em> on one sequence — that's consensus, the hard problem. (Schneider
+        1990; DDIA Ch. 9.)
+</figcaption> </figure><div class="myth"><div class="m">✗ “The events came out of order — make it strictly ordered”</div><div class="t"><p>✓ First ask: FIFO, causal, or total? Total order needs consensus; don’t pay for it
+unless required</p></div></div><div class="rule"><p><span>📡 Memory rule:</span> FIFO ⊂ causal ⊂ total; </p><span><p>need every replica on one order → you need total-order broadcast → you need consensus</p></span><p>.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Which rung stops a reply overtaking its question? <span class="ans">&rarr; causal</span> </li><li> Why is total order the expensive jump? <span class="ans">&rarr; nodes must agree on order of concurrent messages = consensus</span> </li><li> State-machine replication needs what input? <span class="ans">&rarr; same commands, same order (a total-order log)</span> </li> </ul> </details></section>
 
-  <!-- ============ HERO: the one hard truth ============ -->
-  <figure style="margin-top:1.6rem">
-    <svg viewBox="0 0 640 210" role="img" aria-label="Node A sends a request to Node B and hears nothing; the four causes — lost request, B slow, lost reply, B dead — all look identical: silence">
-      <g font-family="ui-sans-serif,system-ui,sans-serif">
-        <text x="320" y="22" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THE ONE HARD TRUTH — no reply has four indistinguishable causes</text>
-        <!-- A -->
-        <rect x="18" y="76" width="96" height="46" rx="9" fill="#f1eee2" stroke="#7a1f12" stroke-width="1.5"/>
-        <text x="66" y="98" text-anchor="middle" font-size="14" font-weight="700" fill="#7a1f12">Node A</text>
-        <text x="66" y="113" text-anchor="middle" font-size="9.5" fill="#6b675f">waits…</text>
-        <!-- B -->
-        <rect x="526" y="76" width="96" height="46" rx="9" fill="#fff" stroke="#d8d4c8"/>
-        <text x="574" y="98" text-anchor="middle" font-size="14" font-weight="700" fill="#111110">Node B</text>
-        <text x="574" y="113" text-anchor="middle" font-size="9.5" fill="#6b675f">??</text>
-        <!-- request arrow -->
-        <line x1="116" y1="90" x2="524" y2="90" stroke="#6b675f" marker-end="url(#arw)"/>
-        <text x="320" y="84" text-anchor="middle" font-size="10" fill="#6b675f">request</text>
-        <!-- four causes -->
-        <g font-size="10" fill="#9a2417">
-          <text x="320" y="142" text-anchor="middle">① request lost &#160;·&#160; ② B slow / paused (GC) &#160;·&#160; ③ reply lost &#160;·&#160; ④ B dead</text>
-        </g>
-        <rect x="120" y="156" width="400" height="30" rx="8" fill="#f7ecea" stroke="#9a2417"/>
-        <text x="320" y="175" text-anchor="middle" font-size="11" font-weight="700" fill="#7a2218">from A's seat all four = identical silence</text>
-        <text x="320" y="200" text-anchor="middle" font-size="10" fill="#7a1f12">…and in ③ &amp; ④ the work may already be done</text>
-      </g>
-    </svg>
-    <figcaption>Memorise this banner. Every level below is a tactic for making good decisions <em>despite</em> this permanent uncertainty.</figcaption>
-  </figure>
+<section class="lvl" id="l5"><div class="lvltop"><span class="num">5</span><h2>Replication — leader, multi-leader, leaderless</h2></div><p class="tagline"><p>Keep copies useful-agreement-close despite the lost messages and timeouts you already
+accepted.</p></p><table><tr><th>Architecture</th><th>Who takes writes</th><th>Key trade-off</th></tr><tr><td>Single-leader</td><td>one leader; followers replay its log</td><td><p>no write conflicts (one serializer); leader is a SPOF → 
+<b>failover &amp; split brain</b></p></td></tr><tr><td>Multi-leader</td><td>a leader per DC / per device</td><td><p>local fast writes; <b>conflicts</b> must be resolved after the fact</p></td></tr><tr><td>Leaderless (Dynamo)</td><td>any replica; client uses quorums</td><td><p>no leader; freshness via <code>R + W &gt; N</code>; needs read-repair / anti-entropy</p></td></tr></table><figure><img src="diagrams/08-quorum-rw.png" alt="A read quorum and a write quorum must overlap by at least one node. With N=3 replicas, a write that lands on 2 nodes (W=2) and a read that contacts 2 nodes (R=2) are guaranteed to share at least one node, so the read sees the latest write."/><figcaption><p>A read quorum and a write quorum must overlap by ≥1 node. With <b>N=3, W=2, R=2</b> 
+(R+W=4&gt;3), whichever two the read picks, at least one was in the write set — so the
+read sees the latest value. W and R are tunable knobs, not fixed laws. (Dynamo, 2007.)</p></figcaption></figure><div class="facts"><div class="fact"><p><b>Why replicate</b> Fault tolerance · latency (replica near the user) · throughput
+(parallel reads). Name which one you’re buying.</p></div><div class="fact"><p><b>Sync vs async</b> Synchronous = durable but one slow follower blocks; async = fast
+but a leader crash loses acked writes. Most run <em>semi-sync</em>.</p></div><div class="fact blue"><p><b>Conflict resolution</b> LWW (silently loses data — clocks lie) · app merge (more
+code, no loss) · CRDTs (deterministic merge, limited shapes).</p></div><div class="fact blue"><p><b>Replication lag anomalies</b> read-your-writes · monotonic reads · consistent-prefix
+— each with a standard bounded fix (route to leader / pin replica).</p></div></div><div class="myth"><div class="m">✗ “R + W &gt; N gives me linearizability”</div><div class="t"><p>✓ It only guarantees a read <em>sees</em> a recent write; concurrent/partial writes
+still leak stale values</p></div></div><div class="rule"><p><span>🗂 Memory rule:</span> One serializer = no conflicts; many writers = resolve later; no
+leader = <span>R + W &gt; N</span> for overlap.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Why no write conflicts under single-leader? <span class="ans">&rarr; the leader serializes all writes into one order</span> </li><li> N=5 — which W,R is safe? <span class="ans">&rarr; W=3,R=3 (6&gt;5); the rest sum to ≤5</span> </li><li> "Comment vanished on reload" is which anomaly? <span class="ans">&rarr; read-your-own-writes</span> </li> </ul> </details></section>
 
-  <!-- ================= LEVEL 1 ================= -->
-  <section class="lvl" id="l1">
-    <div class="lvltop"><span class="num">1</span><h2>The One Hard Truth — you can never know</h2></div>
-    <p class="tagline">Partial failure: some parts work while others fail, and the working parts can't tell which is which.</p>
-    <figure>
-      <img src="diagrams/01-four-causes.png" alt="The four indistinguishable causes. A request that draws no reply has exactly these four explanations — and from A's vantage point every one of them looks the same: silence."/>
-      <figcaption><strong>The four indistinguishable causes.</strong> A request that draws no reply has exactly these four explanations — and from A's vantage point every one of them looks the same: silence.</figcaption>
-    </figure>
-    <div class="facts">
-      <div class="fact"><b>Is</b> A set of nodes that interact only by messages over a network, where failure is <em>partial</em>, not total-and-knowable.</div>
-      <div class="fact"><b>Why it's hard</b> A single machine crashes with a stack trace. A distributed node dies silently while everyone else runs on, unaware.</div>
-      <div class="fact blue"><b>The trap</b> In causes ③ &amp; ④ the work <em>already happened</em> — the charge went through, the row was written. "Just retry" is loaded.</div>
-      <div class="fact blue"><b>Two Generals</b> No finite exchange of messages makes two parties <em>certain</em> they agree over a lossy channel. Proven impossible — not hard.</div>
-    </div>
-    <figure>
-      <img src="diagrams/03-two-generals-regress.png" alt="The acknowledgement regress. Each message could be the one that's lost, so each needs its own confirmation — which needs its own confirmation, without end. Certainty is never reached in a finite number of messages."/>
-      <figcaption><strong>The acknowledgement regress.</strong> Each message could be the one that's lost, so each needs <em>its</em> own confirmation, without end. Certainty is never reached in a finite number of messages. (Two Generals, Kleppmann, Cambridge Lecture 2.)</figcaption>
-    </figure>
-    <p class="tagline"><b>Timeouts are a guess, not a truth.</b> A timeout doesn't <em>detect</em> failure; it <em>declares</em> it — and there is no provably-correct value for <em>N</em>:</p>
-    <figure>
-      <svg viewBox="0 0 560 150" role="img" aria-label="Too short a timeout fires false positives and double-runs; too long hangs the system; no correct value exists">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <rect x="14" y="30" width="250" height="96" rx="9" fill="#f7ecea" stroke="#9a2417"/>
-          <text x="139" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#7a2218">TOO SHORT</text>
-          <text x="139" y="74" text-anchor="middle" font-size="10" fill="#7a2218">call a slow node "dead"</text>
-          <text x="139" y="92" text-anchor="middle" font-size="10" fill="#7a2218">→ retry runs it twice</text>
-          <text x="139" y="110" text-anchor="middle" font-size="10" fill="#7a2218">double charge · split brain</text>
-          <rect x="296" y="30" width="250" height="96" rx="9" fill="#fbfaf2" stroke="#7a1f12"/>
-          <text x="421" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#7a1f12">TOO LONG</text>
-          <text x="421" y="74" text-anchor="middle" font-size="10" fill="#6b675f">hang on a dead node</text>
-          <text x="421" y="92" text-anchor="middle" font-size="10" fill="#6b675f">→ slow detection</text>
-          <text x="421" y="110" text-anchor="middle" font-size="10" fill="#6b675f">cascading queues</text>
-          <text x="280" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#111110">no provably-correct N — the network has no upper delay bound</text>
-        </g>
-      </svg>
-      <figcaption>A real network is <em>asynchronous</em>: no guaranteed bound on message delay or pause length. With no bound, no timeout can ever be provably correct. (DDIA Ch. 8, "Timeouts and Unbounded Delays.")</figcaption>
-    </figure>
-    <div class="myth"><div class="m">✗ "TCP is reliable, so my request is safe"</div><div class="t">✓ TCP ACK = "kernel got bytes," not "app did the work" — the four causes live at the application layer</div></div>
-    <div class="rule"><span>🧠 Memory rule:</span> When a remote call goes silent you cannot tell <span>lost request · slow node · lost reply · dead node</span> apart — and the work may already be done.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Four indistinguishable causes of no reply? <span class="ans">→ lost request · node slow/paused · lost reply · node dead</span></li>
-      <li>What is a timeout, really? <span class="ans">→ a guess that declares failure; it doesn't detect it</span></li>
-      <li>What does Two Generals prove? <span class="ans">→ certain agreement over a lossy channel is impossible</span></li>
-    </ul></details>
-  </section>
+<section class="lvl" id="l6"><div class="lvltop"><span class="num">6</span><h2>Consistency models — eventual → causal → linearizable</h2></div><p class="tagline"><p>A contract for what a read may return. Stronger = fewer surprises, more coordination, more
+latency.</p></p><figure><img src="diagrams/09-consistency-spectrum.png" alt="Bold caption: consistency is a ladder, not a switch. A vertical ladder of replica-consistency models from eventual (weak, bottom) to linearizable (strong, top), with a two-client read example showing eventual lets a read see the old value just after a write while linearizable does not."/><figcaption><p><strong>Consistency is a ladder, not a switch.</strong> From eventual (weak) up to
+linearizable (strong). A stronger model permits fewer behaviours — easier to program
+against, more expensive to provide. (Jepsen, “Consistency Models”.)</p></figcaption></figure><table><tr><th>Model</th><th>Promise</th><th>Cost / note</th></tr><tr><td>Eventual</td><td>if writes stop, replicas converge</td><td>any past/stale value meanwhile; cheapest, stays available (AP)</td></tr><tr><td>Session (RYW, monotonic reads)</td><td><p>per-<em>your</em>-client promises</p></td><td>kills the anomalies users notice; pin to an up-to-date replica</td></tr><tr><td>Causal</td><td>cause-and-effect seen in order everywhere</td><td><p>strongest model that stays available under partition; concurrent writes unordered</p></td></tr><tr><td>Linearizable</td><td>acts like one copy; recency, real-time order</td><td>no staleness window — but needs coordination (consensus/quorum) → latency</td></tr></table><div class="facts"><div class="fact"><p><b>“Consistency” is overloaded</b> CAP’s C (recency of single-object reads) ≠ ACID’s C
+(transaction invariants) ≠ serializability (multi-object). Keep them apart.</p></div><div class="fact blue"><p><b>The rule of thumb</b> Buy the strongest model your correctness actually needs and not
+a rung more. Reserve linearizability for locks, leader election, unique constraints.</p></div></div><div class="myth"><div class="m">✗ “Linearizable = serializable”</div><div class="t"><p>✓ Linearizable is recency for single objects; serializable is isolation across
+transactions — different words</p></div></div><div class="rule"><p><span>📈 Memory rule:</span> Climb only as high as correctness demands — 
+<span>eventual → session → causal → linearizable</span>, each rung costs coordination.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Strongest model that stays available under partition? <span class="ans">&rarr; causal</span> </li><li> Cheap per-client fix for "comment vanished"? <span class="ans">&rarr; session guarantee: read-your-writes</span> </li><li> Why does linearizability cost latency even with no partition? <span class="ans">&rarr; a node must coordinate to be sure it isn't stale</span> </li> </ul> </details></section>
 
-  <!-- ================= LEVEL 2 ================= -->
-  <section class="lvl" id="l2">
-    <div class="lvltop"><span class="num">2</span><h2>Delivery guarantees &amp; idempotency</h2></div>
-    <p class="tagline">The fix for the double-charge: pick at-least-once, then make processing duplicate-proof.</p>
-    <figure>
-      <img src="diagrams/04-delivery-guarantees.png" alt="The three delivery guarantees. Send-and-forget may lose the message; retry-until-acked may duplicate it; exactly-once is the goal you can't get at the delivery layer."/>
-      <figcaption><strong>The three delivery guarantees.</strong> Send-and-forget may lose the message; retry-until-acked may duplicate it; exactly-once is the goal you can't get at the delivery layer.</figcaption>
-    </figure>
-    <table>
-      <tr><th>Guarantee</th><th>Promise</th><th>The price · where you see it</th></tr>
-      <tr><td>At-most-once</td><td>send &amp; forget; 0 or 1 times</td><td>may be <b>lost</b>, never duplicated · metrics, telemetry</td></tr>
-      <tr><td>At-least-once</td><td>retry until acked</td><td>never lost, may <b>duplicate</b> · Kafka, SQS, webhooks (the default)</td></tr>
-      <tr><td>Exactly-once <em>delivery</em></td><td>once, period</td><td><b>impossible</b> over an unreliable network — see below</td></tr>
-    </table>
-    <p class="tagline">An unacked send leaves you two moves: <b>resend</b> (risk a duplicate → at-least-once) or <b>don't</b> (risk a loss → at-most-once). There is no third door — it's Two Generals in work clothes. So stop chasing exactly-once <em>delivery</em> and build exactly-once <strong>effects</strong>.</p>
-    <figure>
-      <img src="diagrams/05-idempotency-key.png" alt="The idempotency key. The timed-out retry carries the same key; the server recognises it, returns the original result, and does not charge again. At-least-once + idempotency = exactly-once effect."/>
-      <figcaption><strong>The idempotency key.</strong> The timed-out retry carries the same key; the server recognises it, returns the original result, and does not charge again. <b>At-least-once + idempotency = exactly-once effect.</b></figcaption>
-    </figure>
-    <div class="facts">
-      <div class="fact"><b>Idempotent</b> Doing it many times = doing it once. <code>balance=100</code>, <code>DELETE /orders/42</code>, "mark #7 paid."</div>
-      <div class="fact"><b>Not idempotent</b> <code>balance=balance+10</code>, <code>POST /orders</code>, "increment counter," "append a row."</div>
-      <div class="fact blue"><b>Idempotency key</b> Client mints one UUID per <em>logical</em> op, reuses it on every retry; server stores <code>key→result</code>, replays the saved result on repeats. (Stripe's <code>Idempotency-Key</code>.)</div>
-      <div class="fact blue"><b>Dedup (receiver side)</b> Broker tags each message; consumer records processed IDs and drops repeats — exactly-once <em>within the dedup window</em>.</div>
-    </div>
-    <div class="myth"><div class="m">✗ "Idempotency also protects me from reordering"</div><div class="t">✓ Idempotency defends against duplicates only; reordering needs ordering (Lessons 3–4) or commutative ops</div></div>
-    <div class="rule"><span>🔁 Memory rule:</span> Exactly-once delivery is a myth; ship <span>at-least-once + idempotency</span> = exactly-once <em>effects</em>.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>The default real-world guarantee? <span class="ans">→ at-least-once (may duplicate)</span></li>
-      <li>Why is exactly-once delivery impossible? <span class="ans">→ unacked send forces resend-or-not = duplicate-or-loss</span></li>
-      <li>Who generates the idempotency key, and when? <span class="ans">→ the client, once per logical op, reused on retries</span></li>
-    </ul></details>
-  </section>
+<section class="lvl" id="l7"><div class="lvltop"><span class="num">7</span><h2>CAP &amp; PACELC — the real trade-offs</h2></div><p class="tagline"><p>CAP isn’t “pick 2 of 3.” P is forced on you; the only choice is C-vs-A <em>during</em> a
+partition.</p></p><figure><img src="diagrams/10-cap-pacelc.png" alt="The PACELC decision tree. If there is a Partition, choose Availability or Consistency; Else — the normal case — choose lower Latency or stronger Consistency."/><figcaption><p><strong>The PACELC decision tree.</strong> A partition forces the CAP choice (PA vs PC);
+but the far more common no-partition state still forces a Latency-vs-Consistency choice
+(EL vs EC). Most systems are PA/EL or PC/EC. (Abadi, IEEE Computer 2012.)</p></figcaption></figure><div class="facts"><div class="fact"><p><b>C / A / P</b> C = linearizability · A = every non-failed node answers (not “fast”) ·
+P = partition tolerance — <em>not optional</em>, partitions happen.</p></div><div class="fact"><p><b>Under partition</b> CP refuses/blocks on the minority side (etcd, ZooKeeper, Mongo
+default). AP answers with possibly-stale data (Cassandra, DynamoDB, Riak).</p></div><div class="fact blue"><p><b>PACELC</b> if-Partition: A vs C. Else: <b>L vs C</b> — strong consistency costs
+round-trips to a quorum even on a healthy network.</p></div><div class="fact blue"><p><b>Tunable per-request</b> Cassandra/Dynamo let one cluster be EL for feeds and EC for
+balances (consistency level / <code>ConsistentRead</code>).</p></div></div><div class="myth"><div class="m">✗ “You pick two of C, A, P” / “CAP describes my system always”</div><div class="t"><p>✓ P is mandatory → only choose C-or-A under partition; CAP is silent on healthy networks
+— that’s the hole PACELC fills (Brewer 2012)</p></div></div><div class="rule"><p><span>⚖️ Memory rule:</span> 
+<span>if Partition → A or C; Else → Latency or Consistency.</span> Coordination buys
+consistency and always costs latency.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> When does CAP force the C-vs-A choice? <span class="ans">&rarr; only during a network partition</span> </li><li> What does a CP system do under partition? <span class="ans">&rarr; sacrifice availability to keep data consistent</span> </li><li> What does PACELC add over CAP? <span class="ans">&rarr; the latency-vs-consistency trade on healthy networks</span> </li> </ul> </details></section>
 
-  <!-- ================= LEVEL 3 ================= -->
-  <section class="lvl" id="l3">
-    <div class="lvltop"><span class="num">3</span><h2>No global clock — logical time</h2></div>
-    <p class="tagline">Stop asking <em>when</em> things happened on a wall clock; ask which one <em>caused</em> the other.</p>
-    <figure>
-      <svg viewBox="0 0 560 150" role="img" aria-label="Two machine clocks drift apart; the later write carries the smaller timestamp and last-write-wins silently discards it">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <text x="280" y="20" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9a2417">CLOCK SKEW silently eats data under last-write-wins</text>
-          <rect x="20" y="40" width="150" height="40" rx="8" fill="#fff" stroke="#d8d4c8"/>
-          <text x="95" y="58" text-anchor="middle" font-size="10.5" font-weight="700">Replica A clock</text>
-          <text x="95" y="73" text-anchor="middle" font-size="10" fill="#6b675f">stamps write @ t=105</text>
-          <rect x="390" y="40" width="150" height="40" rx="8" fill="#fff" stroke="#d8d4c8"/>
-          <text x="465" y="58" text-anchor="middle" font-size="10.5" font-weight="700">Replica B clock</text>
-          <text x="465" y="73" text-anchor="middle" font-size="10" fill="#6b675f">stamps LATER write @ t=103</text>
-          <line x1="170" y1="60" x2="388" y2="60" stroke="#9a2417" stroke-dasharray="4 3" marker-end="url(#arwA)"/>
-          <text x="279" y="52" text-anchor="middle" font-size="10" fill="#9a2417">~ms skew</text>
-          <rect x="120" y="100" width="320" height="34" rx="8" fill="#f7ecea" stroke="#9a2417"/>
-          <text x="280" y="121" text-anchor="middle" font-size="11" font-weight="700" fill="#7a2218">later write (103) &lt; earlier (105) → silently dropped</text>
-        </g>
-      </svg>
-      <figcaption>Quartz drifts ~200 ppm (≈17 s/day); NTP narrows but can't share an instant and can step <em>backwards</em>. Wall-clock timestamps from different machines are not comparable for ordering. (DDIA Ch. 8, "Unreliable Clocks".)</figcaption>
-    </figure>
-    <table>
-      <tr><th>Clock kind</th><th>Answers</th><th>Failure mode</th></tr>
-      <tr><td>Physical / time-of-day</td><td>"what wall-clock instant?"</td><td>skew, drift, backward jumps</td></tr>
-      <tr><td>Monotonic</td><td>"how much elapsed locally?"</td><td>meaningless across machines</td></tr>
-      <tr><td>Logical</td><td>"what is the <em>order</em>?"</td><td>carries no real-time meaning</td></tr>
-    </table>
-    <figure>
-      <img src="diagrams/06-happens-before.png" alt="Happens-before vs concurrent, with Lamport timestamps. A space-time diagram showing that B sending event m2 only after receiving m1 from A makes A's send causally before B's send, while C's event is concurrent with both."/>
-      <figcaption>Happens-before vs concurrent. B sends m2 only after receiving m1, so <code>send(m1) → recv(m1) → send(m2)</code>; C's event is reachable from neither — <em>concurrent</em>. (Lamport, 1978.)</figcaption>
-    </figure>
-    <div class="facts">
-      <div class="fact"><b>Happens-before (a → b)</b> Same node &amp; earlier; or send→receive of one message; plus transitivity. A <em>partial</em> order.</div>
-      <div class="fact"><b>Concurrent (a ∥ b)</b> Neither reaches the other — causally independent, <em>not</em> "same wall-clock time."</div>
-      <div class="fact blue"><b>Lamport clock</b> One integer; <code>recv: L=max(L,t)+1</code>. Gives <code>a→b ⟹ L(a)&lt;L(b)</code> — but <em>not</em> the converse. Can't detect concurrency.</div>
-      <div class="fact blue"><b>Vector clock</b> One counter per node; compare element-wise. <code>a→b iff V(a)&lt;V(b)</code>; incomparable = concurrent. Cost: O(N) per message. (Dynamo.)</div>
-    </div>
-    <div class="myth"><div class="m">✗ "NTP syncs clocks, so timestamps order events"</div><div class="t">✓ NTP error is tens of ms and can jump backward; use logical time for ordering</div></div>
-    <div class="rule"><span>⏱ Memory rule:</span> There is no global clock — for ordering, throw away time and track <span>cause: happens-before</span>.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Why are cross-machine timestamps unsafe to order? <span class="ans">→ skew can make the later event carry the smaller stamp</span></li>
-      <li>What does a Lamport clock fail to do? <span class="ans">→ tell whether two events were concurrent or causal</span></li>
-      <li>What does a vector clock add? <span class="ans">→ an exact concurrent-vs-causal test</span></li>
-    </ul></details>
-  </section>
+<section class="lvl" id="l8"><div class="lvltop"><span class="num">8</span><h2>Consensus — FLP impossibility + Raft</h2></div><p class="tagline"><p>Get nodes to agree on one value despite crashes — using a majority quorum that always
+overlaps.</p></p><figure> <svg viewBox="0 0 560 130" role="img" aria-label="FLP: no deterministic protocol guarantees consensus in a fully asynchronous system if one node may crash; real systems add timeouts and randomness"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="280" y="20" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9a2417">FLP (1985) — the computation cousin of Two Generals</text> <rect x="14" y="34" width="262" height="80" rx="9" fill="#f7ecea" stroke="#9a2417"></rect> <text x="145" y="56" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7a2218">fully async + 1 crash possible</text> <text x="145" y="76" text-anchor="middle" font-size="10" fill="#7a2218">no </text></g></svg><em>deterministic</em> protocol
+<text x="145" y="93" text-anchor="middle" font-size="10" fill="#7a2218">can <em>guarantee</em> consensus</text> <line x1="278" y1="74" x2="312" y2="74" stroke="#6b675f" marker-end="url(#arw)"></line> <rect x="314" y="34" width="232" height="80" rx="9" fill="#eef5ee" stroke="#2f5d3a"></rect> <text x="430" y="56" text-anchor="middle" font-size="10.5" font-weight="700" fill="#244a2e">escape hatch</text> <text x="430" y="76" text-anchor="middle" font-size="10" fill="#244a2e">timeouts (partial synchrony)</text> <text x="430" y="93" text-anchor="middle" font-size="10" fill="#244a2e">+ randomness → liveness in practice</text> <figcaption>
+Safety holds <em>always</em>; liveness is achieved only when the network is calm. Real
+        consensus bets the network is eventually well-behaved. (Fischer, Lynch &amp; Paterson,
+        1985.)
+</figcaption> </figure><figure><img src="diagrams/11-raft-election.png" alt="A 5-node Raft cluster electing a leader. One node's election timeout fires first; it becomes a candidate in a new term, gathers a majority of votes, and becomes leader."/><figcaption><p>A 5-node Raft cluster electing a leader: one node’s <em>randomized</em> election timeout
+fires first, it becomes a candidate in a new <b>term</b>, gathers a <b>majority</b> of
+votes, and becomes leader. Random timeouts dissolve split votes. (Ongaro &amp;
+Ousterhout, 2014.)</p></figcaption></figure><figure><img src="diagrams/12-raft-log.png" alt="A leader replicating a log entry. The entry is committed only after a majority of nodes have persisted it; it is then applied to each node's state machine."/><figcaption><p>A leader replicating a log entry: it is <b>committed</b> only after a <em>majority</em> 
+persists it, then <b>applied</b> to each node’s state machine. The leader replies to the
+client only after commit — so an acked write can never be lost.</p></figcaption></figure><div class="facts"><div class="fact"><p><b>Consensus = 3 properties</b> Agreement (no two decide differently) · Validity
+(decided value was proposed) · Termination (everyone eventually decides).</p></div><div class="fact"><p><b>Majority quorum</b> ⌈(N+1)/2⌉. Two majorities always share a node → two conflicting
+decisions impossible. N=3 tolerates 1, N=5 tolerates 2.</p></div><div class="fact blue"><p><b>Why odd-sized</b> A 4-node cluster needs 3 for majority, tolerates 1 — same as 3
+nodes. The extra even node buys nothing.</p></div><div class="fact blue"><p><b>Log Matching</b> AppendEntries carries the prior entry’s index+term; a mismatch is
+rejected and the divergent tail overwritten — committed history never lost.</p></div></div><div class="myth"><div class="m">✗ “Raft/Paxos tolerate any kind of node failure”</div><div class="t"><p>✓ They assume <em>crash-stop</em>, not lying; malicious nodes need Byzantine consensus
+(PBFT, 3f+1) (Castro &amp; Liskov 1999)</p></div></div><div class="rule"><p><span>🗳 Memory rule:</span> 
+<span>elect by randomized timeout · commit on a majority · majorities overlap</span> → two
+leaders / two decisions can’t coexist.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Three properties of consensus? <span class="ans">&rarr; agreement, validity, termination</span> </li><li> What does FLP prove? <span class="ans">&rarr; no deterministic protocol guarantees consensus under async + 1 crash</span> </li><li> When is a Raft entry committed? <span class="ans">&rarr; once a majority persists it; then it's applied to the state machine</span> </li> </ul> </details></section>
 
-  <!-- ================= LEVEL 4 ================= -->
-  <section class="lvl" id="l4">
-    <div class="lvltop"><span class="num">4</span><h2>Order &amp; causality — the broadcast ladder</h2></div>
-    <p class="tagline">Pick the cheapest rung that still satisfies the requirement — that choice is the whole art.</p>
-    <figure>
-      <img src="diagrams/07-broadcast-ordering.png" alt="The broadcast-guarantee ladder, and the causal violation it prevents. A layered stack from best-effort up to total order, beside a three-node example where a reply (M2) overtakes the question (M1) it depends on. The reader should conclude: each rung adds exactly one ordering promise, and the causal rung is the one that stops the overtaking reply."/>
-      <figcaption><strong>The broadcast-guarantee ladder, and the causal violation it prevents.</strong> Each rung adds exactly one ordering promise; the causal rung is the one that stops a reply from overtaking the question it depends on.</figcaption>
-    </figure>
-    <table>
-      <tr><th>Rung</th><th>Adds this promise</th><th>Concretely</th></tr>
-      <tr><td>Best-effort</td><td>nothing — try once</td><td>sender may crash mid-send; some get it, some don't</td></tr>
-      <tr><td>Reliable</td><td>all-or-nothing</td><td>if any correct node delivers, every correct node eventually does</td></tr>
-      <tr><td>FIFO</td><td>per-sender order</td><td>one sender's messages arrive in send order</td></tr>
-      <tr><td>Causal</td><td>happens-before order</td><td>if A→B, every node delivers A before B</td></tr>
-      <tr><td>Total order</td><td>one global sequence</td><td>all nodes deliver all messages in the <b>same</b> order</td></tr>
-    </table>
-    <figure>
-      <svg viewBox="0 0 560 130" role="img" aria-label="Total-order broadcast equals state-machine replication equals consensus — the same problem in three hats">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <rect x="14" y="44" width="160" height="48" rx="9" fill="#fff" stroke="#1f3a5a"/>
-          <text x="94" y="66" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">total-order</text>
-          <text x="94" y="82" text-anchor="middle" font-size="10" fill="#6b675f">broadcast</text>
-          <rect x="200" y="44" width="160" height="48" rx="9" fill="#f1eee2" stroke="#7a1f12"/>
-          <text x="280" y="66" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">state-machine</text>
-          <text x="280" y="82" text-anchor="middle" font-size="10" fill="#6b675f">replication</text>
-          <rect x="386" y="44" width="160" height="48" rx="9" fill="#fff" stroke="#2f5d3a"/>
-          <text x="466" y="66" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">consensus</text>
-          <text x="466" y="82" text-anchor="middle" font-size="10" fill="#6b675f">(Lesson 8)</text>
-          <text x="187" y="72" text-anchor="middle" font-size="16" fill="#6b675f">≈</text>
-          <text x="373" y="72" text-anchor="middle" font-size="16" fill="#6b675f">≈</text>
-          <text x="280" y="26" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">ONE problem in three hats — each reduces to the others</text>
-          <text x="280" y="116" text-anchor="middle" font-size="10" fill="#7a1f12">so total order inherits Lesson 1's impossibility (FLP)</text>
-        </g>
-      </svg>
-      <figcaption>Causal order is enforceable <em>locally</em> (vector-clock metadata, no agreement). Total order requires nodes to <em>agree</em> on one sequence — that's consensus, the hard problem. (Schneider 1990; DDIA Ch. 9.)</figcaption>
-    </figure>
-    <div class="myth"><div class="m">✗ "The events came out of order — make it strictly ordered"</div><div class="t">✓ First ask: FIFO, causal, or total? Total order needs consensus; don't pay for it unless required</div></div>
-    <div class="rule"><span>📡 Memory rule:</span> FIFO ⊂ causal ⊂ total; <span>need every replica on one order → you need total-order broadcast → you need consensus</span>.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Which rung stops a reply overtaking its question? <span class="ans">→ causal</span></li>
-      <li>Why is total order the expensive jump? <span class="ans">→ nodes must agree on order of concurrent messages = consensus</span></li>
-      <li>State-machine replication needs what input? <span class="ans">→ same commands, same order (a total-order log)</span></li>
-    </ul></details>
-  </section>
+<section class="lvl" id="l9"><div class="lvltop"><span class="num">9</span><h2>Partitioning / sharding — splitting without hot spots</h2></div><p class="tagline"><p>Replication raises availability; <em>partitioning</em> raises the storage and write ceiling.</p></p><figure><img src="diagrams/13-hash-vs-range.png" alt="Two ways to map keys to partitions, and what each one costs you. Left: key-range partitioning keeps keys sorted (A–H, I–P, Q–Z) so range scans are cheap, but a burst of writes to one range overloads one node. Right: hash partitioning scatters keys evenly across nodes so load is balanced, but a range scan must hit every node."/><figcaption><p><strong>Two ways to map keys to partitions, and what each costs.</strong> Key-range
+keeps keys sorted (cheap range scans, but a write burst to one range overloads a node);
+hash scatters keys evenly (balanced load, but a range scan must hit every node).</p></figcaption></figure><table><tr><th>Property</th><th>Key-range</th><th>Hash</th></tr><tr><td>Range scan</td><td>cheap — few adjacent partitions</td><td>expensive — scatter to all</td></tr><tr><td>Load distribution</td><td>uneven → hot spots</td><td>even by design</td></tr><tr><td>Example systems</td><td>HBase, Bigtable</td><td>Cassandra, Dynamo</td></tr></table><div class="facts"><div class="fact"><p><b>Rebalancing — never mod N</b> <code>hash(key) mod N</code> moves almost every key
+when N changes. Use a fixed partition count, or <b>consistent hashing</b> (relocates
+~K/N).</p></div><div class="fact"><p><b>Hot spot / skew</b> One celebrity key melts one partition; hashing can’t help (same
+key hashes the same). Fix: random suffix splits the hot key across 100 sub-keys.</p></div><div class="fact blue"><p><b>Request routing</b> Forward via any node (gossip) · a routing tier · partition-aware
+client. The map is kept consistent via ZooKeeper/etcd.</p></div><div class="fact blue"><p><b>Rebalance deliberately</b> Auto-rebalance triggered by a node that merely 
+<em>looks</em> dead (Lesson 1!) can start a data-movement storm.</p></div></div><div class="myth"><div class="m">✗ “Add read replicas to fit more data”</div><div class="t"><p>✓ Every replica holds the <em>whole</em> dataset; to raise the storage ceiling you must
+partition</p></div></div><div class="rule"><p><span>🧩 Memory rule:</span> 
+<span>range = cheap scans, hot spots · hash = even load, no scans</span>; grow with fixed
+partitions or consistent hashing, never mod N.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Failure mode of keying by timestamp + key-range? <span class="ans">&rarr; all current writes hit one partition (write hot spot)</span> </li><li> Why is <code>mod N</code> bad on growth? <span class="ans">&rarr; changing N reassigns almost every key at once</span> </li><li> How to relieve a celebrity's hot partition? <span class="ans">&rarr; add a random suffix to split the hot key</span> </li> </ul> </details></section>
 
-  <!-- ================= LEVEL 5 ================= -->
-  <section class="lvl" id="l5">
-    <div class="lvltop"><span class="num">5</span><h2>Replication — leader, multi-leader, leaderless</h2></div>
-    <p class="tagline">Keep copies useful-agreement-close despite the lost messages and timeouts you already accepted.</p>
-    <table>
-      <tr><th>Architecture</th><th>Who takes writes</th><th>Key trade-off</th></tr>
-      <tr><td>Single-leader</td><td>one leader; followers replay its log</td><td>no write conflicts (one serializer); leader is a SPOF → <b>failover &amp; split brain</b></td></tr>
-      <tr><td>Multi-leader</td><td>a leader per DC / per device</td><td>local fast writes; <b>conflicts</b> must be resolved after the fact</td></tr>
-      <tr><td>Leaderless (Dynamo)</td><td>any replica; client uses quorums</td><td>no leader; freshness via <code>R + W &gt; N</code>; needs read-repair / anti-entropy</td></tr>
-    </table>
-    <figure>
-      <img src="diagrams/08-quorum-rw.png" alt="A read quorum and a write quorum must overlap by at least one node. With N=3 replicas, a write that lands on 2 nodes (W=2) and a read that contacts 2 nodes (R=2) are guaranteed to share at least one node, so the read sees the latest write."/>
-      <figcaption>A read quorum and a write quorum must overlap by ≥1 node. With <b>N=3, W=2, R=2</b> (R+W=4&gt;3), whichever two the read picks, at least one was in the write set — so the read sees the latest value. W and R are tunable knobs, not fixed laws. (Dynamo, 2007.)</figcaption>
-    </figure>
-    <div class="facts">
-      <div class="fact"><b>Why replicate</b> Fault tolerance · latency (replica near the user) · throughput (parallel reads). Name which one you're buying.</div>
-      <div class="fact"><b>Sync vs async</b> Synchronous = durable but one slow follower blocks; async = fast but a leader crash loses acked writes. Most run <em>semi-sync</em>.</div>
-      <div class="fact blue"><b>Conflict resolution</b> LWW (silently loses data — clocks lie) · app merge (more code, no loss) · CRDTs (deterministic merge, limited shapes).</div>
-      <div class="fact blue"><b>Replication lag anomalies</b> read-your-writes · monotonic reads · consistent-prefix — each with a standard bounded fix (route to leader / pin replica).</div>
-    </div>
-    <div class="myth"><div class="m">✗ "R + W &gt; N gives me linearizability"</div><div class="t">✓ It only guarantees a read <em>sees</em> a recent write; concurrent/partial writes still leak stale values</div></div>
-    <div class="rule"><span>🗂 Memory rule:</span> One serializer = no conflicts; many writers = resolve later; no leader = <span>R + W &gt; N</span> for overlap.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Why no write conflicts under single-leader? <span class="ans">→ the leader serializes all writes into one order</span></li>
-      <li>N=5 — which W,R is safe? <span class="ans">→ W=3,R=3 (6&gt;5); the rest sum to ≤5</span></li>
-      <li>"Comment vanished on reload" is which anomaly? <span class="ans">→ read-your-own-writes</span></li>
-    </ul></details>
-  </section>
+<section class="lvl" id="l10"><div class="lvltop"><span class="num">10</span><h2>Putting it together — the resilience toolkit</h2></div><p class="tagline"><p>Every pattern is one trade: at-least-once delivery + idempotent effects =
+“effectively-once.”</p></p><figure> <svg viewBox="0 0 560 150" role="img" aria-label="Retries with exponential backoff and jitter: synchronized retries collide; jitter smears them into smooth load"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="140" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">NO JITTER — herd retries collide</text> <line x1="20" y1="110" x2="260" y2="110" stroke="#6b675f"></line> <g stroke="#9a2417" stroke-width="2.5"> <line x1="70" y1="110" x2="70" y2="48"></line><line x1="73" y1="110" x2="73" y2="48"></line><line x1="76" y1="110" x2="76" y2="48"></line> <line x1="150" y1="110" x2="150" y2="60"></line><line x1="153" y1="110" x2="153" y2="60"></line><line x1="156" y1="110" x2="156" y2="60"></line> <line x1="220" y1="110" x2="220" y2="72"></line><line x1="223" y1="110" x2="223" y2="72"></line> </g> <text x="140" y="128" text-anchor="middle" font-size="9.5" fill="#6b675f">spikes at 1s, 2s, 4s</text> <line x1="288" y1="10" x2="288" y2="140" stroke="#d8d4c8" stroke-dasharray="4 4"></line> <text x="430" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">FULL JITTER — smooth load</text> <line x1="312" y1="110" x2="552" y2="110" stroke="#6b675f"></line> <g stroke="#2f5d3a" stroke-width="2.5"> <line x1="330" y1="110" x2="330" y2="88"></line><line x1="352" y1="110" x2="352" y2="82"></line><line x1="378" y1="110" x2="378" y2="90"></line> <line x1="404" y1="110" x2="404" y2="84"></line><line x1="432" y1="110" x2="432" y2="92"></line><line x1="460" y1="110" x2="460" y2="86"></line> <line x1="492" y1="110" x2="492" y2="90"></line><line x1="524" y1="110" x2="524" y2="88"></line> </g> <text x="432" y="128" text-anchor="middle" font-size="9.5" fill="#6b675f">random delay in [0, cap]</text> </g> </svg> <figcaption>
+Retries: only retry <em>idempotent</em> ops · back off exponentially · add <b>jitter</b> to break
+        lockstep · circuit-break sustained failures. Full jitter both minimises competing calls and finishes
+        fastest. (Brooker, AWS Builders' Library.)
+</figcaption> </figure><figure><img src="diagrams/14-outbox-pattern.png" alt="The outbox pattern turns a dual write into one atomic write plus an idempotent publish. The service commits the business row and an outbox row in a single database transaction; a separate relay reads unsent outbox rows, publishes them to the broker at-least-once, and marks them sent."/><figcaption><p><strong>The outbox pattern</strong> turns a dual write into one atomic write + an
+idempotent publish. The service commits the business row <em>and</em> an outbox row in
+one DB transaction; a relay publishes unsent rows at-least-once and marks them sent.</p></figcaption></figure><figure> <svg viewBox="0 0 560 150" role="img" aria-label="A saga: forward local transactions, and on failure run compensating transactions in reverse"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="280" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111110">SAGA — no cross-service rollback; compensate in reverse</text> <g font-size="9.5"> <rect x="20" y="34" width="150" height="34" rx="7" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="95" y="55" text-anchor="middle" fill="#244a2e">reserve seat ✓</text> <rect x="200" y="34" width="150" height="34" rx="7" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="275" y="55" text-anchor="middle" fill="#244a2e">charge card ✓</text> <rect x="380" y="34" width="160" height="34" rx="7" fill="#f7ecea" stroke="#9a2417"></rect><text x="460" y="55" text-anchor="middle" fill="#7a2218">reserve hotel ✗</text> <line x1="170" y1="51" x2="198" y2="51" stroke="#6b675f" marker-end="url(#arw)"></line> <line x1="350" y1="51" x2="378" y2="51" stroke="#6b675f" marker-end="url(#arw)"></line> <rect x="20" y="100" width="150" height="34" rx="7" fill="#fff" stroke="#7a1f12"></rect><text x="95" y="121" text-anchor="middle" fill="#7a1f12">release seat</text> <rect x="200" y="100" width="150" height="34" rx="7" fill="#fff" stroke="#7a1f12"></rect><text x="275" y="121" text-anchor="middle" fill="#7a1f12">refund card</text> <line x1="275" y1="100" x2="275" y2="70" stroke="#7a1f12" stroke-dasharray="3 3" marker-end="url(#arwA)"></line> <line x1="95" y1="100" x2="95" y2="70" stroke="#7a1f12" stroke-dasharray="3 3" marker-end="url(#arwA)"></line> <line x1="198" y1="117" x2="172" y2="117" stroke="#7a1f12" marker-end="url(#arwA)"></line> </g> <text x="280" y="148" text-anchor="middle" font-size="9.5" fill="#7a1f12">compensating transactions semantically undo committed steps</text> </g> </svg> <figcaption>
+A saga models a cross-service operation as local transactions, each with a compensating
+        transaction; on failure it walks back in reverse. It gives up <em>isolation</em> — the charge
+        is briefly visible. (Garcia-Molina &amp; Salem, 1987.)
+</figcaption> </figure><div class="facts"><div class="fact"><p><b>Dual-write problem</b> Writing DB <em>and</em> publishing as two steps: a crash in
+the gap leaves them disagreeing. The outbox collapses it into one atomic write.</p></div><div class="fact"><p><b>Effectively-once</b> There’s no exactly-once <em>delivery</em>. Ship at-least-once
+delivery + idempotent effects. Always ask: exactly-once across <em>which boundary</em>?</p></div><div class="fact blue"><p><b>End-to-end argument</b> A correctness guarantee (dedup, idempotency) can only be
+enforced by the <em>endpoints</em>; the network is a best-effort accelerator. (Saltzer,
+Reed &amp; Clark, 1984.)</p></div><div class="fact blue"><p><b>Retry budgets</b> Independent retries multiply down a chain (3×3×3 = 27 calls). Cap
+retries (~10% of volume) and retry at one layer. (Google SRE.)</p></div></div><div class="myth"><div class="m">✗ “TCP / the broker gives me exactly-once, so my handler is safe”</div><div class="t"><p>✓ Only your consumer knows it already processed event abc-123 — put dedup at the
+endpoint</p></div></div><div class="rule"><span>🛡 Memory rule:</span> <span><p>retry idempotent ops with backoff+jitter · outbox the dual write · saga + compensate ·
+enforce correctness at the endpoints.</p></span></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Why add jitter to backoff? <span class="ans">&rarr; spreads synchronized retries so herds stop colliding</span> </li><li> What does the outbox solve? <span class="ans">&rarr; the dual-write problem — one atomic write + idempotent publish</span> </li><li> Where must dedup live, and why? <span class="ans">&rarr; at the endpoint; only it knows what it already processed</span> </li> </ul> </details></section>
 
-  <!-- ================= LEVEL 6 ================= -->
-  <section class="lvl" id="l6">
-    <div class="lvltop"><span class="num">6</span><h2>Consistency models — eventual → causal → linearizable</h2></div>
-    <p class="tagline">A contract for what a read may return. Stronger = fewer surprises, more coordination, more latency.</p>
-    <figure>
-      <img src="diagrams/09-consistency-spectrum.png" alt="Bold caption: consistency is a ladder, not a switch. A vertical ladder of replica-consistency models from eventual (weak, bottom) to linearizable (strong, top), with a two-client read example showing eventual lets a read see the old value just after a write while linearizable does not."/>
-      <figcaption><strong>Consistency is a ladder, not a switch.</strong> From eventual (weak) up to linearizable (strong). A stronger model permits fewer behaviours — easier to program against, more expensive to provide. (Jepsen, "Consistency Models".)</figcaption>
-    </figure>
-    <table>
-      <tr><th>Model</th><th>Promise</th><th>Cost / note</th></tr>
-      <tr><td>Eventual</td><td>if writes stop, replicas converge</td><td>any past/stale value meanwhile; cheapest, stays available (AP)</td></tr>
-      <tr><td>Session (RYW, monotonic reads)</td><td>per-<em>your</em>-client promises</td><td>kills the anomalies users notice; pin to an up-to-date replica</td></tr>
-      <tr><td>Causal</td><td>cause-and-effect seen in order everywhere</td><td>strongest model that stays available under partition; concurrent writes unordered</td></tr>
-      <tr><td>Linearizable</td><td>acts like one copy; recency, real-time order</td><td>no staleness window — but needs coordination (consensus/quorum) → latency</td></tr>
-    </table>
-    <div class="facts">
-      <div class="fact"><b>"Consistency" is overloaded</b> CAP's C (recency of single-object reads) ≠ ACID's C (transaction invariants) ≠ serializability (multi-object). Keep them apart.</div>
-      <div class="fact blue"><b>The rule of thumb</b> Buy the strongest model your correctness actually needs and not a rung more. Reserve linearizability for locks, leader election, unique constraints.</div>
-    </div>
-    <div class="myth"><div class="m">✗ "Linearizable = serializable"</div><div class="t">✓ Linearizable is recency for single objects; serializable is isolation across transactions — different words</div></div>
-    <div class="rule"><span>📈 Memory rule:</span> Climb only as high as correctness demands — <span>eventual → session → causal → linearizable</span>, each rung costs coordination.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Strongest model that stays available under partition? <span class="ans">→ causal</span></li>
-      <li>Cheap per-client fix for "comment vanished"? <span class="ans">→ session guarantee: read-your-writes</span></li>
-      <li>Why does linearizability cost latency even with no partition? <span class="ans">→ a node must coordinate to be sure it isn't stale</span></li>
-    </ul></details>
-  </section>
+<h2 class="sec" id="interview"><p>Interview — pick your bar</p></h2>
+<p class="tagline"><p>Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System Design</b> = open
+design round (a different axis, not a harder level).</p></p>
+<div data-interview> <details class="iq" data-level="core"> <summary>State CAP precisely, then correct the most common misreading.</summary> <div class="a"><b>Hit these points:</b> CAP = under a network <em>partition</em> you must choose Consistency (linearizability) or Availability — you cannot keep both &rarr; P is not optional, partitions happen, so the real lever is C-vs-A <em>during</em> a partition: CP blocks the minority side, AP serves possibly-stale reads &rarr; the misreading is "pick 2 of 3" as if a system is permanently one letter — CAP only speaks about partitions and says nothing about the healthy case &rarr; that's exactly the gap PACELC fills: Else (no partition), you still trade Latency vs Consistency &rarr; so a real label is two-part, e.g. PA/EL or PC/EC.</div> </details> <details class="iq" data-level="core"> <summary>Name the consistency models from weakest to strongest and what each guarantees.</summary> <div class="a"><b>Hit these points:</b> <b>eventual</b> — if writes stop, replicas converge; any stale read is legal meanwhile &rarr; <b>read-your-writes / session</b> — a client sees its own writes and monotonic reads within a session &rarr; <b>causal</b> — operations that are causally related are seen in order by everyone; concurrent ones may differ &rarr; <b>linearizable</b> — every operation appears to take effect atomically at one instant between invocation and response, as if on a single copy &rarr; rule of thumb: buy the weakest model your correctness actually needs, since each rung up costs latency and availability.</div> </details> <details class="iq" data-level="core"> <summary>What is a quorum, and why does R + W &gt; N matter in a leaderless store?</summary> <div class="a"><b>Hit these points:</b> in a leaderless (Dynamo-style) store with N replicas, a write waits for W acks and a read gathers R responses &rarr; if R + W &gt; N the read set and the most recent write set must share at least one node, so a read overlaps every acknowledged write and can return the freshest value &rarr; e.g. N=5, W=3, R=3 overlaps; W=2, R=2 does not &rarr; quorums tune the C-vs-A/latency trade: bigger W = more durable, slower writes; smaller R = faster, riskier reads &rarr; caveat: strict quorums still need read-repair / anti-entropy and don't by themselves give linearizability.</div> </details> <details class="iq" data-level="core"> <summary>Name the three replication topologies and the price each pays.</summary> <div class="a"><b>Hit these points:</b> <b>single-leader</b> — all writes to one node, replicate to followers; simple and linearizable-able, but the leader is a write bottleneck and a failover hazard &rarr; <b>multi-leader</b> — writes accepted at several leaders (e.g. multi-region); better write availability/latency, but concurrent writes create conflicts you must resolve &rarr; <b>leaderless</b> — any replica takes writes, quorums for correctness; great availability, but you own conflict detection (version vectors) and read-repair &rarr; the through-line: as you move away from one leader you buy availability and pay in conflict handling.</div> </details> <details class="iq" data-level="senior"> <summary>A payment call times out with no reply. What do you do, and why is "just retry" dangerous?</summary> <div class="a"><b>Hit these points:</b> a timeout has four indistinguishable causes — lost request, slow node, lost reply, or dead node — so you cannot tell "didn't happen" from "happened, ack lost" &rarr; the charge may already have succeeded, so a blind retry double-charges &rarr; the fix is to make the operation idempotent with a client-generated key: at-least-once delivery + idempotent effect = exactly-once <em>effect</em> &rarr; pair it with bounded retries, exponential backoff + jitter, and a retry budget so you don't amplify an overload &rarr; red flag: treating a timeout as proof of failure.</div> </details> <details class="iq" data-level="senior"> <summary>Why is "exactly-once delivery" impossible, and what do we actually ship instead?</summary> <div class="a"><b>Hit these points:</b> an unacked send forces a choice — resend (risk a duplicate) or don't (risk loss); there is no third door, it's the Two Generals problem &rarr; so "exactly-once delivery" over an unreliable network is unachievable &rarr; what we build is exactly-once <em>effects</em>: at-least-once delivery + an idempotent or deduplicating endpoint = effectively-once &rarr; always ask "exactly-once across <em>which</em> boundary?" — the guarantee is per consumer/store, not end-to-end magic &rarr; mechanisms: idempotency keys, dedup windows, transactional outbox to avoid the dual-write.</div> </details> <details class="iq" data-level="senior"> <summary>Two replicas accepted writes; which one wins? Walk me through the clock issue.</summary> <div class="a"><b>Hit these points:</b> wall-clock timestamps on different machines aren't comparable — clock skew can make the later write carry the smaller timestamp &rarr; so last-write-wins by physical time silently drops a genuinely-later write &rarr; you need a <em>logical</em> notion of order: happens-before via Lamport clocks, or version vectors to actually <em>detect</em> concurrency rather than impose a false order &rarr; once concurrency is detected you either merge (CRDT/app-level) or surface siblings to the application &rarr; if you must use LWW, scope its data-loss risk explicitly and use it only where losing a concurrent write is acceptable.</div> </details> <details class="iq" data-level="senior"> <summary>You key a time-series table by timestamp and one node is melting. Why, and how do you fix it?</summary> <div class="a"><b>Hit these points:</b> key-range partitioning by timestamp routes all <em>current</em> writes to the single partition holding the newest range — a moving write hot spot &rarr; fix options: hash-partition the key for even write spread (cost: range scans now scatter across partitions) or prefix/salt the key so recent writes fan out &rarr; never rebalance with <code>mod N</code> — adding a node remaps almost everything; use a fixed number of partitions or consistent hashing so adding a node moves only ~K/N keys &rarr; for read-heavy time ranges, consider a compound key (e.g. tenant + time bucket) so writes spread but scans stay local.</div> </details> <details class="iq" data-level="staff"> <summary>Events are "coming out of order." Diagnose it, then decide how much ordering to actually buy.</summary> <div class="a"><b>Hit these points:</b> first ask <em>which</em> order is required — FIFO (per source), causal, or total — because they cost wildly different amounts &rarr; FIFO ⊂ causal ⊂ total; pick the lowest rung that satisfies correctness, over-ordering is over-engineering &rarr; causal order is enforceable locally with vector clocks and no coordination; <b>total order needs consensus</b> (a single Kafka partition, a replicated log) and is the expensive, throughput-capping one &rarr; diagnose by tracing whether the disorder is cross-partition (you chose total order but partitioned for throughput) or genuine concurrency &rarr; synthesis: partition for throughput where order doesn't matter, reserve a totally-ordered lane only for the keys that need it.</div> </details> <details class="iq" data-level="staff"> <summary>How does Raft avoid two leaders, and what does FLP have to do with it?</summary> <div class="a"><b>Hit these points:</b> a node grants at most one vote per term and a leader needs a majority; any two majorities overlap in ≥1 node, so two leaders in the same term is impossible — that's the safety argument &rarr; FLP proves no <em>deterministic</em> protocol can <em>guarantee termination</em> in a purely asynchronous model with even one crash &rarr; Raft doesn't beat FLP; it sidesteps it by assuming partial synchrony (timeouts) for <em>liveness</em> and using <em>randomized</em> election timeouts to break symmetric split votes &rarr; the principal framing: <b>safety always, liveness only when the network is eventually calm</b> &rarr; so a permanently flaky network can stall progress without ever violating correctness.</div> </details> <details class="iq" data-level="staff"> <summary>How would you choose a failure detector, and why is "perfect failure detection" the wrong goal?</summary> <div class="a"><b>Hit these points:</b> in an async network you cannot distinguish a slow node from a dead one, so any timeout-based detector is a tunable guess trading completeness (always suspect real failures) against accuracy (never falsely suspect) &rarr; aggressive timeouts cause false positives — needless failovers, re-elections, duplicate work; lax timeouts delay recovery &rarr; prefer adaptive detectors (e.g. phi-accrual) that output a suspicion level from observed RTT history instead of a hard boolean &rarr; pair detection with fencing tokens so a wrongly-suspected-then-revived node can't act as a stale leader &rarr; the staff move: don't chase perfect detection — design so a <em>wrong</em> suspicion is safe (idempotent work, fencing, leader leases), because wrong suspicions are inevitable.</div> </details> <div class="designrubric" data-level="design"> <b>Design-round framework</b> — drive any distributed-systems prompt through these, out loud: <ol> <li>Clarify requirements: consistency model needed, ordering, durability, RPO/RTO, scale &amp; latency budget.</li><li>Place it on CAP/PACELC — what happens to each operation under a partition?</li><li>Replication &amp; partitioning: leader topology, quorum (R/W vs N), hash vs range, rebalancing.</li><li>Failure handling: timeouts + backoff + jitter + retry budget; idempotency keys on every side effect.</li><li>Cross-service atomicity: transactional outbox for the dual-write; sagas with compensations (no 2PC across services).</li><li>Observability &amp; ops: detect partitions, lag, hot spots; fencing tokens; how you test rare interleavings.</li><li>End-to-end argument: place each correctness guarantee at the layer that has the knowledge to enforce it.</li> </ol> </div><details class="iq" data-level="design"> <summary>Design an order-checkout flow across payment, inventory, and shipping that survives partial failure.</summary> <div class="a"><b>A strong answer covers:</b> idempotency keys on every external side effect so retries don't double-charge or double-ship &rarr; bounded retries with exponential backoff + jitter and a retry budget to avoid retry storms &rarr; the transactional outbox so the DB state change and the event publish commit atomically (kills the dual-write) &rarr; a saga with compensating transactions (refund, restock) because you cannot 2PC across independent services &rarr; dedup at each consumer with a window comfortably exceeding the worst-case redelivery delay &rarr; choose consistency per step: inventory reservation may need strong/conditional writes, order history can be eventual &rarr; the end-to-end argument — confirm the charge with the payment provider's own idempotency, don't infer success from a timeout &rarr; name the trade-off: saga gives availability and loose coupling but exposes intermediate states, so model compensations and "stuck saga" alerts.</div> </details> <details class="iq" data-level="design"> <summary>Design a globally replicated key-value store and state its consistency contract under partition.</summary> <div class="a"><b>A strong answer covers:</b> start from the contract — do callers need linearizable reads or is causal/eventual acceptable? that single choice drives everything &rarr; partition the keyspace with consistent hashing (virtual nodes) so adding capacity moves only ~K/N keys and avoids hot spots; salt known hot keys &rarr; replicate each partition N ways across failure domains/regions; expose tunable quorums (R + W &gt; N for read-overlap, lower for latency) &rarr; under a partition, declare the choice: CP (block the minority, stay linearizable) for a config/lock store, or AP (serve stale, reconcile later) for a cart &rarr; conflict handling for AP: version vectors to detect concurrency, CRDTs or app merge for resolution, read-repair + anti-entropy to converge &rarr; place it on PACELC and say it: e.g. PC/EC for a metadata store, PA/EL for a session cache &rarr; ops: detect partitions and replica lag, fence stale leaders with tokens, and test failover with fault injection &rarr; name the trade-off explicitly between availability and the strength of the read your callers can rely on.</div> </details>  </div> <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"State CAP precisely, then correct the most common misreading.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: CAP = under a network partition you must choose Consistency (linearizability) or Availability — you cannot keep both → P is not optional, partitions happen, so the real lever is C-vs-A during a partition: CP blocks the minority side, AP serves possibly-stale reads → the misreading is \"pick 2 of 3\" as if a system is permanently one letter — CAP only speaks about partitions and says nothing about the healthy case → that's exactly the gap PACELC fills: Else (no partition), you still trade Latency vs Consistency → so a real label is two-part, e.g. PA/EL or PC/EC."}},{"@type":"Question","name":"Name the consistency models from weakest to strongest and what each guarantees.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: eventual — if writes stop, replicas converge; any stale read is legal meanwhile → read-your-writes / session — a client sees its own writes and monotonic reads within a session → causal — operations that are causally related are seen in order by everyone; concurrent ones may differ → linearizable — every operation appears to take effect atomically at one instant between invocation and response, as if on a single copy → rule of thumb: buy the weakest model your correctness actually needs, since each rung up costs latency and availability."}},{"@type":"Question","name":"What is a quorum, and why does R + W > N matter in a leaderless store?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: in a leaderless (Dynamo-style) store with N replicas, a write waits for W acks and a read gathers R responses → if R + W > N the read set and the most recent write set must share at least one node, so a read overlaps every acknowledged write and can return the freshest value → e.g. N=5, W=3, R=3 overlaps; W=2, R=2 does not → quorums tune the C-vs-A/latency trade: bigger W = more durable, slower writes; smaller R = faster, riskier reads → caveat: strict quorums still need read-repair / anti-entropy and don't by themselves give linearizability."}},{"@type":"Question","name":"Name the three replication topologies and the price each pays.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: single-leader — all writes to one node, replicate to followers; simple and linearizable-able, but the leader is a write bottleneck and a failover hazard → multi-leader — writes accepted at several leaders (e.g. multi-region); better write availability/latency, but concurrent writes create conflicts you must resolve → leaderless — any replica takes writes, quorums for correctness; great availability, but you own conflict detection (version vectors) and read-repair → the through-line: as you move away from one leader you buy availability and pay in conflict handling."}},{"@type":"Question","name":"A payment call times out with no reply. What do you do, and why is \"just retry\" dangerous?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: a timeout has four indistinguishable causes — lost request, slow node, lost reply, or dead node — so you cannot tell \"didn't happen\" from \"happened, ack lost\" → the charge may already have succeeded, so a blind retry double-charges → the fix is to make the operation idempotent with a client-generated key: at-least-once delivery + idempotent effect = exactly-once effect → pair it with bounded retries, exponential backoff + jitter, and a retry budget so you don't amplify an overload → red flag: treating a timeout as proof of failure."}},{"@type":"Question","name":"Why is \"exactly-once delivery\" impossible, and what do we actually ship instead?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: an unacked send forces a choice — resend (risk a duplicate) or don't (risk loss); there is no third door, it's the Two Generals problem → so \"exactly-once delivery\" over an unreliable network is unachievable → what we build is exactly-once effects: at-least-once delivery + an idempotent or deduplicating endpoint = effectively-once → always ask \"exactly-once across which boundary?\" — the guarantee is per consumer/store, not end-to-end magic → mechanisms: idempotency keys, dedup windows, transactional outbox to avoid the dual-write."}},{"@type":"Question","name":"Two replicas accepted writes; which one wins? Walk me through the clock issue.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: wall-clock timestamps on different machines aren't comparable — clock skew can make the later write carry the smaller timestamp → so last-write-wins by physical time silently drops a genuinely-later write → you need a logical notion of order: happens-before via Lamport clocks, or version vectors to actually detect concurrency rather than impose a false order → once concurrency is detected you either merge (CRDT/app-level) or surface siblings to the application → if you must use LWW, scope its data-loss risk explicitly and use it only where losing a concurrent write is acceptable."}},{"@type":"Question","name":"You key a time-series table by timestamp and one node is melting. Why, and how do you fix it?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: key-range partitioning by timestamp routes all current writes to the single partition holding the newest range — a moving write hot spot → fix options: hash-partition the key for even write spread (cost: range scans now scatter across partitions) or prefix/salt the key so recent writes fan out → never rebalance with mod N — adding a node remaps almost everything; use a fixed number of partitions or consistent hashing so adding a node moves only ~K/N keys → for read-heavy time ranges, consider a compound key (e.g. tenant + time bucket) so writes spread but scans stay local."}},{"@type":"Question","name":"Events are \"coming out of order.\" Diagnose it, then decide how much ordering to actually buy.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: first ask which order is required — FIFO (per source), causal, or total — because they cost wildly different amounts → FIFO ⊂ causal ⊂ total; pick the lowest rung that satisfies correctness, over-ordering is over-engineering → causal order is enforceable locally with vector clocks and no coordination; total order needs consensus (a single Kafka partition, a replicated log) and is the expensive, throughput-capping one → diagnose by tracing whether the disorder is cross-partition (you chose total order but partitioned for throughput) or genuine concurrency → synthesis: partition for throughput where order doesn't matter, reserve a totally-ordered lane only for the keys that need it."}},{"@type":"Question","name":"How does Raft avoid two leaders, and what does FLP have to do with it?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: a node grants at most one vote per term and a leader needs a majority; any two majorities overlap in ≥1 node, so two leaders in the same term is impossible — that's the safety argument → FLP proves no deterministic protocol can guarantee termination in a purely asynchronous model with even one crash → Raft doesn't beat FLP; it sidesteps it by assuming partial synchrony (timeouts) for liveness and using randomized election timeouts to break symmetric split votes → the principal framing: safety always, liveness only when the network is eventually calm → so a permanently flaky network can stall progress without ever violating correctness."}},{"@type":"Question","name":"How would you choose a failure detector, and why is \"perfect failure detection\" the wrong goal?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: in an async network you cannot distinguish a slow node from a dead one, so any timeout-based detector is a tunable guess trading completeness (always suspect real failures) against accuracy (never falsely suspect) → aggressive timeouts cause false positives — needless failovers, re-elections, duplicate work; lax timeouts delay recovery → prefer adaptive detectors (e.g. phi-accrual) that output a suspicion level from observed RTT history instead of a hard boolean → pair detection with fencing tokens so a wrongly-suspected-then-revived node can't act as a stale leader → the staff move: don't chase perfect detection — design so a wrong suspicion is safe (idempotent work, fencing, leader leases), because wrong suspicions are inevitable."}},{"@type":"Question","name":"Design an order-checkout flow across payment, inventory, and shipping that survives partial failure.","acceptedAnswer":{"@type":"Answer","text":"A strong answer covers: idempotency keys on every external side effect so retries don't double-charge or double-ship → bounded retries with exponential backoff + jitter and a retry budget to avoid retry storms → the transactional outbox so the DB state change and the event publish commit atomically (kills the dual-write) → a saga with compensating transactions (refund, restock) because you cannot 2PC across independent services → dedup at each consumer with a window comfortably exceeding the worst-case redelivery delay → choose consistency per step: inventory reservation may need strong/conditional writes, order history can be eventual → the end-to-end argument — confirm the charge with the payment provider's own idempotency, don't infer success from a timeout → name the trade-off: saga gives availability and loose coupling but exposes intermediate states, so model compensations and \"stuck saga\" alerts."}},{"@type":"Question","name":"Design a globally replicated key-value store and state its consistency contract under partition.","acceptedAnswer":{"@type":"Answer","text":"A strong answer covers: start from the contract — do callers need linearizable reads or is causal/eventual acceptable? that single choice drives everything → partition the keyspace with consistent hashing (virtual nodes) so adding capacity moves only ~K/N keys and avoids hot spots; salt known hot keys → replicate each partition N ways across failure domains/regions; expose tunable quorums (R + W > N for read-overlap, lower for latency) → under a partition, declare the choice: CP (block the minority, stay linearizable) for a config/lock store, or AP (serve stale, reconcile later) for a cart → conflict handling for AP: version vectors to detect concurrency, CRDTs or app merge for resolution, read-repair + anti-entropy to converge → place it on PACELC and say it: e.g. PC/EC for a metadata store, PA/EL for a session cache → ops: detect partitions and replica lag, fence stale leaders with tokens, and test failover with fault injection → name the trade-off explicitly between availability and the strength of the read your callers can rely on."}}]}</script>
 
-  <!-- ================= LEVEL 7 ================= -->
-  <section class="lvl" id="l7">
-    <div class="lvltop"><span class="num">7</span><h2>CAP &amp; PACELC — the real trade-offs</h2></div>
-    <p class="tagline">CAP isn't "pick 2 of 3." P is forced on you; the only choice is C-vs-A <em>during</em> a partition.</p>
-    <figure>
-      <img src="diagrams/10-cap-pacelc.png" alt="The PACELC decision tree. If there is a Partition, choose Availability or Consistency; Else — the normal case — choose lower Latency or stronger Consistency."/>
-      <figcaption><strong>The PACELC decision tree.</strong> A partition forces the CAP choice (PA vs PC); but the far more common no-partition state still forces a Latency-vs-Consistency choice (EL vs EC). Most systems are PA/EL or PC/EC. (Abadi, IEEE Computer 2012.)</figcaption>
-    </figure>
-    <div class="facts">
-      <div class="fact"><b>C / A / P</b> C = linearizability · A = every non-failed node answers (not "fast") · P = partition tolerance — <em>not optional</em>, partitions happen.</div>
-      <div class="fact"><b>Under partition</b> CP refuses/blocks on the minority side (etcd, ZooKeeper, Mongo default). AP answers with possibly-stale data (Cassandra, DynamoDB, Riak).</div>
-      <div class="fact blue"><b>PACELC</b> if-Partition: A vs C. Else: <b>L vs C</b> — strong consistency costs round-trips to a quorum even on a healthy network.</div>
-      <div class="fact blue"><b>Tunable per-request</b> Cassandra/Dynamo let one cluster be EL for feeds and EC for balances (consistency level / <code>ConsistentRead</code>).</div>
-    </div>
-    <div class="myth"><div class="m">✗ "You pick two of C, A, P" / "CAP describes my system always"</div><div class="t">✓ P is mandatory → only choose C-or-A under partition; CAP is silent on healthy networks — that's the hole PACELC fills (Brewer 2012)</div></div>
-    <div class="rule"><span>⚖️ Memory rule:</span> <span>if Partition → A or C; Else → Latency or Consistency.</span> Coordination buys consistency and always costs latency.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>When does CAP force the C-vs-A choice? <span class="ans">→ only during a network partition</span></li>
-      <li>What does a CP system do under partition? <span class="ans">→ sacrifice availability to keep data consistent</span></li>
-      <li>What does PACELC add over CAP? <span class="ans">→ the latency-vs-consistency trade on healthy networks</span></li>
-    </ul></details>
-  </section>
+<h2 class="sec" id="quiz"><p>Retrieval quiz — answer before peeking</p></h2>
+<p>Effortful recall beats re-reading. Pick one; the right answer highlights with a one-line why.</p>
+<div class="quiz"> <div class="qitem" data-correct="2"> <p class="q"> <span class="qn">Q1.</span> Your call times out with no reply. How many fundamentally indistinguishable causes are there? </p> <button class="opt">Two — it either arrived or it didn&#39;t</button><button class="opt">Three — lost, slow, or dead</button><button class="opt">Four — lost request, slow node, lost reply, dead node</button><button class="opt">One — a timeout always means the node is dead</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="1"> <p class="q"> <span class="qn">Q2.</span> &quot;Exactly-once delivery&quot; over an unreliable network is best understood as… </p> <button class="opt">the standard guarantee every broker ships by default</button><button class="opt">impossible — so we build exactly-once &lt;em&gt;effects&lt;/em&gt; instead</button><button class="opt">reachable by simply turning off all retries</button><button class="opt">another name for at-most-once with no acks</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="3"> <p class="q"> <span class="qn">Q3.</span> A leaderless store has N = 5. Which W, R guarantees a read overlaps every recent write? </p> <button class="opt">W = 2, R = 2</button><button class="opt">W = 3, R = 2</button><button class="opt">W = 2, R = 3</button><button class="opt">W = 3, R = 3</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="0"> <p class="q"> <span class="qn">Q4.</span> CAP forces a choice between Consistency and Availability… </p> <button class="opt">only during a network partition</button><button class="opt">at all times, on every request</button><button class="opt">only when the database is single-leader</button><button class="opt">never — you can always have all three</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="2"> <p class="q"> <span class="qn">Q5.</span> In Raft, a log entry is &lt;em&gt;committed&lt;/em&gt; when… </p> <button class="opt">the leader has written it to its own disk</button><button class="opt">every single follower has acknowledged it</button><button class="opt">a majority of the cluster has persisted it</button><button class="opt">the client has retried it at least once</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="1"> <p class="q"> <span class="qn">Q6.</span> A celebrity account melts one partition even under hash partitioning. The standard fix is to… </p> <button class="opt">switch that key to key-range partitioning</button><button class="opt">add a random suffix to split the hot key across partitions</button><button class="opt">re-hash the whole cluster with &lt;code&gt;mod N&lt;/code&gt;</button><button class="opt">add more read replicas of every partition</button> <p class="fb" role="status" aria-live="polite"></p> </div> </div>
+<h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem"><p>Reconstruct the field from a blank page</p></h3>
+<p class="rehearse">Write the ten lessons in order, one line each, with nothing on screen. Then reveal and compare — gaps are your next drill.</p> <div class="rehearse"> <textarea placeholder="1. One hard truth = …  2. Delivery = …  3. No global clock = …  (keep going to 10, from memory)"></textarea><br> <button class="btn ghost" data-reveal>Reveal model answer</button> <div class="model"><p><p><b>1</b> Can’t tell slow from dead (4 causes; Two Generals) · <b>2</b> at-least-once +
+idempotency = exactly-once effect · <b>3</b> no global clock → happens-before / vector
+clocks · <b>4</b> broadcast ladder; total order ≈ consensus · <b>5</b> leader / multi-leader
+/ leaderless; R+W&gt;N · <b>6</b> eventual→session→causal→linearizable · <b>7</b> CAP
+(C-or-A under partition) + PACELC (L-or-C else) · <b>8</b> FLP impossibility + Raft
+(majority overlap) · <b>9</b> range vs hash; consistent hashing; hot spots · <b>10</b> 
+retries+jitter · outbox · saga · end-to-end argument.</p></p></div> </div>
+<div class="ask"><p><strong>I’m your teacher — ask me anything.</strong> Say 
+<em>“grill me on distributed systems”</em> for mixed no-clue questions, drop a real system and
+I’ll place it on the CAP/PACELC and consistency spectrums with you, or ask for a worked
+space-time diagram. Want the next lesson — spaced, interleaved drills? Just ask.</p></div>
 
-  <!-- ================= LEVEL 8 ================= -->
-  <section class="lvl" id="l8">
-    <div class="lvltop"><span class="num">8</span><h2>Consensus — FLP impossibility + Raft</h2></div>
-    <p class="tagline">Get nodes to agree on one value despite crashes — using a majority quorum that always overlaps.</p>
-    <figure>
-      <svg viewBox="0 0 560 130" role="img" aria-label="FLP: no deterministic protocol guarantees consensus in a fully asynchronous system if one node may crash; real systems add timeouts and randomness">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <text x="280" y="20" text-anchor="middle" font-size="11.5" font-weight="700" fill="#9a2417">FLP (1985) — the computation cousin of Two Generals</text>
-          <rect x="14" y="34" width="262" height="80" rx="9" fill="#f7ecea" stroke="#9a2417"/>
-          <text x="145" y="56" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7a2218">fully async + 1 crash possible</text>
-          <text x="145" y="76" text-anchor="middle" font-size="10" fill="#7a2218">no <em>deterministic</em> protocol</text>
-          <text x="145" y="93" text-anchor="middle" font-size="10" fill="#7a2218">can <em>guarantee</em> consensus</text>
-          <line x1="278" y1="74" x2="312" y2="74" stroke="#6b675f" marker-end="url(#arw)"/>
-          <rect x="314" y="34" width="232" height="80" rx="9" fill="#eef5ee" stroke="#2f5d3a"/>
-          <text x="430" y="56" text-anchor="middle" font-size="10.5" font-weight="700" fill="#244a2e">escape hatch</text>
-          <text x="430" y="76" text-anchor="middle" font-size="10" fill="#244a2e">timeouts (partial synchrony)</text>
-          <text x="430" y="93" text-anchor="middle" font-size="10" fill="#244a2e">+ randomness → liveness in practice</text>
-        </g>
-      </svg>
-      <figcaption>Safety holds <em>always</em>; liveness is achieved only when the network is calm. Real consensus bets the network is eventually well-behaved. (Fischer, Lynch &amp; Paterson, 1985.)</figcaption>
-    </figure>
-    <figure>
-      <img src="diagrams/11-raft-election.png" alt="A 5-node Raft cluster electing a leader. One node's election timeout fires first; it becomes a candidate in a new term, gathers a majority of votes, and becomes leader."/>
-      <figcaption>A 5-node Raft cluster electing a leader: one node's <em>randomized</em> election timeout fires first, it becomes a candidate in a new <b>term</b>, gathers a <b>majority</b> of votes, and becomes leader. Random timeouts dissolve split votes. (Ongaro &amp; Ousterhout, 2014.)</figcaption>
-    </figure>
-    <figure>
-      <img src="diagrams/12-raft-log.png" alt="A leader replicating a log entry. The entry is committed only after a majority of nodes have persisted it; it is then applied to each node's state machine."/>
-      <figcaption>A leader replicating a log entry: it is <b>committed</b> only after a <em>majority</em> persists it, then <b>applied</b> to each node's state machine. The leader replies to the client only after commit — so an acked write can never be lost.</figcaption>
-    </figure>
-    <div class="facts">
-      <div class="fact"><b>Consensus = 3 properties</b> Agreement (no two decide differently) · Validity (decided value was proposed) · Termination (everyone eventually decides).</div>
-      <div class="fact"><b>Majority quorum</b> ⌈(N+1)/2⌉. Two majorities always share a node → two conflicting decisions impossible. N=3 tolerates 1, N=5 tolerates 2.</div>
-      <div class="fact blue"><b>Why odd-sized</b> A 4-node cluster needs 3 for majority, tolerates 1 — same as 3 nodes. The extra even node buys nothing.</div>
-      <div class="fact blue"><b>Log Matching</b> AppendEntries carries the prior entry's index+term; a mismatch is rejected and the divergent tail overwritten — committed history never lost.</div>
-    </div>
-    <div class="myth"><div class="m">✗ "Raft/Paxos tolerate any kind of node failure"</div><div class="t">✓ They assume <em>crash-stop</em>, not lying; malicious nodes need Byzantine consensus (PBFT, 3f+1) (Castro &amp; Liskov 1999)</div></div>
-    <div class="rule"><span>🗳 Memory rule:</span> <span>elect by randomized timeout · commit on a majority · majorities overlap</span> → two leaders / two decisions can't coexist.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Three properties of consensus? <span class="ans">→ agreement, validity, termination</span></li>
-      <li>What does FLP prove? <span class="ans">→ no deterministic protocol guarantees consensus under async + 1 crash</span></li>
-      <li>When is a Raft entry committed? <span class="ans">→ once a majority persists it; then it's applied to the state machine</span></li>
-    </ul></details>
-  </section>
+<h2 class="sec" id="cheat"><p>★ Cheat sheet — buzzword → engineering</p></h2>
+<div class="cheat"><p style="margin-top:0"><p><strong>Mental models:</strong> can’t tell slow from dead · timeout = a guess · exactly-once
+= at-least-once + idempotency · no global clock → cause not time · FIFO ⊂ causal ⊂ total ·
+R+W&gt;N overlaps · climb consistency only as far as needed · P is mandatory (C-or-A under
+partition) · majorities overlap · range vs hash · outbox kills the dual write · enforce
+correctness at the endpoints.</p></p><h3>Translation table</h3><table><tr><th>Buzzword</th><th>What it actually is</th></tr><tr><td>Eventual consistency</td><td>if writes stop, replicas converge — meanwhile any stale read is legal</td></tr><tr><td>Quorum</td><td>R + W &gt; N so read and write sets share a node</td></tr><tr><td>CP / AP</td><td>under partition: block the minority / serve stale data</td></tr><tr><td>PACELC</td><td>if Partition: A-vs-C; Else: Latency-vs-Consistency</td></tr><tr><td>Consensus</td><td>agree on one value despite crashes; ≈ total-order broadcast ≈ a replicated log</td></tr><tr><td>Raft commit</td><td>entry persisted on a majority, then applied to the state machine</td></tr><tr><td>Consistent hashing</td><td>nodes &amp; keys on a ring; add a node, move only ~K/N keys</td></tr><tr><td>Exactly-once</td><td>marketing for at-least-once delivery + idempotent effects</td></tr><tr><td>Outbox / saga</td><td>one atomic local write + relay / local txns + compensations</td></tr></table><h3>Three instincts to install</h3><p style="margin-bottom:0"><p>① At every network boundary ask <strong>“what if this times out but succeeded?”</strong> ②
+Buy the <strong>weakest guarantee</strong> (delivery, ordering, consistency) your
+correctness actually needs. ③ Put each correctness guarantee at the 
+<strong>layer that has the knowledge</strong> to enforce it (the end-to-end argument).</p></p></div>
 
-  <!-- ================= LEVEL 9 ================= -->
-  <section class="lvl" id="l9">
-    <div class="lvltop"><span class="num">9</span><h2>Partitioning / sharding — splitting without hot spots</h2></div>
-    <p class="tagline">Replication raises availability; <em>partitioning</em> raises the storage and write ceiling.</p>
-    <figure>
-      <img src="diagrams/13-hash-vs-range.png" alt="Two ways to map keys to partitions, and what each one costs you. Left: key-range partitioning keeps keys sorted (A–H, I–P, Q–Z) so range scans are cheap, but a burst of writes to one range overloads one node. Right: hash partitioning scatters keys evenly across nodes so load is balanced, but a range scan must hit every node."/>
-      <figcaption><strong>Two ways to map keys to partitions, and what each costs.</strong> Key-range keeps keys sorted (cheap range scans, but a write burst to one range overloads a node); hash scatters keys evenly (balanced load, but a range scan must hit every node).</figcaption>
-    </figure>
-    <table>
-      <tr><th>Property</th><th>Key-range</th><th>Hash</th></tr>
-      <tr><td>Range scan</td><td>cheap — few adjacent partitions</td><td>expensive — scatter to all</td></tr>
-      <tr><td>Load distribution</td><td>uneven → hot spots</td><td>even by design</td></tr>
-      <tr><td>Example systems</td><td>HBase, Bigtable</td><td>Cassandra, Dynamo</td></tr>
-    </table>
-    <div class="facts">
-      <div class="fact"><b>Rebalancing — never mod N</b> <code>hash(key) mod N</code> moves almost every key when N changes. Use a fixed partition count, or <b>consistent hashing</b> (relocates ~K/N).</div>
-      <div class="fact"><b>Hot spot / skew</b> One celebrity key melts one partition; hashing can't help (same key hashes the same). Fix: random suffix splits the hot key across 100 sub-keys.</div>
-      <div class="fact blue"><b>Request routing</b> Forward via any node (gossip) · a routing tier · partition-aware client. The map is kept consistent via ZooKeeper/etcd.</div>
-      <div class="fact blue"><b>Rebalance deliberately</b> Auto-rebalance triggered by a node that merely <em>looks</em> dead (Lesson 1!) can start a data-movement storm.</div>
-    </div>
-    <div class="myth"><div class="m">✗ "Add read replicas to fit more data"</div><div class="t">✓ Every replica holds the <em>whole</em> dataset; to raise the storage ceiling you must partition</div></div>
-    <div class="rule"><span>🧩 Memory rule:</span> <span>range = cheap scans, hot spots · hash = even load, no scans</span>; grow with fixed partitions or consistent hashing, never mod N.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Failure mode of keying by timestamp + key-range? <span class="ans">→ all current writes hit one partition (write hot spot)</span></li>
-      <li>Why is <code>mod N</code> bad on growth? <span class="ans">→ changing N reassigns almost every key at once</span></li>
-      <li>How to relieve a celebrity's hot partition? <span class="ans">→ add a random suffix to split the hot key</span></li>
-    </ul></details>
-  </section>
+<h2 class="sec" id="review"><p>★ Review guides &amp; what to read next</p></h2>
+<div class="facts" style="grid-template-columns:1fr 1fr"><div class="fact"><p><b>5-min (weekly)</b> Don’t re-read — recall. Say the one hard truth; name the four causes;
+redraw the broadcast ladder and the R+W&gt;N overlap; recite CAP-vs-PACELC; state when a
+Raft entry commits.</p></div><div class="fact"><p><b>30-min (when stalled)</b> Blank-page reconstruct all ten lessons; re-derive why each
+builds on Lesson 1; then place one real database (CP/AP? PACELC? which consistency model?
+partitioning scheme?).</p></div></div>
+<p style="font-size:.9rem"><p><strong>Read next, in order:</strong>① </p><a href="https://www.cl.cam.ac.uk/teaching/2021/ConcDisSys/dist-sys-notes.pdf"><p>Kleppmann — Cambridge Distributed Systems notes</p></a> <p>(Lessons 1–4) · ② <a href="https://dataintensive.net/">Designing Data-Intensive Applications</a>
+, Ch. 5, 8, 9 (replication, trouble, consensus) · ③ 
+<a href="https://raft.github.io/">The Raft visualization &amp; paper</a> (Lesson 8) · ④ 
+<a href="https://jepsen.io/consistency">Jepsen consistency models map</a> (Lesson 6). Course
+site → <a href="https://pdos.csail.mit.edu/6.824/">MIT 6.5840</a>.</p></p>
+<p style="font-size:.9rem"><p>📖 <strong>Primary source:</strong> Martin Kleppmann, 
+<em>Designing Data-Intensive Applications</em> + the Cambridge lecture series — the
+highest-trust grounding for this track.</p></p>
+<footer id="sources"> <strong>Sources</strong><br>  <span id="s1">1. Martin Kleppmann, <em>Designing Data-Intensive Applications</em> — Ch. 5 (Replication), Ch. 8 (The Trouble with Distributed Systems), Ch. 9 (Consistency &amp; Consensus). <a href="#r1">↩</a></span> <br>  <span id="s2">2. Martin Kleppmann, <em>Distributed Systems</em> (University of Cambridge) — <a href="https://www.cl.cam.ac.uk/teaching/2021/ConcDisSys/dist-sys-notes.pdf">lecture notes (PDF)</a>; Two Generals (Lec. 2), time &amp; clocks, broadcast.</span> <br>  <span id="s3">3. Foundational papers: Lamport 1978 (Time, Clocks); Fischer, Lynch &amp; Paterson 1985 (FLP); Saltzer, Reed &amp; Clark 1984 (end-to-end argument); Gilbert &amp; Lynch 2002 (CAP); Abadi 2012 (PACELC); Ongaro &amp; Ousterhout 2014 (Raft); DeCandia et al. 2007 (Dynamo); Karger et al. 1997 (consistent hashing); Garcia-Molina &amp; Salem 1987 (Sagas); Herlihy &amp; Wing 1990 (linearizability); Terry et al. 1994 (session guarantees).</span> <br>  <span id="s4">4. Jepsen, <em>Consistency Models</em> — <a href="https://jepsen.io/consistency">jepsen.io/consistency</a>; Marc Brooker, AWS Builders' Library, <em>Timeouts, retries, and backoff with jitter</em>; Google SRE Book (handling overload, cascading failures).</span> <br>  </footer>  <!-- standardized bottom pager — guarantees the `.nav a` hook that
+                 analytics.js uses for lesson_nav_* + lesson_complete on every lesson --> <nav class="nav"> <span>&#8592; <a href="/engineering-learning-hub/index.html#grid">Engineering Vault</a></span> <span>
+Next: <a href="consensus-deep-dive.html">Consensus — Deep Dive &#8594;</a> </span> </nav> <div class="lesson-fb" aria-live="polite"> <span class="lesson-fb-q">Was this lesson helpful?</span> <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">
+👍 Yes
+</button> <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No
+</button> <span class="lesson-fb-thanks">Thanks &mdash; noted.</span> </div> <p class="lesson-endnote">
+These notes reflect my current understanding and are updated as I learn, build, and
+                discover better explanations.
+</p> </main> </div>  <script>
+        document.querySelectorAll('.qitem').forEach(function (item) {
+            var correct = +item.dataset.correct;
+            var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+            var fb = item.querySelector('.fb');
+            opts.forEach(function (opt, i) {
+                opt.addEventListener('click', function () {
+                    opts.forEach(function (o) {
+                        o.disabled = true;
+                    });
+                    opts[correct].classList.add('correct');
+                    if (i === correct) {
+                        fb.textContent = '✓ Correct.';
+                        fb.className = 'fb ok';
+                    } else {
+                        opt.classList.add('wrong');
+                        fb.textContent =
+                            '✗ Not quite — the right answer is highlighted. Re-read it, then say it back out loud.';
+                        fb.className = 'fb no';
+                    }
+                });
+            });
+        });
 
-  <!-- ================= LEVEL 10 ================= -->
-  <section class="lvl" id="l10">
-    <div class="lvltop"><span class="num">10</span><h2>Putting it together — the resilience toolkit</h2></div>
-    <p class="tagline">Every pattern is one trade: at-least-once delivery + idempotent effects = "effectively-once."</p>
-    <figure>
-      <svg viewBox="0 0 560 150" role="img" aria-label="Retries with exponential backoff and jitter: synchronized retries collide; jitter smears them into smooth load">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <text x="140" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#9a2417">NO JITTER — herd retries collide</text>
-          <line x1="20" y1="110" x2="260" y2="110" stroke="#6b675f"/>
-          <g stroke="#9a2417" stroke-width="2.5">
-            <line x1="70" y1="110" x2="70" y2="48"/><line x1="73" y1="110" x2="73" y2="48"/><line x1="76" y1="110" x2="76" y2="48"/>
-            <line x1="150" y1="110" x2="150" y2="60"/><line x1="153" y1="110" x2="153" y2="60"/><line x1="156" y1="110" x2="156" y2="60"/>
-            <line x1="220" y1="110" x2="220" y2="72"/><line x1="223" y1="110" x2="223" y2="72"/>
-          </g>
-          <text x="140" y="128" text-anchor="middle" font-size="9.5" fill="#6b675f">spikes at 1s, 2s, 4s</text>
-          <line x1="288" y1="10" x2="288" y2="140" stroke="#d8d4c8" stroke-dasharray="4 4"/>
-          <text x="430" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">FULL JITTER — smooth load</text>
-          <line x1="312" y1="110" x2="552" y2="110" stroke="#6b675f"/>
-          <g stroke="#2f5d3a" stroke-width="2.5">
-            <line x1="330" y1="110" x2="330" y2="88"/><line x1="352" y1="110" x2="352" y2="82"/><line x1="378" y1="110" x2="378" y2="90"/>
-            <line x1="404" y1="110" x2="404" y2="84"/><line x1="432" y1="110" x2="432" y2="92"/><line x1="460" y1="110" x2="460" y2="86"/>
-            <line x1="492" y1="110" x2="492" y2="90"/><line x1="524" y1="110" x2="524" y2="88"/>
-          </g>
-          <text x="432" y="128" text-anchor="middle" font-size="9.5" fill="#6b675f">random delay in [0, cap]</text>
-        </g>
-      </svg>
-      <figcaption>Retries: only retry <em>idempotent</em> ops · back off exponentially · add <b>jitter</b> to break lockstep · circuit-break sustained failures. Full jitter both minimises competing calls and finishes fastest. (Brooker, AWS Builders' Library.)</figcaption>
-    </figure>
-    <figure>
-      <img src="diagrams/14-outbox-pattern.png" alt="The outbox pattern turns a dual write into one atomic write plus an idempotent publish. The service commits the business row and an outbox row in a single database transaction; a separate relay reads unsent outbox rows, publishes them to the broker at-least-once, and marks them sent."/>
-      <figcaption><strong>The outbox pattern</strong> turns a dual write into one atomic write + an idempotent publish. The service commits the business row <em>and</em> an outbox row in one DB transaction; a relay publishes unsent rows at-least-once and marks them sent.</figcaption>
-    </figure>
-    <figure>
-      <svg viewBox="0 0 560 150" role="img" aria-label="A saga: forward local transactions, and on failure run compensating transactions in reverse">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <text x="280" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111110">SAGA — no cross-service rollback; compensate in reverse</text>
-          <g font-size="9.5">
-            <rect x="20" y="34" width="150" height="34" rx="7" fill="#eef5ee" stroke="#2f5d3a"/><text x="95" y="55" text-anchor="middle" fill="#244a2e">reserve seat ✓</text>
-            <rect x="200" y="34" width="150" height="34" rx="7" fill="#eef5ee" stroke="#2f5d3a"/><text x="275" y="55" text-anchor="middle" fill="#244a2e">charge card ✓</text>
-            <rect x="380" y="34" width="160" height="34" rx="7" fill="#f7ecea" stroke="#9a2417"/><text x="460" y="55" text-anchor="middle" fill="#7a2218">reserve hotel ✗</text>
-            <line x1="170" y1="51" x2="198" y2="51" stroke="#6b675f" marker-end="url(#arw)"/>
-            <line x1="350" y1="51" x2="378" y2="51" stroke="#6b675f" marker-end="url(#arw)"/>
-            <rect x="20" y="100" width="150" height="34" rx="7" fill="#fff" stroke="#7a1f12"/><text x="95" y="121" text-anchor="middle" fill="#7a1f12">release seat</text>
-            <rect x="200" y="100" width="150" height="34" rx="7" fill="#fff" stroke="#7a1f12"/><text x="275" y="121" text-anchor="middle" fill="#7a1f12">refund card</text>
-            <line x1="275" y1="100" x2="275" y2="70" stroke="#7a1f12" stroke-dasharray="3 3" marker-end="url(#arwA)"/>
-            <line x1="95" y1="100" x2="95" y2="70" stroke="#7a1f12" stroke-dasharray="3 3" marker-end="url(#arwA)"/>
-            <line x1="198" y1="117" x2="172" y2="117" stroke="#7a1f12" marker-end="url(#arwA)"/>
-          </g>
-          <text x="280" y="148" text-anchor="middle" font-size="9.5" fill="#7a1f12">compensating transactions semantically undo committed steps</text>
-        </g>
-      </svg>
-      <figcaption>A saga models a cross-service operation as local transactions, each with a compensating transaction; on failure it walks back in reverse. It gives up <em>isolation</em> — the charge is briefly visible. (Garcia-Molina &amp; Salem, 1987.)</figcaption>
-    </figure>
-    <div class="facts">
-      <div class="fact"><b>Dual-write problem</b> Writing DB <em>and</em> publishing as two steps: a crash in the gap leaves them disagreeing. The outbox collapses it into one atomic write.</div>
-      <div class="fact"><b>Effectively-once</b> There's no exactly-once <em>delivery</em>. Ship at-least-once delivery + idempotent effects. Always ask: exactly-once across <em>which boundary</em>?</div>
-      <div class="fact blue"><b>End-to-end argument</b> A correctness guarantee (dedup, idempotency) can only be enforced by the <em>endpoints</em>; the network is a best-effort accelerator. (Saltzer, Reed &amp; Clark, 1984.)</div>
-      <div class="fact blue"><b>Retry budgets</b> Independent retries multiply down a chain (3×3×3 = 27 calls). Cap retries (~10% of volume) and retry at one layer. (Google SRE.)</div>
-    </div>
-    <div class="myth"><div class="m">✗ "TCP / the broker gives me exactly-once, so my handler is safe"</div><div class="t">✓ Only your consumer knows it already processed event abc-123 — put dedup at the endpoint</div></div>
-    <div class="rule"><span>🛡 Memory rule:</span> <span>retry idempotent ops with backoff+jitter · outbox the dual write · saga + compensate · enforce correctness at the endpoints.</span></div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Why add jitter to backoff? <span class="ans">→ spreads synchronized retries so herds stop colliding</span></li>
-      <li>What does the outbox solve? <span class="ans">→ the dual-write problem — one atomic write + idempotent publish</span></li>
-      <li>Where must dedup live, and why? <span class="ans">→ at the endpoint; only it knows what it already processed</span></li>
-    </ul></details>
-  </section>
-
-  <!-- ================= INTERVIEW QUESTIONS ================= -->
-  <h2 class="sec" id="interview">Interview — pick your bar</h2>
-  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
-
-  <div data-interview>
-    <details class="iq" data-level="core">
-      <summary>State CAP precisely, then correct the most common misreading.</summary>
-      <div class="a"><b>Hit these points:</b> CAP = under a network <em>partition</em> you must choose Consistency (linearizability) or Availability — you cannot keep both &rarr; P is not optional, partitions happen, so the real lever is C-vs-A <em>during</em> a partition: CP blocks the minority side, AP serves possibly-stale reads &rarr; the misreading is "pick 2 of 3" as if a system is permanently one letter — CAP only speaks about partitions and says nothing about the healthy case &rarr; that's exactly the gap PACELC fills: Else (no partition), you still trade Latency vs Consistency &rarr; so a real label is two-part, e.g. PA/EL or PC/EC.</div></details>
-    <details class="iq" data-level="core">
-      <summary>Name the consistency models from weakest to strongest and what each guarantees.</summary>
-      <div class="a"><b>Hit these points:</b> <b>eventual</b> — if writes stop, replicas converge; any stale read is legal meanwhile &rarr; <b>read-your-writes / session</b> — a client sees its own writes and monotonic reads within a session &rarr; <b>causal</b> — operations that are causally related are seen in order by everyone; concurrent ones may differ &rarr; <b>linearizable</b> — every operation appears to take effect atomically at one instant between invocation and response, as if on a single copy &rarr; rule of thumb: buy the weakest model your correctness actually needs, since each rung up costs latency and availability.</div></details>
-    <details class="iq" data-level="core">
-      <summary>What is a quorum, and why does R + W &gt; N matter in a leaderless store?</summary>
-      <div class="a"><b>Hit these points:</b> in a leaderless (Dynamo-style) store with N replicas, a write waits for W acks and a read gathers R responses &rarr; if R + W &gt; N the read set and the most recent write set must share at least one node, so a read overlaps every acknowledged write and can return the freshest value &rarr; e.g. N=5, W=3, R=3 overlaps; W=2, R=2 does not &rarr; quorums tune the C-vs-A/latency trade: bigger W = more durable, slower writes; smaller R = faster, riskier reads &rarr; caveat: strict quorums still need read-repair / anti-entropy and don't by themselves give linearizability.</div></details>
-    <details class="iq" data-level="core">
-      <summary>Name the three replication topologies and the price each pays.</summary>
-      <div class="a"><b>Hit these points:</b> <b>single-leader</b> — all writes to one node, replicate to followers; simple and linearizable-able, but the leader is a write bottleneck and a failover hazard &rarr; <b>multi-leader</b> — writes accepted at several leaders (e.g. multi-region); better write availability/latency, but concurrent writes create conflicts you must resolve &rarr; <b>leaderless</b> — any replica takes writes, quorums for correctness; great availability, but you own conflict detection (version vectors) and read-repair &rarr; the through-line: as you move away from one leader you buy availability and pay in conflict handling.</div></details>
-
-    <details class="iq" data-level="senior">
-      <summary>A payment call times out with no reply. What do you do, and why is "just retry" dangerous?</summary>
-      <div class="a"><b>Hit these points:</b> a timeout has four indistinguishable causes — lost request, slow node, lost reply, or dead node — so you cannot tell "didn't happen" from "happened, ack lost" &rarr; the charge may already have succeeded, so a blind retry double-charges &rarr; the fix is to make the operation idempotent with a client-generated key: at-least-once delivery + idempotent effect = exactly-once <em>effect</em> &rarr; pair it with bounded retries, exponential backoff + jitter, and a retry budget so you don't amplify an overload &rarr; red flag: treating a timeout as proof of failure.</div></details>
-    <details class="iq" data-level="senior">
-      <summary>Why is "exactly-once delivery" impossible, and what do we actually ship instead?</summary>
-      <div class="a"><b>Hit these points:</b> an unacked send forces a choice — resend (risk a duplicate) or don't (risk loss); there is no third door, it's the Two Generals problem &rarr; so "exactly-once delivery" over an unreliable network is unachievable &rarr; what we build is exactly-once <em>effects</em>: at-least-once delivery + an idempotent or deduplicating endpoint = effectively-once &rarr; always ask "exactly-once across <em>which</em> boundary?" — the guarantee is per consumer/store, not end-to-end magic &rarr; mechanisms: idempotency keys, dedup windows, transactional outbox to avoid the dual-write.</div></details>
-    <details class="iq" data-level="senior">
-      <summary>Two replicas accepted writes; which one wins? Walk me through the clock issue.</summary>
-      <div class="a"><b>Hit these points:</b> wall-clock timestamps on different machines aren't comparable — clock skew can make the later write carry the smaller timestamp &rarr; so last-write-wins by physical time silently drops a genuinely-later write &rarr; you need a <em>logical</em> notion of order: happens-before via Lamport clocks, or version vectors to actually <em>detect</em> concurrency rather than impose a false order &rarr; once concurrency is detected you either merge (CRDT/app-level) or surface siblings to the application &rarr; if you must use LWW, scope its data-loss risk explicitly and use it only where losing a concurrent write is acceptable.</div></details>
-    <details class="iq" data-level="senior">
-      <summary>You key a time-series table by timestamp and one node is melting. Why, and how do you fix it?</summary>
-      <div class="a"><b>Hit these points:</b> key-range partitioning by timestamp routes all <em>current</em> writes to the single partition holding the newest range — a moving write hot spot &rarr; fix options: hash-partition the key for even write spread (cost: range scans now scatter across partitions) or prefix/salt the key so recent writes fan out &rarr; never rebalance with <code>mod N</code> — adding a node remaps almost everything; use a fixed number of partitions or consistent hashing so adding a node moves only ~K/N keys &rarr; for read-heavy time ranges, consider a compound key (e.g. tenant + time bucket) so writes spread but scans stay local.</div></details>
-
-    <details class="iq" data-level="staff">
-      <summary>Events are "coming out of order." Diagnose it, then decide how much ordering to actually buy.</summary>
-      <div class="a"><b>Hit these points:</b> first ask <em>which</em> order is required — FIFO (per source), causal, or total — because they cost wildly different amounts &rarr; FIFO ⊂ causal ⊂ total; pick the lowest rung that satisfies correctness, over-ordering is over-engineering &rarr; causal order is enforceable locally with vector clocks and no coordination; <b>total order needs consensus</b> (a single Kafka partition, a replicated log) and is the expensive, throughput-capping one &rarr; diagnose by tracing whether the disorder is cross-partition (you chose total order but partitioned for throughput) or genuine concurrency &rarr; synthesis: partition for throughput where order doesn't matter, reserve a totally-ordered lane only for the keys that need it.</div></details>
-    <details class="iq" data-level="staff">
-      <summary>How does Raft avoid two leaders, and what does FLP have to do with it?</summary>
-      <div class="a"><b>Hit these points:</b> a node grants at most one vote per term and a leader needs a majority; any two majorities overlap in ≥1 node, so two leaders in the same term is impossible — that's the safety argument &rarr; FLP proves no <em>deterministic</em> protocol can <em>guarantee termination</em> in a purely asynchronous model with even one crash &rarr; Raft doesn't beat FLP; it sidesteps it by assuming partial synchrony (timeouts) for <em>liveness</em> and using <em>randomized</em> election timeouts to break symmetric split votes &rarr; the principal framing: <b>safety always, liveness only when the network is eventually calm</b> &rarr; so a permanently flaky network can stall progress without ever violating correctness.</div></details>
-    <details class="iq" data-level="staff">
-      <summary>How would you choose a failure detector, and why is "perfect failure detection" the wrong goal?</summary>
-      <div class="a"><b>Hit these points:</b> in an async network you cannot distinguish a slow node from a dead one, so any timeout-based detector is a tunable guess trading completeness (always suspect real failures) against accuracy (never falsely suspect) &rarr; aggressive timeouts cause false positives — needless failovers, re-elections, duplicate work; lax timeouts delay recovery &rarr; prefer adaptive detectors (e.g. phi-accrual) that output a suspicion level from observed RTT history instead of a hard boolean &rarr; pair detection with fencing tokens so a wrongly-suspected-then-revived node can't act as a stale leader &rarr; the staff move: don't chase perfect detection — design so a <em>wrong</em> suspicion is safe (idempotent work, fencing, leader leases), because wrong suspicions are inevitable.</div></details>
-
-    <div class="designrubric" data-level="design">
-      <b>Design-round framework</b> — drive any distributed-systems prompt through these, out loud:
-      <ol>
-        <li>Clarify requirements: consistency model needed, ordering, durability, RPO/RTO, scale &amp; latency budget.</li>
-        <li>Place it on CAP/PACELC — what happens to each operation under a partition?</li>
-        <li>Replication &amp; partitioning: leader topology, quorum (R/W vs N), hash vs range, rebalancing.</li>
-        <li>Failure handling: timeouts + backoff + jitter + retry budget; idempotency keys on every side effect.</li>
-        <li>Cross-service atomicity: transactional outbox for the dual-write; sagas with compensations (no 2PC across services).</li>
-        <li>Observability &amp; ops: detect partitions, lag, hot spots; fencing tokens; how you test rare interleavings.</li>
-        <li>End-to-end argument: place each correctness guarantee at the layer that has the knowledge to enforce it.</li>
-      </ol>
-    </div>
-    <details class="iq" data-level="design">
-      <summary>Design an order-checkout flow across payment, inventory, and shipping that survives partial failure.</summary>
-      <div class="a"><b>A strong answer covers:</b> idempotency keys on every external side effect so retries don't double-charge or double-ship &rarr; bounded retries with exponential backoff + jitter and a retry budget to avoid retry storms &rarr; the transactional outbox so the DB state change and the event publish commit atomically (kills the dual-write) &rarr; a saga with compensating transactions (refund, restock) because you cannot 2PC across independent services &rarr; dedup at each consumer with a window comfortably exceeding the worst-case redelivery delay &rarr; choose consistency per step: inventory reservation may need strong/conditional writes, order history can be eventual &rarr; the end-to-end argument — confirm the charge with the payment provider's own idempotency, don't infer success from a timeout &rarr; name the trade-off: saga gives availability and loose coupling but exposes intermediate states, so model compensations and "stuck saga" alerts.</div></details>
-    <details class="iq" data-level="design">
-      <summary>Design a globally replicated key-value store and state its consistency contract under partition.</summary>
-      <div class="a"><b>A strong answer covers:</b> start from the contract — do callers need linearizable reads or is causal/eventual acceptable? that single choice drives everything &rarr; partition the keyspace with consistent hashing (virtual nodes) so adding capacity moves only ~K/N keys and avoids hot spots; salt known hot keys &rarr; replicate each partition N ways across failure domains/regions; expose tunable quorums (R + W &gt; N for read-overlap, lower for latency) &rarr; under a partition, declare the choice: CP (block the minority, stay linearizable) for a config/lock store, or AP (serve stale, reconcile later) for a cart &rarr; conflict handling for AP: version vectors to detect concurrency, CRDTs or app merge for resolution, read-repair + anti-entropy to converge &rarr; place it on PACELC and say it: e.g. PC/EC for a metadata store, PA/EL for a session cache &rarr; ops: detect partitions and replica lag, fence stale leaders with tokens, and test failover with fault injection &rarr; name the trade-off explicitly between availability and the strength of the read your callers can rely on.</div></details>
-  </div>
-
-  <!-- ================= RETRIEVAL QUIZ ================= -->
-  <h2 class="sec" id="quiz">Retrieval quiz — answer before peeking</h2>
-  <p>Effortful recall beats re-reading. Pick one; the right answer highlights with a one-line why.</p>
-  <div class="quiz">
-    <div class="qitem" data-correct="2">
-      <p class="q"><span class="qn">Q1.</span> Your call times out with no reply. How many fundamentally indistinguishable causes are there?</p>
-      <button class="opt">Two — it either arrived or it didn't</button>
-      <button class="opt">Three — lost, slow, or dead</button>
-      <button class="opt">Four — lost request, slow node, lost reply, dead node</button>
-      <button class="opt">One — a timeout always means the node is dead</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="1">
-      <p class="q"><span class="qn">Q2.</span> "Exactly-once delivery" over an unreliable network is best understood as…</p>
-      <button class="opt">the standard guarantee every broker ships by default</button>
-      <button class="opt">impossible — so we build exactly-once <em>effects</em> instead</button>
-      <button class="opt">reachable by simply turning off all retries</button>
-      <button class="opt">another name for at-most-once with no acks</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="3">
-      <p class="q"><span class="qn">Q3.</span> A leaderless store has N = 5. Which W, R guarantees a read overlaps every recent write?</p>
-      <button class="opt">W = 2, R = 2</button>
-      <button class="opt">W = 3, R = 2</button>
-      <button class="opt">W = 2, R = 3</button>
-      <button class="opt">W = 3, R = 3</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="0">
-      <p class="q"><span class="qn">Q4.</span> CAP forces a choice between Consistency and Availability…</p>
-      <button class="opt">only during a network partition</button>
-      <button class="opt">at all times, on every request</button>
-      <button class="opt">only when the database is single-leader</button>
-      <button class="opt">never — you can always have all three</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="2">
-      <p class="q"><span class="qn">Q5.</span> In Raft, a log entry is <em>committed</em> when…</p>
-      <button class="opt">the leader has written it to its own disk</button>
-      <button class="opt">every single follower has acknowledged it</button>
-      <button class="opt">a majority of the cluster has persisted it</button>
-      <button class="opt">the client has retried it at least once</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="1">
-      <p class="q"><span class="qn">Q6.</span> A celebrity account melts one partition even under hash partitioning. The standard fix is to…</p>
-      <button class="opt">switch that key to key-range partitioning</button>
-      <button class="opt">add a random suffix to split the hot key across partitions</button>
-      <button class="opt">re-hash the whole cluster with <code>mod N</code></button>
-      <button class="opt">add more read replicas of every partition</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-  </div>
-
-  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Reconstruct the field from a blank page</h3>
-  <p class="rehearse" style="font-size:.9rem">Write the ten lessons in order, one line each, with nothing on screen. Then reveal and compare — gaps are your next drill.</p>
-  <div class="rehearse">
-    <textarea placeholder="1. One hard truth = …  2. Delivery = …  3. No global clock = …  (keep going to 10, from memory)"></textarea><br>
-    <button class="btn" onclick="document.getElementById('spine').classList.add('show')">Reveal the spine</button>
-    <div class="model" id="spine">
-      <b>1</b> Can't tell slow from dead (4 causes; Two Generals) · <b>2</b> at-least-once + idempotency = exactly-once effect ·
-      <b>3</b> no global clock → happens-before / vector clocks · <b>4</b> broadcast ladder; total order ≈ consensus ·
-      <b>5</b> leader / multi-leader / leaderless; R+W&gt;N · <b>6</b> eventual→session→causal→linearizable ·
-      <b>7</b> CAP (C-or-A under partition) + PACELC (L-or-C else) · <b>8</b> FLP impossibility + Raft (majority overlap) ·
-      <b>9</b> range vs hash; consistent hashing; hot spots · <b>10</b> retries+jitter · outbox · saga · end-to-end argument.
-    </div>
-  </div>
-
-  <div class="ask">
-    <strong>I'm your teacher — ask me anything.</strong> Say <em>"grill me on distributed systems"</em> for mixed
-    no-clue questions, drop a real system and I'll place it on the CAP/PACELC and consistency spectrums with you,
-    or ask for a worked space-time diagram. Want the next lesson — spaced, interleaved drills? Just ask.
-  </div>
-
-  <!-- ================= CHEAT SHEET ================= -->
-  <h2 class="sec" id="cheat">★ Cheat sheet — buzzword → engineering</h2>
-  <div class="cheat">
-    <p style="margin-top:0"><strong>Mental models:</strong> can't tell slow from dead · timeout = a guess · exactly-once = at-least-once + idempotency · no global clock → cause not time · FIFO ⊂ causal ⊂ total · R+W&gt;N overlaps · climb consistency only as far as needed · P is mandatory (C-or-A under partition) · majorities overlap · range vs hash · outbox kills the dual write · enforce correctness at the endpoints.</p>
-    <h3>Translation table</h3>
-    <table>
-      <tr><th>Buzzword</th><th>What it actually is</th></tr>
-      <tr><td>Eventual consistency</td><td>if writes stop, replicas converge — meanwhile any stale read is legal</td></tr>
-      <tr><td>Quorum</td><td>R + W &gt; N so read and write sets share a node</td></tr>
-      <tr><td>CP / AP</td><td>under partition: block the minority / serve stale data</td></tr>
-      <tr><td>PACELC</td><td>if Partition: A-vs-C; Else: Latency-vs-Consistency</td></tr>
-      <tr><td>Consensus</td><td>agree on one value despite crashes; ≈ total-order broadcast ≈ a replicated log</td></tr>
-      <tr><td>Raft commit</td><td>entry persisted on a majority, then applied to the state machine</td></tr>
-      <tr><td>Consistent hashing</td><td>nodes &amp; keys on a ring; add a node, move only ~K/N keys</td></tr>
-      <tr><td>Exactly-once</td><td>marketing for at-least-once delivery + idempotent effects</td></tr>
-      <tr><td>Outbox / saga</td><td>one atomic local write + relay / local txns + compensations</td></tr>
-    </table>
-    <h3>Three instincts to install</h3>
-    <p style="margin-bottom:0">① At every network boundary ask <strong>"what if this times out but succeeded?"</strong> ② Buy the <strong>weakest guarantee</strong> (delivery, ordering, consistency) your correctness actually needs. ③ Put each correctness guarantee at the <strong>layer that has the knowledge</strong> to enforce it (the end-to-end argument).</p>
-  </div>
-
-  <!-- ================= REVIEW GUIDES ================= -->
-  <h2 class="sec" id="review">★ Review guides &amp; what to read next</h2>
-  <div class="facts" style="grid-template-columns:1fr 1fr">
-    <div class="fact"><b>5-min (weekly)</b> Don't re-read — recall. Say the one hard truth; name the four causes; redraw the broadcast ladder and the R+W&gt;N overlap; recite CAP-vs-PACELC; state when a Raft entry commits.</div>
-    <div class="fact"><b>30-min (when stalled)</b> Blank-page reconstruct all ten lessons; re-derive why each builds on Lesson 1; then place one real database (CP/AP? PACELC? which consistency model? partitioning scheme?).</div>
-  </div>
-  <p style="font-size:.9rem"><strong>Read next, in order:</strong>
-    ① <a href="https://www.cl.cam.ac.uk/teaching/2021/ConcDisSys/dist-sys-notes.pdf">Kleppmann — Cambridge Distributed Systems notes</a> (Lessons 1–4) ·
-    ② <a href="https://dataintensive.net/">Designing Data-Intensive Applications</a>, Ch. 5, 8, 9 (replication, trouble, consensus) ·
-    ③ <a href="https://raft.github.io/">The Raft visualization &amp; paper</a> (Lesson 8) ·
-    ④ <a href="https://jepsen.io/consistency">Jepsen consistency models map</a> (Lesson 6). Course site → <a href="https://pdos.csail.mit.edu/6.824/">MIT 6.5840</a>.</p>
-
-  <p style="font-size:.9rem">📖 <strong>Primary source:</strong> Martin Kleppmann, <em>Designing Data-Intensive Applications</em> + the Cambridge lecture series — the highest-trust grounding for this track.</p>
-
-  <div class="nav">
-    <span>📄 <a href="../index.html">Engineering Vault</a></span>
-    <span><em>Next ▸ interleaved retrieval drills (ask me to build it)</em></span>
-  </div>
-
-  <footer id="sources">
-    <strong>Sources</strong><br>
-    <span id="s1">1. Martin Kleppmann, <em>Designing Data-Intensive Applications</em> — Ch. 5 (Replication), Ch. 8 (The Trouble with Distributed Systems), Ch. 9 (Consistency &amp; Consensus). <a href="#r1">↩</a></span><br>
-    <span id="s2">2. Martin Kleppmann, <em>Distributed Systems</em> (University of Cambridge) — <a href="https://www.cl.cam.ac.uk/teaching/2021/ConcDisSys/dist-sys-notes.pdf">lecture notes (PDF)</a>; Two Generals (Lec. 2), time &amp; clocks, broadcast.</span><br>
-    <span id="s3">3. Foundational papers: Lamport 1978 (Time, Clocks); Fischer, Lynch &amp; Paterson 1985 (FLP); Saltzer, Reed &amp; Clark 1984 (end-to-end argument); Gilbert &amp; Lynch 2002 (CAP); Abadi 2012 (PACELC); Ongaro &amp; Ousterhout 2014 (Raft); DeCandia et al. 2007 (Dynamo); Karger et al. 1997 (consistent hashing); Garcia-Molina &amp; Salem 1987 (Sagas); Herlihy &amp; Wing 1990 (linearizability); Terry et al. 1994 (session guarantees).</span><br>
-    <span id="s4">4. Jepsen, <em>Consistency Models</em> — <a href="https://jepsen.io/consistency">jepsen.io/consistency</a>; Marc Brooker, AWS Builders' Library, <em>Timeouts, retries, and backoff with jitter</em>; Google SRE Book (handling overload, cascading failures).</span>
-  </footer>
-<div class="lesson-fb" aria-live="polite">
-  <span class="lesson-fb-q">Was this lesson helpful?</span>
-  <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">👍 Yes</button>
-  <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No</button>
-  <span class="lesson-fb-thanks">Thanks &mdash; noted.</span>
-</div>
-<p class="lesson-endnote">These notes reflect my current understanding and are updated as I learn, build, and discover better explanations.</p>
-</main>
-</div>
-
-<script>
-  document.querySelectorAll('.qitem').forEach(function(item){
-    var correct = +item.dataset.correct;
-    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
-    var fb = item.querySelector('.fb');
-    opts.forEach(function(opt, i){
-      opt.addEventListener('click', function(){
-        opts.forEach(function(o){ o.disabled = true; });
-        opts[correct].classList.add('correct');
-        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
-        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
-      });
-    });
-  });
-</script>
-<script src="../assets/interview.js" defer></script>
-</body>
-</html>
+        // "Reveal model answer" inside each .rehearse block (id-free; supports
+        // multiple per page — replaces the old inline onclick + fixed id="model").
+        document.querySelectorAll('.rehearse [data-reveal]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var m = btn.parentElement.querySelector('.model');
+                if (m) m.classList.add('show');
+            });
+        });
+    </script>  <script src="/engineering-learning-hub/assets/interview.js" defer></script><script src="/engineering-learning-hub/assets/reading-progress.js" defer></script> </body> </html>

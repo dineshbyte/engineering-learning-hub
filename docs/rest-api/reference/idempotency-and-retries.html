@@ -1,35 +1,28 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<script>
-(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
-function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
-</script>
-<meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Idempotency &amp; Retries Cheat Sheet · Engineering Vault</title>
-<meta name="description" content="An idempotency and retries cheat sheet covering idempotency keys, safe retries, exactly-once semantics, and dedup — a quick reference for REST API interviews.">
-<meta name="keywords" content="idempotency, retries, status codes, http methods, rest, api, pagination, caching, auth, oauth, jwt, versioning, errors, rate">
-<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/rest-api/reference/idempotency-and-retries.html">
-<meta name="robots" content="index, follow">
-<meta name="author" content="dineshbyte">
-<meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Vault">
-<meta property="og:title" content="Idempotency &amp; Retries Cheat Sheet · Engineering Vault">
-<meta property="og:description" content="An idempotency and retries cheat sheet covering idempotency keys, safe retries, exactly-once semantics, and dedup — a quick reference for REST API interviews.">
-<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/rest-api/reference/idempotency-and-retries.html">
-<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/rest-api.png">
-<meta property="og:image:alt" content="REST API · Engineering Vault learning track">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Idempotency &amp; Retries Cheat Sheet · Engineering Vault">
-<meta name="twitter:description" content="An idempotency and retries cheat sheet covering idempotency keys, safe retries, exactly-once semantics, and dedup — a quick reference for REST API interviews.">
-<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/rest-api.png">
-<link rel="stylesheet" href="../../assets/tokens.css">
-<style>
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><link rel="icon" type="image/svg+xml" href="/engineering-learning-hub/assets/favicon.svg"><!-- a11y: no maximum-scale / user-scalable=no — pinch-zoom must stay
+             available (WCAG 1.4.4). Dropped per the hub-migration audit. --><meta name="viewport" content="width=device-width, initial-scale=1"><title>Idempotency &amp; Retries Cheat Sheet · Engineering Vault</title><meta name="description" content="A REST cheat sheet on the six architectural constraints, the Richardson maturity model, HATEOAS, and HTTP method semantics — quick reference for API interviews."><meta name="keywords" content="rest constraints, maturity, status codes, http methods, rest, api, idempotency, pagination, caching, auth, oauth, jwt, versioning, errors"><meta name="author" content="dineshbyte"><meta name="robots" content="index, follow"><link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/rest-api/reference/idempotency-and-retries.html"><meta property="og:type" content="article"><meta property="og:site_name" content="Engineering Vault"><meta property="og:title" content="Idempotency &#38; Retries Cheat Sheet · Engineering Vault"><meta property="og:description" content="A REST cheat sheet on the six architectural constraints, the Richardson maturity model, HATEOAS, and HTTP method semantics — quick reference for API interviews."><meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/rest-api/reference/idempotency-and-retries.html"><meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/rest-api.png"><meta property="og:image:alt" content="REST API · Engineering Vault learning track"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@dineshxbyte"><meta name="twitter:title" content="Idempotency &#38; Retries Cheat Sheet · Engineering Vault"><meta name="twitter:description" content="A REST cheat sheet on the six architectural constraints, the Richardson maturity model, HATEOAS, and HTTP method semantics — quick reference for API interviews."><meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/rest-api.png"><script>
+            (function () {
+                try {
+                    var t = localStorage.getItem('theme');
+                    if (t !== 'light' && t !== 'dark') {
+                        t =
+                            window.matchMedia &&
+                            window.matchMedia('(prefers-color-scheme:dark)').matches
+                                ? 'dark'
+                                : 'light';
+                    }
+                    document.documentElement.setAttribute('data-theme', t);
+                } catch (e) {}
+            })();
+        </script><script>
+            function toggleTheme() {
+                var d = document.documentElement;
+                var t = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                d.setAttribute('data-theme', t);
+                try {
+                    localStorage.setItem('theme', t);
+                } catch (e) {}
+            }
+        </script><link rel="stylesheet" href="/engineering-learning-hub/assets/tokens.css"><script src="/engineering-learning-hub/assets/analytics.js" defer></script></head> <body> <a class="skip-link" href="#main">Skip to content</a>  <style>
   :root{--accent:var(--track-rest)}
   *{box-sizing:border-box}
   html{font-size:17px}
@@ -69,99 +62,32 @@ function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data
     .themebtn,#hubbar{display:none!important}
     html[data-theme="dark"]{--bg:#fff;--card:#fff;--ink:#111110}
   }
-</style>
-<style>
+</style> <style>
 /* topic tag chips (multi-colour, theme-aware) — match the lesson pages */
 .ltags{display:flex;flex-wrap:wrap;gap:.4rem;margin:.7rem 0 .2rem}
 .ltags .lt{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:.7rem;font-weight:600;line-height:1;white-space:nowrap;padding:.32rem .56rem;border-radius:6px;color:color-mix(in srgb,var(--lt-c,var(--accent)) 70%,var(--ink));background:color-mix(in srgb,var(--lt-c,var(--accent)) 14%,transparent);border:1px solid color-mix(in srgb,var(--lt-c,var(--accent)) 32%,transparent)}
 .ltags .lt:nth-child(6n+1){--lt-c:#5b54e6}.ltags .lt:nth-child(6n+2){--lt-c:#0f8a7e}.ltags .lt:nth-child(6n+3){--lt-c:#c2700f}.ltags .lt:nth-child(6n+4){--lt-c:#d6455d}.ltags .lt:nth-child(6n+5){--lt-c:#1f77d0}.ltags .lt:nth-child(6n+6){--lt-c:#8a3fbf}
-</style>
-<script src="../../assets/analytics.js" defer></script>
-</head>
-<body>
-<a class="skip-link" href="#main">Skip to content</a>
-<button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light" style="position:fixed;top:.7rem;right:.7rem;z-index:60;background:var(--card)">🌓</button>
-<div class="wrap">
-  <nav id="hubbar" style="position:sticky;top:0;z-index:50;display:flex;justify-content:space-between;align-items:center;gap:1rem;margin:-3rem -1.5rem 1.4rem;padding:.6rem 1.5rem;background:var(--card);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);font-family:ui-sans-serif,system-ui,sans-serif;font-size:.8rem"><a href="../../index.html" style="color:var(--accent);text-decoration:none;font-weight:600">← Engineering Vault</a><span style="color:var(--muted)">REST API Mastery · Reference</span></nav>
-<main id="main" tabindex="-1">
-  <div class="kicker">Reference · Reliability</div>
-  <h1>Idempotency &amp; Retries</h1>
-  <div class="ltags"><span class="lt">Idempotency</span><span class="lt">Retries</span><span class="lt">Status codes</span><span class="lt">HTTP methods</span><span class="lt">REST</span></div>
-  <p class="lede">The compressed essence. One page to glance at before an interview or a design review.</p>
-
-  <h2>Quick definitions</h2>
-  <dl>
-    <dt>Safe</dt>
-    <dd>Read-only <em>intent</em> — no intended state change. <code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>. <span class="why">→ "Safe" is about intent, not "secure" and not "side-effect-free" (a GET may still log).</span></dd>
-    <dt>Idempotent</dt>
-    <dd>N identical requests ≡ one request's effect on state. <code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>, <code>PUT</code>, <code>DELETE</code>. <span class="why">→ The property that makes a request safe to <em>retry</em>.</span></dd>
-    <dt><code>POST</code> — not idempotent</dt>
-    <dd>Each call can create another resource / charge again. <span class="why">→ Needs an <code>Idempotency-Key</code> to be retried safely.</span></dd>
-    <dt><code>PATCH</code> — not guaranteed</dt>
-    <dd>Depends entirely on the patch document. <span class="why">→ A "set field to X" patch is idempotent; an "increment by 1" patch is not.</span></dd>
-  </dl>
-
-  <h2>Method idempotency at a glance</h2>
-  <table>
-    <thead><tr><th>Method</th><th>Idempotent?</th><th>Notes</th></tr></thead>
-    <tbody>
-      <tr><td><code>GET</code></td><td class="y">yes</td><td>Pure read.</td></tr>
-      <tr><td><code>PUT</code></td><td class="y">yes</td><td>Full replace — repeated puts converge to the same state.</td></tr>
-      <tr><td><code>DELETE</code></td><td class="y">yes</td><td>Return <code>204</code>, or <code>404</code> when already gone — the resource is absent either way.</td></tr>
-      <tr><td><code>POST</code></td><td class="n">no</td><td>Each call can create / charge again — needs an <code>Idempotency-Key</code>.</td></tr>
-      <tr><td><code>PATCH</code></td><td>depends</td><td>Idempotent only if the patch doc is (e.g. "set X" yes, "increment" no).</td></tr>
-    </tbody>
-  </table>
-
-  <h2>The <code>Idempotency-Key</code> pattern</h2>
-  <p>Make a non-idempotent operation safe to retry by deduplicating on a client-supplied key. <a href="https://docs.stripe.com/api/idempotent_requests">Stripe</a>.</p>
-  <div class="lvl"><span class="tag num">1</span><span>Client generates a <strong>unique key per logical operation</strong> (UUID&nbsp;v4) — not per HTTP attempt.</span></div>
-  <div class="lvl"><span class="tag num">2</span><span>Client sends it in the <code>Idempotency-Key</code> request header.</span></div>
-  <div class="lvl"><span class="tag num">3</span><span>Server, <strong>before executing</strong>, looks up the key in a durable store.</span></div>
-  <div class="lvl"><span class="tag num">4</span><span><strong>Miss</strong> → execute inside a transaction that <em>also</em> persists the key + resulting status code + response body + a fingerprint of the request.</span></div>
-  <div class="lvl"><span class="tag num">5</span><span><strong>Hit</strong> → return the stored response <strong>without re-executing</strong>.</span></div>
-  <div class="lvl"><span class="tag num">6</span><span>Keys expire after a <strong>TTL</strong> (Stripe ≈ 24h).</span></div>
-  <div class="lvl"><span class="tag num">7</span><span>If a retry's body differs from the stored fingerprint → <strong>reject</strong> (key reuse for a different request).</span></div>
-
-  <h2>Implementation checklist</h2>
-  <dl>
-    <dt>Durable store</dt>
-    <dd>A DB table or Redis with a TTL — must survive a process crash mid-request.</dd>
-    <dt>Persist the whole outcome</dt>
-    <dd>Status code + response body + request fingerprint, so replays are byte-identical and reuse is detectable.</dd>
-    <dt>Concurrency control</dt>
-    <dd>Enforce a <strong>UNIQUE constraint</strong> or lock on the key so two in-flight requests can't both execute — the loser waits or gets <code>409</code>.</dd>
-    <dt>Scope the key</dt>
-    <dd>Per endpoint + per account, so collisions and cross-tenant leakage can't happen.</dd>
-    <dt>Apply selectively</dt>
-    <dd>Only on <strong>unsafe / non-idempotent</strong> operations — payments, order creation, message sends. Skip it for reads and naturally idempotent writes.</dd>
-  </dl>
-
-  <h2>Idempotency ≠ exactly-once</h2>
-  <p style="font-size:.92rem"><strong>Exactly-once <em>delivery</em> is impossible</strong> in a distributed system. What you can build is exactly-once <em>effect</em>:</p>
-  <div class="lvl"><span class="tag">=</span><span>exactly-once&nbsp;<strong>effect</strong> &nbsp;=&nbsp; at-least-once&nbsp;<strong>delivery</strong> &nbsp;+&nbsp; idempotent&nbsp;<strong>processing</strong>&nbsp;(dedup)</span></div>
-
-  <h2>Retry strategy</h2>
-  <dl>
-    <dt>Retry only what's safe</dt>
-    <dd>Idempotent methods, or non-idempotent ones guarded by an <code>Idempotency-Key</code>. Never blindly retry a bare <code>POST</code>.</dd>
-    <dt>Exponential backoff + jitter</dt>
-    <dd>Spread retries over growing, randomized intervals to avoid synchronized retry storms (thundering herd).</dd>
-    <dt>Honor <code>Retry-After</code></dt>
-    <dd>When the server tells you when to come back (<code>429</code> / <code>503</code>), obey it.</dd>
-    <dt>Cap attempts</dt>
-    <dd>Bound total retries; fail fast rather than hammering a dead dependency.</dd>
-    <dt>Pair with circuit breakers</dt>
-    <dd>Stop retrying entirely once a downstream is clearly down; let it recover.</dd>
-  </dl>
-
-  <footer>
-    Reference doc · part of the REST API teaching workspace ·
-    see <a href="../lessons/0003-idempotency-in-practice.html">Lesson&nbsp;3 — Idempotency in Practice</a> ·
-    sources: <a href="https://docs.stripe.com/api/idempotent_requests">Stripe — Idempotent requests</a> ·
-    <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC&nbsp;9110</a>.
-  </footer>
-</main>
-</div>
-</body>
-</html>
+</style> <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light" style="position:fixed;top:.7rem;right:.7rem;z-index:60;background:var(--card)">&#127763;</button> <div class="wrap"> <nav id="hubbar" style="position:sticky;top:0;z-index:50;display:flex;justify-content:space-between;align-items:center;gap:1rem;margin:-3rem -1.5rem 1.4rem;padding:.6rem 1.5rem;background:var(--card);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);font-family:ui-sans-serif,system-ui,sans-serif;font-size:.8rem"><a href="/engineering-learning-hub/index.html" style="color:var(--accent);text-decoration:none;font-weight:600">&#8592; Engineering Vault</a><span style="color:var(--muted)">REST API Mastery · Reference</span></nav> <main id="main" tabindex="-1"> <div class="kicker">Reference · Reliability</div> <h1>Idempotency &amp; Retries</h1> <div class="ltags"><span class="lt">Idempotency</span><span class="lt">Retries</span><span class="lt">Status codes</span><span class="lt">HTTP methods</span><span class="lt">REST</span></div> <p class="lede">The compressed essence. One page to glance at before an interview or a design review.</p>   <h2>Quick definitions</h2>
+<dl><dt>Safe</dt><dd>Read-only <em>intent</em> — no intended state change. <code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>. <span class="why">→ “Safe” is about intent, not “secure” and not “side-effect-free” (a GET may still log).</span></dd><dt>Idempotent</dt><dd>N identical requests ≡ one request’s effect on state. <code>GET</code>, <code>HEAD</code>, <code>OPTIONS</code>, <code>PUT</code>, <code>DELETE</code>. <span class="why">→ The property that makes a request safe to <em>retry</em>.</span></dd><dt><code>POST</code> — not idempotent</dt><dd>Each call can create another resource / charge again. <span class="why">→ Needs an <code>Idempotency-Key</code> to be retried safely.</span></dd><dt><code>PATCH</code> — not guaranteed</dt><dd>Depends entirely on the patch document. <span class="why">→ A “set field to X” patch is idempotent; an “increment by 1” patch is not.</span></dd></dl>
+<h2>Method idempotency at a glance</h2>
+<table><thead><tr><th>Method</th><th>Idempotent?</th><th>Notes</th></tr></thead><tbody><tr><td><code>GET</code></td><td class="y">yes</td><td>Pure read.</td></tr><tr><td><code>PUT</code></td><td class="y">yes</td><td>Full replace — repeated puts converge to the same state.</td></tr><tr><td><code>DELETE</code></td><td class="y">yes</td><td>Return <code>204</code>, or <code>404</code> when already gone — the resource is absent either way.</td></tr><tr><td><code>POST</code></td><td class="n">no</td><td>Each call can create / charge again — needs an <code>Idempotency-Key</code>.</td></tr><tr><td><code>PATCH</code></td><td>depends</td><td>Idempotent only if the patch doc is (e.g. “set X” yes, “increment” no).</td></tr></tbody></table>
+<h2>The <code>Idempotency-Key</code> pattern</h2>
+<p>Make a non-idempotent operation safe to retry by deduplicating on a client-supplied key. <a href="https://docs.stripe.com/api/idempotent_requests">Stripe</a>.</p>
+<div class="lvl"><span class="tag num">1</span><span>Client generates a <strong>unique key per logical operation</strong> (UUID v4) — not per HTTP attempt.</span></div>
+<div class="lvl"><span class="tag num">2</span><span>Client sends it in the <code>Idempotency-Key</code> request header.</span></div>
+<div class="lvl"><span class="tag num">3</span><span>Server, <strong>before executing</strong>, looks up the key in a durable store.</span></div>
+<div class="lvl"><span class="tag num">4</span><span><strong>Miss</strong> → execute inside a transaction that <em>also</em> persists the key + resulting status code + response body + a fingerprint of the request.</span></div>
+<div class="lvl"><span class="tag num">5</span><span><strong>Hit</strong> → return the stored response <strong>without re-executing</strong>.</span></div>
+<div class="lvl"><span class="tag num">6</span><span>Keys expire after a <strong>TTL</strong> (Stripe ≈ 24h).</span></div>
+<div class="lvl"><span class="tag num">7</span><span>If a retry’s body differs from the stored fingerprint → <strong>reject</strong> (key reuse for a different request).</span></div>
+<h2>Implementation checklist</h2>
+<dl><dt>Durable store</dt><dd>A DB table or Redis with a TTL — must survive a process crash mid-request.</dd><dt>Persist the whole outcome</dt><dd>Status code + response body + request fingerprint, so replays are byte-identical and reuse is detectable.</dd><dt>Concurrency control</dt><dd>Enforce a <strong>UNIQUE constraint</strong> or lock on the key so two in-flight requests can’t both execute — the loser waits or gets <code>409</code>.</dd><dt>Scope the key</dt><dd>Per endpoint + per account, so collisions and cross-tenant leakage can’t happen.</dd><dt>Apply selectively</dt><dd>Only on <strong>unsafe / non-idempotent</strong> operations — payments, order creation, message sends. Skip it for reads and naturally idempotent writes.</dd></dl>
+<h2>Idempotency ≠ exactly-once</h2>
+<p style="font-size:.92rem"><strong>Exactly-once <em>delivery</em> is impossible</strong> in a distributed system. What you can build is exactly-once <em>effect</em>:</p>
+<div class="lvl"><span class="tag">=</span><span>exactly-once <strong>effect</strong>  =  at-least-once <strong>delivery</strong>  +  idempotent <strong>processing</strong> (dedup)</span></div>
+<h2>Retry strategy</h2>
+<dl><dt>Retry only what’s safe</dt><dd>Idempotent methods, or non-idempotent ones guarded by an <code>Idempotency-Key</code>. Never blindly retry a bare <code>POST</code>.</dd><dt>Exponential backoff + jitter</dt><dd>Spread retries over growing, randomized intervals to avoid synchronized retry storms (thundering herd).</dd><dt>Honor <code>Retry-After</code></dt><dd>When the server tells you when to come back (<code>429</code> / <code>503</code>), obey it.</dd><dt>Cap attempts</dt><dd>Bound total retries; fail fast rather than hammering a dead dependency.</dd><dt>Pair with circuit breakers</dt><dd>Stop retrying entirely once a downstream is clearly down; let it recover.</dd></dl>
+<footer><p>Reference doc · part of the REST API teaching workspace ·
+see <a href="../lessons/0003-idempotency-in-practice.html">Lesson 3 — Idempotency in Practice</a> ·
+sources: <a href="https://docs.stripe.com/api/idempotent_requests">Stripe — Idempotent requests</a> ·
+<a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC 9110</a>.</p></footer>  </main> </div>   </body> </html>

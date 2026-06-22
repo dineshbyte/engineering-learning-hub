@@ -1,971 +1,251 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<script>
-(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
-function toggleTheme(){var d=document.documentElement;var t=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',t);try{localStorage.setItem('theme',t);}catch(e){}}
-</script>
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><link rel="icon" type="image/svg+xml" href="/engineering-learning-hub/assets/favicon.svg"><!-- a11y: no maximum-scale / user-scalable=no — pinch-zoom must stay
+             available (WCAG 1.4.4). Dropped per the hub-migration audit. --><meta name="viewport" content="width=device-width, initial-scale=1"><title>Storage Engines: B-Trees vs LSM-Trees · Engineering Vault</title><meta name="description" content="How a database puts bytes on disk and finds them again — B-trees vs LSM-trees, indexes, and data models — so you can choose a storage engine with real judgment."><meta name="keywords" content="storage engines, b-trees, lsm-trees, b-tree, write amplification, indexes, lsm, compaction, sstable"><meta name="author" content="dineshbyte"><meta name="robots" content="index, follow"><link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/storage-engines/storage-engines-fundamentals.html"><meta property="og:type" content="article"><meta property="og:site_name" content="Engineering Vault"><meta property="og:title" content="Storage Engines: B-Trees vs LSM-Trees"><meta property="og:description" content="How a database puts bytes on disk and finds them again — B-trees vs LSM-trees, indexes, and data models — so you can choose a storage engine with real judgment."><meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/storage-engines/storage-engines-fundamentals.html"><meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/storage-engines.png"><meta property="og:image:alt" content="Storage Engines · Engineering Vault learning track"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@dineshxbyte"><meta name="twitter:title" content="Storage Engines: B-Trees vs LSM-Trees"><meta name="twitter:description" content="How a database puts bytes on disk and finds them again — B-trees vs LSM-trees, indexes, and data models — so you can choose a storage engine with real judgment."><meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/storage-engines.png"><script>
+            (function () {
+                try {
+                    var t = localStorage.getItem('theme');
+                    if (t !== 'light' && t !== 'dark') {
+                        t =
+                            window.matchMedia &&
+                            window.matchMedia('(prefers-color-scheme:dark)').matches
+                                ? 'dark'
+                                : 'light';
+                    }
+                    document.documentElement.setAttribute('data-theme', t);
+                } catch (e) {}
+            })();
+        </script><script>
+            function toggleTheme() {
+                var d = document.documentElement;
+                var t = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+                d.setAttribute('data-theme', t);
+                try {
+                    localStorage.setItem('theme', t);
+                } catch (e) {}
+            }
+        </script><link rel="stylesheet" href="/engineering-learning-hub/assets/tokens.css"><link rel="stylesheet" href="/engineering-learning-hub/assets/lesson.css"><link rel="stylesheet" href="/engineering-learning-hub/assets/interview.css"><style>:root{--accent:var(--track-storage)}</style><script src="/engineering-learning-hub/assets/analytics.js" defer></script></head> <body> <a class="skip-link" href="#main">Skip to content</a>  <div class="wrap"> <nav id="hubbar"> <a href="/engineering-learning-hub/index.html">&#8592; Engineering Vault</a> <span class="pn"> <span style="color:var(--muted);opacity:.45">&#8249; Prev</span> <a href="lsm-compaction-deep-dive.html" title="LSM Compaction — Deep Dive">
+Next &#8250;
+</a> </span> <span style="display:flex;align-items:center;gap:.6rem"> <button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button> <span style="color:var(--muted)">Storage Engines · Fundamentals</span> </span> </nav> <main id="main" tabindex="-1"> <div id="reading-progress"></div> <div class="kicker">Book 3 · The layer below your queries · visual edition</div> <h1>Storage Engines from first principles</h1> <p class="meta">~40 min · 9 levels · real engines + interview questions · interactive recall · grounded in DDIA ch.2–4</p> <div class="ltags"><span class="lt">Storage engines</span><span class="lt">B-trees</span><span class="lt">LSM-trees</span><span class="lt">B-tree</span><span class="lt">Write amplification</span></div>  <div class="mission"><p><strong>Your bar:</strong> redraw — from memory — how a database puts bytes on disk and finds
+them again, so you can choose engines, indexes, and data models with judgment instead of
+cargo-culting. Every level is built to be <em>seen and redrawn</em>. Grounded in Kleppmann’s 
+<em>Designing Data-Intensive Applications</em></p><sup><a href="#s1" id="r1"><p>1</p></a></sup><p>and the primary papers behind each engine.</p></div>
+<p>One tension holds the whole book. Each level just moves you along its curve:</p>
+<div class="chips"><span class="chip"><p>A storage engine is a <b>log you write</b></p></span><span class="chip c2"><p>plus an <b>index you read</b></p></span><span class="chip c3"><p>trading <b>read / write / space</b></p></span><span class="chip c4"><p>to fit <b>one access pattern</b></p></span></div>
+<nav class="toc"><a href="#l1">1 · Log + hash index</a><a href="#l2">2 · B-tree</a><a href="#l3">3 · LSM-tree</a><a href="#l4">4 · Amplification</a><a href="#l5">5 · Indexes</a><a href="#l6">6 · Data models</a><a href="#l7">7 · Normalization</a><a href="#l8">8 · Encoding</a><a href="#l9">9 · Row vs column</a><a href="#usecases">★ Real engines</a><a href="#quiz">★ Retrieval quiz</a><a href="#interview">★ Interview Qs</a><a href="#cheat">★ Cheat sheet</a><a href="#review">★ Review guides</a></nav>
 
-<meta charset="utf-8">
-<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Storage Engines: B-Trees vs LSM-Trees · Engineering Vault</title>
-<meta name="description" content="How a database puts bytes on disk and finds them again — B-trees vs LSM-trees, indexes, and data models — so you can choose a storage engine with real judgment.">
-<meta name="keywords" content="storage engines, b-trees, lsm-trees, b-tree, write amplification, indexes, lsm, compaction, sstable">
-<meta name="author" content="dineshbyte">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="https://dineshbyte.github.io/engineering-learning-hub/storage-engines/storage-engines-fundamentals.html">
-<meta property="og:type" content="article">
-<meta property="og:site_name" content="Engineering Vault">
-<meta property="og:title" content="Storage Engines: B-Trees vs LSM-Trees">
-<meta property="og:description" content="How a database puts bytes on disk and finds them again — B-trees vs LSM-trees, indexes, and data models — so you can choose a storage engine with real judgment.">
-<meta property="og:url" content="https://dineshbyte.github.io/engineering-learning-hub/storage-engines/storage-engines-fundamentals.html">
-<meta property="og:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/storage-engines.png">
-<meta property="og:image:alt" content="Storage Engines · Engineering Vault learning track">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:site" content="@dineshxbyte">
-<meta name="twitter:title" content="Storage Engines: B-Trees vs LSM-Trees">
-<meta name="twitter:description" content="How a database puts bytes on disk and finds them again — B-trees vs LSM-trees, indexes, and data models — so you can choose a storage engine with real judgment.">
-<meta name="twitter:image" content="https://dineshbyte.github.io/engineering-learning-hub/assets/og/storage-engines.png">
-<link rel="stylesheet" href="../assets/tokens.css">
-<link rel="stylesheet" href="../assets/lesson.css">
-<link rel="stylesheet" href="../assets/interview.css">
-<style>:root{--accent:var(--track-storage)}
-  /* ---- decomposition chips ---- */
-  .chips{display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0}
-  .chip{font-size:.78rem; padding:.35rem .6rem; border-radius:20px; border:1px solid var(--line); background:var(--card)}
-  .chip b{color:var(--accent)}
-  .chip.c2 b{color:var(--track-rest)} .chip.c3 b{color:var(--good)} .chip.c4 b{color:var(--warn)}
+<figure style="margin-top:1.6rem"> <svg viewBox="0 0 640 230" role="img" aria-label="The read/write/space triangle: every engine picks a corner; the page tours the curve from log to index to layout"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="320" y="26" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THE ONE TENSION — you cannot make all three cheap at once</text> <!-- triangle --> <polygon points="320,52 116,196 524,196" fill="#fbfaf2" stroke="#7a1f12" stroke-width="1.5"></polygon> <!-- vertices --> <circle cx="320" cy="52" r="5" fill="#7a1f12"></circle> <circle cx="116" cy="196" r="5" fill="#1f3a5a"></circle> <circle cx="524" cy="196" r="5" fill="#2f5d3a"></circle> <text x="320" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="#7a1f12">READ amp</text> <text x="320" y="64" text-anchor="middle" font-size="9" fill="#6b675f">pages per lookup</text> <text x="96" y="214" text-anchor="middle" font-size="13" font-weight="700" fill="#1f3a5a">WRITE amp</text> <text x="96" y="226" text-anchor="middle" font-size="9" fill="#6b675f">bytes rewritten</text> <text x="548" y="214" text-anchor="middle" font-size="13" font-weight="700" fill="#2f5d3a">SPACE amp</text> <text x="548" y="226" text-anchor="middle" font-size="9" fill="#6b675f">disk vs data</text> <!-- where engines sit --> <g font-size="10"> <rect x="232" y="96" width="112" height="22" rx="6" fill="#fff" stroke="#7a1f12"></rect><text x="288" y="111" text-anchor="middle" fill="#7a1f12" font-weight="700">B-tree ↗ low read</text> <rect x="158" y="150" width="120" height="22" rx="6" fill="#fff" stroke="#1f3a5a"></rect><text x="218" y="165" text-anchor="middle" fill="#1f3a5a" font-weight="700">LSM ↗ low write</text> </g> <text x="430" y="120" text-anchor="middle" font-size="9.5" fill="#6b675f">column store ↗</text> <text x="430" y="133" text-anchor="middle" font-size="9.5" fill="#6b675f">space via compression</text> </g> </svg> <figcaption>
+Memorise this triangle. Every level below is one engine, index, or layout choosing a corner
+        — and paying in the other two.
+</figcaption> </figure>
 
-  /* ---- TOC grid ---- */
-  .toc{display:grid; grid-template-columns:repeat(2,1fr); gap:.3rem .9rem; font-size:.82rem; margin:1.2rem 0 0}
-  .toc a{text-decoration:none; padding:.15rem 0}
+<section class="lvl" id="l1"><div class="lvltop"><span class="num">1</span><h2>Log + hash index — the simplest real engine</h2></div><p class="tagline"><p>Two lines of bash become a durable database — and reveal the tension that governs every
+index you’ll ever choose.</p></p><figure> <svg viewBox="0 0 560 170" role="img" aria-label="An append-only log on disk with an in-memory hash index; reads follow the index to an offset, writes append and repoint"> <defs> <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"></path></marker> </defs> <g font-family="ui-sans-serif,system-ui,sans-serif"> <rect x="14" y="14" width="240" height="40" rx="8" fill="#eef5ee" stroke="#2f5d3a"></rect> <text x="134" y="32" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">IN-RAM hash index</text> <text x="134" y="47" text-anchor="middle" font-size="9.5" fill="#6b675f">key → byte offset</text> <g font-size="9" fill="#111110"> <text x="30" y="78">foo → 96</text><text x="30" y="94">bar → 32</text> </g> <text x="400" y="14" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">APPEND-ONLY log on disk</text> <g font-size="9.5"> <rect x="290" y="24" width="78" height="26" rx="5" fill="#fff" stroke="#d8d4c8"></rect><text x="329" y="41" text-anchor="middle">bar,9</text> <rect x="372" y="24" width="78" height="26" rx="5" fill="#fff" stroke="#d8d4c8"></rect><text x="411" y="41" text-anchor="middle">foo,1</text> <rect x="454" y="24" width="92" height="26" rx="5" fill="#f1eee2" stroke="#7a1f12"></rect><text x="500" y="41" text-anchor="middle" fill="#7a1f12" font-weight="700">foo,42 ←tail</text> </g> <!-- read arrow --> <path d="M 90 70 C 200 110, 420 90, 480 52" fill="none" stroke="#2f5d3a" stroke-dasharray="4 3" marker-end="url(#arwG)"></path> <text x="300" y="120" text-anchor="middle" font-size="10" fill="#2f5d3a">READ: hash lookup (O(1)) → 1 seek to offset → 1 record</text> <!-- write arrow --> <path d="M 540 58 C 545 96, 545 96, 540 96" fill="none" stroke="#7a1f12"></path> <text x="300" y="140" text-anchor="middle" font-size="10" fill="#7a1f12">WRITE: append 1 record at the tail + repoint 1 map entry</text> <text x="300" y="158" text-anchor="middle" font-size="10" fill="#9a2417">✗ keyset must fit in RAM&#160;&#160;✗ no range queries</text> </g> </svg> <figcaption>
+Bitcask (Riak's engine): append the data, keep <code>key → offset</code> in RAM. Reads do one
+        lookup + one seek regardless of file size.<sup><a href="#s6" id="r6">6</a></sup> </figcaption> </figure><figure><img src="diagrams/01-log-hash-index.png" alt="An append-only log on disk with an in-memory hash index pointing into it. Reads follow the index straight to a record; writes append at the end and repoint the index."/><figcaption><p>The same idea from the book: writes stream to the tail; the hash map turns “search the
+data” into “consult a small structure, then seek.”</p></figcaption></figure><div class="facts"><div class="fact"><p><b>Is</b> An append-only log of <code>key,value</code> records + an in-RAM map from each
+key to its latest byte offset.</p></div><div class="fact"><p><b>Why it exists</b> Appends are the fastest write a disk offers — one position, then
+stream. The index converts a scan into a seek.</p></div><div class="fact blue"><p><b>Compaction</b> Segments close at a size cap, become immutable, and a background merge
+keeps only the latest value per key.</p></div><div class="fact blue"><p><b>Like (code)</b> A <code>SELECT … LIMIT 1</code> over a tail-appended file, but the
+offset is precomputed in a hash map.</p></div></div><div class="myth"><div class="m">✗ “An append-only log keeps every dead version forever”</div><div class="t"><p>✓ Compaction rewrites a fresh segment, swaps it atomically, deletes the old — crash-safe
+by immutability</p></div></div><div class="rule"><p><span>📜 Memory rule:</span> A storage engine is a log you write fast and an index you read
+fast — and every index you add taxes every write.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Why is <code>db_set</code> fast but <code>db_get</code> slow without an index? <span class="ans">&rarr; append vs full linear scan</span> </li><li> What does Bitcask's hash map store? <span class="ans">&rarr; key → byte offset of latest record</span> </li><li> Why can compaction run without blocking reads? <span class="ans">&rarr; new segment swapped in atomically; old stays immutable</span> </li> </ul> </details></section>
 
-  /* ---- level block ---- */
-  .lvl{margin:2.6rem 0 0; padding-top:1rem; border-top:2px solid var(--ink)}
-  .lvltop{display:flex; align-items:center; gap:.6rem; margin-bottom:.2rem}
-  .num{display:inline-grid; place-items:center; width:1.9rem; height:1.9rem; border-radius:50%; background:var(--accent); color:var(--card); font-weight:700; font-size:.95rem; flex:none}
-  .lvltop h2{margin:0; font-size:1.24rem}
-  .tagline{font-size:.84rem; color:var(--muted); margin:.1rem 0 .3rem}
+<section class="lvl" id="l2"><div class="lvltop"><span class="num">2</span><h2>B-tree — the read-optimized default</h2></div><p class="tagline"><p>The structure behind every <code>CREATE INDEX</code> since 1972: a shallow, sorted,
+page-oriented tree you update in place.</p></p><figure><img src="diagrams/02-btree.png" alt="A three-level B-tree with the lookup path for key 215 highlighted. The root page splits the key space, internal pages narrow it, and a single leaf page holds the value — three page reads to reach any row."/><figcaption><p>Lookup of key 215: root <code>[200,400]</code> → internal <code>[210,230,260]</code> →
+leaf. Three page reads, each a binary search in memory.</p></figcaption></figure><figure> <svg viewBox="0 0 540 170" role="img" aria-label="A B-tree split: a full leaf divides into two half-full pages and pushes a separator key up to the parent"> <defs> <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker> </defs> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="270" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7a1f12">INSERT into a full leaf → SPLIT</text> <!-- before --> <rect x="20" y="40" width="180" height="34" rx="6" fill="#f7ecea" stroke="#9a2417"></rect> <text x="110" y="62" text-anchor="middle" font-size="11" fill="#7a2218">[10 20 30 40] ← full, no room</text> <text x="110" y="92" text-anchor="middle" font-size="9.5" fill="#6b675f">before</text> <line x1="210" y1="57" x2="252" y2="57" stroke="#6b675f" marker-end="url(#arw)"></line> <!-- after: parent gains separator --> <rect x="312" y="34" width="80" height="26" rx="6" fill="#f1eee2" stroke="#7a1f12"></rect> <text x="352" y="51" text-anchor="middle" font-size="10" fill="#7a1f12" font-weight="700">parent +30</text> <rect x="266" y="92" width="86" height="28" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect> <text x="309" y="110" text-anchor="middle" font-size="10" fill="#244a2e">[10 20]</text> <rect x="362" y="92" width="86" height="28" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect> <text x="405" y="110" text-anchor="middle" font-size="10" fill="#244a2e">[30 40]</text> <line x1="338" y1="60" x2="309" y2="90" stroke="#6b675f" marker-end="url(#arw)"></line> <line x1="366" y1="60" x2="405" y2="90" stroke="#6b675f" marker-end="url(#arw)"></line> <text x="357" y="140" text-anchor="middle" font-size="9.5" fill="#6b675f">two half-full pages; split propagates up only if the parent is also full</text> <text x="357" y="156" text-anchor="middle" font-size="9.5" fill="#9a2417">danger: torn write mid-split → WAL replays it (full-page image / doublewrite)</text> </g> </svg> <figcaption>
+Branching factor ~hundreds → depth ~4 levels addresses billions of keys. Writes overwrite a
+        page in place; the WAL makes that crash-safe.<sup><a href="#s2" id="r2">2</a></sup> </figcaption> </figure><div class="facts"><div class="fact"><p><b>Is</b> A balanced tree of fixed-size pages (4–8 KB); each node is sorted keys + child
+pointers; all leaves at equal depth.</p></div><div class="fact"><p><b>Why it exists</b> A high branching factor keeps the tree shallow, so a point lookup
+is O(log n) <em>pages</em> — and range scans walk the sorted leaves.</p></div><div class="fact blue"><p><b>Update-in-place</b> One canonical location per key; a write overwrites the leaf page.
+A full leaf splits and pushes a separator up.</p></div><div class="fact blue"><p><b>Crash safety</b> Overwriting a page isn’t atomic, so the WAL records intent first;
+recovery replays it.</p><sup><a href="#s1" id="r1b"><p>1</p></a></sup></div></div><div class="myth"><div class="m">✗ “More keys = a much deeper, slower tree”</div><div class="t"><p>✓ Depth grows logarithmically — fan-out ~256 means 4 levels hold ~4 billion keys</p></div></div><div class="rule"><p><span>🌳 Memory rule:</span> A B-tree is sorted pages updated in place — cheap predictable
+reads, paid for with random write I/O and WAL.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> What keeps a B-tree lookup to a few reads at a billion rows? <span class="ans">&rarr; high branching factor → shallow tree</span> </li><li> What happens when a leaf has no room? <span class="ans">&rarr; split in two, push a separator to the parent</span> </li><li> Why does a B-tree need a WAL? <span class="ans">&rarr; in-place page overwrite isn't crash-atomic</span> </li> </ul> </details></section>
 
-  /* ---- fact cards (lesson.css styles .facts/.fact; add label + blue variant) ---- */
-  .fact b{display:block; font-size:.62rem; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:.15rem}
-  .fact.blue b{color:var(--track-rest)}
+<section class="lvl" id="l3"><div class="lvltop"><span class="num">3</span><h2>LSM-tree — write-optimized, log all the way down</h2></div><p class="tagline"><p>Turn <em>every</em> write into a sequential append; defer the cleanup to a background merge.
+The engine behind RocksDB &amp; Cassandra.</p></p><figure><img src="diagrams/03-lsm-tree.png" alt="The LSM-tree write and read paths on one page. Writes enter the in-memory memtable and flush to a new immutable SSTable; compaction merges older SSTables and drops shadowed keys; a read checks the memtable, passes a Bloom-filter gate, then scans SSTables newest to oldest."/><figcaption><p>Write → WAL + memtable; flush a full memtable as a new immutable SSTable; compaction
+merges runs; reads go memtable → SSTables newest-to-oldest, gated by Bloom filters.</p><sup><a href="#s3" id="r3"><p>3</p></a></sup></figcaption></figure><figure> <svg viewBox="0 0 560 150" role="img" aria-label="A read for an absent key uses a Bloom filter to skip SSTables that definitely lack it"> <defs> <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker> </defs> <g font-family="ui-sans-serif,system-ui,sans-serif"> <rect x="10" y="50" width="96" height="44" rx="9" fill="#f1eee2" stroke="#7a1f12"></rect> <text x="58" y="70" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">read user:9</text> <text x="58" y="85" text-anchor="middle" font-size="9" fill="#6b675f">absent key</text> <line x1="106" y1="72" x2="146" y2="72" stroke="#6b675f" marker-end="url(#arw)"></line> <!-- bloom gates --> <g font-size="9.5"> <rect x="150" y="20" width="120" height="30" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="210" y="39" text-anchor="middle" fill="#244a2e">SST-3 · "absent" → skip</text> <rect x="150" y="58" width="120" height="30" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="210" y="77" text-anchor="middle" fill="#244a2e">SST-2 · "absent" → skip</text> <rect x="150" y="96" width="120" height="30" rx="6" fill="#f7ecea" stroke="#9a2417"></rect><text x="210" y="115" text-anchor="middle" fill="#7a2218">SST-1 · "probably" → open</text> </g> <text x="210" y="142" text-anchor="middle" font-size="9" fill="#6b675f">Bloom filter: one-sided error</text> <line x1="272" y1="111" x2="340" y2="111" stroke="#6b675f" marker-end="url(#arw)"></line> <rect x="344" y="96" width="96" height="30" rx="6" fill="#fff" stroke="#d8d4c8"></rect><text x="392" y="115" text-anchor="middle" font-size="9.5">1 disk read</text> <text x="470" y="58" text-anchor="middle" font-size="10" fill="#2f5d3a">"definitely absent"</text> <text x="470" y="72" text-anchor="middle" font-size="10" fill="#2f5d3a">is never wrong →</text> <text x="470" y="86" text-anchor="middle" font-size="10" fill="#2f5d3a">skipping is safe</text> </g> </svg> <figcaption>
+Without filters an absent-key read touches every SSTable. A ~1%-FPR filter costs ~10
+        bits/key and turns that into one rare false-positive open.
+</figcaption> </figure><div class="facts"><div class="fact"><p><b>Memtable</b> In-RAM sorted map (skip list / RB-tree) that buffers writes; a WAL
+alongside makes it crash-safe.</p></div><div class="fact"><p><b>SSTable</b> Immutable on-disk file sorted by key — never modified, only merged away.
+Two sorted files merge in one linear pass.</p></div><div class="fact blue"><p><b>Updates &amp; deletes are writes too</b> An update appends a newer entry; a delete
+appends a <em>tombstone</em>. Old values are shadowed, not erased.</p></div><div class="fact blue"><p><b>Compaction</b> Merges runs, keeps the newest value per key, drops tombstoned keys —
+reclaiming space. Leveled vs size-tiered is a tunable knob.</p></div></div><div class="myth"><div class="m">✗ “A delete frees the space immediately”</div><div class="t"><p>✓ A tombstone shadows the value; space returns only when compaction reaches the oldest
+SSTable (Cassandra: <code>gc_grace_seconds</code>)</p></div></div><div class="rule"><p><span>🪵 Memory rule:</span> An LSM-tree buffers in RAM, flushes immutable sorted runs, and
+merges later — sequential writes now, read &amp; merge work deferred.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Why are LSM writes fast? <span class="ans">&rarr; append to WAL + insert into in-RAM memtable; no in-place disk write</span> </li><li> A read returns "not found" but old SSTables have a value — why? <span class="ans">&rarr; a newer tombstone shadows them</span> </li><li> What guarantee does a Bloom filter give? <span class="ans">&rarr; "definitely absent" is never wrong → safe to skip</span> </li> </ul> </details></section>
 
-  /* ---- myth grid container (lesson.css styles .myth .m / .myth .t, not the grid) ---- */
-  .myth{display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin:.6rem 0; font-size:.84rem}
-  .myth div{border-radius:8px; padding:.45rem .6rem}
-  .myth .m{border-left:3px solid var(--bad)}
-  .myth .t{border-left:3px solid var(--good)}
+<section class="lvl" id="l4"><div class="lvltop"><span class="num">4</span><h2>Amplification — the three currencies you trade</h2></div><p class="tagline"><p>Read, write, space: a logical op costing more than one physical op. You can’t drive all
+three to zero — pick a corner.</p></p><figure><img src="diagrams/04-amplification.png" alt="B-tree and LSM-tree compared across the three amplification axes. The grid shows where each engine spends and where each engine saves; the insets show why."/><figcaption><p>The amplification grid from the book: where each engine spends, where each saves. B-tree
+pays write; LSM pays read &amp; space-until-compacted.</p><sup><a href="#s1" id="r1c"><p>1</p></a></sup></figcaption></figure><table><tr><th>Axis</th><th>B-tree</th><th>LSM-tree</th></tr><tr><td>Read amp</td><td>low — bounded by tree height</td><td>medium–high — may probe many runs</td></tr><tr><td>Write amp</td><td>medium–high — in-place, random, WAL + page</td><td><p>low <em>now</em> — deferred into compaction</p></td></tr><tr><td>Space amp</td><td>low — one copy, page slack</td><td>medium — stale versions until compacted</td></tr><tr><td>Write I/O</td><td>random</td><td>sequential</td></tr><tr><td>Latency</td><td>predictable</td><td>spiky (compaction stalls)</td></tr></table><div class="facts"><div class="fact"><p><b>Read amp</b> Pages touched per logical read. B-tree ≈ 1 uncached (the leaf); LSM
+grows with the number of sorted runs.</p></div><div class="fact"><p><b>Write amp</b> Bytes written per byte of user data. B-tree: WAL + whole-page rewrite +
+splits. LSM: defers &amp; batches into big sequential rewrites.</p></div><div class="fact blue"><p><b>Space amp</b> Disk used vs logical data. B-tree: page slack (~60–70% full). LSM:
+stale versions + tombstones, often offset by compression.</p></div><div class="fact blue"><p><b>Choose by workload</b> Write-heavy ingest → LSM. Read-heavy, tail-latency-sensitive
+OLTP → B-tree.</p></div></div><div class="myth"><div class="m">✗ “LSM-trees have no write amplification”</div><div class="t"><p>✓ They <em>defer and batch</em> it into compaction — a key may be rewritten across
+several levels over its life</p></div></div><div class="rule"><p><span>⚖️ Memory rule:</span> Read, write, space — every engine picks one corner of the
+triangle and pays in the other two. The skill is reading the workload.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Why is an LSM point lookup sometimes slower than a B-tree's? <span class="ans">&rarr; key may live in any of several sorted runs</span> </li><li> Why does a tiny B-tree update still amplify writes? <span class="ans">&rarr; rewrites a whole page + a WAL record</span> </li><li> Where does LSM space amp come from? <span class="ans">&rarr; stale versions + tombstones held until compaction</span> </li> </ul> </details></section>
 
-  /* ---- memory rule (lesson.css styles .rule; add inline highlight span) ---- */
-  .rule span{color:var(--accent)}
+<section class="lvl" id="l5"><div class="lvltop"><span class="num">5</span><h2>Indexes — clustered vs secondary, and the write tax</h2></div><p class="tagline"><p>One set of rows, many access paths. Every secondary index is pure redundancy you build, pay
+for, and keep in sync.</p></p><figure><img src="diagrams/05-secondary-index.png" alt="A table heap holds rows by row id; a clustered primary-key index stores full rows in its leaves, while a secondary email index stores only key plus a pointer back to the row."/><figcaption><p>Clustered (InnoDB): the row lives in the PK leaf, secondaries store the PK. Heap
+(Postgres): rows in a heap, every index holds a <code>ctid</code> pointer.</p></figcaption></figure><figure> <svg viewBox="0 0 560 160" role="img" aria-label="Leftmost-prefix rule on a composite index (account_id, created_at)"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="280" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1f3a5a">composite index (account_id, created_at) — sorted lexicographically</text> <g font-size="9.5"> <rect x="20" y="34" width="250" height="28" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="30" y="52" fill="#244a2e">WHERE account_id=42 AND created_at&gt;X ✓ full use</text> <rect x="20" y="68" width="250" height="28" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="30" y="86" fill="#244a2e">WHERE account_id=42 ✓ leading prefix</text> <rect x="20" y="102" width="250" height="28" rx="6" fill="#f7ecea" stroke="#9a2417"></rect><text x="30" y="120" fill="#7a2218">WHERE created_at&gt;X ✗ no left-anchored prefix</text> </g> <rect x="300" y="40" width="246" height="88" rx="8" fill="#fbfaf2" stroke="#7a1f12"></rect> <text x="423" y="60" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7a1f12">covering index = no row fetch</text> <text x="423" y="80" text-anchor="middle" font-size="9.5" fill="#6b675f">index holds every column the query reads</text> <text x="423" y="96" text-anchor="middle" font-size="9.5" fill="#6b675f">→ Postgres "Index Only Scan"</text> <text x="423" y="116" text-anchor="middle" font-size="9.5" fill="#9a2417">cost: wider index, fewer rows/page, slower writes</text> </g> </svg> <figcaption>
+Put the equality column first, the range column second — a range on the leading column "uses
+        up" the sort order and forces a scan.<sup><a href="#s2" id="r2b">2</a></sup> </figcaption> </figure><div class="facts"><div class="fact"><p><b>Clustered</b> The PK B-tree leaf <em>is</em> the row (InnoDB). A secondary stores the
+PK value → secondary lookup walks <em>two</em> trees.</p></div><div class="fact"><p><b>Heap</b> Rows sit unordered in a heap; every index leaf holds a <code>ctid</code> 
+pointer (Postgres). PK lookup = index walk + heap fetch.</p></div><div class="fact blue"><p><b>Composite</b> Keyed on several columns, sorted lexicographically. Usable only for a
+left-anchored prefix (leftmost-prefix rule).</p></div><div class="fact blue"><p><b>Covering</b> Holds every column the query reads, so the answer comes from the index
+alone — no row fetch.</p></div></div><div class="myth"><div class="m">✗ “Add indexes freely — they only make queries faster”</div><div class="t"><p>✓ A table with 8 indexes turns 1 logical insert into 9 physical writes; each index is a
+standing write tax</p></div></div><div class="rule"><p><span>🔎 Memory rule:</span> An index makes reads it covers faster and every write that
+maintains it slower — index what you actually filter and sort by, and measure with 
+<code>EXPLAIN</code>.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> What does an InnoDB secondary index store in its leaf? <span class="ans">&rarr; the indexed value + the primary key</span> </li><li> Which query can't use <code>(account_id, created_at)</code>? <span class="ans">&rarr; one filtering only on created_at</span> </li><li> Why does each secondary index slow writes? <span class="ans">&rarr; every write must place/move the key in that index too</span> </li> </ul> </details></section>
 
-  /* ---- memory-check / interview disclosure markers (boxes from lesson.css) ---- */
-  details.mc{font-size:.84rem; padding:.5rem 0 0; border:0; background:none; margin:.5rem 0 0}
-  details.mc summary{cursor:pointer; color:var(--good); font-weight:600; list-style:none}
-  details.mc summary::before{content:"\25B8 "}
-  details.mc[open] summary::before{content:"\25BE "}
-  details.mc ul{margin:.4rem 0 0; padding-left:1.1rem} details.mc li{margin:.2rem 0}
-  details.mc .ans{color:var(--muted)}
-  details.iq{border-left:3px solid var(--track-rest); font-size:.88rem}
-  details.iq summary{list-style:none}
-  details.iq summary::-webkit-details-marker{display:none}
-  details.iq summary::before{content:"\1F4AC "}
-  details.iq[open] summary{color:var(--track-rest)}
-  details.iq .a{margin-top:.45rem; font-size:.85rem; color:var(--ink); line-height:1.45}
-  details.iq .a b{color:var(--track-rest)}
+<section class="lvl" id="l6"><div class="lvltop"><span class="num">6</span><h2>Data models — relational, document, graph</h2></div><p class="tagline"><p>The most consequential, hardest-to-change backend decision. Each model makes a 
+<em>different</em> relationship cheap.</p></p><figure><img src="diagrams/06-data-models.png" alt="The same data — a user, their posts, their friends — modeled three ways: three relational tables wired by foreign keys, one nested JSON document, and a property graph of nodes and directed edges."/><figcaption><p>The same user-posts-friends domain modeled three ways: relational tables joined by
+value, one embedded document, a property graph of traversable edges.</p><sup><a href="#s4" id="r4"><p>4</p></a></sup></figcaption></figure><figure> <svg viewBox="0 0 560 160" role="img" aria-label="Each model makes one relationship cheap and another expensive"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <!-- relational --> <rect x="14" y="28" width="166" height="106" rx="9" fill="#fbfaf2" stroke="#1f3a5a"></rect> <text x="97" y="46" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">RELATIONAL</text> <text x="97" y="66" text-anchor="middle" font-size="9" fill="#2f5d3a">+ ad-hoc joins, integrity</text> <text x="97" y="80" text-anchor="middle" font-size="9" fill="#2f5d3a">+ each fact stored once</text> <text x="97" y="100" text-anchor="middle" font-size="9" fill="#9a2417">− rich object = many joins</text> <text x="97" y="120" text-anchor="middle" font-size="8.5" fill="#6b675f">relate by value (FK)</text> <!-- document --> <rect x="196" y="28" width="166" height="106" rx="9" fill="#fbfaf2" stroke="#7a1f12"></rect> <text x="279" y="46" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">DOCUMENT</text> <text x="279" y="66" text-anchor="middle" font-size="9" fill="#2f5d3a">+ load one aggregate, 1 read</text> <text x="279" y="80" text-anchor="middle" font-size="9" fill="#2f5d3a">+ maps to object tree</text> <text x="279" y="100" text-anchor="middle" font-size="9" fill="#9a2417">− cross-doc joins, shared data</text> <text x="279" y="120" text-anchor="middle" font-size="8.5" fill="#6b675f">embed contiguously</text> <!-- graph --> <rect x="378" y="28" width="166" height="106" rx="9" fill="#fbfaf2" stroke="#2f5d3a"></rect> <text x="461" y="46" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">GRAPH</text> <text x="461" y="66" text-anchor="middle" font-size="9" fill="#2f5d3a">+ many-hop traversal cheap</text> <text x="461" y="80" text-anchor="middle" font-size="9" fill="#2f5d3a">+ edge is first-class</text> <text x="461" y="100" text-anchor="middle" font-size="9" fill="#9a2417">− global aggregates awkward</text> <text x="461" y="120" text-anchor="middle" font-size="8.5" fill="#6b675f">follow stored pointers</text> <text x="280" y="152" text-anchor="middle" font-size="9.5" fill="#6b675f">choose by the dominant access pattern — not by fashion</text> </g> </svg> <figcaption>
+"Friends-of-friends-of-friends" is a 3-table self-join (relational) but a 3-hop pointer walk
+        (graph) — same data, opposite cost.
+</figcaption> </figure><div class="facts"><div class="fact"><p><b>Relational</b> Rows relate <em>by value</em> (foreign key); a join assembles them at
+query time. No duplication, referential integrity, ad-hoc queries.</p></div><div class="fact"><p><b>Document</b> One self-contained JSON/BSON tree embedding related data — great
+locality, eases the object-relational impedance mismatch.</p></div><div class="fact blue"><p><b>Graph</b> Nodes + labeled directed edges; an edge is a traversable pointer
+(index-free adjacency), so a hop is O(local fan-out), not a fresh search.</p></div><div class="fact blue"><p><b>Convergence</b> Postgres <code>jsonb</code> stores an indexable document in a
+relational row — the choice is increasingly per-field.</p></div></div><div class="myth"><div class="m">✗ “Documents are modern / graphs are cool, so default to them”</div><div class="t"><p>✓ Each model is a locality bet; relational stays the safe default when access patterns
+are unknown (Codd separated logical from physical)</p></div></div><div class="rule"><p><span>🗂️ Memory rule:</span> Pick the model whose <em>cheap</em> operation is what your app
+reads and traverses most — not the trendiest one.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> How does relational relate two rows? <span class="ans">&rarr; by value — a FK matching another table's PK</span> </li><li> Why is embedding posts in a user doc fast to read? <span class="ans">&rarr; one contiguous fetch returns the whole aggregate</span> </li><li> Why is a graph good at deep traversals? <span class="ans">&rarr; each hop follows a stored edge, not a fresh index lookup</span> </li> </ul> </details></section>
 
-  /* ---- tables: borderless uppercase header variant ---- */
-  table{font-size:.84rem}
-  th,td{border:0; border-bottom:1px solid var(--line); padding:.4rem .5rem}
-  th{background:none; font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); font-weight:600}
-  td:first-child{font-weight:600}
+<section class="lvl" id="l7"><div class="lvltop"><span class="num">7</span><h2>Normalization vs denormalization — where each fact lives</h2></div><p class="tagline"><p>Store a fact once and the database protects it. Copy it for speed and you inherit the job of
+keeping every copy honest.</p></p><figure><img src="diagrams/07-normalization.png" alt="The same data, two layouts. Normalized stores each customer fact once and joins on read; denormalized embeds a copy of the customer into every order for fast reads but must fan-out updates."/><figcaption><p>Normalized: customer stored once, joined on read. Denormalized: customer copied into
+every order — single-row reads, but a change fans out.</p></figcaption></figure><figure> <svg viewBox="0 0 560 150" role="img" aria-label="The cost migrates from read time to write time as you denormalize"> <defs> <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"></path></marker> </defs> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="140" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">NORMALIZED</text> <text x="420" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">DENORMALIZED</text> <rect x="36" y="36" width="100" height="26" rx="6" fill="#fff" stroke="#1f3a5a"></rect><text x="86" y="53" text-anchor="middle" font-size="9.5">customers (1×)</text> <rect x="36" y="78" width="100" height="26" rx="6" fill="#fff" stroke="#1f3a5a"></rect><text x="86" y="95" text-anchor="middle" font-size="9.5">orders → FK</text> <line x1="86" y1="78" x2="86" y2="64" stroke="#6b675f" marker-end="url(#arw)"></line> <text x="140" y="124" text-anchor="middle" font-size="9" fill="#9a2417">read = JOIN</text> <text x="140" y="138" text-anchor="middle" font-size="9" fill="#2f5d3a">change = 1 update</text> <line x1="270" y1="10" x2="270" y2="140" stroke="#d8d4c8" stroke-dasharray="4 4"></line> <g font-size="9.5"> <rect x="316" y="36" width="208" height="22" rx="5" fill="#f1eee2" stroke="#7a1f12"></rect><text x="420" y="51" text-anchor="middle">order #1 + customer copy</text> <rect x="316" y="64" width="208" height="22" rx="5" fill="#f1eee2" stroke="#7a1f12"></rect><text x="420" y="79" text-anchor="middle">order #2 + customer copy</text> <rect x="316" y="92" width="208" height="22" rx="5" fill="#f1eee2" stroke="#7a1f12"></rect><text x="420" y="107" text-anchor="middle">order #3 + customer copy</text> </g> <text x="420" y="130" text-anchor="middle" font-size="9" fill="#2f5d3a">read = single row</text> <text x="420" y="143" text-anchor="middle" font-size="9" fill="#9a2417">change = fan-out update (the update anomaly)</text> </g> </svg> <figcaption>
+Denormalization doesn't remove the consistency problem — it moves it into your application
+        and transactions (or a materialized view).
+</figcaption> </figure><table><tr><th></th><th>Normalized</th><th>Denormalized</th></tr><tr><td>Each fact</td><td>stored once</td><td>stored many times</td></tr><tr><td>Read “order + customer”</td><td>join</td><td>single row</td></tr><tr><td>Address change</td><td>one update</td><td>fan-out update</td></tr><tr><td>Owns consistency</td><td>the database</td><td>you (or a materialized view)</td></tr></table><div class="facts"><div class="fact"><p><b>Normalization</b> Each independent fact in exactly one row; everything else
+references by key. Consistency by construction (1NF→2NF→3NF).</p></div><div class="fact"><p><b>Denormalization</b> Deliberately copy a fact into the rows that read it — join-free
+reads, paid for with fan-out write sync.</p></div><div class="fact blue"><p><b>Schema-on-write</b> Relational: columns/types/constraints validated on the way in.</p></div><div class="fact blue"><p><b>Schema-on-read</b> Document/lake: bytes written as-is, structure interpreted by the
+reading code — the schema just lives in that code.</p></div></div><div class="myth"><div class="m">✗ “Schema-on-read means schemaless”</div><div class="t"><p>✓ The schema still exists — it’s implicit in the reader and can silently drift between
+versions</p></div></div><div class="rule"><p><span>📐 Memory rule:</span> Start normalized (correct by construction); denormalize 
+<em>specifically</em>, against a measured read pattern, knowing exactly which invariant you
+just took ownership of.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> What does normalization eliminate? <span class="ans">&rarr; redundant copies of a fact that drift out of sync</span> </li><li> Copy <code>customer_name</code> into orders — which invariant do you now own? <span class="ans">&rarr; every copy must update when the customer changes</span> </li><li> What decides normalize vs denormalize? <span class="ans">&rarr; read/write ratio, access pattern, consistency tolerance</span> </li> </ul> </details></section>
 
-  /* ---- cheat panel (recolored with tokens; readable in both themes) ---- */
-  .cheat{background:var(--chip); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:1.1rem 1.2rem; margin:1.2rem 0; font-size:.88rem}
-  .cheat h3{color:var(--accent); margin:1rem 0 .3rem; font-size:.8rem; letter-spacing:.06em; text-transform:uppercase}
-  .cheat a{color:var(--accent)} .cheat th{color:var(--muted)} .cheat td,.cheat th{border-color:var(--line)} .cheat code{background:var(--card); color:var(--ink)}
+<section class="lvl" id="l8"><div class="lvltop"><span class="num">8</span><h2>Encoding &amp; evolution — bytes that outlive their writer</h2></div><p class="tagline"><p>An in-memory object is a graph of pointers meaningful only in one process. To store or send
+it, you flatten it — and then change its shape for years without breaking old readers.</p></p><figure><img src="diagrams/08-schema-evolution.png" alt="Both old and new code keep working across a schema change when the rules are followed. A v2 schema adds an optional field; the two crossing arrows show each version reading the other's data and succeeding."/><figcaption><p>The two crossing arrows: backward (new code reads old data) and forward (old code reads
+new data) compatibility — what makes rolling deploys safe.</p><sup><a href="#s5" id="r5"><p>5</p></a></sup></figcaption></figure><figure> <svg viewBox="0 0 560 150" role="img" aria-label="The compatibility rules: optional new fields, stable tag numbers, never reuse a retired tag"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="280" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7a1f12">the rules that preserve both directions</text> <g font-size="9.5"> <rect x="20" y="32" width="250" height="26" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="30" y="49" fill="#244a2e">new field optional / default → backward OK</text> <rect x="20" y="64" width="250" height="26" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="30" y="81" fill="#244a2e">unknown tag is skipped → forward OK</text> <rect x="20" y="96" width="250" height="26" rx="6" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="30" y="113" fill="#244a2e">identify by stable tag #, rename freely</text> </g> <rect x="300" y="44" width="246" height="64" rx="8" fill="#f7ecea" stroke="#9a2417"></rect> <text x="423" y="66" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7a2218">the one fatal rule</text> <text x="423" y="84" text-anchor="middle" font-size="9.5" fill="#7a2218">never reuse a retired tag #</text> <text x="423" y="100" text-anchor="middle" font-size="9" fill="#6b675f">→ old code silently misreads the new field</text> <text x="280" y="140" text-anchor="middle" font-size="9" fill="#6b675f">proto3 dropped <tspan font-family="ui-monospace">required</tspan> entirely — it's a forward-compat
+                landmine</text> </g> </svg> <figcaption>
+Protobuf/Thrift identify fields by integer tag; Avro carries no per-field id and resolves
+        writer-vs-reader schemas by name.
+</figcaption> </figure><table><tr><th></th><th>Field names in bytes</th><th>Size</th><th>Needs schema to read</th></tr><tr><td>JSON / XML</td><td>yes, every record</td><td>larger</td><td>no</td></tr><tr><td>Protobuf / Thrift</td><td>no — tag numbers</td><td>smaller</td><td>yes</td></tr><tr><td>Avro</td><td>no identifiers at all</td><td>smallest</td><td>yes (writer + reader)</td></tr></table><div class="facts"><div class="fact"><p><b>Encoding</b> Flatten a pointer-laced object graph into a self-contained byte
+sequence; decoding rebuilds it in a possibly different process, months later.</p></div><div class="fact"><p><b>Text vs binary</b> JSON ships field names + decimal text (readable, schema-free).
+Protobuf/Avro ship tagged values (compact, fast, need a schema).</p></div><div class="fact blue"><p><b>Backward compat</b> Newer code reads older data — new fields are absent, filled by
+default.</p></div><div class="fact blue"><p><b>Forward compat</b> Older code reads newer data — it skips the unknown tag and parses
+the rest. This is why rolling deploys are safe.</p></div></div><div class="myth"><div class="m">✗ “A new required field is fine if the schema declares it”</div><div class="t"><p>✓ The moment one producer omits it, every old consumer breaks — proto3 removed 
+<code>required</code> for exactly this</p></div></div><div class="rule"><p><span>🔁 Memory rule:</span> Encoding choices at write time constrain every reader for the
+data’s lifetime — which far outlives any one service version. Keep both directions
+compatible.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> Why can't you dump raw in-memory bytes to disk? <span class="ans">&rarr; pointers are addresses valid only in the writer's process</span> </li><li> Why does old code survive a message from new code? <span class="ans">&rarr; it skips the unknown tagged field</span> </li><li> Which rule silently corrupts reads if broken? <span class="ans">&rarr; reusing a retired tag number</span> </li> </ul> </details></section>
 
-  /* ---- bottom nav row ---- */
-  .nav{display:flex; justify-content:space-between; gap:1rem; margin-top:2rem; padding-top:1rem; border-top:1px solid var(--line); font-size:.84rem}
+<section class="lvl" id="l9"><div class="lvltop"><span class="num">9</span><h2>Row vs column — match the layout to the workload</h2></div><p class="tagline"><p>The capstone. OLTP wants whole rows by key; OLAP scans millions of rows but a handful of
+columns. The bytes reorganize entirely.</p></p><figure><img src="diagrams/09-row-vs-column.png" alt="The same six-column table stored row-wise versus column-wise. Row storage: each row is a contiguous run of all six cells; a scan of one column must touch every block. Column storage: six separate column blocks, so an analytic query reads only the two it names."/><figcaption><p>Row store: all of a row’s cells adjacent — perfect for “fetch order #4821”. Column
+store: all values of one column adjacent — scan reads only the columns named.</p><sup><a href="#s7" id="r7"><p>7</p></a></sup></figcaption></figure><figure> <svg viewBox="0 0 560 150" role="img" aria-label="OLTP point lookup on a row store versus OLAP scan on a column store"> <g font-family="ui-sans-serif,system-ui,sans-serif"> <text x="140" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">OLTP → ROW store</text> <text x="420" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">OLAP → COLUMN store</text> <rect x="40" y="34" width="200" height="26" rx="5" fill="#f1eee2" stroke="#1f3a5a"></rect><text x="140" y="51" text-anchor="middle" font-size="9.5">[id|region|status|ts|qty|amount]</text> <text x="140" y="80" text-anchor="middle" font-size="9" fill="#2f5d3a">1 seek → whole record</text> <text x="140" y="96" text-anchor="middle" font-size="9" fill="#9a2417">but a column scan drags every column</text> <line x1="280" y1="10" x2="280" y2="140" stroke="#d8d4c8" stroke-dasharray="4 4"></line> <g font-size="8.5"> <rect x="316" y="32" width="34" height="74" rx="4" fill="#fff" stroke="#d8d4c8"></rect><text x="333" y="72" text-anchor="middle" transform="rotate(-90 333 72)">id</text> <rect x="354" y="32" width="34" height="74" rx="4" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="371" y="72" text-anchor="middle" transform="rotate(-90 371 72)" fill="#244a2e">region</text> <rect x="392" y="32" width="34" height="74" rx="4" fill="#fff" stroke="#d8d4c8"></rect><text x="409" y="72" text-anchor="middle" transform="rotate(-90 409 72)">status</text> <rect x="430" y="32" width="34" height="74" rx="4" fill="#fff" stroke="#d8d4c8"></rect><text x="447" y="72" text-anchor="middle" transform="rotate(-90 447 72)">ts</text> <rect x="468" y="32" width="34" height="74" rx="4" fill="#fff" stroke="#d8d4c8"></rect><text x="485" y="72" text-anchor="middle" transform="rotate(-90 485 72)">qty</text> <rect x="506" y="32" width="34" height="74" rx="4" fill="#eef5ee" stroke="#2f5d3a"></rect><text x="523" y="72" text-anchor="middle" transform="rotate(-90 523 72)" fill="#244a2e">amount</text> </g> <text x="428" y="124" text-anchor="middle" font-size="9" fill="#2f5d3a">SUM(amount) BY region → read 2 blocks, skip 4</text> <text x="428" y="140" text-anchor="middle" font-size="9" fill="#6b675f">same-domain values compress hard (RLE, dictionary)</text> </g> </svg> <figcaption>
+Two compounding wins for columnar: read only the columns named, and compress same-domain
+        runs hard. The <em>i</em>-th value in every column file is the same row.
+</figcaption> </figure><table><tr><th></th><th>OLTP</th><th>OLAP</th></tr><tr><td>Read pattern</td><td>few rows, by key</td><td>millions of rows, scan</td></tr><tr><td>Columns touched</td><td>all (whole record)</td><td>2–5 of many</td></tr><tr><td>Write pattern</td><td>random inserts/updates</td><td>bulk load / append</td></tr><tr><td>Bottleneck</td><td>seek latency</td><td>scan bandwidth</td></tr><tr><td>Layout</td><td>row store (B-tree / LSM)</td><td>column store (Parquet, Vertica)</td></tr></table><div class="facts"><div class="fact"><p><b>Row store</b> All of a row’s values adjacent. The unit you store together is the unit
+you retrieve together — ideal OLTP locality.</p></div><div class="fact"><p><b>Column store</b> All values of one column adjacent in its own block; a scan reads
+only the columns it names, bounded by columns-touched not table-width.</p></div><div class="fact blue"><p><b>Compression</b> A column is one type from one domain → run-length / dictionary /
+bitmap encoding compress far harder than a heterogeneous row.</p></div><div class="fact blue"><p><b>Star schema</b> Warehouses ETL into a column store: a narrow central fact table (one
+row per event) + small dimension tables radiating out.</p></div></div><div class="myth"><div class="m">✗ “There’s one best storage engine”</div><div class="t"><p>✓ Only an engine that fits an access pattern — the same logical table can (and at scale
+should) live in both a row and a column store</p></div></div><div class="rule"><p><span>🏛️ Memory rule:</span> Match the storage layout to the workload — many small key reads
+→ row; few wide scans → column. The senior skill is reading the workload, not memorizing
+engines.</p></div><details class="mc"> <summary>Memory check</summary> <ul> <li> What distinguishes OLAP from OLTP? <span class="ans">&rarr; scans many rows but reads few columns</span> </li><li> Two reasons columnar scans are fast? <span class="ans">&rarr; read only needed columns + compress same-domain values</span> </li><li> What does a star-schema fact table hold? <span class="ans">&rarr; one row per event, FKs out to dimension tables</span> </li> </ul> </details></section>
 
-  @media (max-width:560px){.facts,.myth,.toc{grid-template-columns:1fr}}
-</style>
-<script type="application/ld+json">
-{
- "@context": "https://schema.org",
- "@type": "FAQPage",
- "mainEntity": [
-  {
-   "@type": "Question",
-   "name": "Walk me through what a storage engine does to turn \"find me row 42\" into disk I/O.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: the engine consults an index to convert a scan into a seek -> the mechanism depends on the engine: a B-tree walk root->leaf, a hash-map lookup to a byte offset, or memtable-then-SSTables for an LSM -> without an index a read is a linear scan whose cost grows with data size -> the unit of I/O is the page (~4-8 KB), not the row, so the engine reads whole pages and the index is a small structure kept off to the side -> the punchline: every index turns \"search the data\" into \"consult a structure, then seek.\""
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What is a clustered index versus a secondary index, and where does the row actually live?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: a clustered index stores the full row in the index leaf , ordered by the key - InnoDB clusters on the primary key, so the table is the PK B-tree -> a secondary index is a separate structure keyed on another column whose leaf holds only the key plus a pointer back to the row -> that pointer differs by engine: InnoDB stores the primary key (so a secondary lookup walks two B-trees, secondary->PK->clustered), Postgres uses a heap and every index holds a ctid heap pointer -> consequence: a wide PK bloats every secondary index in a clustered engine -> a secondary index is pure redundancy you build, pay for on every write, and keep in sync."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What is a composite index on (a, b) , and which queries can use it?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: it stores entries sorted lexicographically by a then b -> so it serves any left-anchored prefix : a=… and a=… AND b=… -> it does not serve b=… alone, because there is no left-anchored prefix to seek on -> rule of thumb: put the equality column first and the range column second, since a range on the leading column \"uses up\" the sort order for everything after it -> verify with EXPLAIN rather than guessing what the planner picks."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What is a write-ahead log (WAL), and why does a B-tree need one?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: a WAL is an append-only log of intent written and fsync'd before the change is applied to the data pages -> a B-tree updates pages in place, and overwriting a page is not crash-atomic - a torn write mid-update (or mid-split) can corrupt the page -> the WAL records the change first so recovery can replay it and reach a consistent state -> it also turns many random page writes into one sequential log write for durability, and engines add full-page images / doublewrite to survive torn writes -> the durability contract: a commit is acknowledged once its WAL record is on stable storage, even if the dirty page is still in memory."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "A teammate says \"LSM-trees are just faster than B-trees.\" Correct them.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: it's not \"faster,\" it's a different corner of the amplification triangle -> an LSM has low write amp now (sequential appends, work deferred into compaction) but higher read amp (a point lookup may probe many sorted runs) and space amp (stale versions and tombstones until compacted) -> a B-tree has low, predictable read amp (bounded by tree height) but random write I/O plus WAL + whole-page rewrites -> latency profile differs too: B-tree is predictable, LSM is spiky under compaction stalls -> so the answer is \"depends on the workload\": ingest-heavy -> LSM, read-heavy/tail-latency-sensitive OLTP -> B-tree."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Define read, write, and space amplification, and explain why you can't drive all three to zero.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: read amp = pages/files touched per logical read; write amp = bytes written to disk per byte of user data; space amp = disk bytes ÷ live data bytes -> they trade off against each other: a B-tree keeps read amp ≈ 1 (the leaf) but pays write amp on every in-place page rewrite + WAL; an LSM keeps write amp low by deferring it, but pays read amp (many runs) and space amp (stale versions) until compaction runs -> compaction itself converts space/read amp back into write amp - you're moving the cost, not removing it -> this is the RUM conjecture: optimize any two of read/write/space and the third suffers -> the skill is reading the workload and choosing which currency to spend."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "An InnoDB secondary-index lookup is slow. Explain the mechanics and a fix.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: InnoDB is clustered, so the secondary leaf stores the primary key , not a direct row pointer -> a secondary lookup therefore walks two B-trees: secondary index -> PK value -> clustered index to fetch the row (the \"bookmark lookup\") -> a wide PK makes this worse because it bloats every secondary index and every lookup -> fix: a covering index that includes the selected columns so the query is answered from the index alone (Index Only Scan), avoiding the second walk -> or narrow the PK -> confirm with EXPLAIN that you actually got the covering/index-only plan."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "What does the page / buffer cache do, and how does it change how you reason about read cost?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: the buffer pool / page cache holds recently-used pages in RAM, so a \"disk read\" is often actually a memory hit -> the real read cost is the miss rate, not the raw page count: a B-tree's upper levels stay cached, so a billion-row lookup is usually one uncached leaf read, not four disk reads -> an LSM's read amp also softens once hot SSTable blocks and index/Bloom-filter blocks are cached -> writes go through it too: dirty pages are buffered and flushed later, which is why durability rides on the WAL, not on the page being written -> the senior framing: amplification numbers are worst-case/cold; the working-set fit in the cache is what dominates steady-state latency -> watch the cache hit ratio, not just the plan."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "How do you choose between a B-tree (row store) and an LSM-tree for a new service, and how would you defend reversing that choice later?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: start from the access pattern and SLO, not the brand: write:read ratio, point vs range reads, p99 latency target, dataset vs RAM size, and storage budget -> map them onto the triangle - write-heavy ingest with disk to spare -> LSM (sequential writes, low write amp); read-heavy, tail-latency-sensitive OLTP -> B-tree (predictable, low read amp) -> name the second-order costs: LSM compaction stalls and tunable strategy vs B-tree random-write ceiling and page slack -> make it reversible: hide the engine behind a repository boundary, keep the data model engine-agnostic, and define the metric that would trigger a switch (e.g. compaction can't keep up -> write stalls, or p99 read latency from probing too many runs) -> the staff move is committing to a default and the measured trip-wire that says you chose wrong."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "\"Add an index, the query's slow\" — make the principal-level case for when not to add one.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: every secondary index is redundant data you maintain on every write - it taxes write throughput, write amp, and disk, and on a clustered engine it carries the PK in every entry -> so an index is a read optimization paid for by all writers, and on a write-heavy table that tax can dwarf the read it saves -> before adding one, ask: is the query hot enough and selective enough to matter? would an existing composite index serve it via a left-anchored prefix? is the planner ignoring an index that already exists (stale stats, non-sargable predicate)? -> alternatives: rewrite the predicate, a covering index instead of two, a different data layout, or denormalize against a measured read pattern -> the principal framing: indexes aren't free reads, they're a standing write liability - justify each one against the workload and measure with EXPLAIN , don't cargo-cult."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "When is a column store the right call over a row store, and what exactly are you trading?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "Hit these points: the discriminator is the access pattern: row stores keep a record's columns contiguous (great for OLTP point reads/writes of whole rows), column stores keep each column contiguous (great for OLAP scans that touch few columns over many rows) -> columnar wins because a scan reads only the columns it needs and homogeneous data compresses hard (run-length, dictionary, bit-packing), so you trade space amp for huge scan throughput -> what you give up: single-row writes and updates are expensive (a row is scattered across column segments), so column stores favor bulk/append loads, not OLTP mutation -> the synthesis: don't pick one - run OLTP on a row store and ETL into a columnar warehouse on a star schema, refreshed so analytics scans don't starve user I/O -> justify each side by its access pattern and the amplification it spends."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design the storage for a product with live order pages AND an analytics dashboard.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "A strong answer covers: two access patterns, two layouts - don't force one engine to do both -> OLTP path: a row store (B-tree/InnoDB, or LSM if ingest-heavy), normalized, indexed on the actual query predicates, with covering indexes for the hot read paths and a sensibly narrow clustered key -> OLAP path: ETL/CDC the data into a column store / warehouse on a star schema (narrow fact table + dimension tables), refreshed periodically so heavy scans run on isolated resources -> justify each choice by its access pattern and the amplification it spends (row store pays write amp for predictable reads; column store trades single-row write cost for compressed, fast scans) -> keep them decoupled so a dashboard query can't starve order-page I/O -> name the freshness trade-off: live OLTP vs periodically-refreshed analytics, and how stale the dashboard is allowed to be."
-   }
-  },
-  {
-   "@type": "Question",
-   "name": "Design the storage engine + indexing for a write-heavy event-ingest service that also needs fast recent-event reads.",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "A strong answer covers: start from the workload - very high sustained write rate, mostly append, reads skewed to recent data -> that points at an LSM-tree: turn every write into a sequential append (WAL + memtable), flush immutable SSTables, defer cleanup to compaction - low write amp is exactly what an ingest firehose needs -> protect read latency with Bloom filters (skip SSTables that definitely lack a key) and a partitioning/clustering key on time so recent events sit in the freshest, smallest runs -> choose compaction by sub-pattern: size-tiered for the raw write-heavy table (cheap writes, accept space + read amp), or time-windowed if events carry TTLs so whole old buckets drop at once -> size the buffer cache to the recent working set so hot reads stay in RAM -> durability via WAL fsync policy and replication -> the trip-wire to monitor: write stalls when L0/pending-compaction crosses the back-pressure trigger - sustainable write rate is bounded by compaction throughput, so the fix is more compaction I/O or a cheaper-write strategy, never \"write faster\" -> name the trade-off: LSM buys ingest throughput by paying read + space amp on cold data, which is acceptable because reads target recent (hot) events."
-   }
-  }
- ]
-}
-</script>
-<script src="../assets/analytics.js" defer></script>
-</head>
-<body>
-<a class="skip-link" href="#main">Skip to content</a>
-<!-- shared arrowheads -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <marker id="arw" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b675f"/></marker>
-  <marker id="arwA" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7a1f12"/></marker>
-  <marker id="arwG" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f5d3a"/></marker>
-</defs></svg>
+<h2 class="sec" id="usecases"><p>Where each layer shows up — real engines</p></h2>
+<p><p>Grounding for your judgment: the concept, a concrete engine that embodies it, and the 
+<em>shape</em> the trade-off usually takes.</p></p>
+<table><tr><th>Concept</th><th>Real engine / feature</th><th>The trade-off it makes</th></tr><tr><td>Log + hash index</td><td>Bitcask (Riak)</td><td>blazing reads, keyset must fit RAM</td></tr><tr><td>B-tree</td><td>PostgreSQL btree · InnoDB clustered PK</td><td>low read amp, random write I/O</td></tr><tr><td>LSM-tree</td><td>RocksDB · Cassandra · ScyllaDB</td><td>cheap sequential writes, read &amp; compaction cost</td></tr><tr><td>Amplification knob</td><td>RocksDB leveled vs universal compaction</td><td>trade write amp against space amp explicitly</td></tr><tr><td>Clustered vs heap</td><td>InnoDB (PK leaf = row) vs Postgres (heap + ctid)</td><td>two-tree secondary vs heap pointer chase</td></tr><tr><td>Document model</td><td>MongoDB (16 MB doc cap forces subset pattern)</td><td>locality vs unbounded-array bloat</td></tr><tr><td>Materialized view</td><td><p>Postgres <code>MATERIALIZED VIEW</code> (manual refresh)</p></td><td>denormalized read speed vs staleness</td></tr><tr><td>Encoding / evolution</td><td>Protocol Buffers · Avro · Parquet footer</td><td>compactness vs human-readability + compat rules</td></tr><tr><td>Column store</td><td>Vertica (C-Store) · Parquet (Dremel) · Citus columnar</td><td>fast analytic scans, expensive single-row writes</td></tr></table>
+<p class="tagline"><p>Pattern to notice: most “B-tree vs LSM” debates are really <strong>amplification</strong> 
+debates, and most engines now ship both modes (MyRocks, WiredTiger). Reason about the 
+<em>axes</em>, not the data-structure name.</p><sup><a href="#s1" id="r1d"><p>1</p></a></sup></p>
 
-<div class="wrap">
-  <nav id="hubbar">
-    <a href="../index.html">&#8592; Engineering Vault</a>
-    <span class="pn"><span style="color:var(--muted);opacity:.45">&#8249; Prev</span><a href="lsm-compaction-deep-dive.html" title="LSM Compaction — Deep Dive">Next &#8250;</a></span>
-    <span style="display:flex;align-items:center;gap:.6rem"><button class="themebtn" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark / light">&#127763;</button><span style="color:var(--muted)">Storage Engines · Fundamentals</span></span>
-  </nav>
-<main id="main" tabindex="-1">
-  <div class="kicker">Book 3 · The layer below your queries · visual edition</div>
-  <h1>Storage Engines from first principles</h1>
-  <p class="meta">~40 min · 9 levels · real engines + interview questions · interactive recall · grounded in DDIA ch.2–4</p>
-  <div class="ltags"><span class="lt">Storage engines</span><span class="lt">B-trees</span><span class="lt">LSM-trees</span><span class="lt">B-tree</span><span class="lt">Write amplification</span></div>
+<h2 class="sec" id="quiz"><p>Retrieval practice — mix the levels</p></h2>
+<p><p>Reading builds <em>fluency</em> (feels familiar). Recall builds <em>storage</em> (lasts). Answer
+from memory — instant feedback.</p></p>
+<div class="quiz" id="quiz1"> <div class="qitem" data-correct="1"> <p class="q"> <span class="qn">Q1.</span> What does a Bitcask-style hash index actually map? </p> <button class="opt">Each value to a checksum verified on every read</button><button class="opt">Each key to the byte offset of its most recent record</button><button class="opt">Each segment file to the key range it contains</button><button class="opt">Each key to the number of times it has been written</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="2"> <p class="q"> <span class="qn">Q2.</span> Why does a B-tree need a write-ahead log? </p> <button class="opt">So replicas can stay in sync by replaying the log</button><button class="opt">So the log keeps the leaf pages sorted by key</button><button class="opt">Because overwriting a page in place isn&#39;t crash-atomic</button><button class="opt">Because reads and writes would otherwise share a lock</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="0"> <p class="q"> <span class="qn">Q3.</span> A read returns &quot;not found&quot;, yet older SSTables hold a value. Why? </p> <button class="opt">A newer tombstone shadows the older values until compaction</button><button class="opt">The Bloom filter produced a false negative and skipped it</button><button class="opt">The memtable flushed before the key reached disk</button><button class="opt">Compaction corrupted that key&#39;s index entry</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="3"> <p class="q"> <span class="qn">Q4.</span> Which query can an index on (account_id, created_at) NOT serve efficiently? </p> <button class="opt">WHERE account_id = 42 AND created_at &gt; X</button><button class="opt">WHERE account_id = 42 ORDER BY created_at</button><button class="opt">WHERE account_id IN (42, 43) AND created_at &lt; X</button><button class="opt">WHERE created_at &gt; X ORDER BY created_at</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="2"> <p class="q"> <span class="qn">Q5.</span> You copy customer_name into every order row. Which invariant do you now own? </p> <button class="opt">Every order&#39;s foreign key must reference a valid customer</button><button class="opt">Every order row must validate against a declared schema</button><button class="opt">Every copy of the name must update when the customer changes</button><button class="opt">Every read must follow a pointer from order to customer</button> <p class="fb" role="status" aria-live="polite"></p> </div><div class="qitem" data-correct="0"> <p class="q"> <span class="qn">Q6.</span> Why does column-oriented storage make analytic scans faster? </p> <button class="opt">It reads only the needed columns and compresses them well</button><button class="opt">It keeps every whole row inside one disk page</button><button class="opt">It avoids building any secondary indexes at all</button><button class="opt">It stores newer column values ahead of older ones</button> <p class="fb" role="status" aria-live="polite"></p> </div> </div>
+<h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem"><p>Reconstruct the engine from a blank page</p></h3>
+<p class="rehearse">Write the nine levels in order, one line each, with nothing on screen. Then reveal and compare — gaps are your next drill.</p> <div class="rehearse"> <textarea placeholder="1. Log + hash index = …  2. B-tree = …  3. LSM = …  (keep going to 9, from memory)"></textarea><br> <button class="btn ghost" data-reveal>Reveal model answer</button> <div class="model"><p><p><b>1</b> Log + hash index: append data, map key→offset · <b>2</b> B-tree: sorted pages,
+update in place, WAL · <b>3</b> LSM: memtable→SSTable→compaction, tombstones, Bloom · 
+<b>4</b> Amplification: read/write/space triangle, pick a corner · <b>5</b> Indexes:
+clustered vs heap, composite prefix, covering, write tax · <b>6</b> Data models:
+relational/document/graph by access pattern · <b>7</b> Normalize vs denormalize: where each
+fact lives · <b>8</b> Encoding: flatten objects; backward + forward compat · <b>9</b> Row vs
+column: match layout to OLTP vs OLAP.</p></p></div> </div>
+<div class="ask"><p><strong>I’m your teacher — ask me anything.</strong> Say <em>“grill me on storage engines”</em> 
+for mixed no-clue questions, or drop a real workload and I’ll place it on the read↔write
+amplification and row↔column axes with you. Want a worked <code>EXPLAIN</code> walkthrough or
+the next book (Streaming &amp; Event-Driven)? Just ask.</p></div>
 
-  <div class="mission">
-    <strong>Your bar:</strong> redraw — from memory — how a database puts bytes on disk and finds them again, so you can
-    choose engines, indexes, and data models with judgment instead of cargo-culting. Every level is built to be
-    <em>seen and redrawn</em>. Grounded in Kleppmann's <em>Designing Data-Intensive Applications</em><sup><a href="#s1" id="r1">1</a></sup> and the primary papers behind each engine.
-  </div>
+<h2 class="sec" id="interview"><p>Interview — pick your bar</p></h2>
+<p class="tagline"><p>Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp;
+failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System Design</b> = open
+design round (a different axis, not a harder level).</p></p>
+<div data-interview> <details class="iq" data-level="core"> <summary>Walk me through what a storage engine does to turn "find me row 42" into disk I/O.</summary> <div class="a"><b>Hit these points:</b> the engine consults an <em>index</em> to convert a scan into a seek &rarr; the mechanism depends on the engine: a B-tree walk root&rarr;leaf, a hash-map lookup to a byte offset, or memtable-then-SSTables for an LSM &rarr; without an index a read is a linear scan whose cost grows with data size &rarr; the unit of I/O is the <em>page</em> (~4&ndash;8 KB), not the row, so the engine reads whole pages and the index is a small structure kept off to the side &rarr; the punchline: every index turns "search the data" into "consult a structure, then seek."</div> </details> <details class="iq" data-level="core"> <summary>What is a clustered index versus a secondary index, and where does the row actually live?</summary> <div class="a"><b>Hit these points:</b> a <b>clustered</b> index stores the full row <em>in the index leaf</em>, ordered by the key &mdash; InnoDB clusters on the primary key, so the table <em>is</em> the PK B-tree &rarr; a <b>secondary</b> index is a separate structure keyed on another column whose leaf holds only the key plus a pointer back to the row &rarr; that pointer differs by engine: InnoDB stores the <em>primary key</em> (so a secondary lookup walks two B-trees, secondary&rarr;PK&rarr;clustered), Postgres uses a heap and every index holds a <code>ctid</code> heap pointer &rarr; consequence: a wide PK bloats every secondary index in a clustered engine &rarr; a secondary index is pure redundancy you build, pay for on every write, and keep in sync.</div> </details> <details class="iq" data-level="core"> <summary>What is a composite index on <code>(a, b)</code>, and which queries can use it?</summary> <div class="a"><b>Hit these points:</b> it stores entries sorted lexicographically by <code>a</code> then <code>b</code> &rarr; so it serves any <em>left-anchored prefix</em>: <code>a=…</code> and <code>a=… AND b=…</code> &rarr; it does <em>not</em> serve <code>b=…</code> alone, because there is no left-anchored prefix to seek on &rarr; rule of thumb: put the equality column first and the range column second, since a range on the leading column "uses up" the sort order for everything after it &rarr; verify with <code>EXPLAIN</code> rather than guessing what the planner picks.</div> </details> <details class="iq" data-level="core"> <summary>What is a write-ahead log (WAL), and why does a B-tree need one?</summary> <div class="a"><b>Hit these points:</b> a WAL is an append-only log of <em>intent</em> written and fsync'd <em>before</em> the change is applied to the data pages &rarr; a B-tree updates pages in place, and overwriting a page is not crash-atomic &mdash; a torn write mid-update (or mid-split) can corrupt the page &rarr; the WAL records the change first so recovery can replay it and reach a consistent state &rarr; it also turns many random page writes into one sequential log write for durability, and engines add full-page images / doublewrite to survive torn writes &rarr; the durability contract: a commit is acknowledged once its WAL record is on stable storage, even if the dirty page is still in memory.</div> </details> <details class="iq" data-level="senior"> <summary>A teammate says "LSM-trees are just faster than B-trees." Correct them.</summary> <div class="a"><b>Hit these points:</b> it's not "faster," it's a different corner of the amplification triangle &rarr; an LSM has <em>low write amp now</em> (sequential appends, work deferred into compaction) but higher read amp (a point lookup may probe many sorted runs) and space amp (stale versions and tombstones until compacted) &rarr; a B-tree has low, predictable read amp (bounded by tree height) but random write I/O plus WAL + whole-page rewrites &rarr; latency profile differs too: B-tree is predictable, LSM is spiky under compaction stalls &rarr; so the answer is "depends on the workload": ingest-heavy &rarr; LSM, read-heavy/tail-latency-sensitive OLTP &rarr; B-tree.</div> </details> <details class="iq" data-level="senior"> <summary>Define read, write, and space amplification, and explain why you can't drive all three to zero.</summary> <div class="a"><b>Hit these points:</b> <b>read amp</b> = pages/files touched per logical read; <b>write amp</b> = bytes written to disk per byte of user data; <b>space amp</b> = disk bytes ÷ live data bytes &rarr; they trade off against each other: a B-tree keeps read amp ≈ 1 (the leaf) but pays write amp on every in-place page rewrite + WAL; an LSM keeps write amp low by deferring it, but pays read amp (many runs) and space amp (stale versions) until compaction runs &rarr; compaction itself converts space/read amp back into write amp &mdash; you're moving the cost, not removing it &rarr; this is the RUM conjecture: optimize any two of read/write/space and the third suffers &rarr; the skill is reading the workload and choosing which currency to spend.</div> </details> <details class="iq" data-level="senior"> <summary>An InnoDB secondary-index lookup is slow. Explain the mechanics and a fix.</summary> <div class="a"><b>Hit these points:</b> InnoDB is clustered, so the secondary leaf stores the <em>primary key</em>, not a direct row pointer &rarr; a secondary lookup therefore walks two B-trees: secondary index &rarr; PK value &rarr; clustered index to fetch the row (the "bookmark lookup") &rarr; a wide PK makes this worse because it bloats every secondary index and every lookup &rarr; fix: a <em>covering</em> index that includes the selected columns so the query is answered from the index alone (Index Only Scan), avoiding the second walk &rarr; or narrow the PK &rarr; confirm with <code>EXPLAIN</code> that you actually got the covering/index-only plan.</div> </details> <details class="iq" data-level="senior"> <summary>What does the page / buffer cache do, and how does it change how you reason about read cost?</summary> <div class="a"><b>Hit these points:</b> the buffer pool / page cache holds recently-used pages in RAM, so a "disk read" is often actually a memory hit &rarr; the real read cost is the <em>miss</em> rate, not the raw page count: a B-tree's upper levels stay cached, so a billion-row lookup is usually one uncached leaf read, not four disk reads &rarr; an LSM's read amp also softens once hot SSTable blocks and index/Bloom-filter blocks are cached &rarr; writes go through it too: dirty pages are buffered and flushed later, which is why durability rides on the WAL, not on the page being written &rarr; the senior framing: amplification numbers are worst-case/cold; the working-set fit in the cache is what dominates steady-state latency &rarr; watch the cache hit ratio, not just the plan.</div> </details> <details class="iq" data-level="staff"> <summary>How do you choose between a B-tree (row store) and an LSM-tree for a new service, and how would you defend reversing that choice later?</summary> <div class="a"><b>Hit these points:</b> start from the access pattern and SLO, not the brand: write:read ratio, point vs range reads, p99 latency target, dataset vs RAM size, and storage budget &rarr; map them onto the triangle &mdash; write-heavy ingest with disk to spare &rarr; LSM (sequential writes, low write amp); read-heavy, tail-latency-sensitive OLTP &rarr; B-tree (predictable, low read amp) &rarr; name the second-order costs: LSM compaction stalls and tunable strategy vs B-tree random-write ceiling and page slack &rarr; make it reversible: hide the engine behind a repository boundary, keep the data model engine-agnostic, and define the metric that would trigger a switch (e.g. compaction can't keep up &rarr; write stalls, or p99 read latency from probing too many runs) &rarr; the staff move is committing to a default <em>and</em> the measured trip-wire that says you chose wrong.</div> </details> <details class="iq" data-level="staff"> <summary>"Add an index, the query's slow" — make the principal-level case for when <em>not</em> to add one.</summary> <div class="a"><b>Hit these points:</b> every secondary index is redundant data you maintain on <em>every</em> write &mdash; it taxes write throughput, write amp, and disk, and on a clustered engine it carries the PK in every entry &rarr; so an index is a read optimization paid for by all writers, and on a write-heavy table that tax can dwarf the read it saves &rarr; before adding one, ask: is the query hot enough and selective enough to matter? would an existing composite index serve it via a left-anchored prefix? is the planner ignoring an index that already exists (stale stats, non-sargable predicate)? &rarr; alternatives: rewrite the predicate, a covering index instead of two, a different data layout, or denormalize against a measured read pattern &rarr; the principal framing: indexes aren't free reads, they're a standing write liability &mdash; justify each one against the workload and measure with <code>EXPLAIN</code>, don't cargo-cult.</div> </details> <details class="iq" data-level="staff"> <summary>When is a column store the right call over a row store, and what exactly are you trading?</summary> <div class="a"><b>Hit these points:</b> the discriminator is the access pattern: row stores keep a record's columns contiguous (great for OLTP point reads/writes of whole rows), column stores keep each column contiguous (great for OLAP scans that touch few columns over many rows) &rarr; columnar wins because a scan reads only the columns it needs and homogeneous data compresses hard (run-length, dictionary, bit-packing), so you trade space amp for huge scan throughput &rarr; what you give up: single-row writes and updates are expensive (a row is scattered across column segments), so column stores favor bulk/append loads, not OLTP mutation &rarr; the synthesis: don't pick one &mdash; run OLTP on a row store and ETL into a columnar warehouse on a star schema, refreshed so analytics scans don't starve user I/O &rarr; justify each side by its access pattern and the amplification it spends.</div> </details> <div class="designrubric" data-level="design"> <b>Design-round framework</b> — drive any storage-engine prompt through these, out loud: <ol> <li>Clarify the workload: write:read ratio, point vs range reads, p99 latency target, durability/consistency needs.</li><li>Size it: dataset vs RAM, growth rate, storage budget — does the working set fit the buffer cache?</li><li>Pick the engine corner: B-tree/row for read-heavy OLTP, LSM for write-heavy ingest, column store for analytics scans.</li><li>Index the real predicates: clustered key choice, covering/composite indexes, and the write tax each adds.</li><li>Durability path: WAL/fsync policy, crash recovery, replication.</li><li>Separate OLTP from OLAP: row store + ETL into a columnar warehouse so heavy scans don't starve user I/O.</li><li>Observability &amp; trip-wires: cache hit ratio, p99 read, write/space amp — and the metric that says you chose wrong.</li> </ol> </div><details class="iq" data-level="design"> <summary>Design the storage for a product with live order pages AND an analytics dashboard.</summary> <div class="a"><b>A strong answer covers:</b> two access patterns, two layouts &mdash; don't force one engine to do both &rarr; OLTP path: a row store (B-tree/InnoDB, or LSM if ingest-heavy), normalized, indexed on the actual query predicates, with covering indexes for the hot read paths and a sensibly narrow clustered key &rarr; OLAP path: ETL/CDC the data into a column store / warehouse on a star schema (narrow fact table + dimension tables), refreshed periodically so heavy scans run on isolated resources &rarr; justify each choice by its access pattern and the amplification it spends (row store pays write amp for predictable reads; column store trades single-row write cost for compressed, fast scans) &rarr; keep them decoupled so a dashboard query can't starve order-page I/O &rarr; name the freshness trade-off: live OLTP vs periodically-refreshed analytics, and how stale the dashboard is allowed to be.</div> </details> <details class="iq" data-level="design"> <summary>Design the storage engine + indexing for a write-heavy event-ingest service that also needs fast recent-event reads.</summary> <div class="a"><b>A strong answer covers:</b> start from the workload &mdash; very high sustained write rate, mostly append, reads skewed to recent data &rarr; that points at an LSM-tree: turn every write into a sequential append (WAL + memtable), flush immutable SSTables, defer cleanup to compaction &mdash; low write amp is exactly what an ingest firehose needs &rarr; protect read latency with Bloom filters (skip SSTables that definitely lack a key) and a partitioning/clustering key on time so recent events sit in the freshest, smallest runs &rarr; choose compaction by sub-pattern: size-tiered for the raw write-heavy table (cheap writes, accept space + read amp), or time-windowed if events carry TTLs so whole old buckets drop at once &rarr; size the buffer cache to the recent working set so hot reads stay in RAM &rarr; durability via WAL fsync policy and replication &rarr; the trip-wire to monitor: write stalls when L0/pending-compaction crosses the back-pressure trigger &mdash; sustainable write rate is bounded by compaction throughput, so the fix is more compaction I/O or a cheaper-write strategy, never "write faster" &rarr; name the trade-off: LSM buys ingest throughput by paying read + space amp on cold data, which is acceptable because reads target recent (hot) events.</div> </details>  </div> <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Walk me through what a storage engine does to turn \"find me row 42\" into disk I/O.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: the engine consults an index to convert a scan into a seek → the mechanism depends on the engine: a B-tree walk root→leaf, a hash-map lookup to a byte offset, or memtable-then-SSTables for an LSM → without an index a read is a linear scan whose cost grows with data size → the unit of I/O is the page (~4&ndash;8 KB), not the row, so the engine reads whole pages and the index is a small structure kept off to the side → the punchline: every index turns \"search the data\" into \"consult a structure, then seek.\""}},{"@type":"Question","name":"What is a clustered index versus a secondary index, and where does the row actually live?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: a clustered index stores the full row in the index leaf, ordered by the key &mdash; InnoDB clusters on the primary key, so the table is the PK B-tree → a secondary index is a separate structure keyed on another column whose leaf holds only the key plus a pointer back to the row → that pointer differs by engine: InnoDB stores the primary key (so a secondary lookup walks two B-trees, secondary→PK→clustered), Postgres uses a heap and every index holds a ctid heap pointer → consequence: a wide PK bloats every secondary index in a clustered engine → a secondary index is pure redundancy you build, pay for on every write, and keep in sync."}},{"@type":"Question","name":"What is a composite index on (a, b), and which queries can use it?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: it stores entries sorted lexicographically by a then b → so it serves any left-anchored prefix: a=… and a=… AND b=… → it does not serve b=… alone, because there is no left-anchored prefix to seek on → rule of thumb: put the equality column first and the range column second, since a range on the leading column \"uses up\" the sort order for everything after it → verify with EXPLAIN rather than guessing what the planner picks."}},{"@type":"Question","name":"What is a write-ahead log (WAL), and why does a B-tree need one?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: a WAL is an append-only log of intent written and fsync'd before the change is applied to the data pages → a B-tree updates pages in place, and overwriting a page is not crash-atomic &mdash; a torn write mid-update (or mid-split) can corrupt the page → the WAL records the change first so recovery can replay it and reach a consistent state → it also turns many random page writes into one sequential log write for durability, and engines add full-page images / doublewrite to survive torn writes → the durability contract: a commit is acknowledged once its WAL record is on stable storage, even if the dirty page is still in memory."}},{"@type":"Question","name":"A teammate says \"LSM-trees are just faster than B-trees.\" Correct them.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: it's not \"faster,\" it's a different corner of the amplification triangle → an LSM has low write amp now (sequential appends, work deferred into compaction) but higher read amp (a point lookup may probe many sorted runs) and space amp (stale versions and tombstones until compacted) → a B-tree has low, predictable read amp (bounded by tree height) but random write I/O plus WAL + whole-page rewrites → latency profile differs too: B-tree is predictable, LSM is spiky under compaction stalls → so the answer is \"depends on the workload\": ingest-heavy → LSM, read-heavy/tail-latency-sensitive OLTP → B-tree."}},{"@type":"Question","name":"Define read, write, and space amplification, and explain why you can't drive all three to zero.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: read amp = pages/files touched per logical read; write amp = bytes written to disk per byte of user data; space amp = disk bytes ÷ live data bytes → they trade off against each other: a B-tree keeps read amp ≈ 1 (the leaf) but pays write amp on every in-place page rewrite + WAL; an LSM keeps write amp low by deferring it, but pays read amp (many runs) and space amp (stale versions) until compaction runs → compaction itself converts space/read amp back into write amp &mdash; you're moving the cost, not removing it → this is the RUM conjecture: optimize any two of read/write/space and the third suffers → the skill is reading the workload and choosing which currency to spend."}},{"@type":"Question","name":"An InnoDB secondary-index lookup is slow. Explain the mechanics and a fix.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: InnoDB is clustered, so the secondary leaf stores the primary key, not a direct row pointer → a secondary lookup therefore walks two B-trees: secondary index → PK value → clustered index to fetch the row (the \"bookmark lookup\") → a wide PK makes this worse because it bloats every secondary index and every lookup → fix: a covering index that includes the selected columns so the query is answered from the index alone (Index Only Scan), avoiding the second walk → or narrow the PK → confirm with EXPLAIN that you actually got the covering/index-only plan."}},{"@type":"Question","name":"What does the page / buffer cache do, and how does it change how you reason about read cost?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: the buffer pool / page cache holds recently-used pages in RAM, so a \"disk read\" is often actually a memory hit → the real read cost is the miss rate, not the raw page count: a B-tree's upper levels stay cached, so a billion-row lookup is usually one uncached leaf read, not four disk reads → an LSM's read amp also softens once hot SSTable blocks and index/Bloom-filter blocks are cached → writes go through it too: dirty pages are buffered and flushed later, which is why durability rides on the WAL, not on the page being written → the senior framing: amplification numbers are worst-case/cold; the working-set fit in the cache is what dominates steady-state latency → watch the cache hit ratio, not just the plan."}},{"@type":"Question","name":"How do you choose between a B-tree (row store) and an LSM-tree for a new service, and how would you defend reversing that choice later?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: start from the access pattern and SLO, not the brand: write:read ratio, point vs range reads, p99 latency target, dataset vs RAM size, and storage budget → map them onto the triangle &mdash; write-heavy ingest with disk to spare → LSM (sequential writes, low write amp); read-heavy, tail-latency-sensitive OLTP → B-tree (predictable, low read amp) → name the second-order costs: LSM compaction stalls and tunable strategy vs B-tree random-write ceiling and page slack → make it reversible: hide the engine behind a repository boundary, keep the data model engine-agnostic, and define the metric that would trigger a switch (e.g. compaction can't keep up → write stalls, or p99 read latency from probing too many runs) → the staff move is committing to a default and the measured trip-wire that says you chose wrong."}},{"@type":"Question","name":"\"Add an index, the query's slow\" — make the principal-level case for when not to add one.","acceptedAnswer":{"@type":"Answer","text":"Hit these points: every secondary index is redundant data you maintain on every write &mdash; it taxes write throughput, write amp, and disk, and on a clustered engine it carries the PK in every entry → so an index is a read optimization paid for by all writers, and on a write-heavy table that tax can dwarf the read it saves → before adding one, ask: is the query hot enough and selective enough to matter? would an existing composite index serve it via a left-anchored prefix? is the planner ignoring an index that already exists (stale stats, non-sargable predicate)? → alternatives: rewrite the predicate, a covering index instead of two, a different data layout, or denormalize against a measured read pattern → the principal framing: indexes aren't free reads, they're a standing write liability &mdash; justify each one against the workload and measure with EXPLAIN, don't cargo-cult."}},{"@type":"Question","name":"When is a column store the right call over a row store, and what exactly are you trading?","acceptedAnswer":{"@type":"Answer","text":"Hit these points: the discriminator is the access pattern: row stores keep a record's columns contiguous (great for OLTP point reads/writes of whole rows), column stores keep each column contiguous (great for OLAP scans that touch few columns over many rows) → columnar wins because a scan reads only the columns it needs and homogeneous data compresses hard (run-length, dictionary, bit-packing), so you trade space amp for huge scan throughput → what you give up: single-row writes and updates are expensive (a row is scattered across column segments), so column stores favor bulk/append loads, not OLTP mutation → the synthesis: don't pick one &mdash; run OLTP on a row store and ETL into a columnar warehouse on a star schema, refreshed so analytics scans don't starve user I/O → justify each side by its access pattern and the amplification it spends."}},{"@type":"Question","name":"Design the storage for a product with live order pages AND an analytics dashboard.","acceptedAnswer":{"@type":"Answer","text":"A strong answer covers: two access patterns, two layouts &mdash; don't force one engine to do both → OLTP path: a row store (B-tree/InnoDB, or LSM if ingest-heavy), normalized, indexed on the actual query predicates, with covering indexes for the hot read paths and a sensibly narrow clustered key → OLAP path: ETL/CDC the data into a column store / warehouse on a star schema (narrow fact table + dimension tables), refreshed periodically so heavy scans run on isolated resources → justify each choice by its access pattern and the amplification it spends (row store pays write amp for predictable reads; column store trades single-row write cost for compressed, fast scans) → keep them decoupled so a dashboard query can't starve order-page I/O → name the freshness trade-off: live OLTP vs periodically-refreshed analytics, and how stale the dashboard is allowed to be."}},{"@type":"Question","name":"Design the storage engine + indexing for a write-heavy event-ingest service that also needs fast recent-event reads.","acceptedAnswer":{"@type":"Answer","text":"A strong answer covers: start from the workload &mdash; very high sustained write rate, mostly append, reads skewed to recent data → that points at an LSM-tree: turn every write into a sequential append (WAL + memtable), flush immutable SSTables, defer cleanup to compaction &mdash; low write amp is exactly what an ingest firehose needs → protect read latency with Bloom filters (skip SSTables that definitely lack a key) and a partitioning/clustering key on time so recent events sit in the freshest, smallest runs → choose compaction by sub-pattern: size-tiered for the raw write-heavy table (cheap writes, accept space + read amp), or time-windowed if events carry TTLs so whole old buckets drop at once → size the buffer cache to the recent working set so hot reads stay in RAM → durability via WAL fsync policy and replication → the trip-wire to monitor: write stalls when L0/pending-compaction crosses the back-pressure trigger &mdash; sustainable write rate is bounded by compaction throughput, so the fix is more compaction I/O or a cheaper-write strategy, never \"write faster\" → name the trade-off: LSM buys ingest throughput by paying read + space amp on cold data, which is acceptable because reads target recent (hot) events."}}]}</script>
 
-  <p>One tension holds the whole book. Each level just moves you along its curve:</p>
-  <div class="chips">
-    <span class="chip">A storage engine is a <b>log you write</b></span>
-    <span class="chip c2">plus an <b>index you read</b></span>
-    <span class="chip c3">trading <b>read / write / space</b></span>
-    <span class="chip c4">to fit <b>one access pattern</b></span>
-  </div>
+<h2 class="sec" id="cheat"><p>★ Cheat sheet — name → mechanism</p></h2>
+<div class="cheat"><p style="margin-top:0"><p><strong>Mental models:</strong> Log = the fast write · Index = the fast read · B-tree =
+sorted pages in place · LSM = log + merge · Amplification = the three currencies · Clustered
+= row in the PK leaf · Heap = row + pointer · Covering = answer from the index alone ·
+Normalize = fact stored once · Denormalize = fact copied · Encoding = flatten the object ·
+Column store = layout for the scan.</p></p><h3>Translation table</h3><table><tr><th>Term</th><th>What it actually is</th></tr><tr><td>Storage engine</td><td>The layer that lays bytes on disk and finds them again</td></tr><tr><td>Compaction / VACUUM</td><td>Background rewrite reclaiming stale versions &amp; tombstones</td></tr><tr><td>Write amplification</td><td>Bytes physically written per byte of user data</td></tr><tr><td>Tombstone</td><td>An appended delete marker; space returns at compaction</td></tr><tr><td>Bloom filter</td><td>Per-SSTable bit array: “definitely absent” / “probably present”</td></tr><tr><td>Covering index</td><td>Index holding every column the query reads → no row fetch</td></tr><tr><td>Schema-on-read</td><td>Structure interpreted by the reading code, not validated on write</td></tr><tr><td>Forward compatibility</td><td>Old code reads new data by skipping unknown fields</td></tr><tr><td>Star schema</td><td>Narrow fact table + small dimension tables, for column-store OLAP</td></tr></table><h3>Three rules for the architect chair</h3><p style="margin-bottom:0"><p>① There is no best engine — <strong>match the layout to the workload</strong> (read vs write
+vs scan). ② Every index is a <strong>read win bought with a write tax</strong>; index
+deliberately, measure with <code>EXPLAIN</code>. ③ Start <strong>normalized</strong>;
+denormalize against a measured read pattern, knowing which invariant you took on.</p></p></div>
 
-  <nav class="toc">
-    <a href="#l1">1 · Log + hash index</a><a href="#l2">2 · B-tree</a>
-    <a href="#l3">3 · LSM-tree</a><a href="#l4">4 · Amplification</a>
-    <a href="#l5">5 · Indexes</a><a href="#l6">6 · Data models</a>
-    <a href="#l7">7 · Normalization</a><a href="#l8">8 · Encoding</a>
-    <a href="#l9">9 · Row vs column</a><a href="#usecases">★ Real engines</a>
-    <a href="#quiz">★ Retrieval quiz</a><a href="#interview">★ Interview Qs</a>
-    <a href="#cheat">★ Cheat sheet</a><a href="#review">★ Review guides</a>
-  </nav>
+<h2 class="sec" id="review"><p>★ Review guides &amp; what to read next</p></h2>
+<div class="facts" style="grid-template-columns:1fr 1fr"><div class="fact"><p><b>5-min (weekly)</b> Don’t re-read — recall. Redraw the amplification triangle; trace a
+B-tree split and an LSM compaction from memory; recite where each index pays; translate
+three terms blind.</p></div><div class="fact"><p><b>30-min (when stalled)</b> Blank-page reconstruct all nine levels; re-derive why the log
+forces an index and the index forces the read/write tension; then place one real workload
+(which engine? which indexes? row or column?).</p></div></div>
+<p style="font-size:.9rem"><p><strong>Read next, in order:</strong> ① 
+<a href="https://dataintensive.net/">DDIA — Kleppmann</a>, ch.3 storage &amp; retrieval (Levels
+1–5, 9), then ch.2 data models (6–7) and ch.4 encoding (8) · ② 
+<a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide">RocksDB Tuning Guide</a> 
+(Levels 3–4, amplification as a live knob) · ③ 
+<a href="https://www.postgresql.org/docs/current/wal-intro.html">PostgreSQL WAL docs</a> &amp;
+“Routine Vacuuming” (Levels 2, 5) · ④ 
+<a href="https://protobuf.dev/programming-guides/proto3/">Protocol Buffers proto3 guide</a> 
+(Level 8).</p></p>
+<p style="font-size:.9rem"><p>📖 <strong>Primary source:</strong> </p><a href="https://dataintensive.net/"><p>Martin Kleppmann, <em>Designing Data-Intensive Applications</em></p></a> <p>— chapters 2–4 are the spine of this book.</p></p>
+<footer id="sources"> <strong>Sources</strong><br>  <span id="s1">1. Martin Kleppmann, <em>Designing Data-Intensive Applications</em>, ch.3 "Storage and Retrieval" — the B-tree-vs-LSM and amplification framing. <a href="#r1">↩</a></span> <br>  <span id="s2">2. Bayer &amp; McCreight, "Organization and Maintenance of Large Ordered Indices" (1972) — the original B-tree; PostgreSQL WAL / InnoDB doublewrite for torn-write safety. <a href="#r1b">↩</a></span> <br>  <span id="s3">3. O'Neil, Cheng, Gawlick &amp; O'Neil, "The Log-Structured Merge-Tree (LSM-Tree)" (1996); Bigtable (2006); LevelDB / RocksDB / Cassandra. <a href="#r3">↩</a></span> <br>  <span id="s4">4. Codd, "A Relational Model of Data for Large Shared Data Banks" (1970); DDIA ch.2; Neo4j (property graph, index-free adjacency). <a href="#r4">↩</a></span> <br>  <span id="s5">5. DDIA ch.4 "Encoding and Evolution"; Protocol Buffers, Apache Avro, Apache Thrift specifications. <a href="#r5">↩</a></span> <br>  <span id="s6">6. Sheehy &amp; Smith, "Bitcask: A Log-Structured Hash Table for Fast Key/Value Data" (2010). <a href="#r6">↩</a></span> <br>  <span id="s7">7. Stonebraker et al., "C-Store: A Column-Oriented DBMS" (2005); Melnik et al., "Dremel" (2010) — ancestor of Apache Parquet; Kimball star schema. <a href="#r7">↩</a></span> <br>  </footer>  <!-- standardized bottom pager — guarantees the `.nav a` hook that
+                 analytics.js uses for lesson_nav_* + lesson_complete on every lesson --> <nav class="nav"> <span>&#8592; <a href="/engineering-learning-hub/index.html#grid">Engineering Vault</a></span> <span>
+Next: <a href="lsm-compaction-deep-dive.html">LSM Compaction — Deep Dive &#8594;</a> </span> </nav> <div class="lesson-fb" aria-live="polite"> <span class="lesson-fb-q">Was this lesson helpful?</span> <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">
+👍 Yes
+</button> <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No
+</button> <span class="lesson-fb-thanks">Thanks &mdash; noted.</span> </div> <p class="lesson-endnote">
+These notes reflect my current understanding and are updated as I learn, build, and
+                discover better explanations.
+</p> </main> </div>  <script>
+        document.querySelectorAll('.qitem').forEach(function (item) {
+            var correct = +item.dataset.correct;
+            var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
+            var fb = item.querySelector('.fb');
+            opts.forEach(function (opt, i) {
+                opt.addEventListener('click', function () {
+                    opts.forEach(function (o) {
+                        o.disabled = true;
+                    });
+                    opts[correct].classList.add('correct');
+                    if (i === correct) {
+                        fb.textContent = '✓ Correct.';
+                        fb.className = 'fb ok';
+                    } else {
+                        opt.classList.add('wrong');
+                        fb.textContent =
+                            '✗ Not quite — the right answer is highlighted. Re-read it, then say it back out loud.';
+                        fb.className = 'fb no';
+                    }
+                });
+            });
+        });
 
-  <!-- ============ HERO: the one tension ============ -->
-  <figure style="margin-top:1.6rem">
-    <svg viewBox="0 0 640 230" role="img" aria-label="The read/write/space triangle: every engine picks a corner; the page tours the curve from log to index to layout">
-      <g font-family="ui-sans-serif,system-ui,sans-serif">
-        <text x="320" y="26" text-anchor="middle" font-size="12" font-weight="700" fill="#111110">THE ONE TENSION — you cannot make all three cheap at once</text>
-        <!-- triangle -->
-        <polygon points="320,52 116,196 524,196" fill="#fbfaf2" stroke="#7a1f12" stroke-width="1.5"/>
-        <!-- vertices -->
-        <circle cx="320" cy="52" r="5" fill="#7a1f12"/>
-        <circle cx="116" cy="196" r="5" fill="#1f3a5a"/>
-        <circle cx="524" cy="196" r="5" fill="#2f5d3a"/>
-        <text x="320" y="44" text-anchor="middle" font-size="13" font-weight="700" fill="#7a1f12">READ amp</text>
-        <text x="320" y="64" text-anchor="middle" font-size="9" fill="#6b675f">pages per lookup</text>
-        <text x="96" y="214" text-anchor="middle" font-size="13" font-weight="700" fill="#1f3a5a">WRITE amp</text>
-        <text x="96" y="226" text-anchor="middle" font-size="9" fill="#6b675f">bytes rewritten</text>
-        <text x="548" y="214" text-anchor="middle" font-size="13" font-weight="700" fill="#2f5d3a">SPACE amp</text>
-        <text x="548" y="226" text-anchor="middle" font-size="9" fill="#6b675f">disk vs data</text>
-        <!-- where engines sit -->
-        <g font-size="10">
-          <rect x="232" y="96" width="112" height="22" rx="6" fill="#fff" stroke="#7a1f12"/><text x="288" y="111" text-anchor="middle" fill="#7a1f12" font-weight="700">B-tree ↗ low read</text>
-          <rect x="158" y="150" width="120" height="22" rx="6" fill="#fff" stroke="#1f3a5a"/><text x="218" y="165" text-anchor="middle" fill="#1f3a5a" font-weight="700">LSM ↗ low write</text>
-        </g>
-        <text x="430" y="120" text-anchor="middle" font-size="9.5" fill="#6b675f">column store ↗</text>
-        <text x="430" y="133" text-anchor="middle" font-size="9.5" fill="#6b675f">space via compression</text>
-      </g>
-    </svg>
-    <figcaption>Memorise this triangle. Every level below is one engine, index, or layout choosing a corner — and paying in the other two.</figcaption>
-  </figure>
-
-  <!-- ================= LEVEL 1 ================= -->
-  <section class="lvl" id="l1">
-    <div class="lvltop"><span class="num">1</span><h2>Log + hash index — the simplest real engine</h2></div>
-    <p class="tagline">Two lines of bash become a durable database — and reveal the tension that governs every index you'll ever choose.</p>
-    <figure>
-      <svg viewBox="0 0 560 170" role="img" aria-label="An append-only log on disk with an in-memory hash index; reads follow the index to an offset, writes append and repoint">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <rect x="14" y="14" width="240" height="40" rx="8" fill="#eef5ee" stroke="#2f5d3a"/>
-          <text x="134" y="32" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">IN-RAM hash index</text>
-          <text x="134" y="47" text-anchor="middle" font-size="9.5" fill="#6b675f">key → byte offset</text>
-          <g font-size="9" fill="#111110">
-            <text x="30" y="78">foo → 96</text><text x="30" y="94">bar → 32</text>
-          </g>
-          <text x="400" y="14" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">APPEND-ONLY log on disk</text>
-          <g font-size="9.5">
-            <rect x="290" y="24" width="78" height="26" rx="5" fill="#fff" stroke="#d8d4c8"/><text x="329" y="41" text-anchor="middle">bar,9</text>
-            <rect x="372" y="24" width="78" height="26" rx="5" fill="#fff" stroke="#d8d4c8"/><text x="411" y="41" text-anchor="middle">foo,1</text>
-            <rect x="454" y="24" width="92" height="26" rx="5" fill="#f1eee2" stroke="#7a1f12"/><text x="500" y="41" text-anchor="middle" fill="#7a1f12" font-weight="700">foo,42 ←tail</text>
-          </g>
-          <!-- read arrow -->
-          <path d="M 90 70 C 200 110, 420 90, 480 52" fill="none" stroke="#2f5d3a" stroke-dasharray="4 3" marker-end="url(#arwG)"/>
-          <text x="300" y="120" text-anchor="middle" font-size="10" fill="#2f5d3a">READ: hash lookup (O(1)) → 1 seek to offset → 1 record</text>
-          <!-- write arrow -->
-          <path d="M 540 58 C 545 96, 545 96, 540 96" fill="none" stroke="#7a1f12"/>
-          <text x="300" y="140" text-anchor="middle" font-size="10" fill="#7a1f12">WRITE: append 1 record at the tail + repoint 1 map entry</text>
-          <text x="300" y="158" text-anchor="middle" font-size="10" fill="#9a2417">✗ keyset must fit in RAM&#160;&#160;✗ no range queries</text>
-        </g>
-      </svg>
-      <figcaption>Bitcask (Riak's engine): append the data, keep <code>key → offset</code> in RAM. Reads do one lookup + one seek regardless of file size.<sup><a href="#s6" id="r6">6</a></sup></figcaption>
-    </figure>
-    <figure>
-      <img src="diagrams/01-log-hash-index.png" alt="An append-only log on disk with an in-memory hash index pointing into it. Reads follow the index straight to a record; writes append at the end and repoint the index.">
-      <figcaption>The same idea from the book: writes stream to the tail; the hash map turns "search the data" into "consult a small structure, then seek."</figcaption>
-    </figure>
-    <div class="facts">
-      <div class="fact"><b>Is</b> An append-only log of <code>key,value</code> records + an in-RAM map from each key to its latest byte offset.</div>
-      <div class="fact"><b>Why it exists</b> Appends are the fastest write a disk offers — one position, then stream. The index converts a scan into a seek.</div>
-      <div class="fact blue"><b>Compaction</b> Segments close at a size cap, become immutable, and a background merge keeps only the latest value per key.</div>
-      <div class="fact blue"><b>Like (code)</b> A <code>SELECT … LIMIT 1</code> over a tail-appended file, but the offset is precomputed in a hash map.</div>
-    </div>
-    <div class="myth"><div class="m">✗ "An append-only log keeps every dead version forever"</div><div class="t">✓ Compaction rewrites a fresh segment, swaps it atomically, deletes the old — crash-safe by immutability</div></div>
-    <div class="rule"><span>📜 Memory rule:</span> A storage engine is a log you write fast and an index you read fast — and every index you add taxes every write.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Why is <code>db_set</code> fast but <code>db_get</code> slow without an index? <span class="ans">→ append vs full linear scan</span></li>
-      <li>What does Bitcask's hash map store? <span class="ans">→ key → byte offset of latest record</span></li>
-      <li>Why can compaction run without blocking reads? <span class="ans">→ new segment swapped in atomically; old stays immutable</span></li>
-    </ul></details>
-  </section>
-
-  <!-- ================= LEVEL 2 ================= -->
-  <section class="lvl" id="l2">
-    <div class="lvltop"><span class="num">2</span><h2>B-tree — the read-optimized default</h2></div>
-    <p class="tagline">The structure behind every <code>CREATE INDEX</code> since 1972: a shallow, sorted, page-oriented tree you update in place.</p>
-    <figure>
-      <img src="diagrams/02-btree.png" alt="A three-level B-tree with the lookup path for key 215 highlighted. The root page splits the key space, internal pages narrow it, and a single leaf page holds the value — three page reads to reach any row.">
-      <figcaption>Lookup of key 215: root <code>[200,400]</code> → internal <code>[210,230,260]</code> → leaf. Three page reads, each a binary search in memory.</figcaption>
-    </figure>
-    <figure>
-      <svg viewBox="0 0 540 170" role="img" aria-label="A B-tree split: a full leaf divides into two half-full pages and pushes a separator key up to the parent">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <text x="270" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7a1f12">INSERT into a full leaf → SPLIT</text>
-          <!-- before -->
-          <rect x="20" y="40" width="180" height="34" rx="6" fill="#f7ecea" stroke="#9a2417"/>
-          <text x="110" y="62" text-anchor="middle" font-size="11" fill="#7a2218">[10 20 30 40] ← full, no room</text>
-          <text x="110" y="92" text-anchor="middle" font-size="9.5" fill="#6b675f">before</text>
-          <line x1="210" y1="57" x2="252" y2="57" stroke="#6b675f" marker-end="url(#arw)"/>
-          <!-- after: parent gains separator -->
-          <rect x="312" y="34" width="80" height="26" rx="6" fill="#f1eee2" stroke="#7a1f12"/>
-          <text x="352" y="51" text-anchor="middle" font-size="10" fill="#7a1f12" font-weight="700">parent +30</text>
-          <rect x="266" y="92" width="86" height="28" rx="6" fill="#eef5ee" stroke="#2f5d3a"/>
-          <text x="309" y="110" text-anchor="middle" font-size="10" fill="#244a2e">[10 20]</text>
-          <rect x="362" y="92" width="86" height="28" rx="6" fill="#eef5ee" stroke="#2f5d3a"/>
-          <text x="405" y="110" text-anchor="middle" font-size="10" fill="#244a2e">[30 40]</text>
-          <line x1="338" y1="60" x2="309" y2="90" stroke="#6b675f" marker-end="url(#arw)"/>
-          <line x1="366" y1="60" x2="405" y2="90" stroke="#6b675f" marker-end="url(#arw)"/>
-          <text x="357" y="140" text-anchor="middle" font-size="9.5" fill="#6b675f">two half-full pages; split propagates up only if the parent is also full</text>
-          <text x="357" y="156" text-anchor="middle" font-size="9.5" fill="#9a2417">danger: torn write mid-split → WAL replays it (full-page image / doublewrite)</text>
-        </g>
-      </svg>
-      <figcaption>Branching factor ~hundreds → depth ~4 levels addresses billions of keys. Writes overwrite a page in place; the WAL makes that crash-safe.<sup><a href="#s2" id="r2">2</a></sup></figcaption>
-    </figure>
-    <div class="facts">
-      <div class="fact"><b>Is</b> A balanced tree of fixed-size pages (4–8 KB); each node is sorted keys + child pointers; all leaves at equal depth.</div>
-      <div class="fact"><b>Why it exists</b> A high branching factor keeps the tree shallow, so a point lookup is O(log n) <em>pages</em> — and range scans walk the sorted leaves.</div>
-      <div class="fact blue"><b>Update-in-place</b> One canonical location per key; a write overwrites the leaf page. A full leaf splits and pushes a separator up.</div>
-      <div class="fact blue"><b>Crash safety</b> Overwriting a page isn't atomic, so the WAL records intent first; recovery replays it.<sup><a href="#s1" id="r1b">1</a></sup></div>
-    </div>
-    <div class="myth"><div class="m">✗ "More keys = a much deeper, slower tree"</div><div class="t">✓ Depth grows logarithmically — fan-out ~256 means 4 levels hold ~4 billion keys</div></div>
-    <div class="rule"><span>🌳 Memory rule:</span> A B-tree is sorted pages updated in place — cheap predictable reads, paid for with random write I/O and WAL.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>What keeps a B-tree lookup to a few reads at a billion rows? <span class="ans">→ high branching factor → shallow tree</span></li>
-      <li>What happens when a leaf has no room? <span class="ans">→ split in two, push a separator to the parent</span></li>
-      <li>Why does a B-tree need a WAL? <span class="ans">→ in-place page overwrite isn't crash-atomic</span></li>
-    </ul></details>
-  </section>
-
-  <!-- ================= LEVEL 3 ================= -->
-  <section class="lvl" id="l3">
-    <div class="lvltop"><span class="num">3</span><h2>LSM-tree — write-optimized, log all the way down</h2></div>
-    <p class="tagline">Turn <em>every</em> write into a sequential append; defer the cleanup to a background merge. The engine behind RocksDB &amp; Cassandra.</p>
-    <figure>
-      <img src="diagrams/03-lsm-tree.png" alt="The LSM-tree write and read paths on one page. Writes enter the in-memory memtable and flush to a new immutable SSTable; compaction merges older SSTables and drops shadowed keys; a read checks the memtable, passes a Bloom-filter gate, then scans SSTables newest to oldest.">
-      <figcaption>Write → WAL + memtable; flush a full memtable as a new immutable SSTable; compaction merges runs; reads go memtable → SSTables newest-to-oldest, gated by Bloom filters.<sup><a href="#s3" id="r3">3</a></sup></figcaption>
-    </figure>
-    <figure>
-      <svg viewBox="0 0 560 150" role="img" aria-label="A read for an absent key uses a Bloom filter to skip SSTables that definitely lack it">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <rect x="10" y="50" width="96" height="44" rx="9" fill="#f1eee2" stroke="#7a1f12"/>
-          <text x="58" y="70" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">read user:9</text>
-          <text x="58" y="85" text-anchor="middle" font-size="9" fill="#6b675f">absent key</text>
-          <line x1="106" y1="72" x2="146" y2="72" stroke="#6b675f" marker-end="url(#arw)"/>
-          <!-- bloom gates -->
-          <g font-size="9.5">
-            <rect x="150" y="20" width="120" height="30" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="210" y="39" text-anchor="middle" fill="#244a2e">SST-3 · "absent" → skip</text>
-            <rect x="150" y="58" width="120" height="30" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="210" y="77" text-anchor="middle" fill="#244a2e">SST-2 · "absent" → skip</text>
-            <rect x="150" y="96" width="120" height="30" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="210" y="115" text-anchor="middle" fill="#7a2218">SST-1 · "probably" → open</text>
-          </g>
-          <text x="210" y="142" text-anchor="middle" font-size="9" fill="#6b675f">Bloom filter: one-sided error</text>
-          <line x1="272" y1="111" x2="340" y2="111" stroke="#6b675f" marker-end="url(#arw)"/>
-          <rect x="344" y="96" width="96" height="30" rx="6" fill="#fff" stroke="#d8d4c8"/><text x="392" y="115" text-anchor="middle" font-size="9.5">1 disk read</text>
-          <text x="470" y="58" text-anchor="middle" font-size="10" fill="#2f5d3a">"definitely absent"</text>
-          <text x="470" y="72" text-anchor="middle" font-size="10" fill="#2f5d3a">is never wrong →</text>
-          <text x="470" y="86" text-anchor="middle" font-size="10" fill="#2f5d3a">skipping is safe</text>
-        </g>
-      </svg>
-      <figcaption>Without filters an absent-key read touches every SSTable. A ~1%-FPR filter costs ~10 bits/key and turns that into one rare false-positive open.</figcaption>
-    </figure>
-    <div class="facts">
-      <div class="fact"><b>Memtable</b> In-RAM sorted map (skip list / RB-tree) that buffers writes; a WAL alongside makes it crash-safe.</div>
-      <div class="fact"><b>SSTable</b> Immutable on-disk file sorted by key — never modified, only merged away. Two sorted files merge in one linear pass.</div>
-      <div class="fact blue"><b>Updates &amp; deletes are writes too</b> An update appends a newer entry; a delete appends a <em>tombstone</em>. Old values are shadowed, not erased.</div>
-      <div class="fact blue"><b>Compaction</b> Merges runs, keeps the newest value per key, drops tombstoned keys — reclaiming space. Leveled vs size-tiered is a tunable knob.</div>
-    </div>
-    <div class="myth"><div class="m">✗ "A delete frees the space immediately"</div><div class="t">✓ A tombstone shadows the value; space returns only when compaction reaches the oldest SSTable (Cassandra: <code>gc_grace_seconds</code>)</div></div>
-    <div class="rule"><span>🪵 Memory rule:</span> An LSM-tree buffers in RAM, flushes immutable sorted runs, and merges later — sequential writes now, read &amp; merge work deferred.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Why are LSM writes fast? <span class="ans">→ append to WAL + insert into in-RAM memtable; no in-place disk write</span></li>
-      <li>A read returns "not found" but old SSTables have a value — why? <span class="ans">→ a newer tombstone shadows them</span></li>
-      <li>What guarantee does a Bloom filter give? <span class="ans">→ "definitely absent" is never wrong → safe to skip</span></li>
-    </ul></details>
-  </section>
-
-  <!-- ================= LEVEL 4 ================= -->
-  <section class="lvl" id="l4">
-    <div class="lvltop"><span class="num">4</span><h2>Amplification — the three currencies you trade</h2></div>
-    <p class="tagline">Read, write, space: a logical op costing more than one physical op. You can't drive all three to zero — pick a corner.</p>
-    <figure>
-      <img src="diagrams/04-amplification.png" alt="B-tree and LSM-tree compared across the three amplification axes. The grid shows where each engine spends and where each engine saves; the insets show why.">
-      <figcaption>The amplification grid from the book: where each engine spends, where each saves. B-tree pays write; LSM pays read &amp; space-until-compacted.<sup><a href="#s1" id="r1c">1</a></sup></figcaption>
-    </figure>
-    <table>
-      <tr><th>Axis</th><th>B-tree</th><th>LSM-tree</th></tr>
-      <tr><td>Read amp</td><td>low — bounded by tree height</td><td>medium–high — may probe many runs</td></tr>
-      <tr><td>Write amp</td><td>medium–high — in-place, random, WAL + page</td><td>low <em>now</em> — deferred into compaction</td></tr>
-      <tr><td>Space amp</td><td>low — one copy, page slack</td><td>medium — stale versions until compacted</td></tr>
-      <tr><td>Write I/O</td><td>random</td><td>sequential</td></tr>
-      <tr><td>Latency</td><td>predictable</td><td>spiky (compaction stalls)</td></tr>
-    </table>
-    <div class="facts">
-      <div class="fact"><b>Read amp</b> Pages touched per logical read. B-tree ≈ 1 uncached (the leaf); LSM grows with the number of sorted runs.</div>
-      <div class="fact"><b>Write amp</b> Bytes written per byte of user data. B-tree: WAL + whole-page rewrite + splits. LSM: defers &amp; batches into big sequential rewrites.</div>
-      <div class="fact blue"><b>Space amp</b> Disk used vs logical data. B-tree: page slack (~60–70% full). LSM: stale versions + tombstones, often offset by compression.</div>
-      <div class="fact blue"><b>Choose by workload</b> Write-heavy ingest → LSM. Read-heavy, tail-latency-sensitive OLTP → B-tree.</div>
-    </div>
-    <div class="myth"><div class="m">✗ "LSM-trees have no write amplification"</div><div class="t">✓ They <em>defer and batch</em> it into compaction — a key may be rewritten across several levels over its life</div></div>
-    <div class="rule"><span>⚖️ Memory rule:</span> Read, write, space — every engine picks one corner of the triangle and pays in the other two. The skill is reading the workload.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Why is an LSM point lookup sometimes slower than a B-tree's? <span class="ans">→ key may live in any of several sorted runs</span></li>
-      <li>Why does a tiny B-tree update still amplify writes? <span class="ans">→ rewrites a whole page + a WAL record</span></li>
-      <li>Where does LSM space amp come from? <span class="ans">→ stale versions + tombstones held until compaction</span></li>
-    </ul></details>
-  </section>
-
-  <!-- ================= LEVEL 5 ================= -->
-  <section class="lvl" id="l5">
-    <div class="lvltop"><span class="num">5</span><h2>Indexes — clustered vs secondary, and the write tax</h2></div>
-    <p class="tagline">One set of rows, many access paths. Every secondary index is pure redundancy you build, pay for, and keep in sync.</p>
-    <figure>
-      <img src="diagrams/05-secondary-index.png" alt="A table heap holds rows by row id; a clustered primary-key index stores full rows in its leaves, while a secondary email index stores only key plus a pointer back to the row.">
-      <figcaption>Clustered (InnoDB): the row lives in the PK leaf, secondaries store the PK. Heap (Postgres): rows in a heap, every index holds a <code>ctid</code> pointer.</figcaption>
-    </figure>
-    <figure>
-      <svg viewBox="0 0 560 160" role="img" aria-label="Leftmost-prefix rule on a composite index (account_id, created_at)">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <text x="280" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1f3a5a">composite index (account_id, created_at) — sorted lexicographically</text>
-          <g font-size="9.5">
-            <rect x="20" y="34" width="250" height="28" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="30" y="52" fill="#244a2e">WHERE account_id=42 AND created_at&gt;X ✓ full use</text>
-            <rect x="20" y="68" width="250" height="28" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="30" y="86" fill="#244a2e">WHERE account_id=42 ✓ leading prefix</text>
-            <rect x="20" y="102" width="250" height="28" rx="6" fill="#f7ecea" stroke="#9a2417"/><text x="30" y="120" fill="#7a2218">WHERE created_at&gt;X ✗ no left-anchored prefix</text>
-          </g>
-          <rect x="300" y="40" width="246" height="88" rx="8" fill="#fbfaf2" stroke="#7a1f12"/>
-          <text x="423" y="60" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7a1f12">covering index = no row fetch</text>
-          <text x="423" y="80" text-anchor="middle" font-size="9.5" fill="#6b675f">index holds every column the query reads</text>
-          <text x="423" y="96" text-anchor="middle" font-size="9.5" fill="#6b675f">→ Postgres "Index Only Scan"</text>
-          <text x="423" y="116" text-anchor="middle" font-size="9.5" fill="#9a2417">cost: wider index, fewer rows/page, slower writes</text>
-        </g>
-      </svg>
-      <figcaption>Put the equality column first, the range column second — a range on the leading column "uses up" the sort order and forces a scan.<sup><a href="#s2" id="r2b">2</a></sup></figcaption>
-    </figure>
-    <div class="facts">
-      <div class="fact"><b>Clustered</b> The PK B-tree leaf <em>is</em> the row (InnoDB). A secondary stores the PK value → secondary lookup walks <em>two</em> trees.</div>
-      <div class="fact"><b>Heap</b> Rows sit unordered in a heap; every index leaf holds a <code>ctid</code> pointer (Postgres). PK lookup = index walk + heap fetch.</div>
-      <div class="fact blue"><b>Composite</b> Keyed on several columns, sorted lexicographically. Usable only for a left-anchored prefix (leftmost-prefix rule).</div>
-      <div class="fact blue"><b>Covering</b> Holds every column the query reads, so the answer comes from the index alone — no row fetch.</div>
-    </div>
-    <div class="myth"><div class="m">✗ "Add indexes freely — they only make queries faster"</div><div class="t">✓ A table with 8 indexes turns 1 logical insert into 9 physical writes; each index is a standing write tax</div></div>
-    <div class="rule"><span>🔎 Memory rule:</span> An index makes reads it covers faster and every write that maintains it slower — index what you actually filter and sort by, and measure with <code>EXPLAIN</code>.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>What does an InnoDB secondary index store in its leaf? <span class="ans">→ the indexed value + the primary key</span></li>
-      <li>Which query can't use <code>(account_id, created_at)</code>? <span class="ans">→ one filtering only on created_at</span></li>
-      <li>Why does each secondary index slow writes? <span class="ans">→ every write must place/move the key in that index too</span></li>
-    </ul></details>
-  </section>
-
-  <!-- ================= LEVEL 6 ================= -->
-  <section class="lvl" id="l6">
-    <div class="lvltop"><span class="num">6</span><h2>Data models — relational, document, graph</h2></div>
-    <p class="tagline">The most consequential, hardest-to-change backend decision. Each model makes a <em>different</em> relationship cheap.</p>
-    <figure>
-      <img src="diagrams/06-data-models.png" alt="The same data — a user, their posts, their friends — modeled three ways: three relational tables wired by foreign keys, one nested JSON document, and a property graph of nodes and directed edges.">
-      <figcaption>The same user-posts-friends domain modeled three ways: relational tables joined by value, one embedded document, a property graph of traversable edges.<sup><a href="#s4" id="r4">4</a></sup></figcaption>
-    </figure>
-    <figure>
-      <svg viewBox="0 0 560 160" role="img" aria-label="Each model makes one relationship cheap and another expensive">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <!-- relational -->
-          <rect x="14" y="28" width="166" height="106" rx="9" fill="#fbfaf2" stroke="#1f3a5a"/>
-          <text x="97" y="46" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">RELATIONAL</text>
-          <text x="97" y="66" text-anchor="middle" font-size="9" fill="#2f5d3a">+ ad-hoc joins, integrity</text>
-          <text x="97" y="80" text-anchor="middle" font-size="9" fill="#2f5d3a">+ each fact stored once</text>
-          <text x="97" y="100" text-anchor="middle" font-size="9" fill="#9a2417">− rich object = many joins</text>
-          <text x="97" y="120" text-anchor="middle" font-size="8.5" fill="#6b675f">relate by value (FK)</text>
-          <!-- document -->
-          <rect x="196" y="28" width="166" height="106" rx="9" fill="#fbfaf2" stroke="#7a1f12"/>
-          <text x="279" y="46" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">DOCUMENT</text>
-          <text x="279" y="66" text-anchor="middle" font-size="9" fill="#2f5d3a">+ load one aggregate, 1 read</text>
-          <text x="279" y="80" text-anchor="middle" font-size="9" fill="#2f5d3a">+ maps to object tree</text>
-          <text x="279" y="100" text-anchor="middle" font-size="9" fill="#9a2417">− cross-doc joins, shared data</text>
-          <text x="279" y="120" text-anchor="middle" font-size="8.5" fill="#6b675f">embed contiguously</text>
-          <!-- graph -->
-          <rect x="378" y="28" width="166" height="106" rx="9" fill="#fbfaf2" stroke="#2f5d3a"/>
-          <text x="461" y="46" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">GRAPH</text>
-          <text x="461" y="66" text-anchor="middle" font-size="9" fill="#2f5d3a">+ many-hop traversal cheap</text>
-          <text x="461" y="80" text-anchor="middle" font-size="9" fill="#2f5d3a">+ edge is first-class</text>
-          <text x="461" y="100" text-anchor="middle" font-size="9" fill="#9a2417">− global aggregates awkward</text>
-          <text x="461" y="120" text-anchor="middle" font-size="8.5" fill="#6b675f">follow stored pointers</text>
-          <text x="280" y="152" text-anchor="middle" font-size="9.5" fill="#6b675f">choose by the dominant access pattern — not by fashion</text>
-        </g>
-      </svg>
-      <figcaption>"Friends-of-friends-of-friends" is a 3-table self-join (relational) but a 3-hop pointer walk (graph) — same data, opposite cost.</figcaption>
-    </figure>
-    <div class="facts">
-      <div class="fact"><b>Relational</b> Rows relate <em>by value</em> (foreign key); a join assembles them at query time. No duplication, referential integrity, ad-hoc queries.</div>
-      <div class="fact"><b>Document</b> One self-contained JSON/BSON tree embedding related data — great locality, eases the object-relational impedance mismatch.</div>
-      <div class="fact blue"><b>Graph</b> Nodes + labeled directed edges; an edge is a traversable pointer (index-free adjacency), so a hop is O(local fan-out), not a fresh search.</div>
-      <div class="fact blue"><b>Convergence</b> Postgres <code>jsonb</code> stores an indexable document in a relational row — the choice is increasingly per-field.</div>
-    </div>
-    <div class="myth"><div class="m">✗ "Documents are modern / graphs are cool, so default to them"</div><div class="t">✓ Each model is a locality bet; relational stays the safe default when access patterns are unknown (Codd separated logical from physical)</div></div>
-    <div class="rule"><span>🗂️ Memory rule:</span> Pick the model whose <em>cheap</em> operation is what your app reads and traverses most — not the trendiest one.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>How does relational relate two rows? <span class="ans">→ by value — a FK matching another table's PK</span></li>
-      <li>Why is embedding posts in a user doc fast to read? <span class="ans">→ one contiguous fetch returns the whole aggregate</span></li>
-      <li>Why is a graph good at deep traversals? <span class="ans">→ each hop follows a stored edge, not a fresh index lookup</span></li>
-    </ul></details>
-  </section>
-
-  <!-- ================= LEVEL 7 ================= -->
-  <section class="lvl" id="l7">
-    <div class="lvltop"><span class="num">7</span><h2>Normalization vs denormalization — where each fact lives</h2></div>
-    <p class="tagline">Store a fact once and the database protects it. Copy it for speed and you inherit the job of keeping every copy honest.</p>
-    <figure>
-      <img src="diagrams/07-normalization.png" alt="The same data, two layouts. Normalized stores each customer fact once and joins on read; denormalized embeds a copy of the customer into every order for fast reads but must fan-out updates.">
-      <figcaption>Normalized: customer stored once, joined on read. Denormalized: customer copied into every order — single-row reads, but a change fans out.</figcaption>
-    </figure>
-    <figure>
-      <svg viewBox="0 0 560 150" role="img" aria-label="The cost migrates from read time to write time as you denormalize">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <text x="140" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">NORMALIZED</text>
-          <text x="420" y="20" text-anchor="middle" font-size="11" font-weight="700" fill="#7a1f12">DENORMALIZED</text>
-          <rect x="36" y="36" width="100" height="26" rx="6" fill="#fff" stroke="#1f3a5a"/><text x="86" y="53" text-anchor="middle" font-size="9.5">customers (1×)</text>
-          <rect x="36" y="78" width="100" height="26" rx="6" fill="#fff" stroke="#1f3a5a"/><text x="86" y="95" text-anchor="middle" font-size="9.5">orders → FK</text>
-          <line x1="86" y1="78" x2="86" y2="64" stroke="#6b675f" marker-end="url(#arw)"/>
-          <text x="140" y="124" text-anchor="middle" font-size="9" fill="#9a2417">read = JOIN</text>
-          <text x="140" y="138" text-anchor="middle" font-size="9" fill="#2f5d3a">change = 1 update</text>
-          <line x1="270" y1="10" x2="270" y2="140" stroke="#d8d4c8" stroke-dasharray="4 4"/>
-          <g font-size="9.5">
-            <rect x="316" y="36" width="208" height="22" rx="5" fill="#f1eee2" stroke="#7a1f12"/><text x="420" y="51" text-anchor="middle">order #1 + customer copy</text>
-            <rect x="316" y="64" width="208" height="22" rx="5" fill="#f1eee2" stroke="#7a1f12"/><text x="420" y="79" text-anchor="middle">order #2 + customer copy</text>
-            <rect x="316" y="92" width="208" height="22" rx="5" fill="#f1eee2" stroke="#7a1f12"/><text x="420" y="107" text-anchor="middle">order #3 + customer copy</text>
-          </g>
-          <text x="420" y="130" text-anchor="middle" font-size="9" fill="#2f5d3a">read = single row</text>
-          <text x="420" y="143" text-anchor="middle" font-size="9" fill="#9a2417">change = fan-out update (the update anomaly)</text>
-        </g>
-      </svg>
-      <figcaption>Denormalization doesn't remove the consistency problem — it moves it into your application and transactions (or a materialized view).</figcaption>
-    </figure>
-    <table>
-      <tr><th></th><th>Normalized</th><th>Denormalized</th></tr>
-      <tr><td>Each fact</td><td>stored once</td><td>stored many times</td></tr>
-      <tr><td>Read "order + customer"</td><td>join</td><td>single row</td></tr>
-      <tr><td>Address change</td><td>one update</td><td>fan-out update</td></tr>
-      <tr><td>Owns consistency</td><td>the database</td><td>you (or a materialized view)</td></tr>
-    </table>
-    <div class="facts">
-      <div class="fact"><b>Normalization</b> Each independent fact in exactly one row; everything else references by key. Consistency by construction (1NF→2NF→3NF).</div>
-      <div class="fact"><b>Denormalization</b> Deliberately copy a fact into the rows that read it — join-free reads, paid for with fan-out write sync.</div>
-      <div class="fact blue"><b>Schema-on-write</b> Relational: columns/types/constraints validated on the way in.</div>
-      <div class="fact blue"><b>Schema-on-read</b> Document/lake: bytes written as-is, structure interpreted by the reading code — the schema just lives in that code.</div>
-    </div>
-    <div class="myth"><div class="m">✗ "Schema-on-read means schemaless"</div><div class="t">✓ The schema still exists — it's implicit in the reader and can silently drift between versions</div></div>
-    <div class="rule"><span>📐 Memory rule:</span> Start normalized (correct by construction); denormalize <em>specifically</em>, against a measured read pattern, knowing exactly which invariant you just took ownership of.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>What does normalization eliminate? <span class="ans">→ redundant copies of a fact that drift out of sync</span></li>
-      <li>Copy <code>customer_name</code> into orders — which invariant do you now own? <span class="ans">→ every copy must update when the customer changes</span></li>
-      <li>What decides normalize vs denormalize? <span class="ans">→ read/write ratio, access pattern, consistency tolerance</span></li>
-    </ul></details>
-  </section>
-
-  <!-- ================= LEVEL 8 ================= -->
-  <section class="lvl" id="l8">
-    <div class="lvltop"><span class="num">8</span><h2>Encoding &amp; evolution — bytes that outlive their writer</h2></div>
-    <p class="tagline">An in-memory object is a graph of pointers meaningful only in one process. To store or send it, you flatten it — and then change its shape for years without breaking old readers.</p>
-    <figure>
-      <img src="diagrams/08-schema-evolution.png" alt="Both old and new code keep working across a schema change when the rules are followed. A v2 schema adds an optional field; the two crossing arrows show each version reading the other's data and succeeding.">
-      <figcaption>The two crossing arrows: backward (new code reads old data) and forward (old code reads new data) compatibility — what makes rolling deploys safe.<sup><a href="#s5" id="r5">5</a></sup></figcaption>
-    </figure>
-    <figure>
-      <svg viewBox="0 0 560 150" role="img" aria-label="The compatibility rules: optional new fields, stable tag numbers, never reuse a retired tag">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <text x="280" y="18" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7a1f12">the rules that preserve both directions</text>
-          <g font-size="9.5">
-            <rect x="20" y="32" width="250" height="26" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="30" y="49" fill="#244a2e">new field optional / default → backward OK</text>
-            <rect x="20" y="64" width="250" height="26" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="30" y="81" fill="#244a2e">unknown tag is skipped → forward OK</text>
-            <rect x="20" y="96" width="250" height="26" rx="6" fill="#eef5ee" stroke="#2f5d3a"/><text x="30" y="113" fill="#244a2e">identify by stable tag #, rename freely</text>
-          </g>
-          <rect x="300" y="44" width="246" height="64" rx="8" fill="#f7ecea" stroke="#9a2417"/>
-          <text x="423" y="66" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7a2218">the one fatal rule</text>
-          <text x="423" y="84" text-anchor="middle" font-size="9.5" fill="#7a2218">never reuse a retired tag #</text>
-          <text x="423" y="100" text-anchor="middle" font-size="9" fill="#6b675f">→ old code silently misreads the new field</text>
-          <text x="280" y="140" text-anchor="middle" font-size="9" fill="#6b675f">proto3 dropped <tspan font-family="ui-monospace">required</tspan> entirely — it's a forward-compat landmine</text>
-        </g>
-      </svg>
-      <figcaption>Protobuf/Thrift identify fields by integer tag; Avro carries no per-field id and resolves writer-vs-reader schemas by name.</figcaption>
-    </figure>
-    <table>
-      <tr><th></th><th>Field names in bytes</th><th>Size</th><th>Needs schema to read</th></tr>
-      <tr><td>JSON / XML</td><td>yes, every record</td><td>larger</td><td>no</td></tr>
-      <tr><td>Protobuf / Thrift</td><td>no — tag numbers</td><td>smaller</td><td>yes</td></tr>
-      <tr><td>Avro</td><td>no identifiers at all</td><td>smallest</td><td>yes (writer + reader)</td></tr>
-    </table>
-    <div class="facts">
-      <div class="fact"><b>Encoding</b> Flatten a pointer-laced object graph into a self-contained byte sequence; decoding rebuilds it in a possibly different process, months later.</div>
-      <div class="fact"><b>Text vs binary</b> JSON ships field names + decimal text (readable, schema-free). Protobuf/Avro ship tagged values (compact, fast, need a schema).</div>
-      <div class="fact blue"><b>Backward compat</b> Newer code reads older data — new fields are absent, filled by default.</div>
-      <div class="fact blue"><b>Forward compat</b> Older code reads newer data — it skips the unknown tag and parses the rest. This is why rolling deploys are safe.</div>
-    </div>
-    <div class="myth"><div class="m">✗ "A new required field is fine if the schema declares it"</div><div class="t">✓ The moment one producer omits it, every old consumer breaks — proto3 removed <code>required</code> for exactly this</div></div>
-    <div class="rule"><span>🔁 Memory rule:</span> Encoding choices at write time constrain every reader for the data's lifetime — which far outlives any one service version. Keep both directions compatible.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>Why can't you dump raw in-memory bytes to disk? <span class="ans">→ pointers are addresses valid only in the writer's process</span></li>
-      <li>Why does old code survive a message from new code? <span class="ans">→ it skips the unknown tagged field</span></li>
-      <li>Which rule silently corrupts reads if broken? <span class="ans">→ reusing a retired tag number</span></li>
-    </ul></details>
-  </section>
-
-  <!-- ================= LEVEL 9 ================= -->
-  <section class="lvl" id="l9">
-    <div class="lvltop"><span class="num">9</span><h2>Row vs column — match the layout to the workload</h2></div>
-    <p class="tagline">The capstone. OLTP wants whole rows by key; OLAP scans millions of rows but a handful of columns. The bytes reorganize entirely.</p>
-    <figure>
-      <img src="diagrams/09-row-vs-column.png" alt="The same six-column table stored row-wise versus column-wise. Row storage: each row is a contiguous run of all six cells; a scan of one column must touch every block. Column storage: six separate column blocks, so an analytic query reads only the two it names.">
-      <figcaption>Row store: all of a row's cells adjacent — perfect for "fetch order #4821". Column store: all values of one column adjacent — scan reads only the columns named.<sup><a href="#s7" id="r7">7</a></sup></figcaption>
-    </figure>
-    <figure>
-      <svg viewBox="0 0 560 150" role="img" aria-label="OLTP point lookup on a row store versus OLAP scan on a column store">
-        <g font-family="ui-sans-serif,system-ui,sans-serif">
-          <text x="140" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#1f3a5a">OLTP → ROW store</text>
-          <text x="420" y="18" text-anchor="middle" font-size="11" font-weight="700" fill="#2f5d3a">OLAP → COLUMN store</text>
-          <rect x="40" y="34" width="200" height="26" rx="5" fill="#f1eee2" stroke="#1f3a5a"/><text x="140" y="51" text-anchor="middle" font-size="9.5">[id|region|status|ts|qty|amount]</text>
-          <text x="140" y="80" text-anchor="middle" font-size="9" fill="#2f5d3a">1 seek → whole record</text>
-          <text x="140" y="96" text-anchor="middle" font-size="9" fill="#9a2417">but a column scan drags every column</text>
-          <line x1="280" y1="10" x2="280" y2="140" stroke="#d8d4c8" stroke-dasharray="4 4"/>
-          <g font-size="8.5">
-            <rect x="316" y="32" width="34" height="74" rx="4" fill="#fff" stroke="#d8d4c8"/><text x="333" y="72" text-anchor="middle" transform="rotate(-90 333 72)">id</text>
-            <rect x="354" y="32" width="34" height="74" rx="4" fill="#eef5ee" stroke="#2f5d3a"/><text x="371" y="72" text-anchor="middle" transform="rotate(-90 371 72)" fill="#244a2e">region</text>
-            <rect x="392" y="32" width="34" height="74" rx="4" fill="#fff" stroke="#d8d4c8"/><text x="409" y="72" text-anchor="middle" transform="rotate(-90 409 72)">status</text>
-            <rect x="430" y="32" width="34" height="74" rx="4" fill="#fff" stroke="#d8d4c8"/><text x="447" y="72" text-anchor="middle" transform="rotate(-90 447 72)">ts</text>
-            <rect x="468" y="32" width="34" height="74" rx="4" fill="#fff" stroke="#d8d4c8"/><text x="485" y="72" text-anchor="middle" transform="rotate(-90 485 72)">qty</text>
-            <rect x="506" y="32" width="34" height="74" rx="4" fill="#eef5ee" stroke="#2f5d3a"/><text x="523" y="72" text-anchor="middle" transform="rotate(-90 523 72)" fill="#244a2e">amount</text>
-          </g>
-          <text x="428" y="124" text-anchor="middle" font-size="9" fill="#2f5d3a">SUM(amount) BY region → read 2 blocks, skip 4</text>
-          <text x="428" y="140" text-anchor="middle" font-size="9" fill="#6b675f">same-domain values compress hard (RLE, dictionary)</text>
-        </g>
-      </svg>
-      <figcaption>Two compounding wins for columnar: read only the columns named, and compress same-domain runs hard. The <em>i</em>-th value in every column file is the same row.</figcaption>
-    </figure>
-    <table>
-      <tr><th></th><th>OLTP</th><th>OLAP</th></tr>
-      <tr><td>Read pattern</td><td>few rows, by key</td><td>millions of rows, scan</td></tr>
-      <tr><td>Columns touched</td><td>all (whole record)</td><td>2–5 of many</td></tr>
-      <tr><td>Write pattern</td><td>random inserts/updates</td><td>bulk load / append</td></tr>
-      <tr><td>Bottleneck</td><td>seek latency</td><td>scan bandwidth</td></tr>
-      <tr><td>Layout</td><td>row store (B-tree / LSM)</td><td>column store (Parquet, Vertica)</td></tr>
-    </table>
-    <div class="facts">
-      <div class="fact"><b>Row store</b> All of a row's values adjacent. The unit you store together is the unit you retrieve together — ideal OLTP locality.</div>
-      <div class="fact"><b>Column store</b> All values of one column adjacent in its own block; a scan reads only the columns it names, bounded by columns-touched not table-width.</div>
-      <div class="fact blue"><b>Compression</b> A column is one type from one domain → run-length / dictionary / bitmap encoding compress far harder than a heterogeneous row.</div>
-      <div class="fact blue"><b>Star schema</b> Warehouses ETL into a column store: a narrow central fact table (one row per event) + small dimension tables radiating out.</div>
-    </div>
-    <div class="myth"><div class="m">✗ "There's one best storage engine"</div><div class="t">✓ Only an engine that fits an access pattern — the same logical table can (and at scale should) live in both a row and a column store</div></div>
-    <div class="rule"><span>🏛️ Memory rule:</span> Match the storage layout to the workload — many small key reads → row; few wide scans → column. The senior skill is reading the workload, not memorizing engines.</div>
-    <details class="mc"><summary>Memory check</summary><ul>
-      <li>What distinguishes OLAP from OLTP? <span class="ans">→ scans many rows but reads few columns</span></li>
-      <li>Two reasons columnar scans are fast? <span class="ans">→ read only needed columns + compress same-domain values</span></li>
-      <li>What does a star-schema fact table hold? <span class="ans">→ one row per event, FKs out to dimension tables</span></li>
-    </ul></details>
-  </section>
-
-  <!-- ================= REAL ENGINES ================= -->
-  <h2 class="sec" id="usecases">Where each layer shows up — real engines</h2>
-  <p>Grounding for your judgment: the concept, a concrete engine that embodies it, and the <em>shape</em> the trade-off usually takes.</p>
-  <table>
-    <tr><th>Concept</th><th>Real engine / feature</th><th>The trade-off it makes</th></tr>
-    <tr><td>Log + hash index</td><td>Bitcask (Riak)</td><td>blazing reads, keyset must fit RAM</td></tr>
-    <tr><td>B-tree</td><td>PostgreSQL btree · InnoDB clustered PK</td><td>low read amp, random write I/O</td></tr>
-    <tr><td>LSM-tree</td><td>RocksDB · Cassandra · ScyllaDB</td><td>cheap sequential writes, read &amp; compaction cost</td></tr>
-    <tr><td>Amplification knob</td><td>RocksDB leveled vs universal compaction</td><td>trade write amp against space amp explicitly</td></tr>
-    <tr><td>Clustered vs heap</td><td>InnoDB (PK leaf = row) vs Postgres (heap + ctid)</td><td>two-tree secondary vs heap pointer chase</td></tr>
-    <tr><td>Document model</td><td>MongoDB (16 MB doc cap forces subset pattern)</td><td>locality vs unbounded-array bloat</td></tr>
-    <tr><td>Materialized view</td><td>Postgres <code>MATERIALIZED VIEW</code> (manual refresh)</td><td>denormalized read speed vs staleness</td></tr>
-    <tr><td>Encoding / evolution</td><td>Protocol Buffers · Avro · Parquet footer</td><td>compactness vs human-readability + compat rules</td></tr>
-    <tr><td>Column store</td><td>Vertica (C-Store) · Parquet (Dremel) · Citus columnar</td><td>fast analytic scans, expensive single-row writes</td></tr>
-  </table>
-  <p class="tagline">Pattern to notice: most "B-tree vs LSM" debates are really <strong>amplification</strong> debates, and most engines now ship both modes (MyRocks, WiredTiger). Reason about the <em>axes</em>, not the data-structure name.<sup><a href="#s1" id="r1d">1</a></sup></p>
-
-  <!-- ================= INTERACTIVE RECALL ================= -->
-  <h2 class="sec" id="quiz">Retrieval practice — mix the levels</h2>
-  <p>Reading builds <em>fluency</em> (feels familiar). Recall builds <em>storage</em> (lasts). Answer from memory — instant feedback.</p>
-  <div class="quiz" id="quiz1">
-    <div class="qitem" data-correct="1">
-      <p class="q"><span class="qn">Q1.</span> What does a Bitcask-style hash index actually map?</p>
-      <button class="opt">Each value to a checksum verified on every read</button>
-      <button class="opt">Each key to the byte offset of its most recent record</button>
-      <button class="opt">Each segment file to the key range it contains</button>
-      <button class="opt">Each key to the number of times it has been written</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="2">
-      <p class="q"><span class="qn">Q2.</span> Why does a B-tree need a write-ahead log?</p>
-      <button class="opt">So replicas can stay in sync by replaying the log</button>
-      <button class="opt">So the log keeps the leaf pages sorted by key</button>
-      <button class="opt">Because overwriting a page in place isn't crash-atomic</button>
-      <button class="opt">Because reads and writes would otherwise share a lock</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="0">
-      <p class="q"><span class="qn">Q3.</span> A read returns "not found", yet older SSTables hold a value. Why?</p>
-      <button class="opt">A newer tombstone shadows the older values until compaction</button>
-      <button class="opt">The Bloom filter produced a false negative and skipped it</button>
-      <button class="opt">The memtable flushed before the key reached disk</button>
-      <button class="opt">Compaction corrupted that key's index entry</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="3">
-      <p class="q"><span class="qn">Q4.</span> Which query can an index on <code>(account_id, created_at)</code> NOT serve efficiently?</p>
-      <button class="opt">WHERE account_id = 42 AND created_at &gt; X</button>
-      <button class="opt">WHERE account_id = 42 ORDER BY created_at</button>
-      <button class="opt">WHERE account_id IN (42, 43) AND created_at &lt; X</button>
-      <button class="opt">WHERE created_at &gt; X ORDER BY created_at</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="2">
-      <p class="q"><span class="qn">Q5.</span> You copy <code>customer_name</code> into every order row. Which invariant do you now own?</p>
-      <button class="opt">Every order's foreign key must reference a valid customer</button>
-      <button class="opt">Every order row must validate against a declared schema</button>
-      <button class="opt">Every copy of the name must update when the customer changes</button>
-      <button class="opt">Every read must follow a pointer from order to customer</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-    <div class="qitem" data-correct="0">
-      <p class="q"><span class="qn">Q6.</span> Why does column-oriented storage make analytic scans faster?</p>
-      <button class="opt">It reads only the needed columns and compresses them well</button>
-      <button class="opt">It keeps every whole row inside one disk page</button>
-      <button class="opt">It avoids building any secondary indexes at all</button>
-      <button class="opt">It stores newer column values ahead of older ones</button>
-      <p class="fb" role="status" aria-live="polite"></p>
-    </div>
-  </div>
-
-  <h3 style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:1rem">Reconstruct the engine from a blank page</h3>
-  <p class="rehearse" style="font-size:.9rem">Write the nine levels in order, one line each, with nothing on screen. Then reveal and compare — gaps are your next drill.</p>
-  <div class="rehearse">
-    <textarea placeholder="1. Log + hash index = …  2. B-tree = …  3. LSM = …  (keep going to 9, from memory)"></textarea><br>
-    <button class="btn" onclick="document.getElementById('spine').classList.add('show')">Reveal the spine</button>
-    <div class="model" id="spine">
-      <b>1</b> Log + hash index: append data, map key→offset · <b>2</b> B-tree: sorted pages, update in place, WAL · <b>3</b> LSM: memtable→SSTable→compaction, tombstones, Bloom ·
-      <b>4</b> Amplification: read/write/space triangle, pick a corner · <b>5</b> Indexes: clustered vs heap, composite prefix, covering, write tax ·
-      <b>6</b> Data models: relational/document/graph by access pattern · <b>7</b> Normalize vs denormalize: where each fact lives ·
-      <b>8</b> Encoding: flatten objects; backward + forward compat · <b>9</b> Row vs column: match layout to OLTP vs OLAP.
-    </div>
-  </div>
-
-  <div class="ask">
-    <strong>I'm your teacher — ask me anything.</strong> Say <em>"grill me on storage engines"</em> for mixed
-    no-clue questions, or drop a real workload and I'll place it on the read↔write amplification and row↔column axes with you. Want a worked
-    <code>EXPLAIN</code> walkthrough or the next book (Streaming &amp; Event-Driven)? Just ask.
-  </div>
-
-  <!-- ================= INTERVIEW QUESTIONS ================= -->
-  <h2 class="sec" id="interview">Interview — pick your bar</h2>
-  <p class="tagline">Answer out loud in ~60s, then reveal. <b>Core</b> = recall · <b>Senior</b> = trade-offs &amp; failure modes · <b>Staff</b> = synthesis under ambiguity · <b>System&nbsp;Design</b> = open design round (a different axis, not a harder level).</p>
-
-  <div data-interview>
-    <details class="iq" data-level="core">
-      <summary>Walk me through what a storage engine does to turn "find me row 42" into disk I/O.</summary>
-      <div class="a">
-        <b>Hit these points:</b> the engine consults an <em>index</em> to convert a scan into a seek &rarr; the mechanism depends on the engine: a B-tree walk root&rarr;leaf, a hash-map lookup to a byte offset, or memtable-then-SSTables for an LSM &rarr; without an index a read is a linear scan whose cost grows with data size &rarr; the unit of I/O is the <em>page</em> (~4&ndash;8 KB), not the row, so the engine reads whole pages and the index is a small structure kept off to the side &rarr; the punchline: every index turns "search the data" into "consult a structure, then seek."
-      </div>
-    </details>
-    <details class="iq" data-level="core">
-      <summary>What is a clustered index versus a secondary index, and where does the row actually live?</summary>
-      <div class="a">
-        <b>Hit these points:</b> a <b>clustered</b> index stores the full row <em>in the index leaf</em>, ordered by the key &mdash; InnoDB clusters on the primary key, so the table <em>is</em> the PK B-tree &rarr; a <b>secondary</b> index is a separate structure keyed on another column whose leaf holds only the key plus a pointer back to the row &rarr; that pointer differs by engine: InnoDB stores the <em>primary key</em> (so a secondary lookup walks two B-trees, secondary&rarr;PK&rarr;clustered), Postgres uses a heap and every index holds a <code>ctid</code> heap pointer &rarr; consequence: a wide PK bloats every secondary index in a clustered engine &rarr; a secondary index is pure redundancy you build, pay for on every write, and keep in sync.
-      </div>
-    </details>
-    <details class="iq" data-level="core">
-      <summary>What is a composite index on <code>(a, b)</code>, and which queries can use it?</summary>
-      <div class="a">
-        <b>Hit these points:</b> it stores entries sorted lexicographically by <code>a</code> then <code>b</code> &rarr; so it serves any <em>left-anchored prefix</em>: <code>a=…</code> and <code>a=… AND b=…</code> &rarr; it does <em>not</em> serve <code>b=…</code> alone, because there is no left-anchored prefix to seek on &rarr; rule of thumb: put the equality column first and the range column second, since a range on the leading column "uses up" the sort order for everything after it &rarr; verify with <code>EXPLAIN</code> rather than guessing what the planner picks.
-      </div>
-    </details>
-    <details class="iq" data-level="core">
-      <summary>What is a write-ahead log (WAL), and why does a B-tree need one?</summary>
-      <div class="a">
-        <b>Hit these points:</b> a WAL is an append-only log of <em>intent</em> written and fsync'd <em>before</em> the change is applied to the data pages &rarr; a B-tree updates pages in place, and overwriting a page is not crash-atomic &mdash; a torn write mid-update (or mid-split) can corrupt the page &rarr; the WAL records the change first so recovery can replay it and reach a consistent state &rarr; it also turns many random page writes into one sequential log write for durability, and engines add full-page images / doublewrite to survive torn writes &rarr; the durability contract: a commit is acknowledged once its WAL record is on stable storage, even if the dirty page is still in memory.
-      </div>
-    </details>
-
-    <details class="iq" data-level="senior">
-      <summary>A teammate says "LSM-trees are just faster than B-trees." Correct them.</summary>
-      <div class="a">
-        <b>Hit these points:</b> it's not "faster," it's a different corner of the amplification triangle &rarr; an LSM has <em>low write amp now</em> (sequential appends, work deferred into compaction) but higher read amp (a point lookup may probe many sorted runs) and space amp (stale versions and tombstones until compacted) &rarr; a B-tree has low, predictable read amp (bounded by tree height) but random write I/O plus WAL + whole-page rewrites &rarr; latency profile differs too: B-tree is predictable, LSM is spiky under compaction stalls &rarr; so the answer is "depends on the workload": ingest-heavy &rarr; LSM, read-heavy/tail-latency-sensitive OLTP &rarr; B-tree.
-      </div>
-    </details>
-    <details class="iq" data-level="senior">
-      <summary>Define read, write, and space amplification, and explain why you can't drive all three to zero.</summary>
-      <div class="a">
-        <b>Hit these points:</b> <b>read amp</b> = pages/files touched per logical read; <b>write amp</b> = bytes written to disk per byte of user data; <b>space amp</b> = disk bytes ÷ live data bytes &rarr; they trade off against each other: a B-tree keeps read amp ≈ 1 (the leaf) but pays write amp on every in-place page rewrite + WAL; an LSM keeps write amp low by deferring it, but pays read amp (many runs) and space amp (stale versions) until compaction runs &rarr; compaction itself converts space/read amp back into write amp &mdash; you're moving the cost, not removing it &rarr; this is the RUM conjecture: optimize any two of read/write/space and the third suffers &rarr; the skill is reading the workload and choosing which currency to spend.
-      </div>
-    </details>
-    <details class="iq" data-level="senior">
-      <summary>An InnoDB secondary-index lookup is slow. Explain the mechanics and a fix.</summary>
-      <div class="a">
-        <b>Hit these points:</b> InnoDB is clustered, so the secondary leaf stores the <em>primary key</em>, not a direct row pointer &rarr; a secondary lookup therefore walks two B-trees: secondary index &rarr; PK value &rarr; clustered index to fetch the row (the "bookmark lookup") &rarr; a wide PK makes this worse because it bloats every secondary index and every lookup &rarr; fix: a <em>covering</em> index that includes the selected columns so the query is answered from the index alone (Index Only Scan), avoiding the second walk &rarr; or narrow the PK &rarr; confirm with <code>EXPLAIN</code> that you actually got the covering/index-only plan.
-      </div>
-    </details>
-    <details class="iq" data-level="senior">
-      <summary>What does the page / buffer cache do, and how does it change how you reason about read cost?</summary>
-      <div class="a">
-        <b>Hit these points:</b> the buffer pool / page cache holds recently-used pages in RAM, so a "disk read" is often actually a memory hit &rarr; the real read cost is the <em>miss</em> rate, not the raw page count: a B-tree's upper levels stay cached, so a billion-row lookup is usually one uncached leaf read, not four disk reads &rarr; an LSM's read amp also softens once hot SSTable blocks and index/Bloom-filter blocks are cached &rarr; writes go through it too: dirty pages are buffered and flushed later, which is why durability rides on the WAL, not on the page being written &rarr; the senior framing: amplification numbers are worst-case/cold; the working-set fit in the cache is what dominates steady-state latency &rarr; watch the cache hit ratio, not just the plan.
-      </div>
-    </details>
-
-    <details class="iq" data-level="staff">
-      <summary>How do you choose between a B-tree (row store) and an LSM-tree for a new service, and how would you defend reversing that choice later?</summary>
-      <div class="a">
-        <b>Hit these points:</b> start from the access pattern and SLO, not the brand: write:read ratio, point vs range reads, p99 latency target, dataset vs RAM size, and storage budget &rarr; map them onto the triangle &mdash; write-heavy ingest with disk to spare &rarr; LSM (sequential writes, low write amp); read-heavy, tail-latency-sensitive OLTP &rarr; B-tree (predictable, low read amp) &rarr; name the second-order costs: LSM compaction stalls and tunable strategy vs B-tree random-write ceiling and page slack &rarr; make it reversible: hide the engine behind a repository boundary, keep the data model engine-agnostic, and define the metric that would trigger a switch (e.g. compaction can't keep up &rarr; write stalls, or p99 read latency from probing too many runs) &rarr; the staff move is committing to a default <em>and</em> the measured trip-wire that says you chose wrong.
-      </div>
-    </details>
-    <details class="iq" data-level="staff">
-      <summary>"Add an index, the query's slow" — make the principal-level case for when <em>not</em> to add one.</summary>
-      <div class="a">
-        <b>Hit these points:</b> every secondary index is redundant data you maintain on <em>every</em> write &mdash; it taxes write throughput, write amp, and disk, and on a clustered engine it carries the PK in every entry &rarr; so an index is a read optimization paid for by all writers, and on a write-heavy table that tax can dwarf the read it saves &rarr; before adding one, ask: is the query hot enough and selective enough to matter? would an existing composite index serve it via a left-anchored prefix? is the planner ignoring an index that already exists (stale stats, non-sargable predicate)? &rarr; alternatives: rewrite the predicate, a covering index instead of two, a different data layout, or denormalize against a measured read pattern &rarr; the principal framing: indexes aren't free reads, they're a standing write liability &mdash; justify each one against the workload and measure with <code>EXPLAIN</code>, don't cargo-cult.
-      </div>
-    </details>
-    <details class="iq" data-level="staff">
-      <summary>When is a column store the right call over a row store, and what exactly are you trading?</summary>
-      <div class="a">
-        <b>Hit these points:</b> the discriminator is the access pattern: row stores keep a record's columns contiguous (great for OLTP point reads/writes of whole rows), column stores keep each column contiguous (great for OLAP scans that touch few columns over many rows) &rarr; columnar wins because a scan reads only the columns it needs and homogeneous data compresses hard (run-length, dictionary, bit-packing), so you trade space amp for huge scan throughput &rarr; what you give up: single-row writes and updates are expensive (a row is scattered across column segments), so column stores favor bulk/append loads, not OLTP mutation &rarr; the synthesis: don't pick one &mdash; run OLTP on a row store and ETL into a columnar warehouse on a star schema, refreshed so analytics scans don't starve user I/O &rarr; justify each side by its access pattern and the amplification it spends.
-      </div>
-    </details>
-
-    <div class="designrubric" data-level="design">
-      <b>Design-round framework</b> — drive any storage-engine prompt through these, out loud:
-      <ol>
-        <li>Clarify the workload: write:read ratio, point vs range reads, p99 latency target, durability/consistency needs.</li>
-        <li>Size it: dataset vs RAM, growth rate, storage budget — does the working set fit the buffer cache?</li>
-        <li>Pick the engine corner: B-tree/row for read-heavy OLTP, LSM for write-heavy ingest, column store for analytics scans.</li>
-        <li>Index the real predicates: clustered key choice, covering/composite indexes, and the write tax each adds.</li>
-        <li>Durability path: WAL/fsync policy, crash recovery, replication.</li>
-        <li>Separate OLTP from OLAP: row store + ETL into a columnar warehouse so heavy scans don't starve user I/O.</li>
-        <li>Observability &amp; trip-wires: cache hit ratio, p99 read, write/space amp — and the metric that says you chose wrong.</li>
-      </ol>
-    </div>
-    <details class="iq" data-level="design">
-      <summary>Design the storage for a product with live order pages AND an analytics dashboard.</summary>
-      <div class="a">
-        <b>A strong answer covers:</b> two access patterns, two layouts &mdash; don't force one engine to do both &rarr; OLTP path: a row store (B-tree/InnoDB, or LSM if ingest-heavy), normalized, indexed on the actual query predicates, with covering indexes for the hot read paths and a sensibly narrow clustered key &rarr; OLAP path: ETL/CDC the data into a column store / warehouse on a star schema (narrow fact table + dimension tables), refreshed periodically so heavy scans run on isolated resources &rarr; justify each choice by its access pattern and the amplification it spends (row store pays write amp for predictable reads; column store trades single-row write cost for compressed, fast scans) &rarr; keep them decoupled so a dashboard query can't starve order-page I/O &rarr; name the freshness trade-off: live OLTP vs periodically-refreshed analytics, and how stale the dashboard is allowed to be.
-      </div>
-    </details>
-    <details class="iq" data-level="design">
-      <summary>Design the storage engine + indexing for a write-heavy event-ingest service that also needs fast recent-event reads.</summary>
-      <div class="a">
-        <b>A strong answer covers:</b> start from the workload &mdash; very high sustained write rate, mostly append, reads skewed to recent data &rarr; that points at an LSM-tree: turn every write into a sequential append (WAL + memtable), flush immutable SSTables, defer cleanup to compaction &mdash; low write amp is exactly what an ingest firehose needs &rarr; protect read latency with Bloom filters (skip SSTables that definitely lack a key) and a partitioning/clustering key on time so recent events sit in the freshest, smallest runs &rarr; choose compaction by sub-pattern: size-tiered for the raw write-heavy table (cheap writes, accept space + read amp), or time-windowed if events carry TTLs so whole old buckets drop at once &rarr; size the buffer cache to the recent working set so hot reads stay in RAM &rarr; durability via WAL fsync policy and replication &rarr; the trip-wire to monitor: write stalls when L0/pending-compaction crosses the back-pressure trigger &mdash; sustainable write rate is bounded by compaction throughput, so the fix is more compaction I/O or a cheaper-write strategy, never "write faster" &rarr; name the trade-off: LSM buys ingest throughput by paying read + space amp on cold data, which is acceptable because reads target recent (hot) events.
-      </div>
-    </details>
-  </div>
-
-  <!-- ================= CHEAT SHEET (compact) ================= -->
-  <h2 class="sec" id="cheat">★ Cheat sheet — name → mechanism</h2>
-  <div class="cheat">
-    <p style="margin-top:0"><strong>Mental models:</strong> Log = the fast write · Index = the fast read · B-tree = sorted pages in place · LSM = log + merge · Amplification = the three currencies · Clustered = row in the PK leaf · Heap = row + pointer · Covering = answer from the index alone · Normalize = fact stored once · Denormalize = fact copied · Encoding = flatten the object · Column store = layout for the scan.</p>
-    <h3>Translation table</h3>
-    <table>
-      <tr><th>Term</th><th>What it actually is</th></tr>
-      <tr><td>Storage engine</td><td>The layer that lays bytes on disk and finds them again</td></tr>
-      <tr><td>Compaction / VACUUM</td><td>Background rewrite reclaiming stale versions &amp; tombstones</td></tr>
-      <tr><td>Write amplification</td><td>Bytes physically written per byte of user data</td></tr>
-      <tr><td>Tombstone</td><td>An appended delete marker; space returns at compaction</td></tr>
-      <tr><td>Bloom filter</td><td>Per-SSTable bit array: "definitely absent" / "probably present"</td></tr>
-      <tr><td>Covering index</td><td>Index holding every column the query reads → no row fetch</td></tr>
-      <tr><td>Schema-on-read</td><td>Structure interpreted by the reading code, not validated on write</td></tr>
-      <tr><td>Forward compatibility</td><td>Old code reads new data by skipping unknown fields</td></tr>
-      <tr><td>Star schema</td><td>Narrow fact table + small dimension tables, for column-store OLAP</td></tr>
-    </table>
-    <h3>Three rules for the architect chair</h3>
-    <p style="margin-bottom:0">① There is no best engine — <strong>match the layout to the workload</strong> (read vs write vs scan). ② Every index is a <strong>read win bought with a write tax</strong>; index deliberately, measure with <code>EXPLAIN</code>. ③ Start <strong>normalized</strong>; denormalize against a measured read pattern, knowing which invariant you took on.</p>
-  </div>
-
-  <!-- ================= REVIEW GUIDES ================= -->
-  <h2 class="sec" id="review">★ Review guides &amp; what to read next</h2>
-  <div class="facts" style="grid-template-columns:1fr 1fr">
-    <div class="fact"><b>5-min (weekly)</b> Don't re-read — recall. Redraw the amplification triangle; trace a B-tree split and an LSM compaction from memory; recite where each index pays; translate three terms blind.</div>
-    <div class="fact"><b>30-min (when stalled)</b> Blank-page reconstruct all nine levels; re-derive why the log forces an index and the index forces the read/write tension; then place one real workload (which engine? which indexes? row or column?).</div>
-  </div>
-  <p style="font-size:.9rem"><strong>Read next, in order:</strong>
-    ① <a href="https://dataintensive.net/">DDIA — Kleppmann</a>, ch.3 storage &amp; retrieval (Levels 1–5, 9), then ch.2 data models (6–7) and ch.4 encoding (8) ·
-    ② <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide">RocksDB Tuning Guide</a> (Levels 3–4, amplification as a live knob) ·
-    ③ <a href="https://www.postgresql.org/docs/current/wal-intro.html">PostgreSQL WAL docs</a> &amp; "Routine Vacuuming" (Levels 2, 5) ·
-    ④ <a href="https://protobuf.dev/programming-guides/proto3/">Protocol Buffers proto3 guide</a> (Level 8).</p>
-
-  <p style="font-size:.9rem">📖 <strong>Primary source:</strong> <a href="https://dataintensive.net/">Martin Kleppmann, <em>Designing Data-Intensive Applications</em></a> — chapters 2–4 are the spine of this book.</p>
-
-  <div class="nav">
-    <span>📄 <a href="../index.html">Engineering Vault</a></span>
-    <span><em>Next ▸ Book 4 — Streaming &amp; Event-Driven (ask me to build it)</em></span>
-  </div>
-
-  <footer id="sources">
-    <strong>Sources</strong><br>
-    <span id="s1">1. Martin Kleppmann, <em>Designing Data-Intensive Applications</em>, ch.3 "Storage and Retrieval" — the B-tree-vs-LSM and amplification framing. <a href="#r1">↩</a></span><br>
-    <span id="s2">2. Bayer &amp; McCreight, "Organization and Maintenance of Large Ordered Indices" (1972) — the original B-tree; PostgreSQL WAL / InnoDB doublewrite for torn-write safety. <a href="#r1b">↩</a></span><br>
-    <span id="s3">3. O'Neil, Cheng, Gawlick &amp; O'Neil, "The Log-Structured Merge-Tree (LSM-Tree)" (1996); Bigtable (2006); LevelDB / RocksDB / Cassandra. <a href="#r3">↩</a></span><br>
-    <span id="s4">4. Codd, "A Relational Model of Data for Large Shared Data Banks" (1970); DDIA ch.2; Neo4j (property graph, index-free adjacency). <a href="#r4">↩</a></span><br>
-    <span id="s5">5. DDIA ch.4 "Encoding and Evolution"; Protocol Buffers, Apache Avro, Apache Thrift specifications. <a href="#r5">↩</a></span><br>
-    <span id="s6">6. Sheehy &amp; Smith, "Bitcask: A Log-Structured Hash Table for Fast Key/Value Data" (2010). <a href="#r6">↩</a></span><br>
-    <span id="s7">7. Stonebraker et al., "C-Store: A Column-Oriented DBMS" (2005); Melnik et al., "Dremel" (2010) — ancestor of Apache Parquet; Kimball star schema. <a href="#r7">↩</a></span>
-  </footer>
-<div class="lesson-fb" aria-live="polite">
-  <span class="lesson-fb-q">Was this lesson helpful?</span>
-  <button type="button" class="lesson-fb-btn" data-rating="up" aria-label="Yes, this lesson was helpful">👍 Yes</button>
-  <button type="button" class="lesson-fb-btn" data-rating="down" aria-label="No, this lesson was not helpful">👎 No</button>
-  <span class="lesson-fb-thanks">Thanks &mdash; noted.</span>
-</div>
-<p class="lesson-endnote">These notes reflect my current understanding and are updated as I learn, build, and discover better explanations.</p>
-</main>
-</div>
-
-<script>
-  document.querySelectorAll('.qitem').forEach(function(item){
-    var correct = +item.dataset.correct;
-    var opts = Array.prototype.slice.call(item.querySelectorAll('.opt'));
-    var fb = item.querySelector('.fb');
-    opts.forEach(function(opt, i){
-      opt.addEventListener('click', function(){
-        opts.forEach(function(o){ o.disabled = true; });
-        opts[correct].classList.add('correct');
-        if(i === correct){ fb.textContent = '✓ Correct.'; fb.className = 'fb ok'; }
-        else { opt.classList.add('wrong'); fb.textContent = '✗ Not quite — the highlighted one is right. Say it back, then move on.'; fb.className = 'fb no'; }
-      });
-    });
-  });
-</script>
-<script src="../assets/interview.js" defer></script>
-</body>
-</html>
+        // "Reveal model answer" inside each .rehearse block (id-free; supports
+        // multiple per page — replaces the old inline onclick + fixed id="model").
+        document.querySelectorAll('.rehearse [data-reveal]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var m = btn.parentElement.querySelector('.model');
+                if (m) m.classList.add('show');
+            });
+        });
+    </script>  <script src="/engineering-learning-hub/assets/interview.js" defer></script><script src="/engineering-learning-hub/assets/reading-progress.js" defer></script> </body> </html>

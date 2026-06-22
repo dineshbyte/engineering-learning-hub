@@ -86,23 +86,24 @@ function rehypeHeadingIds() {
     };
 }
 
-// ── Engineering Vault — Astro proof-of-concept config ────────────────────────
-// PROOF ONLY: outDir is ../dist so a build NEVER overwrites the live site in
-// docs/. For the real migration you flip outDir to '../docs' (or move the
-// project to the repo root with outDir './docs') and the deploy model stays
-// exactly "GitHub Pages: main → /docs" — Pages just serves the built output.
+// ── Engineering Vault — Astro site config ───────────────────────────────────
+// outDir is ../docs: `astro build` GENERATES the published site into docs/, and
+// GitHub Pages serves it (main → /docs). docs/ is pure build output now — the
+// hand-authored HTML has been removed; this Astro project is the source of truth.
+// emptyOutDir:true regenerates docs/ cleanly each build (it lives outside the
+// project root, so Astro requires the explicit opt-in to empty it).
 //
 // build.format:'file' preserves the existing .html URLs (e.g. .../0001-foo.html)
 // so canonical URLs, OG tags, and the sitemap don't change a single character.
-//
-// base is the project-pages subpath; site is the origin. Together they make
-// canonical/OG URLs and asset links resolve exactly as they do today.
+// base is the project-pages subpath; site is the origin — together they make
+// canonical/OG URLs and asset links resolve exactly as they did before.
 export default defineConfig({
     site: 'https://dineshbyte.github.io',
     base: '/engineering-learning-hub',
-    outDir: '../dist',
+    outDir: '../docs',
     build: {
         format: 'file',
+        emptyOutDir: true,
     },
     // MDX is required by the lessons content collection (src/content/lessons/*.mdx).
     // The lesson body is MDX (prose + tables + the figure/Quiz/Interview/Sources
