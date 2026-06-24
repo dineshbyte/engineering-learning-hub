@@ -142,6 +142,9 @@ for (const track of tracks) {
     .brand{margin-right:0}
     .brandname{display:none}
     .search{flex:1; min-width:0; max-width:none; margin-left:.25rem}
+    /* 16px stops iOS Safari auto-zooming (and letting the page pan left/right)
+       when the search box is focused — any input font-size < 16px triggers it */
+    .search input{font-size:16px}
   }
   /* NOTE: mobile overrides for grid/cards/filters live in the block at the END
      of this stylesheet — they must come AFTER the base component rules below to
@@ -560,6 +563,8 @@ for (const track of tracks) {
                 grid = document.getElementById('grid'),
                 results = document.getElementById('results'),
                 filters = document.getElementById('filters'),
+                hero = document.querySelector('.hero'),
+                whatis = document.querySelector('.whatis'),
                 idx = window.SEARCH_INDEX || [];
             // (The old hardcoded TOK group→color map was removed: each
             // SEARCH_INDEX entry now carries its track color in `d.c`, derived
@@ -587,6 +592,8 @@ for (const track of tracks) {
                     results.innerHTML = '';
                     grid.style.display = '';
                     filters.style.display = '';
+                    if (hero) hero.style.display = ''; // restore the intro banner
+                    if (whatis) whatis.style.display = '';
                     q.setAttribute('aria-expanded', 'false');
                     q.removeAttribute('aria-activedescendant');
                     setStatus('');
@@ -630,6 +637,10 @@ for (const track of tracks) {
                 // counts don't read as conflicting with the result count
                 grid.style.display = 'none';
                 filters.style.display = 'none';
+                // hide the hero + intro band during search so results sit right
+                // under the search bar instead of below the top banner
+                if (hero) hero.style.display = 'none';
+                if (whatis) whatis.style.display = 'none';
                 results.style.display = 'block'; // '' would fall back to the .results{display:none} default
                 if (!hits.length) {
                     results.innerHTML = renderEmpty(raw);
